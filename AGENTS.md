@@ -437,3 +437,30 @@ Agent 不得：
 - [ ] 最终说明列出实际完成项、验证证据、剩余风险和未执行项。
 
 任何勾选项无法满足时，Agent 必须如实报告原因和影响，不得用“应当通过”“基本完成”代替证据。
+
+## 19. OpenSpec SDD 工作流
+
+### 19.1 适用边界
+
+- 功能、用户流程、架构、Schema、数据库、migration、IPC、Provider 或安全边界变更必须先建立 Active OpenSpec Change。
+- 仅错别字、链接或不改变语义的格式修正可直接修改，但仍要遵守本文件的验证和交付纪律。
+- OpenSpec 只管理增量规范；不得复制整份 PRD、TECH 或 JSON Schema 形成第二事实源。
+
+### 19.2 Change 规则
+
+- Change ID 使用英文 `kebab-case`，一个 Change 只承载一个可独立验收和回滚的能力。
+- Proposal 必须映射 PRD v1.4 验收项、TECH_DESIGN v1.1 章节、适用测试层级和明确非目标。
+- Specs 使用中文 Requirement、`MUST/SHALL` 和 GIVEN/WHEN/THEN Scenario，覆盖与风险相匹配的正常、边界、失败和恢复路径。
+- Proposal、Specs、Design 和 Tasks 未完成审查前不得 Apply；Verify 存在未处理阻断项时不得 Sync 或 Archive。
+- 开发分支使用 `codex/<change-id>`；分支不得代替 Active Change。
+
+### 19.3 工作流与工具
+
+```text
+Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
+```
+
+- 项目使用 OpenSpec 内置 `spec-driven` Schema，项目规则位于 `openspec/config.yaml`。
+- Codex 工作流以当前 CLI 生成的 `.agents/skills/openspec-*` 为准，不得凭历史命令名称猜测调用方式。
+- OpenSpec 安装或更新后必须重启 Codex，并用 CLI 输出核对实际生成的技能数量和路径。
+- 详细的人类操作手册以 `docs/SDD_WORKFLOW.md` 为准；该文档不得覆盖本文件、PRD、TECH 或 Schema。
