@@ -82,6 +82,26 @@ TypeScript 基线开启 `strict`、`noImplicitAny`、`noUncheckedIndexedAccess` 
 - **业务错误码**：不适用；启动、构建和测试失败保留工具非零退出码和诊断输出。
 - **Migration**：不适用；不引入数据库或持久化格式。
 
+### 7. Electron Forge 8 Alpha 兼容决策
+
+Electron Forge 7.11.2 通过 `@electron/rebuild@3.7.2` 依赖官方
+`electron/node-gyp` Git 仓库的固定提交。pnpm 11 默认启用
+`blockExoticSubdeps=true`，会在该 Git 来源作为传递依赖时拒绝安装。
+
+实施期间已验证“将同一精确提交声明为根直接开发依赖并用项目级 override 统一解析”
+的方案：根直接依赖可通过供应链检查，但 pnpm 仍把 Forge 依赖链中的同一来源识别为
+exotic 子依赖并返回 `ERR_PNPM_EXOTIC_SUBDEP`。因此该方案被实测否决，相关无效配置
+不得保留，也不得据此勾选 workspace 或安装任务。
+
+经人工审查，工程基线改用精确版本 `@electron-forge/*@8.0.0-alpha.10`。该版本使用
+新版依赖链，目标是在不关闭 pnpm 11 `blockExoticSubdeps=true` 的前提下完成安装、
+启动和 Windows x64 打包。Alpha 状态属于已知工程风险，不代表可直接发布：本 Change
+必须通过启动、E2E 和本地打包 Smoke；V1 发布候选前必须升级到兼容的 Forge 8 稳定版，
+若届时不存在可用稳定版或升级验证失败，则阻断发布。
+
+根 TypeScript 固定为 `6.0.3`，以满足当前 `typescript-eslint@8.66.0` 的 `<6.1.0`
+peer 范围。不得通过忽略 peer 错误或关闭类型/Lint 门禁继续。
+
 ## Risks / Trade-offs
 
 - **[Windows 本地模块安装和 Electron 下载可能受网络影响]** → lockfile 锁定依赖，失败时保留原始诊断并不降级包管理器或安全选项。
@@ -89,6 +109,9 @@ TypeScript 基线开启 `strict`、`noImplicitAny`、`noUncheckedIndexedAccess` 
 - **[空白名单 `window.jingxu` 短期内没有业务价值]** → 该入口只是进程边界契约；后续 Change 必须逐方法增加类型和校验，不得替换为通用通道。
 - **[首个 Change 未创建全部目标 packages]** → 避免空模块和未来推测；每个后续 Change 在首次需要包时建立其公开入口和边界测试。
 - **[当前系统 pnpm/npm 全局入口存在环境差异]** → 仓库通过 `packageManager`、`engines`、lockfile 和安装文档声明支持环境；不把开发机全局 PATH 状态写入项目逻辑。
+- **[Forge 7 的固定 Git 子依赖会被 pnpm 11 默认阻断]** → 根直接依赖加 override 的方案已实测无效；保持任务未完成并在新的依赖策略审查通过前暂停，禁止静默关闭安全策略。
+- **[Forge 8 当前仍为 Alpha]** → 精确固定 `8.0.0-alpha.10`，用 E2E 与 Windows x64 打包约束当前开发风险；V1 发布候选必须迁移到验证通过的稳定版，否则阻断发布。
+- **[TypeScript 7 超出当前 typescript-eslint peer 范围]** → 固定 TypeScript 6.0.3，不忽略 peer 检查。
 
 ## Migration Plan
 

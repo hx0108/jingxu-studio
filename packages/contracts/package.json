@@ -1,0 +1,17 @@
+{
+  "name": "@jingxu/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "engines": {
+    "node": ">=22.16.0 <23",
+    "pnpm": ">=11.16.0 <12"
+  }
+}

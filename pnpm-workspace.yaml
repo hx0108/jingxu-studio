@@ -1,0 +1,15 @@
+packages:
+  - apps/*
+  - packages/*
+
+allowBuilds:
+  electron: true
+  electron-winstaller: true
+  esbuild: true
+
+blockExoticSubdeps: true
+engineStrict: true
+nodeLinker: hoisted
+packageManagerStrict: true
+saveExact: true
+strictDepBuilds: true

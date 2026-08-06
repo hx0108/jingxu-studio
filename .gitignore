@@ -11,6 +11,7 @@ playwright-report/
 test-results/
 .vite/
 .cache/
+*.tsbuildinfo
 
 # Logs and temporary files
 *.log
@@ -42,4 +43,3 @@ temp/
 .DS_Store
 Thumbs.db
 Desktop.ini
-
