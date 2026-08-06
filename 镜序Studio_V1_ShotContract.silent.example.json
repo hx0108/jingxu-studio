@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.1.0",
+  "shot_id": "shot_ep01_silent_001",
+  "version_id": "scv_shot_ep01_silent_001_v1",
+  "contract_version": 1,
+  "parent_version_id": null,
+  "derived_from_shot_ids": [],
+  "sequence": 1,
+  "status": "READY",
+  "provenance": {
+    "source_type": "HUMAN_CREATED",
+    "source_invocation_id": null,
+    "last_edit_source": "HUMAN"
+  },
+  "format_profile_id": "format_vertical_1080p",
+  "target_duration_sec": 4,
+  "narrative_purpose": "建立空车站环境并为角色出场留出停顿",
+  "cinematography": {
+    "shot_size": "LONG",
+    "camera_angle": "EYE_LEVEL",
+    "composition": "空站台占据主体，入口位于右侧三分线",
+    "focus": "雨幕中的空站台与入口灯光",
+    "camera_motion": "STATIC",
+    "frontal_face": false,
+    "mouth_visible": false
+  },
+  "content": {
+    "character_ids": [],
+    "scene_id": "scene_old_station_night",
+    "prop_ids": [],
+    "action": "雨水落在空站台上，远处入口灯光轻微闪烁",
+    "emotion": "安静而压抑",
+    "spoken_text": ""
+  },
+  "dialogue": {
+    "dialogue_render_mode": "WEAK_LIP_SYNC",
+    "dialogue_mode_source": "PROJECT_DEFAULT",
+    "override_reason": null,
+    "speaker_id": null,
+    "estimated_speech_duration_sec": 0,
+    "audio_required": false,
+    "lip_sync_required": false
+  },
+  "continuity": {
+    "continuity_mode": "SCENE_CHANGE",
+    "previous_shot_id": null,
+    "asset_version_ids": [],
+    "first_frame_requirement": "雨夜空车站全景",
+    "last_frame_requirement": "入口灯光仍在远景"
+  },
+  "generation_constraints": {
+    "capability_requirements": [],
+    "image_prompt": "竖屏构图，雨夜空车站，冷色调，无人物",
+    "video_prompt": "固定镜头，雨丝稳定落下，入口灯光轻微闪烁",
+    "negative_constraints": ["人物", "列车", "白天"],
+    "budget_estimate": {
+      "currency_or_credit": "UNKNOWN",
+      "min": null,
+      "max": null,
+      "price_version": null,
+      "is_estimate": true
+    }
+  },
+  "acceptance": {
+    "must_include": ["空站台", "雨夜", "入口灯光"],
+    "must_not_include": ["人物", "列车"],
+    "human_review_required": true
+  },
+  "locked_paths": []
+}

@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jingxu.studio/schemas/script-stage-output/1.0.0",
+  "title": "Jingxu Studio V1 ScriptStageOutput",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "project_id", "episode_id", "source_invocation_id", "stage", "data"],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "project_id": {"type": "string", "pattern": "^project_[A-Za-z0-9_-]+$"},
+    "episode_id": {"type": ["string", "null"], "pattern": "^episode_[A-Za-z0-9_-]+$"},
+    "source_invocation_id": {"type": "string", "minLength": 1},
+    "stage": {
+      "enum": ["CONCEPT", "STORY_BIBLE", "EPISODE_OUTLINE", "BEAT_SHEET", "SCENE_SCRIPT"]
+    },
+    "data": {"type": "object"}
+  },
+  "$defs": {
+    "concept": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "genre", "target_audience", "core_conflict", "theme", "synopsis"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 100},
+        "genre": {"type": "string", "minLength": 1, "maxLength": 100},
+        "target_audience": {"type": "string", "minLength": 1, "maxLength": 300},
+        "core_conflict": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "theme": {"type": "string", "minLength": 1, "maxLength": 500},
+        "synopsis": {"type": "string", "minLength": 1, "maxLength": 3000}
+      }
+    },
+    "story_bible": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["characters", "world_rules", "scenes", "props"],
+      "properties": {
+        "characters": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 10,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^char_[A-Za-z0-9_-]+$": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "appearance", "personality", "motivation"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1, "maxLength": 100},
+              "appearance": {"type": "string", "minLength": 1, "maxLength": 1000},
+              "personality": {"type": "string", "minLength": 1, "maxLength": 1000},
+              "motivation": {"type": "string", "minLength": 1, "maxLength": 1000}
+            }
+            }
+          }
+        },
+        "world_rules": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string", "minLength": 1, "maxLength": 1000}
+        },
+        "scenes": {
+          "type": "object",
+          "minProperties": 1,
+          "maxProperties": 20,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^scene_[A-Za-z0-9_-]+$": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "description"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1, "maxLength": 100},
+              "description": {"type": "string", "minLength": 1, "maxLength": 1000}
+            }
+            }
+          }
+        },
+        "props": {
+          "type": "object",
+          "maxProperties": 30,
+          "additionalProperties": false,
+          "patternProperties": {
+            "^prop_[A-Za-z0-9_-]+$": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "description"],
+            "properties": {
+              "name": {"type": "string", "minLength": 1, "maxLength": 100},
+              "description": {"type": "string", "minLength": 1, "maxLength": 500}
+            }
+            }
+          }
+        }
+      }
+    },
+    "episode_outline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["episode_goal", "opening", "midpoint", "climax", "ending_hook", "target_duration_sec"],
+      "properties": {
+        "episode_goal": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "opening": {"type": "string", "minLength": 1, "maxLength": 1500},
+        "midpoint": {"type": "string", "minLength": 1, "maxLength": 1500},
+        "climax": {"type": "string", "minLength": 1, "maxLength": 1500},
+        "ending_hook": {"type": "string", "minLength": 1, "maxLength": 1000},
+        "target_duration_sec": {"type": "number", "minimum": 30, "maximum": 180}
+      }
+    },
+    "beat_sheet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["beats"],
+      "properties": {
+        "beats": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["beat_id", "sequence", "purpose", "description", "estimated_duration_sec"],
+            "properties": {
+              "beat_id": {"type": "string", "pattern": "^beat_[A-Za-z0-9_-]+$"},
+              "sequence": {"type": "integer", "minimum": 1},
+              "purpose": {"type": "string", "minLength": 1, "maxLength": 300},
+              "description": {"type": "string", "minLength": 1, "maxLength": 1500},
+              "estimated_duration_sec": {"type": "number", "minimum": 1, "maximum": 60}
+            }
+          }
+        }
+      }
+    },
+    "scene_script": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scenes"],
+      "properties": {
+        "scenes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["script_scene_id", "sequence", "scene_id", "character_ids", "action", "spoken_lines", "estimated_duration_sec"],
+            "properties": {
+              "script_scene_id": {"type": "string", "pattern": "^script_scene_[A-Za-z0-9_-]+$"},
+              "sequence": {"type": "integer", "minimum": 1},
+              "scene_id": {"type": "string", "pattern": "^scene_[A-Za-z0-9_-]+$"},
+              "character_ids": {
+                "type": "array",
+                "items": {"type": "string", "pattern": "^char_[A-Za-z0-9_-]+$"},
+                "uniqueItems": true
+              },
+              "action": {"type": "string", "minLength": 1, "maxLength": 3000},
+              "spoken_lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["speaker_id", "line_type", "text"],
+                  "properties": {
+                    "speaker_id": {"type": ["string", "null"]},
+                    "line_type": {"enum": ["DIALOGUE", "NARRATION", "SUBTITLE"]},
+                    "text": {"type": "string", "minLength": 1, "maxLength": 1000}
+                  }
+                }
+              },
+              "estimated_duration_sec": {"type": "number", "minimum": 1, "maximum": 120}
+            }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"stage": {"const": "CONCEPT"}}},
+      "then": {"properties": {"episode_id": {"type": "null"}, "data": {"$ref": "#/$defs/concept"}}}
+    },
+    {
+      "if": {"properties": {"stage": {"const": "STORY_BIBLE"}}},
+      "then": {"properties": {"episode_id": {"type": "null"}, "data": {"$ref": "#/$defs/story_bible"}}}
+    },
+    {
+      "if": {"properties": {"stage": {"const": "EPISODE_OUTLINE"}}},
+      "then": {"properties": {"episode_id": {"type": "string"}, "data": {"$ref": "#/$defs/episode_outline"}}}
+    },
+    {
+      "if": {"properties": {"stage": {"const": "BEAT_SHEET"}}},
+      "then": {"properties": {"episode_id": {"type": "string"}, "data": {"$ref": "#/$defs/beat_sheet"}}}
+    },
+    {
+      "if": {"properties": {"stage": {"const": "SCENE_SCRIPT"}}},
+      "then": {"properties": {"episode_id": {"type": "string"}, "data": {"$ref": "#/$defs/scene_script"}}}
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+# Dependencies and package-manager caches
+node_modules/
+.pnpm-store/
+
+# Build and test outputs
+dist/
+out/
+release/
+coverage/
+playwright-report/
+test-results/
+.vite/
+.cache/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Local databases and SQLite sidecars
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+
+# Secrets and local environment overrides
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Editor and operating-system metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini
+

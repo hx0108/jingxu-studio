@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0.0",
+  "project_id": "project_rain_station",
+  "episode_id": null,
+  "source_invocation_id": "invocation_concept_001",
+  "stage": "CONCEPT",
+  "data": {
+    "title": "雨停之前",
+    "genre": "都市悬疑",
+    "target_audience": "喜欢强情绪反转与短篇悬疑的年轻用户",
+    "core_conflict": "女主在废弃车站等待失踪十年的姐姐，却发现每晚出现的列车来自不同时间线。",
+    "theme": "人如何面对无法挽回的告别",
+    "synopsis": "雨夜，女主收到姐姐十年前寄出的车票，来到已经停运的旧车站。午夜列车出现后，她必须在找回姐姐和保住现实生活之间做出选择。"
+  }
+}

@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jingxu.studio/schemas/project-transfer-bundle/1.0.0",
+  "title": "Jingxu Studio V1 ProjectTransferBundle",
+  "description": "用于将 V1 当前项目快照导入空项目的公开交换契约；不包含完整历史版本或数据库备份。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_id",
+    "exported_at",
+    "project_snapshot",
+    "story_bible",
+    "script_stage_outputs",
+    "episode_storyboard"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0.0"},
+    "bundle_id": {"type": "string", "pattern": "^bundle_[A-Za-z0-9_-]+$"},
+    "exported_at": {"type": "string", "format": "date-time"},
+    "project_snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["project_id", "name", "creation_mode", "dialogue_render_mode"],
+      "properties": {
+        "project_id": {"type": "string", "pattern": "^project_[A-Za-z0-9_-]+$"},
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "creation_mode": {"enum": ["AI_ORIGINAL", "AUTHORIZED_ADAPTATION", "AI_OPTIMIZATION"]},
+        "dialogue_render_mode": {"enum": ["NARRATION_FIRST", "WEAK_LIP_SYNC", "PRECISE_LIP_SYNC", "SUBTITLE_ONLY"]}
+      }
+    },
+    "story_bible": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version_id", "output"],
+      "properties": {
+        "version_id": {"type": "string", "minLength": 1},
+        "output": {
+          "allOf": [
+            {"$ref": "https://jingxu.studio/schemas/script-stage-output/1.0.0"},
+            {"properties": {"stage": {"const": "STORY_BIBLE"}}}
+          ]
+        }
+      }
+    },
+    "script_stage_outputs": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version_id", "output"],
+        "properties": {
+          "version_id": {"type": "string", "minLength": 1},
+          "output": {"$ref": "https://jingxu.studio/schemas/script-stage-output/1.0.0"}
+        }
+      },
+      "allOf": [
+        {"contains": {"properties": {"output": {"properties": {"stage": {"const": "CONCEPT"}}, "required": ["stage"]}}, "required": ["output"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"output": {"properties": {"stage": {"const": "EPISODE_OUTLINE"}}, "required": ["stage"]}}, "required": ["output"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"output": {"properties": {"stage": {"const": "BEAT_SHEET"}}, "required": ["stage"]}}, "required": ["output"]}, "minContains": 1, "maxContains": 1},
+        {"contains": {"properties": {"output": {"properties": {"stage": {"const": "SCENE_SCRIPT"}}, "required": ["stage"]}}, "required": ["output"]}, "minContains": 1, "maxContains": 1}
+      ]
+    },
+    "episode_storyboard": {
+      "$ref": "https://jingxu.studio/schemas/episode-storyboard-export/1.1.0"
+    }
+  }
+}

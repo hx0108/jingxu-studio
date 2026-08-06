@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jingxu.studio/schemas/episode-storyboard-export/1.1.0",
+  "title": "Jingxu Studio V1 EpisodeStoryboardExport",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "export_id",
+    "exported_at",
+    "project_id",
+    "episode_id",
+    "episode_version",
+    "target_duration_sec",
+    "lineage_completeness",
+    "story_bible_version_id",
+    "format_profile",
+    "shot_contracts",
+    "export_provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.1.0"},
+    "export_id": {"type": "string", "pattern": "^export_[A-Za-z0-9_-]+$"},
+    "exported_at": {"type": "string", "format": "date-time"},
+    "project_id": {"type": "string", "pattern": "^project_[A-Za-z0-9_-]+$"},
+    "episode_id": {"type": "string", "pattern": "^episode_[A-Za-z0-9_-]+$"},
+    "episode_version": {"type": "integer", "minimum": 1},
+    "target_duration_sec": {"type": "number", "minimum": 30, "maximum": 180},
+    "lineage_completeness": {"const": "CURRENT_ONLY"},
+    "story_bible_version_id": {"type": "string", "minLength": 1},
+    "format_profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "aspect_ratio", "width", "height", "fps", "language", "subtitle_safe_area"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "aspect_ratio": {"enum": ["9:16", "16:9"]},
+        "width": {"type": "integer"},
+        "height": {"type": "integer"},
+        "fps": {"const": 30},
+        "language": {"const": "zh-CN"},
+        "subtitle_safe_area": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["top_pct", "right_pct", "bottom_pct", "left_pct"],
+          "properties": {
+            "top_pct": {"type": "number", "minimum": 0, "maximum": 30},
+            "right_pct": {"type": "number", "minimum": 0, "maximum": 30},
+            "bottom_pct": {"type": "number", "minimum": 0, "maximum": 30},
+            "left_pct": {"type": "number", "minimum": 0, "maximum": 30}
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"aspect_ratio": {"const": "9:16"}}},
+          "then": {"properties": {"width": {"const": 1080}, "height": {"const": 1920}}}
+        },
+        {
+          "if": {"properties": {"aspect_ratio": {"const": "16:9"}}},
+          "then": {"properties": {"width": {"const": 1920}, "height": {"const": 1080}}}
+        }
+      ]
+    },
+    "shot_contracts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {"$ref": "https://jingxu.studio/schemas/shot-contract/1.1.0"}
+    },
+    "export_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app_version", "exported_by", "contains_ai_assisted_content"],
+      "properties": {
+        "app_version": {"type": "string", "minLength": 1},
+        "exported_by": {"const": "LOCAL_USER"},
+        "contains_ai_assisted_content": {"type": "boolean"}
+      }
+    }
+  }
+}
