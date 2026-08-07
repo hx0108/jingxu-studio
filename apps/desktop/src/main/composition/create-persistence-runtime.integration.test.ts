@@ -38,6 +38,10 @@ describe('Main Persistence Composition Root', () => {
       );
 
       expect(runtime).not.toBeNull();
+      expect(runtime?.startupService.getStatus()).toMatchObject({
+        state: 'READY',
+        writeEnabled: true,
+      });
       runtime?.close();
       const database = new Database(path.join(root, 'managed', 'data', 'jingxu.sqlite'), {
         readonly: true,

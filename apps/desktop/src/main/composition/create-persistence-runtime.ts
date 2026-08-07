@@ -1,14 +1,9 @@
-import {
-  applyMigrations,
-  createManagedDirectories,
-  createManagedPaths,
-  initializeSqliteDatabase,
-  loadMigrationSet,
-  SqliteConnectionManager,
-} from '@jingxu/persistence';
+import { StartupService } from '@jingxu/application';
+import { SqlitePersistenceRuntimeAdapter } from '@jingxu/persistence';
 
 export interface DesktopPersistenceRuntime {
   readonly close: () => void;
+  readonly startupService: StartupService;
 }
 
 export interface CreateDesktopPersistenceRuntimeOptions {
@@ -22,24 +17,19 @@ export const createDesktopPersistenceRuntime = async ({
   managedRoot,
   migrationDirectory,
 }: CreateDesktopPersistenceRuntimeOptions): Promise<DesktopPersistenceRuntime> => {
-  const paths = createManagedPaths(managedRoot);
-  await createManagedDirectories(paths);
-  const manager = new SqliteConnectionManager(paths.databasePath);
-
-  try {
-    const migrations = await loadMigrationSet(migrationDirectory);
-    await initializeSqliteDatabase(manager, (connection) => {
-      applyMigrations(connection, migrations, clock);
-    });
-    return {
-      close: () => {
-        manager.close();
-      },
-    };
-  } catch (error) {
-    manager.close();
-    throw error;
-  }
+  const adapter = new SqlitePersistenceRuntimeAdapter({
+    clock,
+    managedRoot,
+    migrationDirectory,
+  });
+  const startupService = new StartupService(adapter);
+  await startupService.start();
+  return {
+    close: () => {
+      startupService.close();
+    },
+    startupService,
+  };
 };
 
 export const initializePersistenceAfterSingleInstanceLock = async <T>(

@@ -40,27 +40,27 @@
 
 ## 6. 在线备份与原子升级
 
-- [ ] 6.1 先添加 Integration 测试：已有版本且存在待执行 migration 时，在线备份先于任何 DDL，备份位于受管理目录、可打开、schema version 一致且 manifest/hash/字节数完整。（R: 已有数据库升级前必须生成一致备份 / 旧版本数据库升级前备份成功）
-- [ ] 6.2 先添加备份目录不可写、backup API 失败和备份验证失败测试，断言 `DATABASE_BACKUP_FAILED` 且源库 schema/数据/migration 记录不变。（R: 已有数据库升级前必须生成一致备份 / 备份创建或验证失败）
-- [ ] 6.3 添加全新空库初始化测试，证明 version 0 不生成无内容升级备份，但仍执行完整初始 migration 与 audit。（R: 已有数据库升级前必须生成一致备份 / 全新空库无需制造升级备份）
-- [ ] 6.4 实现 SQLite online backup、临时文件验证、flush/sync、原子 rename 和 manifest，使 6.1–6.3 通过；禁止 WAL 模式下用普通复制冒充一致备份。（Design §7）
+- [x] 6.1 先添加 Integration 测试：已有版本且存在待执行 migration 时，在线备份先于任何 DDL，备份位于受管理目录、可打开、schema version 一致且 manifest/hash/字节数完整。（R: 已有数据库升级前必须生成一致备份 / 旧版本数据库升级前备份成功）
+- [x] 6.2 先添加备份目录不可写、backup API 失败和备份验证失败测试，断言 `DATABASE_BACKUP_FAILED` 且源库 schema/数据/migration 记录不变。（R: 已有数据库升级前必须生成一致备份 / 备份创建或验证失败）
+- [x] 6.3 添加全新空库初始化测试，证明 version 0 不生成无内容升级备份，但仍执行完整初始 migration 与 audit。（R: 已有数据库升级前必须生成一致备份 / 全新空库无需制造升级备份）
+- [x] 6.4 实现 SQLite online backup、临时文件验证、flush/sync、原子 rename 和 manifest，使 6.1–6.3 通过；禁止 WAL 模式下用普通复制冒充一致备份。（Design §7）
 - [x] 6.5 先添加多个待执行 migration 的中间失败测试，断言单一 `BEGIN IMMEDIATE` 回滚全部 DDL 和版本记录并返回 `MIGRATION_APPLY_FAILED`。（R: Migration 失败必须原子回滚 / 中间 migration 执行失败）
 - [x] 6.6 实现全部待执行 SQL 与 `schema_migrations` INSERT 的单事务提交，并验证事务内没有备份、网络或长文件操作。（Design §7）
 - [x] 6.7 使用 100+ 历史版本 Fixture 完成升级演练，对账行数、document hash、父链、完整性和外键；记录执行时长但不以删除数据换取性能。（R: Migration 失败必须原子回滚 / 压力库升级成功）
 
 ## 7. 启动 audit 与故障归一化
 
-- [ ] 7.1 先添加 Integration 测试覆盖 `integrity_check`、`foreign_key_check` 和可由当前 DDL 查询的 Application invariant audit，证明任一失败都关闭写入门且不会自动创建新库。（R: 启动自检必须控制全局写入权限 / 数据库损坏或检查失败）
-- [ ] 7.2 实现结构化 audit finding，明确区分 `PASS/FAIL/NOT_IMPLEMENTED_BY_CURRENT_BUILD`；依赖后续 Schema/StoryBible 的规则不得被记录为已验证。（Design §8）
-- [ ] 7.3 实现 `DATABASE_OPEN_FAILED`、`DATABASE_PRAGMA_FAILED`、migration、backup、audit、restore 和 state conflict 错误映射，并添加 Unit 测试证明 SQLite 原始错误、SQL、路径和堆栈不进入公开 DTO/普通日志。（Design §10）
-- [ ] 7.4 将数据库打开、连接基线、migration、audit、recovery gate 接入 `StartupService`，添加 Integration 测试证明只有全部阶段通过才进入 `READY`。（R: 启动自检必须控制全局写入权限 / 全部数据库启动检查通过）
+- [x] 7.1 先添加 Integration 测试覆盖 `integrity_check`、`foreign_key_check` 和可由当前 DDL 查询的 Application invariant audit，证明任一失败都关闭写入门且不会自动创建新库。（R: 启动自检必须控制全局写入权限 / 数据库损坏或检查失败）
+- [x] 7.2 实现结构化 audit finding，明确区分 `PASS/FAIL/NOT_IMPLEMENTED_BY_CURRENT_BUILD`；依赖后续 Schema/StoryBible 的规则不得被记录为已验证。（Design §8）
+- [x] 7.3 实现 `DATABASE_OPEN_FAILED`、`DATABASE_PRAGMA_FAILED`、migration、backup、audit、restore 和 state conflict 错误映射，并添加 Unit 测试证明 SQLite 原始错误、SQL、路径和堆栈不进入公开 DTO/普通日志。（Design §10）
+- [x] 7.4 将数据库打开、连接基线、migration、audit、recovery gate 接入 `StartupService`，添加 Integration 测试证明只有全部阶段通过才进入 `READY`。（R: 启动自检必须控制全局写入权限 / 全部数据库启动检查通过）
 
 ## 8. 受控恢复
 
-- [ ] 8.1 先添加 Unit/Integration 测试覆盖备份清单扫描、opaque id、受管理根、hash/版本复检和伪造 id/路径拒绝，断言 `BACKUP_NOT_ALLOWED` 且零文件访问副作用。（R: 数据库恢复必须保留诊断证据并可失败回退 / 恢复源不在受管理清单）
-- [ ] 8.2 先添加恢复成功测试，证明连接关闭、当前 DB/WAL/SHM 诊断证据先保存、备份原子替换、完整自检重跑且仅通过后进入 `READY`。（R: 数据库恢复必须保留诊断证据并可失败回退 / 从有效备份恢复成功）
-- [ ] 8.3 先添加替换、重新打开和自检失败测试，断言 `DATABASE_RESTORE_FAILED`、保持只读故障，并保留原库、备份、诊断副本和操作 manifest。（R: 数据库恢复必须保留诊断证据并可失败回退 / 恢复过程中失败）
-- [ ] 8.4 实现操作级互斥、诊断快照/原始三件套保存、临时恢复文件、可回退 rename 和完整重检，使 8.1–8.3 通过；不得自动删除或覆盖备份/诊断文件。（R: 数据库恢复必须保留诊断证据并可失败回退 / 备份与诊断副本不被静默清理）
+- [x] 8.1 先添加 Unit/Integration 测试覆盖备份清单扫描、opaque id、受管理根、hash/版本复检和伪造 id/路径拒绝，断言 `BACKUP_NOT_ALLOWED` 且零文件访问副作用。（R: 数据库恢复必须保留诊断证据并可失败回退 / 恢复源不在受管理清单）
+- [x] 8.2 先添加恢复成功测试，证明连接关闭、当前 DB/WAL/SHM 诊断证据先保存、备份原子替换、完整自检重跑且仅通过后进入 `READY`。（R: 数据库恢复必须保留诊断证据并可失败回退 / 从有效备份恢复成功）
+- [x] 8.3 先添加替换、重新打开和自检失败测试，断言 `DATABASE_RESTORE_FAILED`、保持只读故障，并保留原库、备份、诊断副本和操作 manifest。（R: 数据库恢复必须保留诊断证据并可失败回退 / 恢复过程中失败）
+- [x] 8.4 实现操作级互斥、诊断快照/原始三件套保存、临时恢复文件、可回退 rename 和完整重检，使 8.1–8.3 通过；不得自动删除或覆盖备份/诊断文件。（R: 数据库恢复必须保留诊断证据并可失败回退 / 备份与诊断副本不被静默清理）
 
 ## 9. Main IPC、Preload 与只读故障页
 
