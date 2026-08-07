@@ -45,7 +45,7 @@ apps/desktop/src/main/
 └── ipc/runtime-ipc.ts
 ```
 
-`StartupService` 只依赖 `PersistenceRuntimePort`，负责状态机、并发命令串行化和写入门；SQLite 连接、文件路径、SQL、backup API 和异常归一化全部位于 `packages/persistence`。Main Composition Root 解析 `app.getPath('userData')` 下的受管理根目录、构造 Adapter 并注册逐方法 IPC。Domain 不新增依赖，Renderer 和 Preload 只依赖公开 Contract。
+`StartupService` 只依赖 `PersistenceRuntimePort`，负责状态机、并发命令串行化和写入门；SQLite 连接、文件路径、SQL、backup API 和异常归一化全部位于 `packages/persistence`。Main Composition Root 从 Windows `LOCALAPPDATA` 已知目录派生 `%LOCALAPPDATA%/JingxuStudio` 受管理根，严格校验其存在性、绝对路径和平台后再构造 Adapter；测试只能由 Composition Root 显式注入任务临时根。不得使用 Electron 默认位于 `%APPDATA%` 的 `app.getPath('userData')` 代替 TECH_DESIGN v1.1 §8.2 锁定的数据根。Domain 不新增依赖，Renderer 和 Preload 只依赖公开 Contract。
 
 Repository 与 UnitOfWork 虽然同属持久化 Port，但本 Change 不创建没有调用方的业务接口；它们由对应业务 Change 按用例需要增量加入。
 
@@ -88,7 +88,7 @@ Main IPC Host 对每个方法验证受信 sender、Zod DTO、状态前置条件�
 
 ### 4. 数据目录、单实例与连接生命周期
 
-生产数据根由 Main 从 Electron `userData` 派生为 `JingxuStudio` 受管理目录；测试显式注入临时根，不读取用户目录。应用取得 Electron single-instance lock 后才初始化数据库，Main 持有唯一写连接并在退出时关闭。
+生产数据根由 Main 从经校验的 Windows `LOCALAPPDATA` 已知目录派生为 `%LOCALAPPDATA%/JingxuStudio`；缺失、非绝对路径、非 Windows 平台或规范化失败均阻断数据库初始化，不回退到工作目录、`%APPDATA%` 或明文配置。测试显式注入任务临时根，不读取产品受管理目录。应用取得 Electron single-instance lock 后才初始化数据库，Main 持有唯一写连接并在退出时关闭。
 
 打开连接后依次设置并回读验证：
 

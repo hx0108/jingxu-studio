@@ -14,29 +14,29 @@
 
 ## 3. 受管理路径与 SQLite 连接基线
 
-- [ ] 3.1 先添加 Unit 测试覆盖生产根派生、测试根注入、父目录创建、符号链接/路径逃逸拒绝和 opaque backup id 解析，确保 Renderer 无法控制任意路径。（R: 数据库恢复必须保留诊断证据并可失败回退 / 恢复源不在受管理清单）
-- [ ] 3.2 先添加 Integration 测试验证新安装创建数据库、Main 唯一写连接和 `foreign_keys=ON`、WAL、`synchronous=FULL`、`busy_timeout=5000` 的设置及回读结果。（R: 本地数据库连接必须满足固定安全基线 / 新安装创建本地数据库）
-- [ ] 3.3 添加可注入 PRAGMA 失败测试，断言返回 `DATABASE_PRAGMA_FAILED`、数据库不进入可写状态且 migration 未执行。（R: 本地数据库连接必须满足固定安全基线 / 连接基线无法生效）
-- [ ] 3.4 实现 persistence 受管理目录、连接工厂、连接生命周期和异常归一化，由 Composition Root 在取得 Electron single-instance lock 后创建唯一写连接，使 3.1–3.3 通过。（Design §4）
+- [x] 3.1 先添加 Unit 测试覆盖生产根派生、测试根注入、父目录创建、符号链接/路径逃逸拒绝和 opaque backup id 解析，确保 Renderer 无法控制任意路径。（R: 数据库恢复必须保留诊断证据并可失败回退 / 恢复源不在受管理清单）
+- [x] 3.2 先添加 Integration 测试验证新安装创建数据库、Main 唯一写连接和 `foreign_keys=ON`、WAL、`synchronous=FULL`、`busy_timeout=5000` 的设置及回读结果。（R: 本地数据库连接必须满足固定安全基线 / 新安装创建本地数据库）
+- [x] 3.3 添加可注入 PRAGMA 失败测试，断言返回 `DATABASE_PRAGMA_FAILED`、数据库不进入可写状态且 migration 未执行。（R: 本地数据库连接必须满足固定安全基线 / 连接基线无法生效）
+- [x] 3.4 实现 persistence 受管理目录、连接工厂、连接生命周期和异常归一化，由 Composition Root 在取得 Electron single-instance lock 后创建唯一写连接，使 3.1–3.3 通过。（Design §4）
 
 ## 4. Migration 发现、版本与 checksum
 
-- [ ] 4.1 先添加 Unit 测试覆盖合法文件名、UTF-8/no-BOM、从 1 连续递增、重复版本、编号缺口、非法名称和基于原始字节的 SHA-256；错误集合统一映射 `MIGRATION_SEQUENCE_INVALID`。（R: Migration 必须严格顺序且可重现 / Migration 集合存在缺口或重复版本）
-- [ ] 4.2 先添加 Integration 测试覆盖空库应用 migration、记录版本/名称/hash/时间及第二次启动完全跳过已应用 SQL。（R: Migration 必须严格顺序且可重现 / 空库应用初始 migration、重复启动跳过已应用 migration）
-- [ ] 4.3 先添加 Integration 测试覆盖已应用文件名称/hash 漂移，断言 `MIGRATION_CHECKSUM_MISMATCH` 且历史记录和 schema 均不变。（R: Migration 必须严格顺序且可重现 / 已应用 migration 发生漂移）
-- [ ] 4.4 先添加 Integration 测试覆盖高版本库与存在用户表但缺失 `schema_migrations` 的未版本化库，分别返回 `DATABASE_VERSION_TOO_NEW` 与 `DATABASE_UNVERSIONED_SCHEMA` 且零写入。（R: Migration 必须严格顺序且可重现 / 数据库版本高于当前应用；Design §5）
-- [ ] 4.5 实现 migration 资源加载、集合预检、版本判定、已应用记录核对和待执行计划，使 4.1–4.4 通过；不得使用 `PRAGMA user_version` 替代 `schema_migrations`。（Design §5）
+- [x] 4.1 先添加 Unit 测试覆盖合法文件名、UTF-8/no-BOM、从 1 连续递增、重复版本、编号缺口、非法名称和基于原始字节的 SHA-256；错误集合统一映射 `MIGRATION_SEQUENCE_INVALID`。（R: Migration 必须严格顺序且可重现 / Migration 集合存在缺口或重复版本）
+- [x] 4.2 先添加 Integration 测试覆盖空库应用 migration、记录版本/名称/hash/时间及第二次启动完全跳过已应用 SQL。（R: Migration 必须严格顺序且可重现 / 空库应用初始 migration、重复启动跳过已应用 migration）
+- [x] 4.3 先添加 Integration 测试覆盖已应用文件名称/hash 漂移，断言 `MIGRATION_CHECKSUM_MISMATCH` 且历史记录和 schema 均不变。（R: Migration 必须严格顺序且可重现 / 已应用 migration 发生漂移）
+- [x] 4.4 先添加 Integration 测试覆盖高版本库与存在用户表但缺失 `schema_migrations` 的未版本化库，分别返回 `DATABASE_VERSION_TOO_NEW` 与 `DATABASE_UNVERSIONED_SCHEMA` 且零写入。（R: Migration 必须严格顺序且可重现 / 数据库版本高于当前应用；Design §5）
+- [x] 4.5 实现 migration 资源加载、集合预检、版本判定、已应用记录核对和待执行计划，使 4.1–4.4 通过；不得使用 `PRAGMA user_version` 替代 `schema_migrations`。（Design §5）
 
 ## 5. 完整 `0001_initial.sql` 与数据库约束
 
-- [ ] 5.1 根据 TECH_DESIGN v1.1 §8.4 建立“表/索引/trigger → DDL → 测试”追踪清单，并先添加 introspection 测试，要求全部登记表和确定命名对象存在。（R: 初始数据库结构必须落实 V1 持久化约束 / 初始结构在空库完整创建）
-- [ ] 5.2 先为系统配置、Provider 快照和 Prompt 表添加 FK/CHECK/unique/json_valid 负例测试，再补 `0001_initial.sql` 对应 DDL；凭据列只允许不透明 `credential_ref`。（Design §6）
-- [ ] 5.3 先为 Project、FormatProfile、SourceInput、Consent、Episode、StoryBible/Script/StageHead 表添加外键、版本唯一、current partial unique、项目级/集级 stage head 和 JSON 基础合法性负例，再补对应 DDL。（R: 初始数据库结构必须落实 V1 持久化约束 / 数据库约束拒绝非法关系）
-- [ ] 5.4 先为 Job、Invocation、Lock、Dependency、Audit 表添加枚举、幂等键、复合边和有效锁 partial unique 负例，再补对应 DDL；测试证明日志/审计列不要求保存密钥或完整 Prompt。（Design §6）
-- [ ] 5.5 先为 Shot、ShotContractVersion、Derivation、Producibility 表添加 sequence、版本唯一、枚举、COPY/SPLIT/MERGE 可由 DDL 表达部分的负例，再补对应 DDL。（R: 初始数据库结构必须落实 V1 持久化约束 / 数据库约束拒绝非法关系）
-- [ ] 5.6 先为 Import/Export、Evaluation 和本地 Analytics 表添加状态、唯一键、json_valid 和必要索引负例，再补对应 DDL，且不实现业务导入导出方法。（Design §6 Non-Goals）
-- [ ] 5.7 先添加 StoryBible、Script、EpisodeVersion 和 ShotContractVersion 原地 UPDATE 失败测试，再建立不可变 trigger；确认允许通过 INSERT 新版本而非关闭 trigger。（R: 初始数据库结构必须落实 V1 持久化约束 / 历史版本不能原地更新）
-- [ ] 5.8 在空库执行完整 `0001_initial.sql`，断言所有追踪项存在、`schema_migrations` 版本 1 正确、`foreign_key_check` 零违规，并让所有单一错误负例保持互相独立。（R: 初始数据库结构必须落实 V1 持久化约束 / 初始结构在空库完整创建）
+- [x] 5.1 根据 TECH_DESIGN v1.1 §8.4 建立“表/索引/trigger → DDL → 测试”追踪清单，并先添加 introspection 测试，要求全部登记表和确定命名对象存在。（R: 初始数据库结构必须落实 V1 持久化约束 / 初始结构在空库完整创建）
+- [x] 5.2 先为系统配置、Provider 快照和 Prompt 表添加 FK/CHECK/unique/json_valid 负例测试，再补 `0001_initial.sql` 对应 DDL；凭据列只允许不透明 `credential_ref`。（Design §6）
+- [x] 5.3 先为 Project、FormatProfile、SourceInput、Consent、Episode、StoryBible/Script/StageHead 表添加外键、版本唯一、current partial unique、项目级/集级 stage head 和 JSON 基础合法性负例，再补对应 DDL。（R: 初始数据库结构必须落实 V1 持久化约束 / 数据库约束拒绝非法关系）
+- [x] 5.4 先为 Job、Invocation、Lock、Dependency、Audit 表添加枚举、幂等键、复合边和有效锁 partial unique 负例，再补对应 DDL；测试证明日志/审计列不要求保存密钥或完整 Prompt。（Design §6）
+- [x] 5.5 先为 Shot、ShotContractVersion、Derivation、Producibility 表添加 sequence、版本唯一、枚举、COPY/SPLIT/MERGE 可由 DDL 表达部分的负例，再补对应 DDL。（R: 初始数据库结构必须落实 V1 持久化约束 / 数据库约束拒绝非法关系）
+- [x] 5.6 先为 Import/Export、Evaluation 和本地 Analytics 表添加状态、唯一键、json_valid 和必要索引负例，再补对应 DDL，且不实现业务导入导出方法。（Design §6 Non-Goals）
+- [x] 5.7 先添加 StoryBible、Script、EpisodeVersion 和 ShotContractVersion 原地 UPDATE 失败测试，再建立不可变 trigger；确认允许通过 INSERT 新版本而非关闭 trigger。（R: 初始数据库结构必须落实 V1 持久化约束 / 历史版本不能原地更新）
+- [x] 5.8 在空库执行完整 `0001_initial.sql`，断言所有追踪项存在、`schema_migrations` 版本 1 正确、`foreign_key_check` 零违规，并让所有单一错误负例保持互相独立。（R: 初始数据库结构必须落实 V1 持久化约束 / 初始结构在空库完整创建）
 
 ## 6. 在线备份与原子升级
 
@@ -44,9 +44,9 @@
 - [ ] 6.2 先添加备份目录不可写、backup API 失败和备份验证失败测试，断言 `DATABASE_BACKUP_FAILED` 且源库 schema/数据/migration 记录不变。（R: 已有数据库升级前必须生成一致备份 / 备份创建或验证失败）
 - [ ] 6.3 添加全新空库初始化测试，证明 version 0 不生成无内容升级备份，但仍执行完整初始 migration 与 audit。（R: 已有数据库升级前必须生成一致备份 / 全新空库无需制造升级备份）
 - [ ] 6.4 实现 SQLite online backup、临时文件验证、flush/sync、原子 rename 和 manifest，使 6.1–6.3 通过；禁止 WAL 模式下用普通复制冒充一致备份。（Design §7）
-- [ ] 6.5 先添加多个待执行 migration 的中间失败测试，断言单一 `BEGIN IMMEDIATE` 回滚全部 DDL 和版本记录并返回 `MIGRATION_APPLY_FAILED`。（R: Migration 失败必须原子回滚 / 中间 migration 执行失败）
-- [ ] 6.6 实现全部待执行 SQL 与 `schema_migrations` INSERT 的单事务提交，并验证事务内没有备份、网络或长文件操作。（Design §7）
-- [ ] 6.7 使用 100+ 历史版本 Fixture 完成升级演练，对账行数、document hash、父链、完整性和外键；记录执行时长但不以删除数据换取性能。（R: Migration 失败必须原子回滚 / 压力库升级成功）
+- [x] 6.5 先添加多个待执行 migration 的中间失败测试，断言单一 `BEGIN IMMEDIATE` 回滚全部 DDL 和版本记录并返回 `MIGRATION_APPLY_FAILED`。（R: Migration 失败必须原子回滚 / 中间 migration 执行失败）
+- [x] 6.6 实现全部待执行 SQL 与 `schema_migrations` INSERT 的单事务提交，并验证事务内没有备份、网络或长文件操作。（Design §7）
+- [x] 6.7 使用 100+ 历史版本 Fixture 完成升级演练，对账行数、document hash、父链、完整性和外键；记录执行时长但不以删除数据换取性能。（R: Migration 失败必须原子回滚 / 压力库升级成功）
 
 ## 7. 启动 audit 与故障归一化
 

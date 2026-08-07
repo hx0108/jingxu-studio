@@ -39,4 +39,13 @@ describe('跨包依赖边界', () => {
       /@jingxu\/(application|persistence)|better-sqlite3|node:/u,
     );
   });
+
+  it('Main 构建—处理原生 SQLite—将 better-sqlite3 保持为运行时外部依赖', async () => {
+    const viteMainConfig = await readFile(
+      path.join(repositoryRoot, 'apps', 'desktop', 'vite.main.config.ts'),
+      'utf8',
+    );
+
+    expect(viteMainConfig).toMatch(/external:\s*\[[^\]]*'better-sqlite3'/su);
+  });
 });

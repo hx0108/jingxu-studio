@@ -1,8 +1,14 @@
 import path from 'node:path';
 
 import { app, BrowserWindow, net, protocol, session } from 'electron';
+import { deriveWindowsProductionRoot } from '@jingxu/persistence';
 
 import { createSecureMainWindow } from './composition/create-main-window';
+import {
+  createDesktopPersistenceRuntime,
+  initializePersistenceAfterSingleInstanceLock,
+  type DesktopPersistenceRuntime,
+} from './composition/create-persistence-runtime';
 import { registerAppProtocol } from './security/app-protocol';
 
 const APP_SCHEME = 'jingxu';
@@ -13,6 +19,7 @@ const devServerUrl =
 const rendererName =
   typeof MAIN_WINDOW_VITE_NAME === 'string' ? MAIN_WINDOW_VITE_NAME : 'main_window';
 let appProtocolRegistered = false;
+let persistenceRuntime: DesktopPersistenceRuntime | null = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -26,8 +33,22 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 app.enableSandbox();
+const singleInstanceLockAcquired = app.requestSingleInstanceLock();
 
 const getTrustedUrl = (): string => devServerUrl ?? PRODUCTION_URL;
+
+const getMigrationDirectory = (): string =>
+  app.isPackaged
+    ? path.join(process.resourcesPath, 'migrations')
+    : path.resolve(
+        app.getAppPath(),
+        '..',
+        '..',
+        'packages',
+        'persistence',
+        'resources',
+        'migrations',
+      );
 
 const createMainWindow = async (): Promise<void> => {
   if (devServerUrl === undefined && !appProtocolRegistered) {
@@ -48,23 +69,45 @@ const createMainWindow = async (): Promise<void> => {
   });
 };
 
-void app
-  .whenReady()
-  .then(createMainWindow)
-  .catch((error: unknown) => {
-    const message = error instanceof Error ? error.message : '未知启动错误';
-    process.stderr.write(`镜序 Studio 启动失败：${message}\n`);
-    app.exit(1);
+if (!singleInstanceLockAcquired) {
+  app.quit();
+} else {
+  void app
+    .whenReady()
+    .then(async () => {
+      const managedRoot = deriveWindowsProductionRoot(
+        process.env.LOCALAPPDATA ?? '',
+        process.platform,
+      );
+      persistenceRuntime = await initializePersistenceAfterSingleInstanceLock(true, () =>
+        createDesktopPersistenceRuntime({
+          clock: () => new Date().toISOString(),
+          managedRoot,
+          migrationDirectory: getMigrationDirectory(),
+        }),
+      );
+      await createMainWindow();
+    })
+    .catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : '未知启动错误';
+      process.stderr.write(`镜序 Studio 启动失败：${message}\n`);
+      app.exit(1);
+    });
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) {
+      void createMainWindow();
+    }
   });
 
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    void createMainWindow();
-  }
-});
+  app.on('before-quit', () => {
+    persistenceRuntime?.close();
+    persistenceRuntime = null;
+  });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
-});
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit();
+    }
+  });
+}
