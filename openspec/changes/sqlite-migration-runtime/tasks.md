@@ -1,16 +1,16 @@
 ## 1. 依赖、边界与测试底座
 
-- [ ] 1.1 依据 Electron 43、Node 22、pnpm 11 和当前 Forge 配置核验 `better-sqlite3` 的官方兼容性与 native rebuild 要求，记录来源后精确锁定运行/类型依赖；不得降低 pnpm 安全策略或伪造 native 安装结果。（Design §11）
-- [ ] 1.2 先添加跨包依赖规则测试，再创建 `packages/application` 与 `packages/persistence` 的最小 package/tsconfig/public entry，证明 Application 不依赖 persistence、Domain 不依赖 SQLite、Renderer 不导入基础设施。（Design §1）
-- [ ] 1.3 建立只使用任务临时目录的 SQLite 测试工具，注入固定时间、ID、hash 输入和故障点，并添加测试证明任何 Unit/Integration 测试都不会读取真实 `%LOCALAPPDATA%`。（Design §11）
-- [ ] 1.4 建立空库、上一版本库、100+ 历史版本压力库、损坏库和单一错误 migration Fixture 的生成/校验入口，保证 Fixture 可重现且不含用户内容或凭据。（R: Migration 失败必须原子回滚 / 压力库升级成功）
+- [x] 1.1 依据 Electron 43、Node 22、pnpm 11 和当前 Forge 配置核验 `better-sqlite3` 的官方兼容性与 native rebuild 要求，记录来源后精确锁定运行/类型依赖；不得降低 pnpm 安全策略或伪造 native 安装结果。（Design §11）
+- [x] 1.2 先添加跨包依赖规则测试，再创建 `packages/application` 与 `packages/persistence` 的最小 package/tsconfig/public entry，证明 Application 不依赖 persistence、Domain 不依赖 SQLite、Renderer 不导入基础设施。（Design §1）
+- [x] 1.3 建立只使用任务临时目录的 SQLite 测试工具，注入固定时间、ID、hash 输入和故障点，并添加测试证明任何 Unit/Integration 测试都不会读取真实 `%LOCALAPPDATA%`。（Design §11）
+- [x] 1.4 建立空库、上一版本库、100+ 历史版本压力库、损坏库和单一错误 migration Fixture 的生成/校验入口，保证 Fixture 可重现且不含用户内容或凭据。（R: Migration 失败必须原子回滚 / 压力库升级成功）
 
 ## 2. Application Port、状态机与公开契约
 
-- [ ] 2.1 先添加 Unit 测试覆盖 `BOOTING/CHECKING/READY/READ_ONLY_FAULT/RESTORING` 合法转换、revision 单调递增、非 READY 时写入门关闭和非法转换失败。（R: 启动自检必须控制全局写入权限 / 全部数据库启动检查通过）
-- [ ] 2.2 先添加 Unit 测试覆盖 `retry`/`restore` 串行化、重复 `requestId` 幂等和过期 `expectedRevision` 返回 `STARTUP_STATE_CONFLICT`，不得并行执行迁移或恢复。（Design §2）
-- [ ] 2.3 在 `packages/application/src/ports/persistence/` 定义带简短 TSDoc 的 `PersistenceRuntimePort`，并实现不导入 SQLite 类型的 `StartupService`、状态机和全局写入门，使 2.1–2.2 测试通过。（Design §1–§2）
-- [ ] 2.4 先添加 Contract 测试，再在 `packages/contracts` 定义三个 `runtime` 方法的 Zod DTO/类型；验证错误状态可行动且不含 SQL、堆栈、绝对路径、连接、密钥或用户内容。（R: 启动自检必须控制全局写入权限 / 故障信息保持脱敏且可行动）
+- [x] 2.1 先添加 Unit 测试覆盖 `BOOTING/CHECKING/READY/READ_ONLY_FAULT/RESTORING` 合法转换、revision 单调递增、非 READY 时写入门关闭和非法转换失败。（R: 启动自检必须控制全局写入权限 / 全部数据库启动检查通过）
+- [x] 2.2 先添加 Unit 测试覆盖 `retry`/`restore` 串行化、重复 `requestId` 幂等和过期 `expectedRevision` 返回 `STARTUP_STATE_CONFLICT`，不得并行执行迁移或恢复。（Design §2）
+- [x] 2.3 在 `packages/application/src/ports/persistence/` 定义带简短 TSDoc 的 `PersistenceRuntimePort`，并实现不导入 SQLite 类型的 `StartupService`、状态机和全局写入门，使 2.1–2.2 测试通过。（Design §1–§2）
+- [x] 2.4 先添加 Contract 测试，再在 `packages/contracts` 定义三个 `runtime` 方法的 Zod DTO/类型；验证错误状态可行动且不含 SQL、堆栈、绝对路径、连接、密钥或用户内容。（R: 启动自检必须控制全局写入权限 / 故障信息保持脱敏且可行动）
 
 ## 3. 受管理路径与 SQLite 连接基线
 

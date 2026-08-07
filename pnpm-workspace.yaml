@@ -3,6 +3,7 @@ packages:
   - packages/*
 
 allowBuilds:
+  better-sqlite3: true
   electron: true
   electron-winstaller: true
   esbuild: true
@@ -13,3 +14,9 @@ nodeLinker: hoisted
 packageManagerStrict: true
 saveExact: true
 strictDepBuilds: true
+
+supportedArchitectures:
+  os:
+    - win32
+  cpu:
+    - x64

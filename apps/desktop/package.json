@@ -15,7 +15,9 @@
     "package:win": "electron-forge package --platform=win32 --arch=x64"
   },
   "dependencies": {
+    "@jingxu/application": "workspace:*",
     "@jingxu/contracts": "workspace:*",
+    "@jingxu/persistence": "workspace:*",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -23,6 +25,7 @@
     "@electron-forge/cli": "8.0.0-alpha.10",
     "@electron-forge/maker-squirrel": "8.0.0-alpha.10",
     "@electron-forge/plugin-vite": "8.0.0-alpha.10",
+    "@electron-forge/plugin-auto-unpack-natives": "8.0.0-alpha.10",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "5.0.0",

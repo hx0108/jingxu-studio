@@ -7,5 +7,10 @@
     "noEmit": true,
     "types": ["node", "electron"]
   },
-  "include": ["e2e/**/*.ts", "forge.config.ts", "vite.*.config.ts", "src/**/*.ts", "src/**/*.tsx"]
+  "include": ["e2e/**/*.ts", "forge.config.ts", "vite.*.config.ts", "src/**/*.ts", "src/**/*.tsx"],
+  "references": [
+    { "path": "../../packages/contracts" },
+    { "path": "../../packages/application" },
+    { "path": "../../packages/persistence" }
+  ]
 }

@@ -23,6 +23,10 @@ const forgeConfig = {
   },
   plugins: [
     {
+      config: {},
+      name: '@electron-forge/plugin-auto-unpack-natives',
+    },
+    {
       config: {
         build: [
           {

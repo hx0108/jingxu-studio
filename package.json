@@ -17,9 +17,9 @@
     "prebuild": "pnpm check:env",
     "build": "pnpm --filter @jingxu/desktop build",
     "preformat": "pnpm check:env",
-    "format": "prettier --write package.json pnpm-workspace.yaml \"*.config.{mjs,ts}\" \"scripts/**/*.mjs\" \"apps/**/*.{json,ts,tsx,css,html}\" \"packages/**/*.{json,ts,tsx}\" README.md",
+    "format": "prettier --write package.json pnpm-workspace.yaml \"*.config.{mjs,ts}\" \"scripts/**/*.{mjs,ts}\" \"apps/**/*.{json,ts,tsx,css,html}\" \"packages/**/*.{json,ts,tsx}\" docs/SQLITE_RUNTIME.md README.md",
     "preformat:check": "pnpm check:env",
-    "format:check": "prettier --check package.json pnpm-workspace.yaml \"*.config.{mjs,ts}\" \"scripts/**/*.mjs\" \"apps/**/*.{json,ts,tsx,css,html}\" \"packages/**/*.{json,ts,tsx}\" README.md",
+    "format:check": "prettier --check package.json pnpm-workspace.yaml \"*.config.{mjs,ts}\" \"scripts/**/*.{mjs,ts}\" \"apps/**/*.{json,ts,tsx,css,html}\" \"packages/**/*.{json,ts,tsx}\" docs/SQLITE_RUNTIME.md README.md",
     "prelint": "pnpm check:env",
     "lint": "eslint . --max-warnings=0",
     "pretypecheck": "pnpm check:env",
@@ -38,6 +38,7 @@
     "package:win": "pnpm --filter @jingxu/desktop package:win"
   },
   "devDependencies": {
+    "@electron/rebuild": "4.2.0",
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.1.2",
     "eslint": "^10.8.0",

@@ -28,6 +28,7 @@ export default tseslint.config(
     ignores: [
       '.agents/**',
       '.vite/**',
+      '**/dist/**',
       'node_modules/**',
       'openspec/**',
       'out/**',

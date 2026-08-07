@@ -1,5 +1,5 @@
 {
-  "name": "@jingxu/contracts",
+  "name": "@jingxu/application",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,6 +15,6 @@
     "pnpm": ">=11.16.0 <12"
   },
   "dependencies": {
-    "zod": "4.4.3"
+    "@jingxu/contracts": "workspace:*"
   }
 }
