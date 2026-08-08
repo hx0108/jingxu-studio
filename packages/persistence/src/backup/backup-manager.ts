@@ -14,7 +14,6 @@ import {
 import path from 'node:path';
 
 import type { BackupSummaryDto } from '@jingxu/contracts';
-import Database from 'better-sqlite3';
 
 import type { MigrationResource } from '../migrations/migration-loader';
 import { applyMigrations, inspectMigrationPlan } from '../migrations/migration-runner';
@@ -24,6 +23,12 @@ import {
   type ManagedPaths,
 } from '../runtime/managed-paths';
 import { PersistenceRuntimeError } from '../runtime/persistence-error';
+import {
+  backupSqliteDatabase,
+  openSqliteDatabase,
+  queryPragmaRows,
+  type SqliteDatabase,
+} from '../runtime/sqlite-database';
 
 interface BackupManifest {
   readonly backupId: string;
@@ -32,6 +37,7 @@ interface BackupManifest {
   readonly databaseFile: string;
   readonly schemaVersion: number;
   readonly sha256: string;
+  readonly targetSchemaVersion: number;
 }
 
 export interface VerifiedBackup {
@@ -41,12 +47,13 @@ export interface VerifiedBackup {
 }
 
 export interface CreateOnlineBackupOptions {
-  readonly backupDatabase?: (database: Database.Database, destination: string) => Promise<unknown>;
+  readonly backupDatabase?: (database: SqliteDatabase, destination: string) => Promise<unknown>;
   readonly backupId: string;
   readonly clock: () => string;
   readonly currentVersion: number;
-  readonly database: Database.Database;
+  readonly database: SqliteDatabase;
   readonly paths: ManagedPaths;
+  readonly targetVersion?: number;
 }
 
 export interface PerformManagedMigrationOptions extends Omit<
@@ -93,12 +100,15 @@ const parseManifest = (text: string): BackupManifest => {
     !('databaseFile' in value) ||
     !('schemaVersion' in value) ||
     !('sha256' in value) ||
+    !('targetSchemaVersion' in value) ||
     typeof value.backupId !== 'string' ||
     typeof value.byteSize !== 'number' ||
     typeof value.createdAt !== 'string' ||
     typeof value.databaseFile !== 'string' ||
     typeof value.schemaVersion !== 'number' ||
-    typeof value.sha256 !== 'string'
+    typeof value.sha256 !== 'string' ||
+    typeof value.targetSchemaVersion !== 'number' ||
+    value.targetSchemaVersion < value.schemaVersion
   ) {
     throw new PersistenceRuntimeError('BACKUP_NOT_ALLOWED');
   }
@@ -106,17 +116,17 @@ const parseManifest = (text: string): BackupManifest => {
 };
 
 const verifyBackupDatabase = (databasePath: string, expectedVersion: number): void => {
-  const backup = new Database(databasePath, { readonly: true });
+  const backup = openSqliteDatabase(databasePath, { readOnly: true });
   try {
-    const integrity = backup.pragma('integrity_check') as readonly {
-      readonly integrity_check: string;
-    }[];
+    const integrity = queryPragmaRows(backup, 'integrity_check');
+    const foreignKeyRows = queryPragmaRows(backup, 'foreign_key_check');
     const row = backup.prepare('SELECT MAX(version) AS version FROM schema_migrations').get() as {
       readonly version: number | null;
     };
     if (
       integrity.length !== 1 ||
       integrity[0]?.integrity_check !== 'ok' ||
+      foreignKeyRows.length !== 0 ||
       row.version !== expectedVersion
     ) {
       throw new PersistenceRuntimeError('DATABASE_BACKUP_FAILED');
@@ -127,12 +137,13 @@ const verifyBackupDatabase = (databasePath: string, expectedVersion: number): vo
 };
 
 export const createOnlineBackup = async ({
-  backupDatabase = async (database, destination) => database.backup(destination),
+  backupDatabase = backupSqliteDatabase,
   backupId,
   clock,
   currentVersion,
   database,
   paths,
+  targetVersion = currentVersion,
 }: CreateOnlineBackupOptions): Promise<BackupSummaryDto> => {
   const finalDatabasePath = resolveManagedBackupPath(paths, backupId);
   const finalManifestPath = manifestPathFor(paths, backupId);
@@ -169,6 +180,7 @@ export const createOnlineBackup = async ({
       databaseFile: `${backupId}.sqlite`,
       schemaVersion: currentVersion,
       sha256: await hashFile(temporaryDatabasePath),
+      targetSchemaVersion: targetVersion,
     };
     await writeFile(temporaryManifestPath, `${JSON.stringify(manifest)}\n`, {
       encoding: 'utf8',
@@ -244,7 +256,11 @@ export const performManagedMigration = async (
   const plan = inspectMigrationPlan(options.database, options.migrations);
   const backup =
     plan.currentVersion > 0 && plan.pending.length > 0
-      ? await createOnlineBackup({ ...options, currentVersion: plan.currentVersion })
+      ? await createOnlineBackup({
+          ...options,
+          currentVersion: plan.currentVersion,
+          targetVersion: options.migrations.length,
+        })
       : null;
   applyMigrations(options.database, options.migrations, options.clock);
   return { backup };

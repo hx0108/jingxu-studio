@@ -1,10 +1,10 @@
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 
 import { loadMigrationSet } from '../migrations/migration-loader';
 import { applyMigrations } from '../migrations/migration-runner';
+import { SqliteTestDatabase as Database } from '../testing/sqlite-test-database';
 import { withSqliteTestContext } from '../testing/sqlite-test-kit';
 import { runDatabaseAudit } from './database-audit';
 

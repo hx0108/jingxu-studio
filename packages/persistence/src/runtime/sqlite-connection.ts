@@ -1,6 +1,10 @@
-import Database from 'better-sqlite3';
-
 import { PersistenceRuntimeError } from './persistence-error';
+import {
+  assertSqliteRuntimeCapabilities,
+  openSqliteDatabase,
+  queryPragmaValue,
+  type SqliteDatabase,
+} from './sqlite-database';
 
 type PragmaName = 'busy_timeout' | 'foreign_keys' | 'journal_mode' | 'synchronous';
 
@@ -9,12 +13,12 @@ export interface SqliteConnectionOptions {
 }
 
 const configureConnection = (
-  database: Database.Database,
+  database: SqliteDatabase,
   beforePragma: ((name: PragmaName) => void) | undefined,
 ): void => {
   const apply = (name: PragmaName, statement: string) => {
     beforePragma?.(name);
-    database.pragma(statement);
+    database.exec(`PRAGMA ${statement}`);
   };
 
   apply('foreign_keys', 'foreign_keys = ON');
@@ -23,30 +27,36 @@ const configureConnection = (
   apply('busy_timeout', 'busy_timeout = 5000');
 
   const valid =
-    database.pragma('foreign_keys', { simple: true }) === 1 &&
-    database.pragma('journal_mode', { simple: true }) === 'wal' &&
-    database.pragma('synchronous', { simple: true }) === 2 &&
-    database.pragma('busy_timeout', { simple: true }) === 5000;
+    queryPragmaValue(database, 'foreign_keys') === 1 &&
+    queryPragmaValue(database, 'journal_mode') === 'wal' &&
+    queryPragmaValue(database, 'synchronous') === 2 &&
+    queryPragmaValue(database, 'busy_timeout') === 5000;
   if (!valid) throw new PersistenceRuntimeError('DATABASE_PRAGMA_FAILED');
 };
 
 export class SqliteConnectionManager {
   readonly #databasePath: string;
   readonly #options: SqliteConnectionOptions;
-  #database: Database.Database | null = null;
+  #database: SqliteDatabase | null = null;
 
   public constructor(databasePath: string, options: SqliteConnectionOptions = {}) {
     this.#databasePath = databasePath;
     this.#options = options;
   }
 
-  public open(): Database.Database {
+  public open(): SqliteDatabase {
     if (this.#database !== null) return this.#database;
 
-    let database: Database.Database;
+    let database: SqliteDatabase;
     try {
-      database = new Database(this.#databasePath);
+      database = openSqliteDatabase(this.#databasePath);
     } catch {
+      throw new PersistenceRuntimeError('DATABASE_OPEN_FAILED');
+    }
+    try {
+      assertSqliteRuntimeCapabilities(database);
+    } catch {
+      database.close();
       throw new PersistenceRuntimeError('DATABASE_OPEN_FAILED');
     }
 

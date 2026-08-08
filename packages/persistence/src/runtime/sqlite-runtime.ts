@@ -1,11 +1,10 @@
-import type Database from 'better-sqlite3';
-
 import type { SqliteConnectionManager } from './sqlite-connection';
+import type { SqliteDatabase } from './sqlite-database';
 
 export const initializeSqliteDatabase = async (
   connectionManager: SqliteConnectionManager,
-  migrate: (database: Database.Database) => void | Promise<void>,
-): Promise<Database.Database> => {
+  migrate: (database: SqliteDatabase) => void | Promise<void>,
+): Promise<SqliteDatabase> => {
   const database = connectionManager.open();
   await migrate(database);
   return database;

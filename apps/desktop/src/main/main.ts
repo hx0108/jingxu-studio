@@ -1,6 +1,7 @@
 import path from 'node:path';
+import os from 'node:os';
 
-import { app, BrowserWindow, net, protocol, session } from 'electron';
+import { app, BrowserWindow, ipcMain, net, protocol, session } from 'electron';
 import { deriveWindowsProductionRoot } from '@jingxu/persistence';
 
 import { createSecureMainWindow } from './composition/create-main-window';
@@ -9,6 +10,7 @@ import {
   initializePersistenceAfterSingleInstanceLock,
   type DesktopPersistenceRuntime,
 } from './composition/create-persistence-runtime';
+import { registerRuntimeIpc } from './ipc/runtime-ipc';
 import { registerAppProtocol } from './security/app-protocol';
 
 const APP_SCHEME = 'jingxu';
@@ -50,6 +52,23 @@ const getMigrationDirectory = (): string =>
         'migrations',
       );
 
+const getManagedRoot = (): string => {
+  const testRoot = process.env.JINGXU_E2E_DATA_ROOT;
+  if (process.env.JINGXU_E2E === '1' && testRoot !== undefined) {
+    const resolvedTestRoot = path.resolve(testRoot);
+    const relativeToTemporaryRoot = path.relative(os.tmpdir(), resolvedTestRoot);
+    if (
+      relativeToTemporaryRoot === '..' ||
+      relativeToTemporaryRoot.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relativeToTemporaryRoot)
+    ) {
+      throw new Error('E2E_DATA_ROOT_INVALID');
+    }
+    return resolvedTestRoot;
+  }
+  return deriveWindowsProductionRoot(process.env.LOCALAPPDATA ?? '', process.platform);
+};
+
 const createMainWindow = async (): Promise<void> => {
   if (devServerUrl === undefined && !appProtocolRegistered) {
     registerAppProtocol({
@@ -75,10 +94,7 @@ if (!singleInstanceLockAcquired) {
   void app
     .whenReady()
     .then(async () => {
-      const managedRoot = deriveWindowsProductionRoot(
-        process.env.LOCALAPPDATA ?? '',
-        process.platform,
-      );
+      const managedRoot = getManagedRoot();
       persistenceRuntime = await initializePersistenceAfterSingleInstanceLock(true, () =>
         createDesktopPersistenceRuntime({
           clock: () => new Date().toISOString(),
@@ -86,11 +102,29 @@ if (!singleInstanceLockAcquired) {
           migrationDirectory: getMigrationDirectory(),
         }),
       );
+      if (persistenceRuntime !== null) {
+        registerRuntimeIpc(
+          {
+            handle: (channel, listener) => {
+              ipcMain.handle(channel, (event, ...arguments_: readonly unknown[]) =>
+                listener(
+                  {
+                    sender: { mainFrame: event.sender.mainFrame },
+                    senderFrame: event.senderFrame,
+                  },
+                  ...arguments_,
+                ),
+              );
+            },
+          },
+          persistenceRuntime.startupService,
+          getTrustedUrl(),
+        );
+      }
       await createMainWindow();
     })
-    .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : '未知启动错误';
-      process.stderr.write(`镜序 Studio 启动失败：${message}\n`);
+    .catch(() => {
+      process.stderr.write('镜序 Studio 启动失败：STARTUP_FATAL\n');
       app.exit(1);
     });
 

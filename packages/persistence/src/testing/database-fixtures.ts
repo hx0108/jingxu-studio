@@ -1,8 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
-
+import { openSqliteDatabase, runImmediateTransaction } from '../runtime/sqlite-database';
 import type { SqliteTestContext } from './sqlite-test-kit';
 
 export interface DatabaseFixtureSet {
@@ -22,22 +21,22 @@ export const createDatabaseFixtureSet = async (
   const corruptDatabasePath = path.join(context.root, 'corrupt.sqlite');
   const invalidMigrationDirectory = path.join(context.root, 'invalid-migrations');
 
-  new Database(emptyDatabasePath).close();
+  openSqliteDatabase(emptyDatabasePath).close();
 
-  const previous = new Database(previousDatabasePath);
+  const previous = openSqliteDatabase(previousDatabasePath);
   previous.exec(
     'CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, checksum TEXT NOT NULL, applied_at TEXT NOT NULL);',
   );
   previous.close();
 
-  const pressure = new Database(pressureDatabasePath);
+  const pressure = openSqliteDatabase(pressureDatabasePath);
   pressure.exec(
     'CREATE TABLE fixture_versions (id TEXT PRIMARY KEY, parent_id TEXT, content_sha256 TEXT NOT NULL);',
   );
   const insert = pressure.prepare(
     'INSERT INTO fixture_versions (id, parent_id, content_sha256) VALUES (?, ?, ?)',
   );
-  pressure.transaction(() => {
+  runImmediateTransaction(pressure, () => {
     for (let version = 1; version <= 101; version += 1) {
       insert.run(
         `fixture_v${String(version)}`,
@@ -45,7 +44,7 @@ export const createDatabaseFixtureSet = async (
         `sha256_${String(version).padStart(3, '0')}`,
       );
     }
-  })();
+  });
   pressure.close();
 
   await writeFile(corruptDatabasePath, Buffer.from('not-a-sqlite-database', 'utf8'));

@@ -1,6 +1,10 @@
 const electronArtifactName = 'electron-v43.3.0-win32-x64.zip';
 const electronArtifactSha256 = '18528bedc6a9b04bdc5efb7b803cbc3cb0e5ea6415d54046e23d464d89a00da9';
 const electronCacheRoot = process.env.ELECTRON_CACHE;
+export const migrationResourceDirectory = path.resolve(
+  import.meta.dirname,
+  '../../packages/persistence/resources/migrations',
+);
 
 const forgeConfig = {
   makers: [
@@ -20,12 +24,9 @@ const forgeConfig = {
       ...(electronCacheRoot === undefined ? {} : { cacheRoot: electronCacheRoot }),
     },
     executableName: 'jingxu-studio',
+    extraResource: migrationResourceDirectory,
   },
   plugins: [
-    {
-      config: {},
-      name: '@electron-forge/plugin-auto-unpack-natives',
-    },
     {
       config: {
         build: [
@@ -53,3 +54,4 @@ const forgeConfig = {
 };
 
 export default forgeConfig;
+import path from 'node:path';

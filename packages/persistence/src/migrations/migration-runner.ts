@@ -1,6 +1,5 @@
-import type Database from 'better-sqlite3';
-
 import { PersistenceRuntimeError } from '../runtime/persistence-error';
+import { runImmediateTransaction, type SqliteDatabase } from '../runtime/sqlite-database';
 import type { MigrationResource } from './migration-loader';
 
 interface AppliedMigrationRow {
@@ -14,22 +13,22 @@ export interface MigrationPlan {
   readonly pending: readonly MigrationResource[];
 }
 
-const hasTable = (database: Database.Database, name: string): boolean =>
+const hasTable = (database: SqliteDatabase, name: string): boolean =>
   database
     .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1")
     .get(name) !== undefined;
 
-const listUserTables = (database: Database.Database): readonly string[] =>
+const listUserTables = (database: SqliteDatabase): readonly string[] =>
   (
     database
       .prepare(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
       )
-      .all() as readonly { readonly name: string }[]
+      .all() as unknown as readonly { readonly name: string }[]
   ).map(({ name }) => name);
 
 export const inspectMigrationPlan = (
-  database: Database.Database,
+  database: SqliteDatabase,
   migrations: readonly MigrationResource[],
 ): MigrationPlan => {
   if (!hasTable(database, 'schema_migrations')) {
@@ -41,7 +40,7 @@ export const inspectMigrationPlan = (
 
   const applied = database
     .prepare('SELECT version, name, checksum FROM schema_migrations ORDER BY version')
-    .all() as readonly AppliedMigrationRow[];
+    .all() as unknown as readonly AppliedMigrationRow[];
   const latest = applied.at(-1)?.version ?? 0;
   if (latest > migrations.length) {
     throw new PersistenceRuntimeError('DATABASE_VERSION_TOO_NEW');
@@ -64,7 +63,7 @@ export const inspectMigrationPlan = (
 };
 
 export const applyMigrations = (
-  database: Database.Database,
+  database: SqliteDatabase,
   migrations: readonly MigrationResource[],
   clock: () => string,
 ): MigrationPlan => {
@@ -72,18 +71,17 @@ export const applyMigrations = (
   if (plan.pending.length === 0) return plan;
 
   try {
-    database.exec('BEGIN IMMEDIATE');
-    for (const migration of plan.pending) {
-      database.exec(migration.sql);
-      database
-        .prepare(
-          'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
-        )
-        .run(migration.version, migration.name, migration.sha256, clock());
-    }
-    database.exec('COMMIT');
+    runImmediateTransaction(database, () => {
+      for (const migration of plan.pending) {
+        database.exec(migration.sql);
+        database
+          .prepare(
+            'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
+          )
+          .run(migration.version, migration.name, migration.sha256, clock());
+      }
+    });
   } catch {
-    if (database.inTransaction) database.exec('ROLLBACK');
     throw new PersistenceRuntimeError('MIGRATION_APPLY_FAILED');
   }
 

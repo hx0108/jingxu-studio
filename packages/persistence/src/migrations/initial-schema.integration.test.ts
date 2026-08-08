@@ -1,8 +1,8 @@
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 
+import { SqliteTestDatabase } from '../testing/sqlite-test-database';
 import { withSqliteTestContext } from '../testing/sqlite-test-kit';
 import {
   INITIAL_SCHEMA_INDEXES,
@@ -15,8 +15,8 @@ import { applyMigrations } from './migration-runner';
 const MIGRATION_DIRECTORY = path.resolve(import.meta.dirname, '../../resources/migrations');
 const NOW = '2026-08-08T00:00:00.000Z';
 
-const openMigratedDatabase = async (root: string): Promise<Database.Database> => {
-  const database = new Database(path.join(root, 'initial-schema.sqlite'));
+const openMigratedDatabase = async (root: string): Promise<SqliteTestDatabase> => {
+  const database = new SqliteTestDatabase(path.join(root, 'initial-schema.sqlite'));
   try {
     database.pragma('foreign_keys = ON');
     applyMigrations(database, await loadMigrationSet(MIGRATION_DIRECTORY), () => NOW);
@@ -28,7 +28,7 @@ const openMigratedDatabase = async (root: string): Promise<Database.Database> =>
 };
 
 const withMigratedDatabase = async <T>(
-  operation: (database: Database.Database) => T | Promise<T>,
+  operation: (database: SqliteTestDatabase) => T | Promise<T>,
 ): Promise<T> =>
   withSqliteTestContext(async (context) => {
     const database = await openMigratedDatabase(context.root);
@@ -39,7 +39,7 @@ const withMigratedDatabase = async <T>(
     }
   });
 
-const seedProjectGraph = (database: Database.Database): void => {
+const seedProjectGraph = (database: SqliteTestDatabase): void => {
   database
     .prepare(
       `INSERT INTO projects
@@ -149,7 +149,7 @@ describe('0001_initial.sql', () => {
         .prepare(
           "SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name",
         )
-        .all() as readonly { readonly name: string; readonly type: string }[];
+        .all() as unknown as readonly { readonly name: string; readonly type: string }[];
       const namesByType = (type: string) =>
         objects.filter((object) => object.type === type).map((object) => object.name);
 

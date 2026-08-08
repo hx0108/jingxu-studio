@@ -8,11 +8,11 @@
 
 **Goals:**
 
-- 以 Application-owned Port 隔离启动编排与 `better-sqlite3`，保持 Domain 零基础设施依赖。
+- 以 Application-owned Port 隔离启动编排与 `node:sqlite`，保持 Domain 零基础设施依赖。
 - 对新库、旧库、漂移库、高版本库和损坏库给出确定、可测试且不静默破坏数据的启动结果。
 - 用完整 `0001_initial.sql` 固定 TECH_DESIGN v1.1 §8.4 的数据库事实源，并为后续业务 Change 提供可验证约束。
 - 把在线备份、原子 migration、受控恢复和启动写入门组合成一个闭环。
-- 在开发态和 Windows x64 打包态都证明 native module、migration 资源和只读故障 UI 可用。
+- 在 Node 22.16.0 开发/测试态和 Electron 43.x Windows x64 打包态都证明内置 SQLite API、migration 资源和只读故障 UI 可用。
 
 **Non-Goals:**
 
@@ -49,7 +49,7 @@ apps/desktop/src/main/
 
 Repository 与 UnitOfWork 虽然同属持久化 Port，但本 Change 不创建没有调用方的业务接口；它们由对应业务 Change 按用例需要增量加入。
 
-**被否决方案：** Main 直接调用 `better-sqlite3` 会让生命周期宿主同时拥有业务基础设施实现；把 Port 放进 persistence 会反转接口所有权；提前创建全部 Repository 会形成无用的未来模块。
+**被否决方案：** Main 直接调用 `node:sqlite` 会让生命周期宿主同时拥有业务基础设施实现；把 Port 放进 persistence 会反转接口所有权；提前创建全部 Repository 会形成无用的未来模块。
 
 ### 2. 启动状态机与写入门
 
@@ -86,9 +86,13 @@ Main IPC Host 对每个方法验证受信 sender、Zod DTO、状态前置条件�
 
 **被否决方案：** 暴露通用 IPC 或恢复路径会扩大 Renderer 权限；仅靠 TypeScript 类型不能保护运行时输入；把原始 SQLite 错误传给 UI 可能泄漏路径、SQL 和内部结构。
 
-### 4. 数据目录、单实例与连接生命周期
+### 4. `node:sqlite`、数据目录、单实例与连接生命周期
 
 生产数据根由 Main 从经校验的 Windows `LOCALAPPDATA` 已知目录派生为 `%LOCALAPPDATA%/JingxuStudio`；缺失、非绝对路径、非 Windows 平台或规范化失败均阻断数据库初始化，不回退到工作目录、`%APPDATA%` 或明文配置。测试显式注入任务临时根，不读取产品受管理目录。应用取得 Electron single-instance lock 后才初始化数据库，Main 持有唯一写连接并在退出时关闭。
+
+SQLite 绑定使用 Node 22.16.0 与 Electron 43.x 内置的 `node:sqlite`。`packages/persistence` 建立内部窄接口封装 `DatabaseSync`、`StatementSync` 和顶层 `backup()`；其余生产包、业务代码和普通测试不得直接依赖运行时对象，只有用于对比 Node/Electron 内置版本的专用 runtime smoke 探针可以直接导入 `node:sqlite`。现有同步访问模型保持不变：参数绑定继续使用 prepared statement，`better-sqlite3.transaction()` 改为内部显式 `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK` 助手，`pragma()` 便利方法改为确定 SQL 与结果读取，在线备份改为 `node:sqlite` 的 `backup(sourceDb, destination)`。启动时验证所需导出和 SQLite JSON 函数可用，否则以 `DATABASE_OPEN_FAILED` 阻断写入。
+
+开发/Integration 固定使用 Node 22.16.0，Electron E2E 与 Package Smoke 使用 Electron 43.x 内嵌 Node；两类门禁都执行 `0001_initial.sql`、连接基线和在线备份关键路径，防止两套内置 SQLite 版本差异被普通 Node 测试掩盖。不得通过外部 `.node`、手工复制预编译二进制或本机 C++ rebuild 补齐能力。
 
 打开连接后依次设置并回读验证：
 
@@ -101,7 +105,7 @@ PRAGMA busy_timeout=5000;
 
 测试或只读诊断连接也必须启用外键并显式声明用途，不能被 Repository 复用为第二写连接。路径解析、目录创建和文件访问均位于 Adapter，任何符号链接或解析后越出受管理根的目标都被拒绝。
 
-**被否决方案：** PostgreSQL 与当前单用户、离线、零服务安装约束不匹配；ORM 会弱化对 SQLite CHECK、partial index、trigger 和 migration 原文的审查；网络共享 SQLite 不在支持范围。
+**被否决方案：** `better-sqlite3` 需要与 Electron ABI 匹配的预编译文件或本机 C++ rebuild，不满足当前低磁盘、可复现开发约束；`sqlite3` 外部包已进入 deprecated/unmaintained 状态；SQLite WASM 会改变 WAL、文件锁和在线备份语义。PostgreSQL 与当前单用户、离线、零服务安装约束不匹配；ORM 会弱化对 SQLite CHECK、partial index、trigger 和 migration 原文的审查；网络共享 SQLite 不在支持范围。
 
 ### 5. Migration 发现、版本判定与 checksum
 
@@ -140,7 +144,7 @@ DDL 负例测试覆盖非法父链可由 FK 表达的部分、重复 current、�
 启动 audit 分两层：
 
 1. SQLite 层运行 `integrity_check` 和 `foreign_key_check`，明确收集全部失败行而非只看命令是否执行。
-2. Application invariant audit 通过只读查询检查当前指针归属、父链直接性、Episode sequence、document hash、有效锁唯一性等当前 DDL 可验证项目；依赖 JSON Schema/StoryBible 解析的项目在对应后续 Change 接管前标记为 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`，不得误报已验证。
+2. Application invariant audit 在当前构建只读检查 Shot/Episode current pointer 所有权；父链直接性、Episode sequence、document hash、锁路径一致性及依赖 JSON Schema/StoryBible 解析的规则，在对应业务 Change 接管前明确标记为 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`，不得误报已验证。
 
 audit 返回结构化 finding，仅内部日志记录对象 id、规则 id 和 hash；Renderer 只看到失败规则数量、稳定错误码和恢复建议。`integrity_check` 不能替代外键和应用级 audit。
 
@@ -149,7 +153,7 @@ audit 返回结构化 finding，仅内部日志记录对象 id、规则 id 和 h
 恢复只在 `READ_ONLY_FAULT` 且数据库连接已关闭时进行：
 
 1. 重新验证 `backupId` 的路径仍位于受管理备份根，文件 hash、可打开性和 schema version 与清单一致。
-2. 在 `backups/diagnostics/<operation-id>/` 保存当前数据库状态；可打开时优先使用 online backup，无法打开时关闭句柄后保存数据库、`-wal`、`-shm` 原始文件并生成 manifest。
+2. 在受管理根的 `diagnostics/<operation-id>/` 保存当前数据库状态；可打开时优先使用 online backup，无法打开时关闭句柄后保存数据库、`-wal`、`-shm` 原始文件并生成 manifest。
 3. 将验证过的备份复制到目标目录临时文件，flush/sync 后以可回退 rename 替换数据库；替换前原文件保持在诊断目录。
 4. 重新打开数据库，从 `DATABASE_OPEN` 开始执行完整启动流程；若失败，保持 `READ_ONLY_FAULT`，保留原文件、备份、诊断副本和操作 manifest。
 
@@ -180,15 +184,15 @@ SQLite 原始 code、SQL、路径和堆栈只进入受限内部证据并经过�
 - **Contract**：Zod DTO、逐方法 Preload 白名单、禁止任意路径/通用 IPC、错误 DTO 脱敏。
 - **Integration**：每个测试使用临时目录和独立 SQLite；覆盖空库、重复启动、全量 DDL、约束负例、上一版本、100+ 历史版本、备份失败、事务回滚、版本过高、checksum 漂移、损坏库及恢复矩阵。
 - **E2E**：强制故障 Fixture 启动 Electron，验证独立故障页、正常导航被阻断、重试/恢复状态和 Renderer 隔离；正常 Fixture 验证 READY 后进入基线界面。
-- **Package Smoke**：Windows x64 打包产物在临时数据根运行，证明 `better-sqlite3` native binary 可加载、migration SQL 被包含且能创建空库。native `.node` 文件必须位于 asar 可加载位置，具体 Forge 配置由测试锁定，不能用伪造 `path.txt` 绕过。
+- **Package Smoke**：Windows x64 打包产物在临时数据根运行，证明 Electron 内置 `node:sqlite` 可加载、所需 API/JSON 函数存在、migration SQL 被包含且能创建空库；产物不得包含或依赖 `better-sqlite3`、手工放置的 SQLite `.node` 或本机 Visual Studio Build Tools。
 
 单元测试不得读取真实 `%LOCALAPPDATA%`，时间、ID、hash 输入、磁盘错误和 backup API 均可注入。测试数据不得包含真实用户内容或凭据。
 
 ## Risks / Trade-offs
 
 - **[完整 `0001_initial.sql` 范围大，容易漏约束]** → 建立 TECH §8.4 逐表追踪表、DDL introspection 快照和单一错误负例 Fixture；Verify 对照 TECH §8.5/§8.6。
-- **[`better-sqlite3` 与 Electron ABI/Forge alpha 不兼容]** → 依赖精确锁定，安装后执行 native rebuild，并把 packaged executable 空库启动纳入门禁；失败不得退回纯 JS 非等价驱动。
-- **[升级备份占用磁盘导致启动失败]** → 预检空间和写权限，失败保持旧库不变并提供可行动错误；本 Change 不自动清理历史证据。
+- **[`node:sqlite` 在 Node 22.16.0 仍为 Active development，且开发 Node 与 Electron 内嵌 Node 的 SQLite 版本可能不同]** → 精确锁定 Node 22.16.0 与 Electron 43.x；只通过 persistence 内部窄接口访问；启动验证必需 API/JSON 函数；Node Integration、Electron E2E 与 packaged executable 空库/备份 Smoke 共同作为门禁。升级任一运行时必须建立独立 Change 并重跑数据库矩阵。
+- **[升级备份占用磁盘导致启动失败]** → 不依赖存在竞态的空间预估作为成功保证；online backup、flush、验证或原子发布任一步失败都保持旧库不变并返回可行动错误，本 Change 不自动清理历史证据。
 - **[单事务执行多个 migration 可能持锁较久]** → migration 禁止网络和长文件操作，压力库记录时长；V1 单机启动期间不开放业务写入。
 - **[损坏库无法通过 SQLite API 生成诊断快照]** → 关闭句柄后保留数据库/WAL/SHM 原始三件套及 manifest，绝不覆盖唯一副本。
 - **[只读故障页扩大 IPC 攻击面]** → 仅三个固定方法、sender/Zod/状态/revision 四重校验，Renderer 只能使用 opaque backup id。
@@ -197,7 +201,7 @@ SQLite 原始 code、SQL、路径和堆栈只进入受限内部证据并经过�
 ## Migration Plan
 
 1. 先提交失败测试和临时数据库 Fixture，证明当前仓库缺少持久化运行时。
-2. 精确锁定并验证 Electron 43 兼容的 `better-sqlite3`/类型依赖，配置 native rebuild 与打包解包规则。
+2. 精确锁定并验证 Node 22.16.0 与 Electron 43.x 内置 `node:sqlite` 的连接、prepared statement、事务、PRAGMA、JSON 函数和 online backup 能力；建立 persistence 内部窄接口并移除外部原生 SQLite addon、native rebuild 与打包解包规则。
 3. 落地 Application Port、启动状态机、SQLite 连接和 migration runner，再生成并逐表验证 `0001_initial.sql`。
 4. 落地在线备份、数据库 audit、受控恢复、错误归一化和 Main 写入门。
 5. 最后接入类型化 IPC、Preload 和只读故障页；运行全部工程门禁、数据库矩阵、E2E 和 Windows package Smoke。

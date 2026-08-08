@@ -4,12 +4,12 @@ import path from 'node:path';
 
 import { StartupService } from '@jingxu/application';
 import { startupStatusSchema } from '@jingxu/contracts';
-import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createOnlineBackup } from '../backup/backup-manager';
 import { loadMigrationSet } from '../migrations/migration-loader';
 import { applyMigrations } from '../migrations/migration-runner';
+import { SqliteTestDatabase as Database } from '../testing/sqlite-test-database';
 import { createManagedDirectories, createManagedPaths } from './managed-paths';
 import { SqlitePersistenceRuntimeAdapter } from './persistence-runtime-adapter';
 
@@ -175,18 +175,34 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
       await loadMigrationSet(MIGRATION_DIRECTORY),
       () => '2026-08-08T00:00:00.000Z',
     );
-    database.pragma('foreign_keys = OFF');
     database
       .prepare(
-        `INSERT INTO shots
-         (id, episode_id, lifecycle_status, current_version_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO projects
+         (id, name, creation_mode, dialogue_render_mode, deployment_mode, data_root_rel, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
-        'shot_invalid',
-        'episode_missing',
-        'ACTIVE',
-        'shot_version_missing',
+        'project_invalid_pointer',
+        '不变量测试项目',
+        'AI_ORIGINAL',
+        'NARRATION_FIRST',
+        'LOCAL_DEMO',
+        'projects/invalid-pointer',
+        '2026-08-08T00:00:00.000Z',
+        '2026-08-08T00:00:00.000Z',
+      );
+    database
+      .prepare(
+        `INSERT INTO episodes
+         (id, project_id, title, target_duration_sec, current_version_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        'episode_invalid_pointer',
+        'project_invalid_pointer',
+        '不变量测试集',
+        90,
+        'episode_version_missing',
         '2026-08-08T00:00:00.000Z',
         '2026-08-08T00:00:00.000Z',
       );

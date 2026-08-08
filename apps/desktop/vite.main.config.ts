@@ -12,7 +12,7 @@ export default defineConfig({
     },
     outDir: path.resolve(import.meta.dirname, '.vite/build'),
     rollupOptions: {
-      external: ['better-sqlite3', 'electron', /^node:/u],
+      external: ['electron', /^node:/u],
     },
     target: 'node22',
   },

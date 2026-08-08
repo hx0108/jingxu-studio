@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { withSqliteTestContext } from '../testing/sqlite-test-kit';
 import { createManagedDirectories, createManagedPaths } from './managed-paths';
 import { SqliteConnectionManager } from './sqlite-connection';
+import { queryPragmaValue } from './sqlite-database';
 import { initializeSqliteDatabase } from './sqlite-runtime';
 
 describe('SQLite 连接基线', () => {
@@ -18,10 +19,10 @@ describe('SQLite 连接基线', () => {
       const second = manager.open();
 
       expect(second).toBe(first);
-      expect(first.pragma('foreign_keys', { simple: true })).toBe(1);
-      expect(first.pragma('journal_mode', { simple: true })).toBe('wal');
-      expect(first.pragma('synchronous', { simple: true })).toBe(2);
-      expect(first.pragma('busy_timeout', { simple: true })).toBe(5000);
+      expect(queryPragmaValue(first, 'foreign_keys')).toBe(1);
+      expect(queryPragmaValue(first, 'journal_mode')).toBe('wal');
+      expect(queryPragmaValue(first, 'synchronous')).toBe(2);
+      expect(queryPragmaValue(first, 'busy_timeout')).toBe(5000);
       manager.close();
     });
   });

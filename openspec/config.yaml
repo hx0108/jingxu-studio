@@ -7,7 +7,7 @@ context: |
   技术事实源：TECH_DESIGN.md v1.1。
   机器契约：四份镜序Studio_V1_*.schema.json；字段、枚举、必填项和跨字段条件以 Schema 为准。
   Agent 执行护栏：AGENTS.md。
-  技术栈：Electron、React、TypeScript、Vite、pnpm workspace、SQLite/better-sqlite3、Ajv 2020、Zod、Vitest、Playwright Electron、Electron Forge。
+  技术栈：Electron、React、TypeScript、Vite、pnpm workspace、SQLite/node:sqlite、Ajv 2020、Zod、Vitest、Playwright Electron、Electron Forge。
   依赖方向：Renderer -> Preload/IPC -> Main Host/Composition Root -> Application -> Domain + Application Ports；基础设施 Adapter 实现 Application Ports。
   规范正文使用中文；Change ID、目录和代码标识符使用英文。
 

@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import { queryPragmaRows, type SqliteDatabase } from '../runtime/sqlite-database';
 
 export type AuditStatus = 'FAIL' | 'NOT_IMPLEMENTED_BY_CURRENT_BUILD' | 'PASS';
 
@@ -17,21 +17,21 @@ export interface DatabaseAuditOptions {
   readonly integrityRows?: readonly string[];
 }
 
-const hasTable = (database: Database.Database, name: string): boolean =>
+const hasTable = (database: SqliteDatabase, name: string): boolean =>
   database
     .prepare("SELECT 1 AS found FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1")
     .get(name) !== undefined;
 
 export const runDatabaseAudit = (
-  database: Database.Database,
+  database: SqliteDatabase,
   options: DatabaseAuditOptions = {},
 ): DatabaseAuditResult => {
   const integrityRows =
     options.integrityRows ??
-    (database.pragma('integrity_check') as readonly { readonly integrity_check: string }[]).map(
-      ({ integrity_check: result }) => result,
+    queryPragmaRows(database, 'integrity_check').map(({ integrity_check: result }) =>
+      String(result),
     );
-  const foreignKeyRows = database.pragma('foreign_key_check') as readonly unknown[];
+  const foreignKeyRows = queryPragmaRows(database, 'foreign_key_check');
   const hasVersionTables =
     hasTable(database, 'shots') && hasTable(database, 'shot_contract_versions');
   const invalidShotPointers = hasVersionTables

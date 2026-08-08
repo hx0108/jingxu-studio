@@ -97,8 +97,15 @@ export interface RuntimeApi {
   restoreBackup: (command: RestoreBackupCommandDto) => Promise<StartupStatusDto>;
 }
 
-// `runtime` 将在本 Change 的 IPC 检查点实现后加入公开白名单。
-export type JingxuApi = Readonly<Record<never, never>>;
+export const RUNTIME_IPC_CHANNELS = {
+  getStartupStatus: 'runtime.getStartupStatus',
+  restoreBackup: 'runtime.restoreBackup',
+  retryStartup: 'runtime.retryStartup',
+} as const;
+
+export interface JingxuApi {
+  readonly runtime: RuntimeApi;
+}
 
 declare global {
   interface Window {

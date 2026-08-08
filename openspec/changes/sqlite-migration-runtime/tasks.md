@@ -1,6 +1,6 @@
 ## 1. 依赖、边界与测试底座
 
-- [x] 1.1 依据 Electron 43、Node 22、pnpm 11 和当前 Forge 配置核验 `better-sqlite3` 的官方兼容性与 native rebuild 要求，记录来源后精确锁定运行/类型依赖；不得降低 pnpm 安全策略或伪造 native 安装结果。（Design §11）
+- [x] 1.1 依据 Node 22.16.0 与 Electron 43.x 官方资料和本机运行时探针，核验 `node:sqlite` 的 `DatabaseSync`、prepared statement、事务状态、busy timeout、JSON 函数和 online backup 能力，记录 Active development 风险和精确版本基线；不得引入外部原生 SQLite addon、本机 C++ rebuild 或手工 `.node` 文件。（Design §4、§11）
 - [x] 1.2 先添加跨包依赖规则测试，再创建 `packages/application` 与 `packages/persistence` 的最小 package/tsconfig/public entry，证明 Application 不依赖 persistence、Domain 不依赖 SQLite、Renderer 不导入基础设施。（Design §1）
 - [x] 1.3 建立只使用任务临时目录的 SQLite 测试工具，注入固定时间、ID、hash 输入和故障点，并添加测试证明任何 Unit/Integration 测试都不会读取真实 `%LOCALAPPDATA%`。（Design §11）
 - [x] 1.4 建立空库、上一版本库、100+ 历史版本压力库、损坏库和单一错误 migration Fixture 的生成/校验入口，保证 Fixture 可重现且不含用户内容或凭据。（R: Migration 失败必须原子回滚 / 压力库升级成功）
@@ -64,16 +64,19 @@
 
 ## 9. Main IPC、Preload 与只读故障页
 
-- [ ] 9.1 先添加 Contract 测试覆盖 `runtime.getStartupStatus`、`runtime.retryStartup`、`runtime.restoreBackup` 的 sender、Zod、状态、requestId/revision 校验，以及 Preload 无通用 `send/on/invoke`、无路径/SQL/连接暴露。（R: 本地数据库连接必须满足固定安全基线 / Renderer 尝试越过持久化边界）
-- [ ] 9.2 在 Main 注册三个固定 IPC 并由 Composition Root 注入 `StartupService`，更新冻结的 `window.jingxu` 类型化白名单，使 9.1 通过。（Design §3）
-- [ ] 9.3 先添加 Renderer 组件测试，再实现独立只读故障页：显示检查阶段、稳定错误码、脱敏摘要、重试和受控备份恢复；非 READY 时不渲染正常导航或伪造业务入口。（R: 启动自检必须控制全局写入权限 / 故障信息保持脱敏且可行动）
-- [ ] 9.4 添加重试流程测试，证明 `runtime.retryStartup` 从 `DATABASE_OPEN` 开始完整重检，成功才离开故障页，失败保留上次结果和可执行动作。（R: 启动自检必须控制全局写入权限 / 用户在故障页重试）
-- [ ] 9.5 添加 Playwright Electron E2E：正常临时根进入 READY 基线；故障 Fixture 进入只读故障页并阻断正常导航；伪造恢复源被拒绝；Renderer 仍无 Node/SQLite/通用 IPC 权限。（R: 启动自检必须控制全局写入权限；R: 数据库恢复必须保留诊断证据并可失败回退）
+- [x] 9.1 先添加 Contract 测试覆盖 `runtime.getStartupStatus`、`runtime.retryStartup`、`runtime.restoreBackup` 的 sender、Zod、状态、requestId/revision 校验，以及 Preload 无通用 `send/on/invoke`、无路径/SQL/连接暴露。（R: 本地数据库连接必须满足固定安全基线 / Renderer 尝试越过持久化边界）
+- [x] 9.2 在 Main 注册三个固定 IPC 并由 Composition Root 注入 `StartupService`，更新冻结的 `window.jingxu` 类型化白名单，使 9.1 通过。（Design §3）
+- [x] 9.3 先添加 Renderer 组件测试，再实现独立只读故障页：显示检查阶段、稳定错误码、脱敏摘要、重试和受控备份恢复；非 READY 时不渲染正常导航或伪造业务入口。（R: 启动自检必须控制全局写入权限 / 故障信息保持脱敏且可行动）
+- [x] 9.4 添加重试流程测试，证明 `runtime.retryStartup` 从 `DATABASE_OPEN` 开始完整重检，成功才离开故障页，失败保留上次结果和可执行动作。（R: 启动自检必须控制全局写入权限 / 用户在故障页重试）
+- [x] 9.5 添加 Playwright Electron E2E：正常临时根进入 READY 基线；故障 Fixture 进入只读故障页并阻断正常导航；伪造恢复源被拒绝；Renderer 仍无 Node/SQLite/通用 IPC 权限。（R: 启动自检必须控制全局写入权限；R: 数据库恢复必须保留诊断证据并可失败回退）
 
-## 10. 打包、文档与最终验证
+## 10. `node:sqlite` 迁移、打包、文档与最终验证
 
-- [ ] 10.1 配置 Forge native rebuild、`.node` 可加载位置和 migration SQL 资源包含规则，并添加资源清单测试，禁止通过伪造 Electron `path.txt` 或跳过安装脚本制造成功。（Design §11）
-- [ ] 10.2 从干净 `.vite/out` 状态执行 Windows x64 打包，以注入的临时数据根启动 packaged executable，验证 native SQLite 可加载、空库完成 `0001_initial.sql`、故障页资源可用且真实用户目录未被访问。（Design §11 Package Smoke）
-- [ ] 10.3 更新 README 的数据库位置、启动状态、备份/恢复边界、开发验证命令和“V1 JSON 不等于完整备份”说明；若实现发现 PRD/TECH/Schema 冲突，停止并记录冲突，不静默修改事实源。（Proposal Impact）
-- [ ] 10.4 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:e2e` 和 `pnpm package:win`，记录每类实际通过/失败数量及未验证项。（AGENTS.md §15）
-- [ ] 10.5 使用 `$openspec-verify-change` 核对全部 Requirement/Scenario、TECH §8.4 DDL 追踪和打包证据；阻断问题清零后才能 Sync/Archive，且不得声称 Project、Schema Registry、JobRunner 或 AC-V1-01 至 AC-V1-06 已完成。（OpenSpec archive guidance）
+- [x] 10.1 先添加 persistence 内部 SQLite 窄接口与兼容性测试，分别在 Node 22.16.0 和 Electron 43.x 证明连接、参数绑定、PRAGMA 回读、显式事务回滚、JSON 函数和 online backup 可用；缺少必需能力时稳定阻断启动。（Design §4、§11）
+- [x] 10.2 将 production persistence 从 `better-sqlite3` 迁移到 `node:sqlite`：使用内部 `DatabaseSync`/`StatementSync` 适配、显式 `BEGIN IMMEDIATE`/`COMMIT`/`ROLLBACK`、确定 PRAGMA SQL 和顶层 `backup()`，保持错误归一化、唯一写连接和在线备份语义不变。（Design §4、§7、§10）
+- [x] 10.3 将 Fixture、Unit/Integration、Composition 和 E2E 的数据库访问迁移到同一内部测试入口，重跑空库、完整 DDL、checksum、100+ 历史版本、备份、恢复与 audit 矩阵；不得通过削弱断言掩盖运行时差异。（Design §6–§11）
+- [x] 10.4 删除 `better-sqlite3`、类型依赖、pnpm native build 许可、Forge native unpack 插件和 Vite 原生 external 配置；保留 migration SQL `extraResource`，更新资源清单测试证明产物不依赖外部 SQLite `.node` 或 Visual Studio Build Tools。（Design §11）
+- [x] 10.5 同步 TECH_DESIGN、AGENTS.md、OpenSpec config 与 README 的 SQLite 驱动、打包、测试和开发环境说明；保留数据库、事务、备份、Renderer 隔离和 V1 范围语义，PRD 与四份业务 Schema 不变。（Proposal Impact）
+- [x] 10.6 从干净 `.vite/out` 状态执行 Windows x64 打包，以注入的临时数据根启动 packaged executable，验证 Electron 内置 `node:sqlite` 与 JSON 函数可用、空库完成 `0001_initial.sql`、故障页资源可用且真实用户目录未被访问。（Design §11 Package Smoke）
+- [x] 10.7 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:e2e` 和 `pnpm package:win`，记录每类实际通过/失败数量及未验证项。（AGENTS.md §15）
+- [x] 10.8 使用 `$openspec-verify-change` 核对全部 Requirement/Scenario、TECH §8.4 DDL 追踪和打包证据；阻断问题清零后才能 Sync/Archive，且不得声称 Project、Schema Registry、JobRunner 或 AC-V1-01 至 AC-V1-06 已完成。（OpenSpec archive guidance）

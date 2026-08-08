@@ -78,7 +78,7 @@ Agent 不得以“为未来扩展”为由预建上述能力。V2/V3 代码只�
 - Electron、React、TypeScript、Vite。
 - React Query 处理 IPC 异步状态，Zustand 处理局部编辑和跨组件 UI 状态。
 - React Hook Form 处理表单；最终领域校验仍在主进程应用层。
-- SQLite + `better-sqlite3`。
+- SQLite + 锁定 Node.js/Electron 内置 `node:sqlite`；不得引入外部 SQLite native addon 或本机 C++ rebuild 要求。
 - Ajv 2020 校验正式 JSON Schema；Zod 校验 IPC DTO，二者不能互相替代。
 - 阿里云百炼 OpenAI 兼容接口封装在 `QwenTextModelAdapter` 中。
 - Vitest、SQLite 临时库和 Playwright Electron。
@@ -141,7 +141,7 @@ Infrastructure Adapters --implements--> Application Ports
 3. JobRunner 的业务实现位于 `packages/application/src/jobs/`。
 4. Electron Main 只承载 IPC Host、Composition Root、调度、启动恢复和生命周期。
 5. Persistence、Model、File、Credential Adapter 实现 Application Ports，并由 Composition Root 注入。
-6. Renderer 只通过 `window.jingxu` 调用逐方法 IPC，不得直接导入 Repository、Node 内置模块、`better-sqlite3` 或 Provider SDK。
+6. Renderer 只通过 `window.jingxu` 调用逐方法 IPC，不得直接导入 Repository、Node 内置模块、`node:sqlite` 或 Provider SDK。
 7. Provider 专有 DTO、字段和错误仅存在于对应 Adapter。
 8. Validation 可以依赖公开 Contract 和纯领域值对象，不得写数据库或调用 Provider。
 9. 跨包只使用公开入口，不深层导入其他包的 `src/` 私有文件，不用关闭 lint 规则掩盖循环依赖。
@@ -267,7 +267,7 @@ RUNNING/VALIDATING -> FAILED        # 超时、不可重试错误或修复失败
 - Provider 网络请求必须发生在事务外。
 - 最终响应证据、业务新版本、指针和审计在短事务中原子提交。
 - 事务内不得等待网络或执行长时间文件操作。
-- Repository 不自行嵌套提交，JobRunner 不直接执行 SQL 或导入 `better-sqlite3`。
+- Repository 不自行嵌套提交，JobRunner 不直接执行 SQL 或导入 `node:sqlite`。
 - Command 携带 `requestId`；修改命令携带 `expectedVersionId` 或 `expectedUpdatedAt`。
 
 ### 11.3 Provider 边界

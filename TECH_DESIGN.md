@@ -158,7 +158,7 @@ flowchart LR
 | UI | React、TypeScript、Vite |
 | 状态与请求 | React Query 处理 IPC 异步状态；Zustand 处理局部编辑与跨组件 UI 状态 |
 | 表单 | React Hook Form；领域校验仍以后端/主进程为准 |
-| 本地数据库 | SQLite + `better-sqlite3`；SQL migration 文件进入版本控制 |
+| 本地数据库 | SQLite + 锁定 Node.js/Electron 内置 `node:sqlite`；SQL migration 文件进入版本控制，不依赖外部 SQLite native addon 或本机 C++ rebuild |
 | JSON Schema | Ajv 2020；Format Checker 单独实现日期时间等格式校验 |
 | 运行时 DTO | Zod，用于 IPC 输入输出，不替代领域 Schema |
 | 文本模型 | 阿里云百炼 OpenAI 兼容 Chat Completions，由 `QwenTextModelAdapter` 封装 |
@@ -264,9 +264,9 @@ Persistence / Model / File / Credential Adapters --implements--> Application Por
 ```
 
 1. `domain` 不得依赖 React、Electron、SQLite、文件系统、具体 Provider SDK、Zustand/React Query 或 IPC。
-2. `renderer` 只能通过 `window.jingxu` 调用主进程，不得导入 Repository、`better-sqlite3`、Node 内置模块或 Provider SDK。
+2. `renderer` 只能通过 `window.jingxu` 调用主进程，不得导入 Repository、`node:sqlite`、Node 内置模块或 Provider SDK。
 3. `application` 定义用例、事务边界及其需要的全部出站抽象，Port 接口统一位于 `packages/application/src/ports/`。Repository 与 UnitOfWork 接口属于持久化 Port；TextModelPort、FilePort、CredentialPort 分别属于模型、文件和凭据 Port；这些接口均归 Application 层所有。
-4. JobRunner 的业务编排实现位于 `packages/application/src/jobs/`；Electron Main 只负责调度、启动恢复和生命周期宿主。JobRunner 不得直接导入 `better-sqlite3` 或任何 Adapter，而是通过 Repository/UnitOfWork Port 完成领取、响应证据落库和最终原子提交；文件、凭据和模型调用也通过对应 Port 注入。
+4. JobRunner 的业务编排实现位于 `packages/application/src/jobs/`；Electron Main 只负责调度、启动恢复和生命周期宿主。JobRunner 不得直接导入 `node:sqlite` 或任何 Adapter，而是通过 Repository/UnitOfWork Port 完成领取、响应证据落库和最终原子提交；文件、凭据和模型调用也通过对应 Port 注入。
 5. `persistence`、`model-adapters` 及 Electron Main 下的平台 Adapter 实现 Application Ports，并由 Composition Root 注入；Application 与 Domain 不得反向依赖这些实现包。
 6. `validation` 可以依赖公开 Schema/Contract 和纯领域值对象，不得直接写数据库或调用 Provider。
 7. Provider 专有请求、响应和错误只能存在于对应 Adapter；领域对象和 Renderer 不得出现百炼专有字段。
@@ -288,7 +288,7 @@ Persistence / Model / File / Credential Adapters --implements--> Application Por
 1. SQL 只允许出现在 `packages/persistence` 的 Repository 或 migration 中；全部变量使用参数绑定，禁止字符串拼接 SQL。
 2. 查询明确列出字段，不使用生产代码 `SELECT *`；列表查询必须有稳定排序和分页/上限。
 3. migration 命名为 `NNNN_short_description.sql`，一经发布不得改写；checksum 不一致阻断启动。结构变更同时提供空库和上一版本升级测试。
-4. Repository 返回领域/持久化 DTO，不返回 `better-sqlite3` Row、Statement 或连接对象；数据库异常在 persistence 边界归一化。
+4. Repository 返回领域/持久化 DTO，不返回 `node:sqlite` 的 `DatabaseSync`、`StatementSync` 或连接对象；数据库异常在 persistence 边界归一化。
 5. 时间、金额、布尔和 JSON 的存储规则统一遵守 8.1；不得由不同 Repository 自行选择表示方式。
 6. 写入不可变版本、更新当前指针、审计、依赖边和 EpisodeVersion 快照属于同一用例事务，不允许调用方分步拼接。
 

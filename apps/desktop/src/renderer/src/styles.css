@@ -60,3 +60,113 @@ h1 {
   font-size: 17px;
   line-height: 1.7;
 }
+
+.fault-shell {
+  place-items: start center;
+  overflow: auto;
+}
+
+.fault-card {
+  margin-block: 48px;
+}
+
+.fault-details {
+  display: grid;
+  gap: 12px;
+  margin: 28px 0;
+}
+
+.fault-details > div {
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  gap: 16px;
+}
+
+.fault-details dt {
+  color: #9ca9c5;
+}
+
+.fault-details dd {
+  margin: 0;
+}
+
+.error-code {
+  color: #ffb4a9;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  overflow-wrap: anywhere;
+}
+
+.fault-actions {
+  margin-top: 28px;
+}
+
+button {
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid #8298e8;
+  border-radius: 10px;
+  color: #f4f6ff;
+  background: #3951a8;
+  font: inherit;
+  cursor: pointer;
+}
+
+button:focus-visible {
+  outline: 3px solid #b9c7ff;
+  outline-offset: 3px;
+}
+
+button:disabled {
+  color: #9ca9c5;
+  border-color: #4c5670;
+  background: #252c3d;
+  cursor: not-allowed;
+}
+
+.action-hint,
+.backup-list p {
+  color: #aeb9d1;
+}
+
+.backup-list {
+  padding-top: 30px;
+  border-top: 1px solid rgb(150 168 220 / 20%);
+  margin-top: 30px;
+}
+
+.backup-list h2 {
+  margin: 0 0 16px;
+  font-size: 20px;
+}
+
+.backup-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid rgb(150 168 220 / 20%);
+  border-radius: 12px;
+  margin-top: 12px;
+  background: rgb(10 16 33 / 60%);
+}
+
+.backup-card div {
+  display: grid;
+  gap: 6px;
+}
+
+.backup-card small {
+  color: #9ca9c5;
+}
+
+@media (width <= 640px) {
+  .status-card {
+    padding: 28px;
+  }
+
+  .backup-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

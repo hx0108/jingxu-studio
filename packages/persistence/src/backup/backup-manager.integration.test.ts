@@ -1,14 +1,14 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 import { describe, expect, it, vi } from 'vitest';
 
 import { loadMigrationSet } from '../migrations/migration-loader';
 import { applyMigrations } from '../migrations/migration-runner';
 import { createManagedDirectories, createManagedPaths } from '../runtime/managed-paths';
+import { SqliteTestDatabase as Database } from '../testing/sqlite-test-database';
 import { withSqliteTestContext } from '../testing/sqlite-test-kit';
-import { listVerifiedBackups, performManagedMigration } from './backup-manager';
+import { createOnlineBackup, listVerifiedBackups, performManagedMigration } from './backup-manager';
 
 const createMigrationSet = async (root: string, includeSecond: boolean) => {
   const directory = path.join(root, 'migrations');
@@ -52,6 +52,13 @@ describe('SQLite 在线备份与升级', () => {
       );
       const backups = await listVerifiedBackups(paths);
       expect(backups).toHaveLength(1);
+      const manifest: unknown = JSON.parse(
+        await readFile(
+          path.join(paths.backupDirectory, `${backups[0]?.backupId ?? ''}.manifest.json`),
+          'utf8',
+        ),
+      );
+      expect(manifest).toMatchObject({ schemaVersion: 1, targetSchemaVersion: 2 });
       const backupDatabase = new Database(
         path.join(paths.backupDirectory, `${backups[0]?.backupId ?? ''}.sqlite`),
         { readonly: true },
@@ -65,6 +72,31 @@ describe('SQLite 在线备份与升级', () => {
         expect.arrayContaining([expect.objectContaining({ name: 'title' })]),
       );
       backupDatabase.close();
+      database.close();
+    });
+  });
+
+  it('在线备份含外键违规—验证候选—拒绝发布备份', async () => {
+    await withSqliteTestContext(async (context) => {
+      const paths = createManagedPaths(path.join(context.root, 'managed'));
+      await createManagedDirectories(paths);
+      const database = new Database(paths.databasePath);
+      database.exec(
+        "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, checksum TEXT NOT NULL, applied_at TEXT NOT NULL); INSERT INTO schema_migrations VALUES (1, '0001_initial.sql', 'checksum', '2026-08-08T00:00:00.000Z'); CREATE TABLE parent (id TEXT PRIMARY KEY); CREATE TABLE child (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES parent(id));",
+      );
+      database.pragma('foreign_keys = OFF');
+      database.prepare('INSERT INTO child (id, parent_id) VALUES (?, ?)').run('child_1', 'missing');
+
+      await expect(
+        createOnlineBackup({
+          backupId: 'backup_foreignkey',
+          clock: context.clock,
+          currentVersion: 1,
+          database,
+          paths,
+        }),
+      ).rejects.toMatchObject({ code: 'DATABASE_BACKUP_FAILED' });
+      await expect(listVerifiedBackups(paths)).resolves.toEqual([]);
       database.close();
     });
   });

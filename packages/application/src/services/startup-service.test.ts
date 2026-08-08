@@ -142,6 +142,40 @@ describe('StartupService', () => {
     expect(port.prepareCalls).toBe(1);
   });
 
+  it('故障页重试—等待持久化检查—从 DATABASE_OPEN 开始且失败后保留可执行动作', async () => {
+    const port = new FakePersistenceRuntime();
+    port.prepareResult = faultResult();
+    const service = new StartupService(port);
+    const fault = await service.start();
+    let releasePrepare: (() => void) | undefined;
+    port.waitForPrepare = new Promise<void>((resolve) => {
+      releasePrepare = resolve;
+    });
+
+    const retry = service.retryStartup({
+      expectedRevision: fault.revision,
+      requestId: 'request-retry-003',
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(service.getStatus()).toMatchObject({
+      allowedActions: [],
+      currentPhase: 'DATABASE_OPEN',
+      state: 'CHECKING',
+      writeEnabled: false,
+    });
+    releasePrepare?.();
+    await expect(retry).resolves.toMatchObject({
+      allowedActions: ['RETRY', 'RESTORE'],
+      currentPhase: 'DATABASE_AUDIT',
+      errorCode: 'DATABASE_INVARIANT_FAILED',
+      state: 'READ_ONLY_FAULT',
+      writeEnabled: false,
+    });
+    expect(port.prepareCalls).toBe(2);
+  });
+
   it('恢复与重试同时提交—串行化操作—不会并行执行持久化流程', async () => {
     const port = new FakePersistenceRuntime();
     port.prepareResult = faultResult();

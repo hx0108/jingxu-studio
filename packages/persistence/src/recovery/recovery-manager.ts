@@ -1,12 +1,15 @@
 import { access, copyFile, mkdir, open, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
-
 import { getVerifiedBackup } from '../backup/backup-manager';
 import type { ManagedPaths } from '../runtime/managed-paths';
 import { PersistenceRuntimeError } from '../runtime/persistence-error';
 import type { SqliteConnectionManager } from '../runtime/sqlite-connection';
+import {
+  backupSqliteDatabase,
+  openSqliteDatabase,
+  queryPragmaRows,
+} from '../runtime/sqlite-database';
 
 export interface RestoreManagedBackupOptions {
   readonly backupId: string;
@@ -57,7 +60,7 @@ export const restoreManagedBackup = async ({
         'current-online.sqlite.tmp',
       );
       const onlineSnapshotPath = path.join(operationDirectory, 'current-online.sqlite');
-      await connectionManager.open().backup(onlineSnapshotTemporaryPath);
+      await backupSqliteDatabase(connectionManager.open(), onlineSnapshotTemporaryPath);
       await syncFile(onlineSnapshotTemporaryPath);
       await rename(onlineSnapshotTemporaryPath, onlineSnapshotPath);
       onlineSnapshotCreated = true;
@@ -82,11 +85,9 @@ export const restoreManagedBackup = async ({
     );
     await copyFile(verified.databasePath, temporaryRestorePath);
     await syncFile(temporaryRestorePath);
-    const candidate = new Database(temporaryRestorePath, { readonly: true });
+    const candidate = openSqliteDatabase(temporaryRestorePath, { readOnly: true });
     try {
-      const integrity = candidate.pragma('integrity_check') as readonly {
-        readonly integrity_check: string;
-      }[];
+      const integrity = queryPragmaRows(candidate, 'integrity_check');
       if (integrity[0]?.integrity_check !== 'ok') {
         throw new Error('invalid restore candidate');
       }

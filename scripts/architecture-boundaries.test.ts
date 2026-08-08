@@ -40,12 +40,19 @@ describe('跨包依赖边界', () => {
     );
   });
 
-  it('Main 构建—处理原生 SQLite—将 better-sqlite3 保持为运行时外部依赖', async () => {
-    const viteMainConfig = await readFile(
-      path.join(repositoryRoot, 'apps', 'desktop', 'vite.main.config.ts'),
-      'utf8',
-    );
+  it('Main 构建—处理内置 SQLite—保留 node: external 且不声明外部 SQLite addon', async () => {
+    const [viteMainConfig, desktopPackage, persistencePackage, persistenceEntry] =
+      await Promise.all([
+        readFile(path.join(repositoryRoot, 'apps', 'desktop', 'vite.main.config.ts'), 'utf8'),
+        readFile(path.join(repositoryRoot, 'apps', 'desktop', 'package.json'), 'utf8'),
+        readFile(path.join(repositoryRoot, 'packages', 'persistence', 'package.json'), 'utf8'),
+        readFile(path.join(repositoryRoot, 'packages', 'persistence', 'src', 'index.ts'), 'utf8'),
+      ]);
 
-    expect(viteMainConfig).toMatch(/external:\s*\[[^\]]*'better-sqlite3'/su);
+    expect(viteMainConfig).toMatch(/external:\s*\[[^\]]*\/\^node:\//su);
+    expect(`${viteMainConfig}\n${desktopPackage}\n${persistencePackage}`).not.toContain(
+      'better-sqlite3',
+    );
+    expect(persistenceEntry).not.toContain("export * from './runtime/sqlite-database'");
   });
 });

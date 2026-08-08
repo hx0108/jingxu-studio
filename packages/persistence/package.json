@@ -16,10 +16,6 @@
   },
   "dependencies": {
     "@jingxu/application": "workspace:*",
-    "@jingxu/contracts": "workspace:*",
-    "better-sqlite3": "12.11.1"
-  },
-  "devDependencies": {
-    "@types/better-sqlite3": "9.6.0"
+    "@jingxu/contracts": "workspace:*"
   }
 }

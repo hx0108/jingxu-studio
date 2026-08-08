@@ -1,9 +1,9 @@
 import { access, readFile } from 'node:fs/promises';
 
-import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 
 import { createDatabaseFixtureSet } from './database-fixtures';
+import { SqliteTestDatabase as Database } from './sqlite-test-database';
 import { withSqliteTestContext } from './sqlite-test-kit';
 
 describe('SQLite 数据库 Fixture', () => {

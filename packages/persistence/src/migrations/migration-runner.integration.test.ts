@@ -1,9 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 import { describe, expect, it } from 'vitest';
 
+import { SqliteTestDatabase as Database } from '../testing/sqlite-test-database';
 import { withSqliteTestContext } from '../testing/sqlite-test-kit';
 import { loadMigrationSet } from './migration-loader';
 import { applyMigrations, inspectMigrationPlan } from './migration-runner';

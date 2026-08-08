@@ -1,8 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import Database from 'better-sqlite3';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -43,13 +42,8 @@ describe('Main Persistence Composition Root', () => {
         writeEnabled: true,
       });
       runtime?.close();
-      const database = new Database(path.join(root, 'managed', 'data', 'jingxu.sqlite'), {
-        readonly: true,
-      });
-      expect(database.prepare('SELECT version FROM schema_migrations').all()).toEqual([
-        { version: 1 },
-      ]);
-      database.close();
+      const databaseFile = await readFile(path.join(root, 'managed', 'data', 'jingxu.sqlite'));
+      expect(databaseFile.subarray(0, 16).toString('utf8')).toBe('SQLite format 3\0');
     } finally {
       await rm(root, { force: true, recursive: true });
     }

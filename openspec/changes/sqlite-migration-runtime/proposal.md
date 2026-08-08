@@ -4,7 +4,7 @@
 
 ## What Changes
 
-- 引入 `better-sqlite3` 持久化 Adapter、Application-owned Persistence Runtime Port 与启动编排服务；Electron Main 仅在 Composition Root 中注入实现，Renderer 不直接接触数据库。
+- 引入基于 Electron/Node 内置 `node:sqlite` 的持久化 Adapter、Application-owned Persistence Runtime Port 与启动编排服务；Electron Main 仅在 Composition Root 中注入实现，Renderer 不直接接触数据库。本 Change 不依赖外部原生 SQLite addon、本机 C++ 工具链或 Visual Studio Build Tools。
 - 建立唯一写连接及显式连接基线：`foreign_keys=ON`、WAL、`synchronous=FULL`、`busy_timeout=5000`，数据库路径默认位于 `%LOCALAPPDATA%/JingxuStudio/data/jingxu.sqlite`，测试可注入隔离路径。
 - 建立按 `NNNN_short_description.sql` 顺序执行的 migration runner、`schema_migrations` 记录和基于原始文件字节的 SHA-256；拒绝编号缺口、重复版本、已应用文件漂移和高于当前应用的数据库版本。
 - 按 TECH_DESIGN v1.1 §8.4–§8.6 交付完整 `0001_initial.sql`，覆盖表清单、FK/CHECK、partial unique、必要索引和不可变版本 UPDATE trigger；本 Change 只建立存储结构，不实现对应业务用例。
@@ -27,7 +27,7 @@
 
 ## Impact
 
-- **代码与依赖**：新增 `packages/application` 的持久化运行时 Port/启动服务、`packages/persistence` 的 SQLite Adapter 与 migrations，并在 `apps/desktop` Composition Root、Preload、Renderer 故障页和 `packages/contracts` 中增加最小运行时状态接口；新增锁定版本的 `better-sqlite3` 及类型依赖。
+- **代码与依赖**：新增 `packages/application` 的持久化运行时 Port/启动服务、`packages/persistence` 的 SQLite Adapter 与 migrations，并在 `apps/desktop` Composition Root、Preload、Renderer 故障页和 `packages/contracts` 中增加最小运行时状态接口；SQLite 运行时使用锁定的 Node 22.16.0/Electron 43.x 内置 `node:sqlite`，不新增外部原生 SQLite addon 或类型依赖。
 - **数据库与兼容性**：新库创建 TECH_DESIGN v1.1 §8.4 的 V1 初始结构；旧库只允许顺序前进并先备份；高版本库只读阻断，不支持降级写入；已应用 migration 内容变化属于启动阻断错误。
 - **IPC 与进程**：新增逐方法 `runtime.getStartupStatus`、`runtime.retryStartup` 和 `runtime.restoreBackup`；全部调用校验 sender 与 Zod DTO，数据库对象只存在于 Main/persistence 边界。
 - **Schema**：四份 PRD-owned JSON Schema 及其 `$id`、版本和 hash 均不变；Schema Registry 仍由后续 `schema-registry-version-locks` Change 实现。
