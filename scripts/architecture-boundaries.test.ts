@@ -33,10 +33,17 @@ describe('跨包依赖边界', () => {
     );
   });
 
-  it('Renderer 源码—检查依赖—不导入 Application 实现或基础设施', async () => {
+  it('Renderer 源码—检查依赖—不导入 Application/Domain 实现或基础设施', async () => {
     await assertFilesExclude(
       path.join(repositoryRoot, 'apps', 'desktop', 'src', 'renderer'),
-      /@jingxu\/(application|persistence)|better-sqlite3|node:/u,
+      /@jingxu\/(application|persistence|domain)|better-sqlite3|node:/u,
+    );
+  });
+
+  it('Domain 源码—检查依赖—不导入 React/Electron/Zod/Node/SQLite 或其他 jingxu 包', async () => {
+    await assertFilesExclude(
+      path.join(repositoryRoot, 'packages', 'domain', 'src'),
+      /from\s+['"]react['"]|from\s+['"]electron['"]|from\s+['"]zod['"]|node:sqlite|better-sqlite3|from\s+['"]node:|@jingxu\//u,
     );
   });
 

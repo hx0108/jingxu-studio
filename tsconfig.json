@@ -1,6 +1,7 @@
 {
   "files": [],
   "references": [
+    { "path": "./packages/domain" },
     { "path": "./packages/contracts" },
     { "path": "./packages/application" },
     { "path": "./packages/persistence" },

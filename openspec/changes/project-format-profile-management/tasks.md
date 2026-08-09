@@ -1,10 +1,10 @@
 ## 1. 工程边界与 Domain 基线
 
-- [ ] 1.1 在安装 Renderer 状态依赖前核验 React Query、React Hook Form、Zustand 与当前 React 19.2.8/TypeScript 6.0.3 的官方 peer 范围，精确锁定兼容版本并记录核验日期；不得使用 `latest` 或引入第二个锁文件。（Design §8）
-- [ ] 1.2 先扩展 `scripts/architecture-boundaries.test.ts` 使其在 `packages/domain` 导入 React/Electron/Zod/Node/SQLite、Application 导入 persistence、Renderer 导入 Node/Domain/persistence 时失败，再创建最小 `@jingxu/domain` package/tsconfig/public entry 并接入 workspace/TS project references。（Design §1）
-- [ ] 1.3 先添加名称值对象 Unit 测试：Unicode code point 0/1/100/101、首尾 Unicode 空白、NFC 等价、`zh-CN` 大小写冲突键和不静默 trim，再实现唯一规范化函数。（R: 创建项目必须原子保存 Project 与首个 FormatProfile / 项目字段非法或名称冲突；Design §3）
-- [ ] 1.4 先添加 FormatProfile Unit 测试：9:16/16:9 派生、默认 5/5/12/5、安全区 0/30/越界/NaN/Infinity、拒绝 1:1/fps/language/target_platform 伪造和语义相等，再实现纯 Domain preset/比较函数。（R: V1 FormatProfile 必须遵守正式规格边界 / 全部 Scenario；Design §3）
-- [ ] 1.5 添加 Project/FormatProfile 领域类型和枚举，证明 Domain 不含 DTO、路径、数据库 Row、审计或基础设施对象，并从公开入口导出所需符号。（Design §1）
+- [x] 1.1 在安装 Renderer 状态依赖前核验 React Query、React Hook Form、Zustand 与当前 React 19.2.8/TypeScript 6.0.3 的官方 peer 范围，精确锁定兼容版本并记录核验日期；不得使用 `latest` 或引入第二个锁文件。（Design §8）— 已核验 2026-08-09：`@tanstack/react-query@5.101.4`、`react-hook-form@7.85.0`、`zustand@5.0.14`，三者 peer 均含 React 19；按 saveExact 锁定，安装推迟至 §9 renderer 段。
+- [x] 1.2 先扩展 `scripts/architecture-boundaries.test.ts` 使其在 `packages/domain` 导入 React/Electron/Zod/Node/SQLite、Application 导入 persistence、Renderer 导入 Node/Domain/persistence 时失败，再创建最小 `@jingxu/domain` package/tsconfig/public entry 并接入 workspace/TS project references。（Design §1）
+- [x] 1.3 先添加名称值对象 Unit 测试：Unicode code point 0/1/100/101、首尾 Unicode 空白、NFC 等价、`zh-CN` 大小写冲突键和不静默 trim，再实现唯一规范化函数。（R: 创建项目必须原子保存 Project 与首个 FormatProfile / 项目字段非法或名称冲突；Design §3）
+- [x] 1.4 先添加 FormatProfile Unit 测试：9:16/16:9 派生、默认 5/5/12/5、安全区 0/30/越界/NaN/Infinity、拒绝 1:1/fps/language/target_platform 伪造和语义相等，再实现纯 Domain preset/比较函数。（R: V1 FormatProfile 必须遵守正式规格边界 / 全部 Scenario；Design §3）
+- [x] 1.5 添加 Project/FormatProfile 领域类型和枚举，证明 Domain 不含 DTO、路径、数据库 Row、审计或基础设施对象，并从公开入口导出所需符号。（Design §1）
 
 ## 2. Project Contract、错误与 Application Ports
 
