@@ -16,7 +16,7 @@
 
 ## 3. ProjectService 测试先行与最小实现
 
-- [ ] 3.1 先用内存 Fake Ports 添加 list/get Unit 测试：真实空、筛选无结果、ACTIVE/DELETED 隔离、`updatedAt DESC,id DESC` keyset、limit/cursor、详情 current+history 和 `PROJECT_NOT_FOUND`。（R: 项目查询必须稳定且区分活动与已删除状态 / 全部 Scenario）
+- [x] 3.1 先用内存 Fake Ports 添加 list/get Unit 测试：真实空、筛选无结果、ACTIVE/DELETED 隔离、`updatedAt DESC,id DESC` keyset、limit/cursor、详情 current+history 和 `PROJECT_NOT_FOUND`。（R: 项目查询必须稳定且区分活动与已删除状态 / 全部 Scenario）
 - [ ] 3.2 先添加 create Unit 测试：9:16/NARRATION_FIRST 默认、16:9/四种对白模式、LOCAL_DEMO、系统字段派生、目录先于事务、名称冲突/字段错误/目录失败及任一写入故障的零部分结果。（R: 创建项目必须原子保存 Project 与首个 FormatProfile / 全部 Scenario）
 - [ ] 3.3 先添加 update Unit 测试：仅元数据更新、Dialogue event 仅变化时写、FormatProfile v2 parent/current、no-op 不制造版本/变更事件、单调 revision、陈旧 expectedUpdatedAt 和下游依赖阻断。（R: 项目更新必须使用乐观并发并保留 FormatProfile 版本链 / 全部 Scenario）
 - [ ] 3.4 先添加 delete/restore Unit 测试：二次确认后的软删除、陈旧版本、重复删除、恢复、重复恢复、恢复名称冲突、Project 目录零删除调用和审计证据。（R: 项目删除与恢复必须可审计且不静默删除文件 / 全部 Scenario）
