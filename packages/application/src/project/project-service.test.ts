@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AppResultDto, ProjectDetailDto, ProjectListResultDto } from '@jingxu/contracts';
+import type {
+  AppResultDto,
+  CreateProjectInputDto,
+  ProjectDetailDto,
+  ProjectListResultDto,
+} from '@jingxu/contracts';
+import { DIALOGUE_RENDER_MODES } from '@jingxu/domain';
 
 import { createProjectService } from './project-service';
 import {
@@ -15,6 +21,7 @@ import {
   makeProject,
   seedProject,
 } from './in-memory-ports';
+import type { FakeDirectoryPort, ProjectWriteFault, ProjectWriteFaults } from './in-memory-ports';
 
 /** 合法系统 ID（满足 cursor ID_RE 12–64）。 */
 const pid = (n: number): string => `proj${String(n).padStart(12, '0')}`;
@@ -23,21 +30,31 @@ const TRACE = 'trace-aaaaaaaa';
 const T10 = '2026-08-09T10:00:00.000Z';
 const T11 = '2026-08-09T11:00:00.000Z';
 
+interface SetupOptions {
+  readonly ids?: readonly string[];
+  readonly prepareError?: Error;
+  readonly faults?: ProjectWriteFaults;
+}
+
 interface Setup {
   readonly service: ReturnType<typeof createProjectService>;
   readonly store: ReturnType<typeof createInMemoryStore>;
+  readonly directory: FakeDirectoryPort;
 }
 
-const setup = (): Setup => {
+const setup = (opts: SetupOptions = {}): Setup => {
   const store = createInMemoryStore();
+  const directory = createFakeDirectoryPort(
+    opts.prepareError !== undefined ? { prepareError: opts.prepareError } : {},
+  );
   const service = createProjectService({
-    unitOfWork: createInMemoryUnitOfWork(createInMemoryRepositories(store)),
+    unitOfWork: createInMemoryUnitOfWork(createInMemoryRepositories(store, opts.faults), store),
     clock: createFakeClock(Date.parse('2026-08-09T12:00:00.000Z')),
-    idGenerator: createFakeIdGenerator(),
+    idGenerator: createFakeIdGenerator(opts.ids),
     hasher: createFakeStableHasher(),
-    directory: createFakeDirectoryPort(),
+    directory,
   });
-  return { service, store };
+  return { service, store, directory };
 };
 
 const okList = async (
@@ -197,5 +214,174 @@ describe('ProjectService.get — 详情 current/history 与 PROJECT_NOT_FOUND（
 
     const deletedRes = await service.get({ projectId: pid(1), scope: 'DELETED' }, TRACE);
     expect(deletedRes.ok).toBe(true);
+  });
+});
+
+// ─── create 辅助 ──────────────────────────────────────────────────────────
+
+const baseCreateInput = (
+  overrides: Partial<CreateProjectInputDto> = {},
+): CreateProjectInputDto => ({
+  requestId: 'req-aaaaaaaa',
+  name: '示例项目',
+  genre: null,
+  style: null,
+  creationMode: 'AI_ORIGINAL',
+  dialogueRenderMode: 'NARRATION_FIRST',
+  aspectRatio: '9:16',
+  subtitleSafeArea: { top: 5, right: 5, bottom: 12, left: 5 },
+  ...overrides,
+});
+
+const okCreate = async (
+  service: Setup['service'],
+  input: CreateProjectInputDto,
+): Promise<ProjectDetailDto> => {
+  const result: AppResultDto<ProjectDetailDto> = await service.create(input, TRACE);
+  if (!result.ok) throw new Error(`expected ok create, got ${result.error.code}`);
+  return result.data;
+};
+
+const CREATE_WRITE_FAULTS: readonly (readonly [string, ProjectWriteFault])[] = [
+  ['insert project', 'insertProject'],
+  ['insert format profile', 'insertFormatProfile'],
+  ['record audit', 'recordAudit'],
+  ['record analytics', 'recordAnalytics'],
+  ['insert receipt', 'insertReceipt'],
+];
+
+/** 构造单点故障注入（避免计算属性键字面量的类型摩擦）。 */
+const singleFault = (fault: ProjectWriteFault): ProjectWriteFaults => {
+  const faults: ProjectWriteFaults = {};
+  faults[fault] = new Error('inject');
+  return faults;
+};
+
+describe('ProjectService.create — 原子保存 Project 与首个 FormatProfile（§3.2）', () => {
+  it('默认值创建:9:16/NARRATION_FIRST/LOCAL_DEMO，完整证据原子提交', async () => {
+    const { service, store } = setup();
+
+    const detail = await okCreate(service, baseCreateInput());
+
+    expect(detail.deploymentMode).toBe('LOCAL_DEMO');
+    expect(detail.creationMode).toBe('AI_ORIGINAL');
+    expect(detail.dialogueRenderMode).toBe('NARRATION_FIRST');
+    expect(detail.currentFormatProfile.aspectRatio).toBe('9:16');
+    expect(detail.currentFormatProfile.width).toBe(1080);
+    expect(detail.currentFormatProfile.height).toBe(1920);
+    expect(detail.currentFormatProfile.fps).toBe(30);
+    expect(detail.currentFormatProfile.language).toBe('zh-CN');
+    expect(detail.currentFormatProfile.versionNo).toBe(1);
+    expect(detail.currentFormatProfile.parentId).toBeNull();
+    expect(detail.currentFormatProfile.isCurrent).toBe(true);
+    expect(detail.currentFormatProfile.subtitleSafeArea).toEqual({
+      top: 5,
+      right: 5,
+      bottom: 12,
+      left: 5,
+    });
+    expect(detail.formatProfileHistory).toEqual([]);
+
+    // 单事务原子证据：1 Project + 1 FormatProfile(v1/current) + 1 audit + 2 analytics + 1 receipt
+    expect(store.projects).toHaveLength(1);
+    expect(store.profiles).toHaveLength(1);
+    expect(store.audit).toHaveLength(1);
+    expect(store.audit[0]?.action).toBe('PROJECT_CREATED');
+    expect(store.analytics.map((e) => e.eventName).sort()).toEqual([
+      'dialogue_mode_selected',
+      'project_created',
+    ]);
+    expect(store.receipts).toHaveLength(1);
+    expect(store.receipts[0]?.commandName).toBe('CREATE_PROJECT');
+    expect(store.receipts[0]?.resultRef.changed).toBe(true);
+  });
+
+  it.each(DIALOGUE_RENDER_MODES)('横屏 16:9 + 对白模式 %s', async (mode) => {
+    const { service, store } = setup();
+    const detail = await okCreate(
+      service,
+      baseCreateInput({
+        aspectRatio: '16:9',
+        dialogueRenderMode: mode,
+      }),
+    );
+
+    expect(detail.currentFormatProfile.aspectRatio).toBe('16:9');
+    expect(detail.currentFormatProfile.width).toBe(1920);
+    expect(detail.currentFormatProfile.height).toBe(1080);
+    expect(detail.dialogueRenderMode).toBe(mode);
+    expect(store.projects[0]?.dialogueRenderMode).toBe(mode);
+  });
+
+  it('字段错误:首尾空白名称 → IPC_INVALID_REQUEST + fieldErrors.name + 零记录', async () => {
+    const { service, store } = setup();
+
+    const result = await service.create(baseCreateInput({ name: ' 带空白 ' }), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('IPC_INVALID_REQUEST');
+      expect(result.error.fieldErrors?.name).toBeTruthy();
+      expect(result.error.traceId).toBe(TRACE);
+    }
+    expect(store.projects).toHaveLength(0);
+    expect(store.profiles).toHaveLength(0);
+  });
+
+  it('名称冲突:zh-CN 大小写归一后与活动项目重名 → PROJECT_NAME_CONFLICT，无新增', async () => {
+    const { service, store } = setup();
+    seedProject(store, makeProject({ id: pid(1), name: 'Alpha' }), [
+      makeFormatProfile({ id: fid(1), projectId: pid(1) }),
+    ]);
+
+    const result = await service.create(baseCreateInput({ name: 'ALPHA' }), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_NAME_CONFLICT');
+    expect(store.projects).toHaveLength(1); // 仍是种子那 1 个
+    expect(store.profiles).toHaveLength(1);
+  });
+
+  it('目录不可用:prepare 失败 → PROJECT_DIRECTORY_UNAVAILABLE，零记录零事件', async () => {
+    const { service, store, directory } = setup({ prepareError: new Error('fs down') });
+
+    const result = await service.create(baseCreateInput(), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_DIRECTORY_UNAVAILABLE');
+    expect(store.projects).toHaveLength(0);
+    expect(store.profiles).toHaveLength(0);
+    expect(store.audit).toHaveLength(0);
+    expect(store.analytics).toHaveLength(0);
+    expect(directory.prepareCalls).toBe(1);
+  });
+
+  it.each(CREATE_WRITE_FAULTS)(
+    '事务中途失败:%s → PROJECT_PERSISTENCE_FAILED，原子回滚零部分结果 + 补偿清理',
+    async (_label, fault) => {
+      const { service, store, directory } = setup({ faults: singleFault(fault) });
+
+      const result = await service.create(baseCreateInput(), TRACE);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+      expect(store.projects).toHaveLength(0);
+      expect(store.profiles).toHaveLength(0);
+      expect(store.audit).toHaveLength(0);
+      expect(store.analytics).toHaveLength(0);
+      expect(store.receipts).toHaveLength(0);
+      expect(directory.cleanupCalls).toBe(1);
+    },
+  );
+
+  it('系统字段派生:id/时间/deploymentMode 由系统派生，请求不携带', async () => {
+    const { service } = setup({ ids: ['proj-derived001', 'fp-derived000001'] });
+
+    const detail = await okCreate(service, baseCreateInput());
+
+    expect(detail.id).toBe('proj-derived001');
+    expect(detail.currentFormatProfile.id).toBe('fp-derived000001');
+    expect(detail.createdAt).toBe(detail.updatedAt);
+    expect(detail.deploymentMode).toBe('LOCAL_DEMO');
   });
 });

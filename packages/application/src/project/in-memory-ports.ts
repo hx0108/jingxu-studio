@@ -3,7 +3,9 @@
  *
  * 为 ProjectService Unit 测试提供确定性、可种子的内存实现。keyset 排序与 scope 过滤
  * 是真实算法的简化镜像（`updated_at DESC, id DESC`），使分页行为可独立于 SQLite 验证。
- * §3.1 仅 list/get 路径被覆盖；写命令相关方法先 reject，将在 §3.2+ 按需实现。
+ * §3.1 list/get 路径覆盖；§3.2 create 写路径覆盖（insert/findActiveNameRefs/audit/
+ * analytics/receipt + 快照回滚 unitOfWork + 故障注入）；update/delete/restore 仍 reject，
+ * 将在 §3.3+ 按需实现。
  */
 
 import type { AspectRatio, FormatProfile, Project } from '@jingxu/domain';
@@ -25,10 +27,13 @@ import type {
   ProjectRepositories,
   ProjectUnitOfWorkPort,
 } from '../ports/project/project-unit-of-work';
+import type { CommandReceipt } from '../ports/project/command-receipt-repository';
+import type { AuditEntry } from '../ports/project/audit-repository';
+import type { AnalyticsEvent } from '../ports/project/analytics-repository';
 
 import { createStableHasher } from './stable-serialization';
 
-const unused = (method: string): Error => new Error(`${method} not used in §3.1 list/get tests`);
+const unused = (method: string): Error => new Error(`${method} not used in §3.1-3.2 scope`);
 
 // ─── builders：构造合法默认领域对象，测试按需覆盖字段 ────────────────────────
 
@@ -62,9 +67,18 @@ export const makeFormatProfile = (overrides: Partial<FormatProfile>): FormatProf
 export interface InMemoryStore {
   readonly projects: Project[];
   readonly profiles: FormatProfile[];
+  readonly receipts: CommandReceipt[];
+  readonly audit: AuditEntry[];
+  readonly analytics: AnalyticsEvent[];
 }
 
-export const createInMemoryStore = (): InMemoryStore => ({ projects: [], profiles: [] });
+export const createInMemoryStore = (): InMemoryStore => ({
+  projects: [],
+  profiles: [],
+  receipts: [],
+  audit: [],
+  analytics: [],
+});
 
 /** 种入一个 Project 及其若干 FormatProfile 版本（首个默认 current）。 */
 export const seedProject = (
@@ -75,6 +89,15 @@ export const seedProject = (
   store.projects.push(project);
   store.profiles.push(...profiles);
 };
+
+// ─── 写命令故障注入：支撑 §3.2 Scenario 5「任一写入故障点」遍历 ──────────────
+
+/** create/update 等写命令的写入步骤故障点。 */
+export type ProjectWriteFault =
+  'insertProject' | 'insertFormatProfile' | 'recordAudit' | 'recordAnalytics' | 'insertReceipt';
+
+/** 每个故障点可注入一个 Error；设置后该步 reject，使整事务回滚。 */
+export type ProjectWriteFaults = Partial<Record<ProjectWriteFault, Error>>;
 
 // ─── keyset 工具：内存镜像 SQLite 的稳定排序与定位 ───────────────────────────
 
@@ -100,9 +123,12 @@ const startIndexAfter = (sorted: readonly Project[], after: ProjectKeyset | null
   return found === -1 ? sorted.length : found;
 };
 
-// ─── ProjectRepository（list/get 路径实现，写命令 reject）────────────────────
+// ─── ProjectRepository（list/get + create 路径实现，update 仍 reject）─────────
 
-export const createInMemoryProjectRepository = (store: InMemoryStore): ProjectRepository => {
+export const createInMemoryProjectRepository = (
+  store: InMemoryStore,
+  faults: ProjectWriteFaults = {},
+): ProjectRepository => {
   const currentAspectRatioOf = (projectId: string): AspectRatio => {
     const current = store.profiles.find((fp) => fp.projectId === projectId && fp.isCurrent);
     if (!current) throw new Error(`seed invariant: no current FormatProfile for ${projectId}`);
@@ -119,7 +145,12 @@ export const createInMemoryProjectRepository = (store: InMemoryStore): ProjectRe
       const project = store.projects.find((p) => p.id === id);
       return Promise.resolve(project && inScope(project, scope) ? project : null);
     },
-    findActiveNameRefs: () => Promise.reject(unused('findActiveNameRefs')),
+    findActiveNameRefs: (excludeProjectId) =>
+      Promise.resolve(
+        store.projects
+          .filter((p) => p.deletedAt === null && p.id !== excludeProjectId)
+          .map((p) => ({ projectId: p.id, name: p.name })),
+      ),
     listPage: (query: ProjectListQuery): Promise<ProjectListPage> => {
       const sorted = sortByKeysetDesc(store.projects.filter((p) => inScope(p, query.scope)));
       const start = startIndexAfter(sorted, query.after);
@@ -138,15 +169,20 @@ export const createInMemoryProjectRepository = (store: InMemoryStore): ProjectRe
       const candidates = sorted.slice(start, start + query.hardLimit).map(toItem);
       return Promise.resolve({ candidates, truncated });
     },
-    insert: () => Promise.reject(unused('insert')),
+    insert: (project) => {
+      if (faults.insertProject !== undefined) return Promise.reject(faults.insertProject);
+      store.projects.push(project);
+      return Promise.resolve();
+    },
     update: () => Promise.reject(unused('update')),
   };
 };
 
-// ─── FormatProfileRepository（findAllByProject 实现，其余 reject）─────────────
+// ─── FormatProfileRepository（findAllByProject + insert 实现，版本链留 §3.3）───
 
 export const createInMemoryFormatProfileRepository = (
   store: InMemoryStore,
+  faults: ProjectWriteFaults = {},
 ): FormatProfileRepository => ({
   findCurrent: () => Promise.reject(unused('findCurrent')),
   findAllByProject: (projectId) =>
@@ -158,43 +194,103 @@ export const createInMemoryFormatProfileRepository = (
   findMaxVersionNo: () => Promise.reject(unused('findMaxVersionNo')),
   isCurrentReferencedByShotContract: () =>
     Promise.reject(unused('isCurrentReferencedByShotContract')),
-  insert: () => Promise.reject(unused('insert')),
+  insert: (profile) => {
+    if (faults.insertFormatProfile !== undefined) return Promise.reject(faults.insertFormatProfile);
+    store.profiles.push(profile);
+    return Promise.resolve();
+  },
   unsetCurrent: () => Promise.reject(unused('unsetCurrent')),
 });
 
-// ─── 聚合 Repositories + UnitOfWork（共享同一 store，无真实事务）─────────────
+// ─── 聚合 Repositories + UnitOfWork（共享同一 store + 快照回滚）──────────────
 
-export const createInMemoryRepositories = (store: InMemoryStore): ProjectRepositories => ({
-  projects: createInMemoryProjectRepository(store),
-  formatProfiles: createInMemoryFormatProfileRepository(store),
+export const createInMemoryRepositories = (
+  store: InMemoryStore,
+  faults: ProjectWriteFaults = {},
+): ProjectRepositories => ({
+  projects: createInMemoryProjectRepository(store, faults),
+  formatProfiles: createInMemoryFormatProfileRepository(store, faults),
   receipts: {
-    findByRequestId: () => Promise.reject(unused('receipts.findByRequestId')),
-    insert: () => Promise.reject(unused('receipts.insert')),
+    findByRequestId: (requestId) =>
+      Promise.resolve(store.receipts.find((r) => r.requestId === requestId) ?? null),
+    insert: (receipt) => {
+      if (faults.insertReceipt !== undefined) return Promise.reject(faults.insertReceipt);
+      store.receipts.push(receipt);
+      return Promise.resolve();
+    },
   },
   audit: {
-    record: () => Promise.reject(unused('audit.record')),
+    record: (entry) => {
+      if (faults.recordAudit !== undefined) return Promise.reject(faults.recordAudit);
+      store.audit.push(entry);
+      return Promise.resolve();
+    },
   },
   analytics: {
-    record: () => Promise.reject(unused('analytics.record')),
+    record: (event) => {
+      if (faults.recordAnalytics !== undefined) return Promise.reject(faults.recordAnalytics);
+      store.analytics.push(event);
+      return Promise.resolve();
+    },
   },
 });
 
-export const createInMemoryUnitOfWork = (
-  repositories: ProjectRepositories,
-): ProjectUnitOfWorkPort => ({
-  run: (work) => work(repositories),
+/** store 的浅快照（领域对象不可变，浅拷贝数组即可）。 */
+const snapshotOf = (store: InMemoryStore) => ({
+  projects: [...store.projects],
+  profiles: [...store.profiles],
+  receipts: [...store.receipts],
+  audit: [...store.audit],
+  analytics: [...store.analytics],
 });
 
-// ─── 注入依赖 Fake（clock/id/dir 在 §3.1 list/get 不调用）───────────────────
+/** 从快照恢复：清空各数组并回填，保持数组引用不变（镜像 BEGIN IMMEDIATE 回滚）。 */
+const restoreFrom = (store: InMemoryStore, snap: ReturnType<typeof snapshotOf>): void => {
+  store.projects.length = 0;
+  store.projects.push(...snap.projects);
+  store.profiles.length = 0;
+  store.profiles.push(...snap.profiles);
+  store.receipts.length = 0;
+  store.receipts.push(...snap.receipts);
+  store.audit.length = 0;
+  store.audit.push(...snap.audit);
+  store.analytics.length = 0;
+  store.analytics.push(...snap.analytics);
+};
+
+/**
+ * 内存 UnitOfWork：work 正常返回即保留写入，抛出即按快照回滚再 rethrow，
+ * 使 §3.2「零部分结果」断言可独立于真实 SQLite 事务验证。
+ */
+export const createInMemoryUnitOfWork = (
+  repositories: ProjectRepositories,
+  store: InMemoryStore,
+): ProjectUnitOfWorkPort => ({
+  run: async (work) => {
+    const snap = snapshotOf(store);
+    try {
+      return await work(repositories);
+    } catch (e) {
+      restoreFrom(store, snap);
+      throw e;
+    }
+  },
+});
+
+// ─── 注入依赖 Fake ──────────────────────────────────────────────────────────
 
 export const createFakeClock = (fixedNow: number): Clock => ({ now: () => fixedNow });
 
+/**
+ * 确定性 ID 生成器：先用传入序列，耗尽后回退 `gen-<n>`（满足 ID 安全字符集），
+ * 使未显式提供 ID 的测试也能完成 create（需 projectId + formatProfileId）。
+ */
 export const createFakeIdGenerator = (ids: readonly string[] = []): IdGenerator => {
   let i = 0;
   return {
     newId: () => {
-      const id = ids[i];
-      if (id === undefined) throw new Error('FakeIdGenerator exhausted');
+      const provided = ids[i];
+      const id = provided ?? `gen-${String(i).padStart(12, '0')}`;
       i += 1;
       return id;
     },
@@ -204,7 +300,33 @@ export const createFakeIdGenerator = (ids: readonly string[] = []): IdGenerator 
 export const createFakeStableHasher = (): StableHasher =>
   createStableHasher((input) => `sha:${input}`);
 
-export const createFakeDirectoryPort = (): ProjectDirectoryPort => ({
-  prepare: () => Promise.reject(unused('directory.prepare')),
-  cleanupIfCreatedEmpty: () => Promise.reject(unused('directory.cleanupIfCreatedEmpty')),
-});
+/** Fake 目录 Port：默认 prepare 成功；可注入 prepareError 触发 §3.2 Scenario 4。 */
+export interface FakeDirectoryPort extends ProjectDirectoryPort {
+  readonly prepareCalls: number;
+  readonly cleanupCalls: number;
+}
+
+export const createFakeDirectoryPort = (
+  opts: { readonly prepareError?: Error } = {},
+): FakeDirectoryPort => {
+  let prepareCalls = 0;
+  let cleanupCalls = 0;
+  return {
+    prepare: (projectId) => {
+      prepareCalls += 1;
+      return opts.prepareError !== undefined
+        ? Promise.reject(opts.prepareError)
+        : Promise.resolve({ projectId, created: true });
+    },
+    cleanupIfCreatedEmpty: () => {
+      cleanupCalls += 1;
+      return Promise.resolve({ deleted: true } as const);
+    },
+    get prepareCalls() {
+      return prepareCalls;
+    },
+    get cleanupCalls() {
+      return cleanupCalls;
+    },
+  };
+};
