@@ -169,7 +169,7 @@ FormatProfile 版本规格字段不可 UPDATE；唯一允许的旧行 UPDATE 是
 
 Project list 只选择列表需要的 Project 列和 current FormatProfile 摘要，按 `updated_at DESC, id DESC`。Cursor 是带版本的 base64url JSON `{v:1, updatedAt, id, scope, searchHash}`，Main 解码后严格校验；search/scope 改变时旧 cursor 返回 `IPC_INVALID_REQUEST`。Query limit 最大 100，不使用 OFFSET。
 
-搜索先限制为项目名称 contains，按规范化名称在 Application 对当前有界候选执行；为避免全表无限读取，Repository 设内部扫描硬上限并在 V1 容量基线内测试。若未来项目数超过门槛，再通过独立索引/FTS Change 调整，不在此处预建。
+搜索先限制为项目名称 contains，按规范化名称在 Application 对当前有界候选执行；为避免全表无限读取，Repository 设内部扫描硬上限并在 V1 容量基线内测试，达到上限时向调用方返回显式截断标志供 Renderer 区分，不得静默完整。若未来项目数超过门槛，再通过独立索引/FTS Change 调整，不在此处预建。
 
 Get 根据 scope 区分 ACTIVE/DELETED，返回 current profile 和 FormatProfile 历史摘要（id/versionNo/parentId/spec/createdAt）；不返回 `data_root_rel`、SQL、审计 metadata 或内部 command receipt。
 

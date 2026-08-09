@@ -36,7 +36,7 @@
 ## 5. SQLite Repository、UnitOfWork 与 invariant audit
 
 - [ ] 5.1 先添加 Row mapper 集成测试，覆盖 Project nullable 字段、软删除状态、FormatProfile JSON 安全区、current/history、坏 JSON/无 current/多 current 的错误归一化，且 Repository 外部不可见 Row/Statement/连接。（Design §1、§6）
-- [ ] 5.2 先添加 list/get 集成测试，覆盖稳定 keyset、同更新时间 tie-break、ACTIVE/DELETED、limit 1/100/101、搜索有界扫描、cursor mismatch 和生产 SQL 不使用 `SELECT *`/OFFSET。（R: 项目查询必须稳定且区分活动与已删除状态 / 全部 Scenario；Design §7）
+- [ ] 5.2 先添加 list/get 集成测试，覆盖稳定 keyset、同更新时间 tie-break、ACTIVE/DELETED、limit 1/100/101、名称搜索有界扫描与显式截断标志、cursor mismatch 和生产 SQL 不使用 `SELECT *`/OFFSET。（R: 项目查询必须稳定且区分活动与已删除状态 / 全部 Scenario；Design §7）
 - [ ] 5.3 先添加 create 集成测试，在单一 `BEGIN IMMEDIATE` 中断言 Project、FormatProfile v1/current、Audit、两个 Analytics、Receipt 同时提交；从 FormatProfile/Audit/Analytics/Receipt 各故障点回滚零残留。（R: 创建项目必须原子保存 Project 与首个 FormatProfile / 创建事务中途失败）
 - [ ] 5.4 先添加活动名称冲突集成测试，覆盖 NFC/大小写等价、软删除后可复用、恢复冲突和单写事务内检查；不得通过关闭外键或部分 unique 规则制造通过。（R: 项目字段非法或名称冲突；R: 恢复时名称发生冲突）
 - [ ] 5.5 先添加 update 集成测试，覆盖 expectedUpdatedAt 条件更新、单调 revision、metadata-only、FormatProfile 旧 current→0/新 v2→1/parent/versionNo、no-op 和每一步故障回滚。（R: 项目更新必须使用乐观并发并保留 FormatProfile 版本链 / 前四个 Scenario）
@@ -79,5 +79,5 @@
 - [ ] 9.4 从干净 `.vite/out` 使用已校验 Electron 缓存执行 Windows x64 package，确认 0001/0002 resources、零外部 SQLite `.node`、临时数据根升级/创建/重启/删除恢复、真实用户目录零访问。（Design §10、Migration Plan）
 - [ ] 9.5 在固定环境记录 Project create/update 的 P50/P95、事务语句数和目录准备耗时；断言事务内无文件 I/O、列表 limit/keyset 有界，不用波动的墙钟阈值删除或隔离测试。（TECH_DESIGN v1.1 §15；Design §10）
 - [ ] 9.6 同步 README、TECH_DESIGN v1.1 §3.3/§8.4.1/§11/§15、SQLite runtime/trace 文档和必要 AGENTS 架构示例；明确 SourceInput/Consent/Episode/Schema Registry/JobRunner 尚未实现，本 Change 不修改 PRD 和四份业务 Schema。（Proposal Impact）
-- [ ] 9.7 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:e2e`、`pnpm package:win` 和 `openspec validate project-format-profile-management`，记录实际通过/失败数量、性能环境和未验证项。（AGENTS.md §15、§18）
+- [ ] 9.7 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:e2e`、`pnpm test:collection`、`pnpm package:win` 和 `openspec validate project-format-profile-management`，记录实际通过/失败数量、性能环境和未验证项。（AGENTS.md §15、§18）
 - [ ] 9.8 使用 `$openspec-verify-change` 核对 8 条 Requirement、30 个 Scenario、0002/备份/回滚、IPC/安全、页面状态和打包证据；阻断问题清零后才可 Sync/Archive，且不得声称 SourceInput、Episode、Schema Registry、剧本、分镜或 AC-V1-01 已完成。（OpenSpec archive guidance）

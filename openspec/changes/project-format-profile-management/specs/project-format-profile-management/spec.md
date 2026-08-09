@@ -6,7 +6,7 @@
 
 ### Requirement: 项目查询必须稳定且区分活动与已删除状态
 
-系统 MUST 提供稳定排序、有限分页的项目列表和单项目详情；默认列表只返回未删除项目，显式请求回收站时才返回软删除项目。详情 SHALL 包含 Project 字段、唯一 current FormatProfile 及其版本号，不得向 Renderer 暴露数据库路径、SQL 或内部连接对象。
+系统 MUST 提供稳定排序、有限分页的项目列表和单项目详情；默认列表只返回未删除项目，显式请求回收站时才返回软删除项目。可选名称搜索 SHALL 在请求 scope 内按规范化名称有界匹配，当候选超过内部扫描上限时 MUST 返回显式截断标志而非静默完整。详情 SHALL 包含 Project 字段、唯一 current FormatProfile 及其版本号，不得向 Renderer 暴露数据库路径、SQL 或内部连接对象。
 
 #### Scenario: 新安装项目列表为空
 
@@ -28,6 +28,20 @@
 - **WHEN** 用户请求默认项目列表或该活动项目详情
 - **THEN** 默认列表 MUST NOT 返回该项目
 - **THEN** 活动详情查询 SHALL 返回稳定的 `PROJECT_NOT_FOUND`，回收站查询仍可找到该项目
+
+#### Scenario: 名称搜索返回匹配的活动项目
+
+- **GIVEN** 数据库中存在多条活动项目，且其中部分名称包含同一子串的 Unicode 大小写或 NFC 等价形式
+- **WHEN** Renderer 在 `ACTIVE` scope 下提交有限 `limit`、不透明 cursor 和搜索文本
+- **THEN** 系统 SHALL 按规范化名称匹配返回包含该文本的活动项目，并保持 `updated_at DESC, id DESC` 稳定排序
+- **THEN** 软删除项目 MUST NOT 出现在活动搜索结果中
+
+#### Scenario: 名称搜索达到有界扫描上限
+
+- **GIVEN** 活动项目数量超过 Repository 的内部扫描硬上限，且搜索文本匹配其中一部分
+- **WHEN** Renderer 请求名称搜索
+- **THEN** 系统 SHALL 返回已扫描到的匹配项并附带显式「结果已截断」标志
+- **THEN** 系统 MUST NOT 静默丢弃该标志、伪造完整结果或为匹配而读取无界数据
 
 ### Requirement: 创建项目必须原子保存 Project 与首个 FormatProfile
 
