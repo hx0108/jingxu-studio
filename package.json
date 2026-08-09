@@ -38,6 +38,8 @@
     "package:win": "pnpm --filter @jingxu/desktop package:win"
   },
   "devDependencies": {
+    "@jingxu/contracts": "workspace:*",
+    "@jingxu/domain": "workspace:*",
     "@playwright/test": "^1.62.1",
     "@types/node": "^26.1.2",
     "eslint": "^10.8.0",

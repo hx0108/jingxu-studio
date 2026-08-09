@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@jingxu/contracts':
+        specifier: workspace:*
+        version: link:packages/contracts
+      '@jingxu/domain':
+        specifier: workspace:*
+        version: link:packages/domain
       '@playwright/test':
         specifier: ^1.62.1
         version: 1.62.1
@@ -84,9 +90,6 @@ importers:
 
   packages/contracts:
     dependencies:
-      '@jingxu/domain':
-        specifier: workspace:*
-        version: link:../domain
       zod:
         specifier: 4.4.3
         version: 4.4.3
