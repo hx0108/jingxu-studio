@@ -2,6 +2,7 @@ export const INITIAL_SCHEMA_TABLES = [
   'analytics_events',
   'app_settings',
   'audit_events',
+  'command_receipts',
   'consent_records',
   'dependency_edges',
   'episode_version_shots',
@@ -37,6 +38,7 @@ export const INITIAL_SCHEMA_TABLES = [
 
 export const INITIAL_SCHEMA_INDEXES = [
   'ix_audit_project_time',
+  'ix_command_receipts_project',
   'ix_dependency_downstream',
   'ix_dependency_upstream',
   'ix_evaluation_sample_type',

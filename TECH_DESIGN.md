@@ -683,6 +683,7 @@ erDiagram
 | `model_price_snapshots` | `id PK, provider_profile_id FK, model_id, region, currency, tiers_json, effective_at, expires_at, source_url, sha256` | 记录真实文本模型调用的计价快照，用于 ModelInvocation 估算；与视觉可生产性参考价分离 |
 | `reference_price_snapshots` | `id PK, price_version UNIQUE, provider, model, region, capability_type, billing_unit, currency, price_range_json, effective_at, expires_at, source_url, sha256, enabled` | 与 Provider 凭据/Profile 无关，随包发布；V1 Shot 只引用 `SHOT_PACKAGE + PER_SHOT` 整镜打包行 |
 | `prompt_templates` | `id PK, stage, version, template_text, sha256, active, created_at` | `(stage, version)` 唯一；发布构建内置且不可静默改写 |
+| `command_receipts` | `request_id PK, command_name, payload_sha256, project_id FK NULL, result_ref_json, trace_id, committed_at` | 由 `0002_project_command_receipts.sql` 追加；通用写命令幂等回执。合法 command 枚举、64 位小写 hex `payload_sha256`、`json_valid(result_ref_json)`、可空 Project 外键；`result_ref_json` 只存安全 ID/revision，不存名称、genre/style、目录或完整命令载荷 |
 
 #### 8.4.2 项目、输入与版本内容
 
@@ -917,11 +918,35 @@ BEFORE UPDATE ON shot_contract_versions
 BEGIN
   SELECT RAISE(ABORT, 'IMMUTABLE_VERSION_ROW');
 END;
+
+-- 由 0002_project_command_receipts.sql 追加：通用写命令幂等回执（Design §4）。
+-- 只保存 requestId、命令名、payload SHA-256、可空 Project 引用、安全结果引用 JSON、
+-- traceId 和提交时间；result_ref_json 不含名称/genre/style/目录/完整载荷。
+CREATE TABLE command_receipts (
+  request_id TEXT PRIMARY KEY,
+  command_name TEXT NOT NULL CHECK (
+    command_name IN ('CREATE_PROJECT', 'UPDATE_PROJECT', 'DELETE_PROJECT', 'RESTORE_PROJECT')
+  ),
+  payload_sha256 TEXT NOT NULL CHECK (
+    length(payload_sha256) = 64
+    AND payload_sha256 NOT GLOB '*[^0-9a-f]*'
+  ),
+  project_id TEXT REFERENCES projects(id),
+  result_ref_json TEXT NOT NULL CHECK (json_valid(result_ref_json)),
+  trace_id TEXT NOT NULL CHECK (length(trace_id) > 0),
+  committed_at TEXT NOT NULL
+);
+
+CREATE INDEX ix_command_receipts_project
+ON command_receipts(project_id)
+WHERE project_id IS NOT NULL;
 ```
 
 参考价格种子以 `resources/seeds/reference-prices.v1.json` 随包发布，V1 至少包含一条启用且未过期的 `SHOT_PACKAGE + PER_SHOT` 行，文件 hash 同时写入构建 manifest。启动时只执行幂等 upsert：相同 `price_version` 但 hash 不同视为构建损坏并进入只读故障页，不允许静默覆盖；新版本可与旧版本并存，以便历史 Shot 的 `price_version` 继续解析。
 
 StoryBible、Script、EpisodeVersion 和 ShotContractVersion 均建立同类 immutable UPDATE trigger；更正必须 INSERT 新版本。`0001_initial.sql` 的完成定义：包含 8.4 所有表、FK/CHECK/partial unique/index/immutable trigger；在空库可执行；第二次执行被 migration runner 幂等跳过；对非法父链、重复 current、重复 stage head、重复 sequence、重复有效锁和 UPDATE 历史版本的负例测试均失败。本文的表清单和不变量是 migration 的评审基线，实际 SQL 文件才是数据库事实源。
+
+`0002_project_command_receipts.sql` 是不可变追加 migration，建立通用写命令幂等回执表 `command_receipts`，约束见上方示例；它不修改 `0001_initial.sql`、不使用 `PRAGMA user_version`，`result_ref_json` 只保存安全 ID/revision，不保存用户内容。发布回滚不执行 down migration：旧二进制遇到 schema version 2 以 `DATABASE_VERSION_TOO_NEW` 阻断，需要回退时使用升级前受管理备份恢复，不得删除 `command_receipts` 或手改 `schema_migrations`。
 
 ### 8.6 关键数据库不变量
 
