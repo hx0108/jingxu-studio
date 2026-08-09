@@ -15,6 +15,7 @@
     "pnpm": ">=11.16.0 <12"
   },
   "dependencies": {
-    "@jingxu/contracts": "workspace:*"
+    "@jingxu/contracts": "workspace:*",
+    "@jingxu/domain": "workspace:*"
   }
 }

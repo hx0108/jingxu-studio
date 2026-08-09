@@ -11,7 +11,7 @@
 - [x] 2.1 先添加 Contract 测试覆盖 Project/FormatProfile DTO、1–100 limit、ACTIVE/DELETED scope、opaque cursor、strict unknown-field rejection、ID/requestId/ISO datetime、两种画幅和四种 DialogueRenderMode。（R: 项目查询必须稳定且区分活动与已删除状态；R: Project IPC 必须是类型化白名单并服从启动写入门）
 - [x] 2.2 先添加 Contract 测试覆盖 `AppResultDto<T>` 与稳定 AppError：fieldErrors、traceId、脱敏 message、全部 Project error code，并断言 SQL、堆栈、绝对路径、name/genre/style 和内部对象不能出现在错误 Fixture。（Design §2、§9）
 - [x] 2.3 在 `packages/contracts` 实现 Project schemas/types、六个 channel 常量、`ProjectApi` 和扩展后的 `JingxuApi`，使 2.1–2.2 通过；RuntimeApi 行为保持兼容。（Design §2）
-- [ ] 2.4 在 `packages/application/src/ports/` 定义带 TSDoc 的 `ProjectUnitOfWorkPort`、事务内 Repository 集合、`ProjectDirectoryPort`、Clock/Id/hash 依赖；接口不得泄漏 Row、Statement、连接、SQL 或绝对路径。（Design §1、§5）
+- [x] 2.4 在 `packages/application/src/ports/` 定义带 TSDoc 的 `ProjectUnitOfWorkPort`、事务内 Repository 集合、`ProjectDirectoryPort`、Clock/Id/hash 依赖；接口不得泄漏 Row、Statement、连接、SQL 或绝对路径。（Design §1、§5）
 - [ ] 2.5 添加稳定序列化/hash、单调 `updatedAt` 和 versioned cursor Unit 测试，覆盖属性顺序、scope/searchHash 不匹配、非法 base64/版本/时间和同毫秒连续写入。（R: 活动项目按稳定游标分页；R: 项目更新必须使用乐观并发并保留 FormatProfile 版本链；Design §6–§7）
 
 ## 3. ProjectService 测试先行与最小实现

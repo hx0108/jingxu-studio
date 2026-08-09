@@ -39,11 +39,11 @@ export const SUBTITLE_SAFE_AREA_MAX = 30;
 
 export type SubtitleSafeAreaField = 'top' | 'right' | 'bottom' | 'left';
 
-export type SubtitleSafeAreaError = {
+export interface SubtitleSafeAreaError {
   readonly field: SubtitleSafeAreaField;
   readonly kind: 'OUT_OF_RANGE' | 'NOT_FINITE';
   readonly value: number;
-};
+}
 
 const SUBTITLE_SAFE_AREA_FIELDS = ['top', 'right', 'bottom', 'left'] as const;
 
@@ -116,3 +116,23 @@ export const formatProfileSpecsEqual = (a: FormatProfileSpec, b: FormatProfileSp
   a.subtitleSafeArea.right === b.subtitleSafeArea.right &&
   a.subtitleSafeArea.bottom === b.subtitleSafeArea.bottom &&
   a.subtitleSafeArea.left === b.subtitleSafeArea.left;
+
+/**
+ * FormatProfile 领域聚合：不可变规格版本 + 版本链投影（Design §6）。
+ *
+ * 与 {@link FormatProfileSpec}（纯规格）不同，FormatProfile 承载持久化的版本链字段
+ * versionNo/parentId/isCurrent，供 Application 查询当前版本与历史摘要。规格字段
+ * 整体不可变；唯一允许的变更是把旧版本的 isCurrent 从 true 置 false，再插入承载新
+ * 规格、isCurrent=true 的新版本，二者在同一受管理事务内完成。
+ *
+ * 不含文件路径、数据库 Row 或 SQL；dataRootRel 属于持久化行映射，不进入本聚合。
+ */
+export interface FormatProfile {
+  readonly id: string;
+  readonly projectId: string;
+  readonly versionNo: number;
+  readonly parentId: string | null;
+  readonly spec: FormatProfileSpec;
+  readonly isCurrent: boolean;
+  readonly createdAt: string;
+}
