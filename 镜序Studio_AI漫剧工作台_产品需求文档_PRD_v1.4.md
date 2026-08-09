@@ -11,7 +11,7 @@
 | 更新日期 | 2026-08-05 |
 | 当前状态 | 方案阶段，尚未完成开发、上线及用户验证 |
 | 当前开发目标 | V1：AI 剧本与结构化分镜 |
-| 求职建议交付点 | 完成 V3，并具备真实用户、标注集和测量结果 |
+| 交付目标 | 完成 V3，并具备真实用户、标注集和测量结果 |
 | 命名状态 | 工作名称；商业化前需完成商标、域名和应用商店重名核验 |
 | V1 机器契约 | `镜序Studio_V1_ScriptStageOutput.schema.json`、`镜序Studio_V1_ShotContract.schema.json`、`镜序Studio_V1_EpisodeStoryboardExport.schema.json`、`镜序Studio_V1_ProjectTransferBundle.schema.json` |
 
