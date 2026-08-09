@@ -30,7 +30,8 @@ describe('window.jingxu 白名单 Contract', () => {
 
     expect(Object.isFrozen(api)).toBe(true);
     expect(Object.isFrozen(api.runtime)).toBe(true);
-    expect(Object.keys(api)).toEqual(['runtime']);
+    expect(Object.isFrozen(api.project)).toBe(true);
+    expect(Object.keys(api)).toEqual(['runtime', 'project']);
     expect(Object.keys(api.runtime).sort()).toEqual([
       'getStartupStatus',
       'restoreBackup',
