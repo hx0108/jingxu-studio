@@ -3,9 +3,10 @@
  *
  * 为 ProjectService Unit 测试提供确定性、可种子的内存实现。keyset 排序与 scope 过滤
  * 是真实算法的简化镜像（`updated_at DESC, id DESC`），使分页行为可独立于 SQLite 验证。
- * §3.1 list/get 路径覆盖；§3.2 create 写路径覆盖（insert/findActiveNameRefs/audit/
- * analytics/receipt + 快照回滚 unitOfWork + 故障注入）；update/delete/restore 仍 reject，
- * 将在 §3.3+ 按需实现。
+ * §3.1 list/get 路径覆盖；§3.2 create 写路径覆盖；§3.3 update 路径覆盖（乐观锁 +
+ * findCurrent/unsetCurrent/版本链 + ShotContract 引用占位）；§3.4 delete/restore 路径
+ * 复用 findById(scope)/findActiveNameRefs/update（全量覆盖，含软删除/恢复）。
+ * 快照回滚 unitOfWork + 故障注入贯穿所有写路径。
  */
 
 import type { AspectRatio, FormatProfile, Project } from '@jingxu/domain';

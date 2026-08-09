@@ -1,6 +1,7 @@
 import type {
   AppResultDto,
   CreateProjectInputDto,
+  DeleteProjectInputDto,
   FormatProfileDto,
   ProjectDetailDto,
   ProjectErrorCode,
@@ -8,6 +9,7 @@ import type {
   ProjectListInputDto,
   ProjectListResultDto,
   ProjectSummaryDto,
+  RestoreProjectInputDto,
   UpdateProjectInputDto,
 } from '@jingxu/contracts';
 import type { FormatProfile, Project, ProjectNameValidationError } from '@jingxu/domain';
@@ -68,6 +70,10 @@ export interface ProjectService {
   create(input: CreateProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
   /** 乐观并发更新 Project 与 FormatProfile 版本链（Design §6）。 */
   update(input: UpdateProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
+  /** 二次确认后软删除 Project 聚合（不删除目录/子表），审计可查（Design §6）。 */
+  delete(input: DeleteProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
+  /** 从回收站恢复软删除 Project，事务内重检名称冲突（Design §6）。 */
+  restore(input: RestoreProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
 }
 
 /** 名称校验失败转用户可读 message（与 fieldErrors.name 共用）。 */
@@ -534,5 +540,171 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
       );
   };
 
-  return { list, get, create, update };
+  const deleteProject: ProjectService['delete'] = (input, traceId) => {
+    const projectId = input.projectId;
+    // payloadSha256 覆盖命令定位（不含 requestId），与 §3.5 幂等约定一致
+    const payloadSha256 = deps.hasher.hash({
+      projectId,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    });
+    return deps.unitOfWork
+      .run<AppResultDto<ProjectDetailDto>>(async (repositories) => {
+        // 1. ACTIVE 查不到 → 区分 ALREADY_DELETED / NOT_FOUND（无 ANY scope，两次 scope 查询）
+        const active = await repositories.projects.findById(projectId, 'ACTIVE');
+        if (active === null) {
+          const alreadyDeleted = await repositories.projects.findById(projectId, 'DELETED');
+          return alreadyDeleted !== null
+            ? error('PROJECT_ALREADY_DELETED', '项目已被删除，无需重复操作', traceId)
+            : error('PROJECT_NOT_FOUND', '项目不存在', traceId);
+        }
+
+        // 2. current 不变性守卫（写入前；纯读返回 error 不触发回滚，无副作用）
+        const current = await repositories.formatProfiles.findCurrent(projectId);
+        if (current === null) {
+          return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常', traceId);
+        }
+
+        // 3. 单调 updatedAt + 原子设 deleted_at（Design §6：仅 Project deleted_at/updated_at 变）
+        const nowIso = monotonicUpdatedAt(deps.clock.now(), active.updatedAt);
+        const deletedProject: Project = { ...active, deletedAt: nowIso, updatedAt: nowIso };
+
+        // 4. 乐观锁（此后才有写入；false = 版本冲突，此前无写入）
+        const hit = await repositories.projects.update(deletedProject, input.expectedUpdatedAt);
+        if (!hit) {
+          return error(
+            'PROJECT_VERSION_CONFLICT',
+            '项目已被修改，请刷新后重试',
+            traceId,
+            null,
+            true,
+          );
+        }
+
+        // 5. 审计 PROJECT_DELETED（目录/导出/Provider 侧数据零删除）
+        await repositories.audit.record({
+          projectId,
+          action: 'PROJECT_DELETED',
+          objectType: 'PROJECT',
+          objectId: projectId,
+          traceId,
+          occurredAt: nowIso,
+        });
+
+        // 6. 回执（changed=true；FormatProfile 不删除，formatProfileId 不变）
+        await repositories.receipts.insert({
+          requestId: input.requestId,
+          commandName: 'DELETE_PROJECT',
+          payloadSha256,
+          projectId,
+          resultRef: { projectId, formatProfileId: current.id, updatedAt: nowIso, changed: true },
+          traceId,
+          committedAt: nowIso,
+        });
+
+        // 7. 返回（重读 history：current 不变，profile 链完整保留）
+        const profiles = await repositories.formatProfiles.findAllByProject(projectId);
+        return {
+          ok: true,
+          data: buildProjectDetail(
+            deletedProject,
+            current,
+            profiles.filter((fp) => !fp.isCurrent),
+          ),
+        };
+      })
+      .catch(
+        // 事务内任一写入 reject → unitOfWork 快照回滚后 rethrow；归一化为安全错误（§3.7 进一步脱敏）
+        () =>
+          error<ProjectDetailDto>('PROJECT_PERSISTENCE_FAILED', '项目删除失败，请重试', traceId),
+      );
+  };
+
+  const restore: ProjectService['restore'] = (input, traceId) => {
+    const projectId = input.projectId;
+    // payloadSha256 覆盖命令定位（不含 requestId），与 §3.5 幂等约定一致
+    const payloadSha256 = deps.hasher.hash({
+      projectId,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    });
+    return deps.unitOfWork
+      .run<AppResultDto<ProjectDetailDto>>(async (repositories) => {
+        // 1. DELETED 查不到 → 区分 NOT_DELETED / NOT_FOUND（无 ANY scope，两次 scope 查询）
+        const deleted = await repositories.projects.findById(projectId, 'DELETED');
+        if (deleted === null) {
+          const active = await repositories.projects.findById(projectId, 'ACTIVE');
+          return active !== null
+            ? error('PROJECT_NOT_DELETED', '项目未被删除，无需恢复', traceId)
+            : error('PROJECT_NOT_FOUND', '项目不存在', traceId);
+        }
+
+        // 2. 名称冲突重检（事务内，排除自身；按 normalizeNameKey 比对，不依赖数据库 lower()）
+        const wantedKey = normalizeNameKey(deleted.name);
+        const refs = await repositories.projects.findActiveNameRefs(projectId);
+        if (refs.some((ref) => normalizeNameKey(ref.name) === wantedKey)) {
+          // 原项目保持软删除，不自动改名
+          return error('PROJECT_NAME_CONFLICT', '存在同名活动项目，无法恢复', traceId);
+        }
+
+        // 3. current 不变性守卫（写入前；纯读返回 error 不触发回滚，无副作用）
+        const current = await repositories.formatProfiles.findCurrent(projectId);
+        if (current === null) {
+          return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常', traceId);
+        }
+
+        // 4. 单调 updatedAt + 清 deleted_at
+        const nowIso = monotonicUpdatedAt(deps.clock.now(), deleted.updatedAt);
+        const restoredProject: Project = { ...deleted, deletedAt: null, updatedAt: nowIso };
+
+        // 5. 乐观锁（此后才有写入；false = 版本冲突，此前无写入）
+        const hit = await repositories.projects.update(restoredProject, input.expectedUpdatedAt);
+        if (!hit) {
+          return error(
+            'PROJECT_VERSION_CONFLICT',
+            '项目已被修改，请刷新后重试',
+            traceId,
+            null,
+            true,
+          );
+        }
+
+        // 6. 审计 PROJECT_RESTORED
+        await repositories.audit.record({
+          projectId,
+          action: 'PROJECT_RESTORED',
+          objectType: 'PROJECT',
+          objectId: projectId,
+          traceId,
+          occurredAt: nowIso,
+        });
+
+        // 7. 回执（changed=true；FormatProfile 链恢复可见）
+        await repositories.receipts.insert({
+          requestId: input.requestId,
+          commandName: 'RESTORE_PROJECT',
+          payloadSha256,
+          projectId,
+          resultRef: { projectId, formatProfileId: current.id, updatedAt: nowIso, changed: true },
+          traceId,
+          committedAt: nowIso,
+        });
+
+        // 8. 返回（重读 history：current 不变）
+        const profiles = await repositories.formatProfiles.findAllByProject(projectId);
+        return {
+          ok: true,
+          data: buildProjectDetail(
+            restoredProject,
+            current,
+            profiles.filter((fp) => !fp.isCurrent),
+          ),
+        };
+      })
+      .catch(
+        // 事务内任一写入 reject → unitOfWork 快照回滚后 rethrow；归一化为安全错误（§3.7 进一步脱敏）
+        () =>
+          error<ProjectDetailDto>('PROJECT_PERSISTENCE_FAILED', '项目恢复失败，请重试', traceId),
+      );
+  };
+
+  return { list, get, create, update, delete: deleteProject, restore };
 };

@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type {
   AppResultDto,
   CreateProjectInputDto,
+  DeleteProjectInputDto,
   ProjectDetailDto,
   ProjectListResultDto,
+  RestoreProjectInputDto,
   UpdateProjectInputDto,
 } from '@jingxu/contracts';
 import { DEFAULT_SUBTITLE_SAFE_AREA, DIALOGUE_RENDER_MODES } from '@jingxu/domain';
@@ -650,4 +652,261 @@ describe('ProjectService.update — 乐观并发与 FormatProfile 版本链（§
     expect(store.analytics).toHaveLength(0); // dialogueMode 未变
     expect(store.receipts[0]?.resultRef.changed).toBe(true);
   });
+});
+
+// ─── delete/restore 辅助 ──────────────────────────────────────────────────
+
+/** 种入单个软删除 project（pid(1)，deletedAt T11 / updatedAt T10）+ v1 current profile。 */
+const seedDeletedProject = (store: Setup['store']): void => {
+  seedProject(store, makeProject({ id: pid(1), updatedAt: T10, deletedAt: T11 }), [
+    makeFormatProfile({ id: fid(1), projectId: pid(1), versionNo: 1 }),
+  ]);
+};
+
+/**
+ * delete/restore 共用 mutation 输入：expectedUpdatedAt 默认 T10，
+ * 同时匹配 {@link seedSingleProject}（活动 updatedAt T10）与 {@link seedDeletedProject}（updatedAt T10）。
+ */
+const baseMutationInput = (
+  overrides: Partial<DeleteProjectInputDto> = {},
+): DeleteProjectInputDto => ({
+  requestId: 'req-aaaaaaaa',
+  projectId: pid(1),
+  expectedUpdatedAt: T10,
+  ...overrides,
+});
+
+const okDelete = async (
+  service: Setup['service'],
+  input: DeleteProjectInputDto,
+): Promise<ProjectDetailDto> => {
+  const result: AppResultDto<ProjectDetailDto> = await service.delete(input, TRACE);
+  if (!result.ok) throw new Error(`expected ok delete, got ${result.error.code}`);
+  return result.data;
+};
+
+const okRestore = async (
+  service: Setup['service'],
+  input: RestoreProjectInputDto,
+): Promise<ProjectDetailDto> => {
+  const result: AppResultDto<ProjectDetailDto> = await service.restore(input, TRACE);
+  if (!result.ok) throw new Error(`expected ok restore, got ${result.error.code}`);
+  return result.data;
+};
+
+// delete/restore 仅触及 update/audit/receipt 三处写入（无 profile 切换、无 analytics）
+const DELETE_RESTORE_WRITE_FAULTS: readonly (readonly [string, ProjectWriteFault])[] = [
+  ['update project', 'updateProject'],
+  ['record audit', 'recordAudit'],
+  ['insert receipt', 'insertReceipt'],
+];
+
+describe('ProjectService.delete — 软删除聚合与审计（§3.4）', () => {
+  it('场景 1 二次确认软删除：deleted_at/updated_at 原子设值 + 1 audit + 0 event + 1 receipt(changed:true)，目录/Profile 零删除', async () => {
+    const { service, store, directory } = setup();
+    seedSingleProject(store);
+
+    const detail = await okDelete(service, baseMutationInput());
+
+    expect(detail.deletedAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(detail.updatedAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(store.projects[0]?.deletedAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(store.projects[0]?.updatedAt).toBe('2026-08-09T12:00:00.000Z');
+    // FormatProfile 不删除：仍 1 条、current 不变
+    expect(store.profiles).toHaveLength(1);
+    expect(store.profiles[0]?.id).toBe(fid(1));
+    expect(store.profiles[0]?.isCurrent).toBe(true);
+    expect(detail.currentFormatProfile.id).toBe(fid(1));
+    // 审计证据 + 0 analytics + 1 receipt(changed:true)
+    expect(store.audit.map((a) => a.action)).toEqual(['PROJECT_DELETED']);
+    expect(store.audit[0]?.objectType).toBe('PROJECT');
+    expect(store.audit[0]?.objectId).toBe(pid(1));
+    expect(store.audit[0]?.traceId).toBe(TRACE);
+    expect(store.audit[0]?.occurredAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(store.analytics).toHaveLength(0);
+    expect(store.receipts).toHaveLength(1);
+    expect(store.receipts[0]?.commandName).toBe('DELETE_PROJECT');
+    expect(store.receipts[0]?.resultRef.changed).toBe(true);
+    expect(store.receipts[0]?.resultRef.formatProfileId).toBe(fid(1));
+    // 目录零调用（不删文件/导出/Provider 侧数据）
+    expect(directory.prepareCalls).toBe(0);
+    expect(directory.cleanupCalls).toBe(0);
+  });
+
+  it('陈旧 expectedUpdatedAt → PROJECT_VERSION_CONFLICT(retryable)，项目仍活动', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    const result = await service.delete(
+      baseMutationInput({ expectedUpdatedAt: '2026-08-08T00:00:00.000Z' }),
+      TRACE,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('PROJECT_VERSION_CONFLICT');
+      expect(result.error.retryable).toBe(true);
+      expect(result.error.traceId).toBe(TRACE);
+    }
+    // 项目仍活动（deletedAt null），零新增 audit/receipt
+    expect(store.projects[0]?.deletedAt).toBeNull();
+    expect(store.audit).toHaveLength(0);
+    expect(store.receipts).toHaveLength(0);
+  });
+
+  it('重复删除：已软删除项目 → PROJECT_ALREADY_DELETED，零写入', async () => {
+    const { service, store } = setup();
+    seedDeletedProject(store);
+
+    const result = await service.delete(baseMutationInput(), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_ALREADY_DELETED');
+    expect(store.audit).toHaveLength(0);
+    expect(store.receipts).toHaveLength(0);
+  });
+
+  it('不存在 → PROJECT_NOT_FOUND', async () => {
+    const { service } = setup();
+
+    const result = await service.delete(baseMutationInput({ projectId: pid(99) }), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_NOT_FOUND');
+  });
+
+  it.each(DELETE_RESTORE_WRITE_FAULTS)(
+    '删除失败不产生成功事件：%s 故障 → PROJECT_PERSISTENCE_FAILED，回滚到种子',
+    async (_label, fault) => {
+      const { service, store } = setup({ faults: singleFault(fault) });
+      seedSingleProject(store);
+
+      const result = await service.delete(baseMutationInput(), TRACE);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+      // 回滚到种子：项目仍活动（deletedAt null）、updatedAt 未变、profile 完好、零审计/回执
+      expect(store.projects[0]?.deletedAt).toBeNull();
+      expect(store.projects[0]?.updatedAt).toBe(T10);
+      expect(store.profiles).toHaveLength(1);
+      expect(store.profiles[0]?.id).toBe(fid(1));
+      expect(store.profiles[0]?.isCurrent).toBe(true);
+      expect(store.audit).toHaveLength(0);
+      expect(store.receipts).toHaveLength(0);
+    },
+  );
+
+  it('current 不变性守卫：无 profile 的项目 → PROJECT_PERSISTENCE_FAILED', async () => {
+    const { service, store } = setup();
+    // 种子项目但不带任何 profile（违反"恰有一个 current"不变性）
+    seedProject(store, makeProject({ id: pid(1), updatedAt: T10 }), []);
+
+    const result = await service.delete(baseMutationInput(), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+    expect(store.projects[0]?.deletedAt).toBeNull();
+    expect(store.audit).toHaveLength(0);
+    expect(store.receipts).toHaveLength(0);
+  });
+});
+
+describe('ProjectService.restore — 恢复与名称冲突重检（§3.4）', () => {
+  it('场景 3 恢复软删除项目：清 deleted_at + 1 audit + 1 receipt(changed:true)，重新出现在活动列表', async () => {
+    const { service, store } = setup();
+    seedDeletedProject(store);
+
+    const detail = await okRestore(service, baseMutationInput());
+
+    expect(detail.deletedAt).toBeNull();
+    expect(detail.updatedAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(store.projects[0]?.deletedAt).toBeNull();
+    expect(store.projects[0]?.updatedAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(store.audit.map((a) => a.action)).toEqual(['PROJECT_RESTORED']);
+    expect(store.audit[0]?.objectType).toBe('PROJECT');
+    expect(store.audit[0]?.objectId).toBe(pid(1));
+    expect(store.analytics).toHaveLength(0);
+    expect(store.receipts).toHaveLength(1);
+    expect(store.receipts[0]?.commandName).toBe('RESTORE_PROJECT');
+    expect(store.receipts[0]?.resultRef.changed).toBe(true);
+    // 恢复后重新出现在活动列表
+    expect(idsOf(await okList(service, 'ACTIVE'))).toEqual([pid(1)]);
+  });
+
+  it('场景 4 恢复时名称冲突：同名活动项目占用 → PROJECT_NAME_CONFLICT，原项目保持软删除', async () => {
+    const { service, store } = setup();
+    seedDeletedProject(store);
+    // 另一活动项目占用同规范化名（默认名"示例项目"，与种子的 pid(1) 相同）
+    seedProject(store, makeProject({ id: pid(2), name: '示例项目', updatedAt: T11 }), [
+      makeFormatProfile({ id: fid(2), projectId: pid(2), versionNo: 1 }),
+    ]);
+
+    const result = await service.restore(baseMutationInput(), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_NAME_CONFLICT');
+    // 原项目保持软删除（deletedAt 不变）、不自动改名、零审计/回执
+    expect(store.projects[0]?.deletedAt).toBe(T11);
+    expect(store.projects[0]?.name).toBe('示例项目');
+    expect(store.audit).toHaveLength(0);
+    expect(store.receipts).toHaveLength(0);
+  });
+
+  it('重复恢复：活动（未删除）项目 → PROJECT_NOT_DELETED，零写入', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    const result = await service.restore(baseMutationInput(), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_NOT_DELETED');
+    expect(store.audit).toHaveLength(0);
+    expect(store.receipts).toHaveLength(0);
+  });
+
+  it('不存在 → PROJECT_NOT_FOUND', async () => {
+    const { service } = setup();
+
+    const result = await service.restore(baseMutationInput({ projectId: pid(99) }), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_NOT_FOUND');
+  });
+
+  it('陈旧 expectedUpdatedAt → PROJECT_VERSION_CONFLICT(retryable)，项目仍软删除', async () => {
+    const { service, store } = setup();
+    seedDeletedProject(store);
+
+    const result = await service.restore(
+      baseMutationInput({ expectedUpdatedAt: '2026-08-08T00:00:00.000Z' }),
+      TRACE,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('PROJECT_VERSION_CONFLICT');
+      expect(result.error.retryable).toBe(true);
+    }
+    expect(store.projects[0]?.deletedAt).toBe(T11);
+    expect(store.audit).toHaveLength(0);
+    expect(store.receipts).toHaveLength(0);
+  });
+
+  it.each(DELETE_RESTORE_WRITE_FAULTS)(
+    '恢复失败不产生成功事件：%s 故障 → PROJECT_PERSISTENCE_FAILED，回滚（项目仍软删除）',
+    async (_label, fault) => {
+      const { service, store } = setup({ faults: singleFault(fault) });
+      seedDeletedProject(store);
+
+      const result = await service.restore(baseMutationInput(), TRACE);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+      // 回滚：项目仍软删除、updatedAt 未变、零审计/回执
+      expect(store.projects[0]?.deletedAt).toBe(T11);
+      expect(store.projects[0]?.updatedAt).toBe(T10);
+      expect(store.audit).toHaveLength(0);
+      expect(store.receipts).toHaveLength(0);
+    },
+  );
 });
