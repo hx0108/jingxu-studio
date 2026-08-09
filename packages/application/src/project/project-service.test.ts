@@ -5,8 +5,9 @@ import type {
   CreateProjectInputDto,
   ProjectDetailDto,
   ProjectListResultDto,
+  UpdateProjectInputDto,
 } from '@jingxu/contracts';
-import { DIALOGUE_RENDER_MODES } from '@jingxu/domain';
+import { DEFAULT_SUBTITLE_SAFE_AREA, DIALOGUE_RENDER_MODES } from '@jingxu/domain';
 
 import { createProjectService } from './project-service';
 import {
@@ -383,5 +384,270 @@ describe('ProjectService.create — 原子保存 Project 与首个 FormatProfile
     expect(detail.currentFormatProfile.id).toBe('fp-derived000001');
     expect(detail.createdAt).toBe(detail.updatedAt);
     expect(detail.deploymentMode).toBe('LOCAL_DEMO');
+  });
+});
+
+// ─── update 辅助 ──────────────────────────────────────────────────────────
+
+/** 种入单个活动 project（pid(1)，updatedAt T10）+ v1 current profile（9:16/默认安全区）。 */
+const seedSingleProject = (store: Setup['store']): void => {
+  seedProject(store, makeProject({ id: pid(1), updatedAt: T10 }), [
+    makeFormatProfile({ id: fid(1), projectId: pid(1), versionNo: 1 }),
+  ]);
+};
+
+/**
+ * 默认携带与 {@link seedSingleProject} 种子完全一致的字段 → no-op 基线；
+ * expectedUpdatedAt 默认 T10（与种子 updatedAt 一致），按测试覆盖。
+ */
+const baseUpdateInput = (
+  overrides: Partial<UpdateProjectInputDto> = {},
+): UpdateProjectInputDto => ({
+  requestId: 'req-aaaaaaaa',
+  projectId: pid(1),
+  expectedUpdatedAt: T10,
+  name: '示例项目',
+  genre: null,
+  style: null,
+  dialogueRenderMode: 'NARRATION_FIRST',
+  aspectRatio: '9:16',
+  subtitleSafeArea: { ...DEFAULT_SUBTITLE_SAFE_AREA },
+  ...overrides,
+});
+
+const okUpdate = async (
+  service: Setup['service'],
+  input: UpdateProjectInputDto,
+): Promise<ProjectDetailDto> => {
+  const result: AppResultDto<ProjectDetailDto> = await service.update(input, TRACE);
+  if (!result.ok) throw new Error(`expected ok update, got ${result.error.code}`);
+  return result.data;
+};
+
+const UPDATE_WRITE_FAULTS: readonly (readonly [string, ProjectWriteFault])[] = [
+  ['update project', 'updateProject'],
+  ['unset current profile', 'unsetCurrent'],
+  ['insert format profile', 'insertFormatProfile'],
+  ['record audit', 'recordAudit'],
+  ['record analytics', 'recordAnalytics'],
+  ['insert receipt', 'insertReceipt'],
+];
+
+describe('ProjectService.update — 乐观并发与 FormatProfile 版本链（§3.3）', () => {
+  it('场景 1 只更元数据：name 变 → updatedAt 前进 + 1 audit + 0 新 profile + 0 event + 1 receipt(changed:true)', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    const detail = await okUpdate(service, baseUpdateInput({ name: '新名称' }));
+
+    expect(detail.name).toBe('新名称');
+    expect(detail.updatedAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(store.profiles).toHaveLength(1);
+    expect(store.analytics).toHaveLength(0);
+    expect(store.audit.map((a) => a.action)).toEqual(['PROJECT_UPDATED']);
+    expect(store.receipts).toHaveLength(1);
+    expect(store.receipts[0]?.commandName).toBe('UPDATE_PROJECT');
+    expect(store.receipts[0]?.resultRef.changed).toBe(true);
+    expect(store.projects[0]?.name).toBe('新名称');
+    expect(store.projects[0]?.updatedAt).toBe('2026-08-09T12:00:00.000Z');
+  });
+
+  it('dialogueRenderMode 变化才写 dialogue_mode_selected（对比场景 1 不写）', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    const detail = await okUpdate(
+      service,
+      baseUpdateInput({ dialogueRenderMode: 'WEAK_LIP_SYNC' }),
+    );
+
+    expect(detail.dialogueRenderMode).toBe('WEAK_LIP_SYNC');
+    expect(store.analytics.map((e) => e.eventName)).toEqual(['dialogue_mode_selected']);
+    expect(store.analytics[0]?.properties).toMatchObject({
+      dialogueRenderMode: 'WEAK_LIP_SYNC',
+      source: 'PROJECT_SETTINGS',
+    });
+  });
+
+  it('场景 2 画幅变更生成新版本：9:16→16:9 插入 v2(parentId=v1、isCurrent=true)，v1 落 history 不被覆盖', async () => {
+    const { service, store } = setup({ ids: ['fp-v2-derived1'] });
+    seedSingleProject(store);
+
+    const detail = await okUpdate(service, baseUpdateInput({ aspectRatio: '16:9' }));
+
+    expect(detail.currentFormatProfile.id).toBe('fp-v2-derived1');
+    expect(detail.currentFormatProfile.versionNo).toBe(2);
+    expect(detail.currentFormatProfile.parentId).toBe(fid(1));
+    expect(detail.currentFormatProfile.aspectRatio).toBe('16:9');
+    expect(detail.currentFormatProfile.isCurrent).toBe(true);
+    expect(detail.formatProfileHistory.map((f) => f.versionNo)).toEqual([1]);
+    // store 中 v1 现 isCurrent=false、v2 current；旧 spec 未被覆盖（版本链可追溯）
+    const v1 = store.profiles.find((fp) => fp.id === fid(1));
+    expect(v1?.isCurrent).toBe(false);
+    expect(v1?.spec.aspectRatio).toBe('9:16');
+    expect(store.audit.map((a) => a.action)).toEqual([
+      'FORMAT_PROFILE_VERSIONED',
+      'PROJECT_UPDATED',
+    ]);
+    expect(store.receipts[0]?.resultRef.changed).toBe(true);
+  });
+
+  it('场景 3 无变化不造版本：no-op → 0 新 profile + 0 audit + 0 event + 1 receipt(changed:false)，updatedAt 不变', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    const detail = await okUpdate(service, baseUpdateInput());
+
+    expect(detail.updatedAt).toBe(T10);
+    expect(store.profiles).toHaveLength(1);
+    expect(store.audit).toHaveLength(0);
+    expect(store.analytics).toHaveLength(0);
+    expect(store.receipts).toHaveLength(1);
+    expect(store.receipts[0]?.resultRef.changed).toBe(false);
+    expect(store.projects[0]?.updatedAt).toBe(T10);
+  });
+
+  it('单调 revision：clock 固定同毫秒，连续两次 update → updatedAt 严格递增', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    const first = await okUpdate(service, baseUpdateInput({ name: '第一次' }));
+    const second = await okUpdate(
+      service,
+      baseUpdateInput({ name: '第二次', expectedUpdatedAt: first.updatedAt }),
+    );
+
+    expect(first.updatedAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(second.updatedAt).toBe('2026-08-09T12:00:00.001Z');
+    // 第二次乐观锁基于第一次结果生效
+    expect(store.projects[0]?.name).toBe('第二次');
+  });
+
+  it('场景 4 陈旧 expectedUpdatedAt → PROJECT_VERSION_CONFLICT(retryable)，零新增', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    const result = await service.update(
+      baseUpdateInput({ name: '冲突', expectedUpdatedAt: '2026-08-08T00:00:00.000Z' }),
+      TRACE,
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('PROJECT_VERSION_CONFLICT');
+      expect(result.error.retryable).toBe(true);
+      expect(result.error.traceId).toBe(TRACE);
+    }
+    // 种子未变、零新增（无 profile/audit/event/receipt）
+    expect(store.projects[0]?.name).toBe('示例项目');
+    expect(store.profiles).toHaveLength(1);
+    expect(store.audit).toHaveLength(0);
+    expect(store.analytics).toHaveLength(0);
+    expect(store.receipts).toHaveLength(0);
+  });
+
+  it('场景 5 下游依赖阻断：ShotContract 引用 current + 改画幅 → FORMAT_PROFILE_DEPENDENCY_BLOCKED，种子不变', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+    store.shotContractReferencedProfileIds.add(fid(1));
+
+    const result = await service.update(baseUpdateInput({ aspectRatio: '16:9' }), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('FORMAT_PROFILE_DEPENDENCY_BLOCKED');
+    // 检查在写入前纯读阶段短路 → 种子 Project/Profile 均不变
+    expect(store.projects[0]?.updatedAt).toBe(T10);
+    expect(store.profiles).toHaveLength(1);
+    expect(store.profiles[0]?.id).toBe(fid(1));
+    expect(store.profiles[0]?.isCurrent).toBe(true);
+    expect(store.audit).toHaveLength(0);
+  });
+
+  it('不存在 → PROJECT_NOT_FOUND', async () => {
+    const { service } = setup();
+
+    const result = await service.update(baseUpdateInput({ projectId: pid(99) }), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_NOT_FOUND');
+  });
+
+  it('字段错误：首尾空白名称 → IPC_INVALID_REQUEST + fieldErrors.name + 零写入', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    const result = await service.update(baseUpdateInput({ name: ' 带空白 ' }), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('IPC_INVALID_REQUEST');
+      expect(result.error.fieldErrors?.name).toBeTruthy();
+    }
+    expect(store.projects[0]?.name).toBe('示例项目');
+    expect(store.audit).toHaveLength(0);
+    expect(store.receipts).toHaveLength(0);
+  });
+
+  it('名称冲突：种入另一同名活动项目，改 name 撞它 → PROJECT_NAME_CONFLICT（自身排除）', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+    seedProject(store, makeProject({ id: pid(2), name: '已占用名称', updatedAt: T11 }), [
+      makeFormatProfile({ id: fid(2), projectId: pid(2), versionNo: 1 }),
+    ]);
+
+    const result = await service.update(baseUpdateInput({ name: '已占用名称' }), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe('PROJECT_NAME_CONFLICT');
+    expect(store.projects[0]?.name).toBe('示例项目');
+    expect(store.audit).toHaveLength(0);
+  });
+
+  it.each(UPDATE_WRITE_FAULTS)(
+    '更新失败不产生成功事件：%s 故障 → PROJECT_PERSISTENCE_FAILED，回滚到种子',
+    async (_label, fault) => {
+      const { service, store } = setup({ faults: singleFault(fault) });
+      seedSingleProject(store);
+
+      // 三处同时变（metadata + profile + dialogueMode）使全部写入步骤进入路径
+      const result = await service.update(
+        baseUpdateInput({
+          name: '改名',
+          aspectRatio: '16:9',
+          dialogueRenderMode: 'SUBTITLE_ONLY',
+        }),
+        TRACE,
+      );
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+      // 回滚到种子状态：project 元数据/updatedAt 未变、仅 v1 current、零审计/事件/回执
+      expect(store.projects).toHaveLength(1);
+      expect(store.projects[0]?.name).toBe('示例项目');
+      expect(store.projects[0]?.updatedAt).toBe(T10);
+      expect(store.profiles).toHaveLength(1);
+      expect(store.profiles[0]?.id).toBe(fid(1));
+      expect(store.profiles[0]?.isCurrent).toBe(true);
+      expect(store.audit).toHaveLength(0);
+      expect(store.analytics).toHaveLength(0);
+      expect(store.receipts).toHaveLength(0);
+    },
+  );
+
+  it('元数据 + FormatProfile 同时变：name + aspectRatio → 2 audit + v2 + receipt(changed:true)，无 event', async () => {
+    const { service, store } = setup({ ids: ['fp-both-derived'] });
+    seedSingleProject(store);
+
+    const detail = await okUpdate(service, baseUpdateInput({ name: '改名', aspectRatio: '16:9' }));
+
+    expect(detail.name).toBe('改名');
+    expect(detail.currentFormatProfile.aspectRatio).toBe('16:9');
+    expect(detail.currentFormatProfile.versionNo).toBe(2);
+    expect(store.audit.map((a) => a.action)).toEqual([
+      'FORMAT_PROFILE_VERSIONED',
+      'PROJECT_UPDATED',
+    ]);
+    expect(store.analytics).toHaveLength(0); // dialogueMode 未变
+    expect(store.receipts[0]?.resultRef.changed).toBe(true);
   });
 });

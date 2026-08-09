@@ -33,8 +33,6 @@ import type { AnalyticsEvent } from '../ports/project/analytics-repository';
 
 import { createStableHasher } from './stable-serialization';
 
-const unused = (method: string): Error => new Error(`${method} not used in §3.1-3.2 scope`);
-
 // ─── builders：构造合法默认领域对象，测试按需覆盖字段 ────────────────────────
 
 export const makeProject = (overrides: Partial<Project>): Project => ({
@@ -70,6 +68,8 @@ export interface InMemoryStore {
   readonly receipts: CommandReceipt[];
   readonly audit: AuditEntry[];
   readonly analytics: AnalyticsEvent[];
+  /** V1 无真实 ShotContract 数据；用被引用的 current FormatProfile id 集合表达下游依赖（§3.3 占位，真实 Fixture 在 §5.6）。 */
+  readonly shotContractReferencedProfileIds: Set<string>;
 }
 
 export const createInMemoryStore = (): InMemoryStore => ({
@@ -78,6 +78,7 @@ export const createInMemoryStore = (): InMemoryStore => ({
   receipts: [],
   audit: [],
   analytics: [],
+  shotContractReferencedProfileIds: new Set(),
 });
 
 /** 种入一个 Project 及其若干 FormatProfile 版本（首个默认 current）。 */
@@ -94,7 +95,13 @@ export const seedProject = (
 
 /** create/update 等写命令的写入步骤故障点。 */
 export type ProjectWriteFault =
-  'insertProject' | 'insertFormatProfile' | 'recordAudit' | 'recordAnalytics' | 'insertReceipt';
+  | 'insertProject'
+  | 'insertFormatProfile'
+  | 'recordAudit'
+  | 'recordAnalytics'
+  | 'insertReceipt'
+  | 'updateProject'
+  | 'unsetCurrent';
 
 /** 每个故障点可注入一个 Error；设置后该步 reject，使整事务回滚。 */
 export type ProjectWriteFaults = Partial<Record<ProjectWriteFault, Error>>;
@@ -174,7 +181,15 @@ export const createInMemoryProjectRepository = (
       store.projects.push(project);
       return Promise.resolve();
     },
-    update: () => Promise.reject(unused('update')),
+    update: (project, expectedUpdatedAt) => {
+      if (faults.updateProject !== undefined) return Promise.reject(faults.updateProject);
+      const idx = store.projects.findIndex((p) => p.id === project.id);
+      const existing = idx === -1 ? undefined : store.projects[idx];
+      if (existing === undefined) return Promise.resolve(false);
+      if (existing.updatedAt !== expectedUpdatedAt) return Promise.resolve(false);
+      store.projects[idx] = project;
+      return Promise.resolve(true);
+    },
   };
 };
 
@@ -184,22 +199,40 @@ export const createInMemoryFormatProfileRepository = (
   store: InMemoryStore,
   faults: ProjectWriteFaults = {},
 ): FormatProfileRepository => ({
-  findCurrent: () => Promise.reject(unused('findCurrent')),
+  findCurrent: (projectId) =>
+    Promise.resolve(
+      store.profiles.find((fp) => fp.projectId === projectId && fp.isCurrent) ?? null,
+    ),
   findAllByProject: (projectId) =>
     Promise.resolve(
       store.profiles
         .filter((fp) => fp.projectId === projectId)
         .sort((a, b) => a.versionNo - b.versionNo),
     ),
-  findMaxVersionNo: () => Promise.reject(unused('findMaxVersionNo')),
-  isCurrentReferencedByShotContract: () =>
-    Promise.reject(unused('isCurrentReferencedByShotContract')),
+  findMaxVersionNo: (projectId) =>
+    Promise.resolve(
+      store.profiles
+        .filter((fp) => fp.projectId === projectId)
+        .reduce((max, fp) => Math.max(max, fp.versionNo), 0),
+    ),
+  isCurrentReferencedByShotContract: (_projectId, formatProfileId) =>
+    Promise.resolve(store.shotContractReferencedProfileIds.has(formatProfileId)),
   insert: (profile) => {
     if (faults.insertFormatProfile !== undefined) return Promise.reject(faults.insertFormatProfile);
     store.profiles.push(profile);
     return Promise.resolve();
   },
-  unsetCurrent: () => Promise.reject(unused('unsetCurrent')),
+  unsetCurrent: (projectId, formatProfileId) => {
+    if (faults.unsetCurrent !== undefined) return Promise.reject(faults.unsetCurrent);
+    const idx = store.profiles.findIndex(
+      (fp) => fp.projectId === projectId && fp.id === formatProfileId,
+    );
+    const existing = idx === -1 ? undefined : store.profiles[idx];
+    if (existing !== undefined) {
+      store.profiles[idx] = { ...existing, isCurrent: false };
+    }
+    return Promise.resolve();
+  },
 });
 
 // ─── 聚合 Repositories + UnitOfWork（共享同一 store + 快照回滚）──────────────

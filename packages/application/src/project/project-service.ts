@@ -8,9 +8,15 @@ import type {
   ProjectListInputDto,
   ProjectListResultDto,
   ProjectSummaryDto,
+  UpdateProjectInputDto,
 } from '@jingxu/contracts';
 import type { FormatProfile, Project, ProjectNameValidationError } from '@jingxu/domain';
-import { createFormatProfileSpec, normalizeNameKey, validateProjectName } from '@jingxu/domain';
+import {
+  createFormatProfileSpec,
+  formatProfileSpecsEqual,
+  normalizeNameKey,
+  validateProjectName,
+} from '@jingxu/domain';
 import type { Clock, IdGenerator, StableHasher } from '../ports/project/service-dependencies';
 import type {
   ProjectDirectoryHandle,
@@ -20,6 +26,7 @@ import type { ProjectKeyset, ProjectListItem } from '../ports/project/project-re
 import type { ProjectUnitOfWorkPort } from '../ports/project/project-unit-of-work';
 
 import { decodeCursor, encodeCursor } from './project-cursor';
+import { monotonicUpdatedAt } from './monotonic-timestamp';
 
 /**
  * 名称搜索的内部扫描硬上限（Design §7）。
@@ -59,6 +66,8 @@ export interface ProjectService {
   get(input: ProjectGetInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
   /** 原子创建 Project 与首个 current FormatProfile（Design §5、§6）。 */
   create(input: CreateProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
+  /** 乐观并发更新 Project 与 FormatProfile 版本链（Design §6）。 */
+  update(input: UpdateProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
 }
 
 /** 名称校验失败转用户可读 message（与 fieldErrors.name 共用）。 */
@@ -328,5 +337,202 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
     }
   };
 
-  return { list, get, create };
+  const update: ProjectService['update'] = (input, traceId) => {
+    const projectId = input.projectId;
+    // payloadSha256 覆盖命令定位 + 业务字段（不含 requestId），与 §3.5 幂等约定一致
+    const payloadSha256 = deps.hasher.hash({
+      projectId,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+      name: input.name,
+      genre: input.genre,
+      style: input.style,
+      dialogueRenderMode: input.dialogueRenderMode,
+      aspectRatio: input.aspectRatio,
+      subtitleSafeArea: input.subtitleSafeArea,
+    });
+    return deps.unitOfWork
+      .run<AppResultDto<ProjectDetailDto>>(async (repositories) => {
+        // 1. NOT_FOUND guard（乐观锁 false 含 not-found，先 findById 区分）
+        const project = await repositories.projects.findById(projectId, 'ACTIVE');
+        if (project === null) return error('PROJECT_NOT_FOUND', '项目不存在', traceId);
+
+        // 2. 名称语义校验（zod 已在 IPC 拦空与 100，这里补首尾空白）
+        const nameError = validateProjectName(input.name);
+        if (nameError !== null) {
+          const message = nameErrorMessage(nameError);
+          return error('IPC_INVALID_REQUEST', message, traceId, { name: message });
+        }
+
+        // 3. 名称冲突检查（排除自身）：单写连接内按 normalizeNameKey 比对，不依赖数据库 lower()
+        const normalizedNew = normalizeNameKey(input.name);
+        const refs = await repositories.projects.findActiveNameRefs(projectId);
+        if (refs.some((ref) => normalizeNameKey(ref.name) === normalizedNew)) {
+          return error('PROJECT_NAME_CONFLICT', '项目名称已被占用', traceId, {
+            name: '该名称已存在，请更换',
+          });
+        }
+
+        // 4. 读 current FormatProfile
+        const current = await repositories.formatProfiles.findCurrent(projectId);
+        if (current === null) {
+          return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常', traceId);
+        }
+
+        // 5. 判定变化（creationMode 不可改，不参与）
+        const newSpec = createFormatProfileSpec(input.aspectRatio, input.subtitleSafeArea);
+        const profileChanged = !formatProfileSpecsEqual(newSpec, current.spec);
+        const metadataChanged =
+          input.name !== project.name ||
+          input.genre !== project.genre ||
+          input.style !== project.style ||
+          input.dialogueRenderMode !== project.dialogueRenderMode;
+        const dialogueModeChanged = input.dialogueRenderMode !== project.dialogueRenderMode;
+
+        // 6. no-op：写 NO_OP receipt（changed=false），不写 audit/event，updatedAt 不动，返回当前
+        if (!profileChanged && !metadataChanged) {
+          const profiles = await repositories.formatProfiles.findAllByProject(projectId);
+          await repositories.receipts.insert({
+            requestId: input.requestId,
+            commandName: 'UPDATE_PROJECT',
+            payloadSha256,
+            projectId,
+            resultRef: {
+              projectId,
+              formatProfileId: current.id,
+              updatedAt: project.updatedAt,
+              changed: false,
+            },
+            traceId,
+            committedAt: new Date(deps.clock.now()).toISOString(),
+          });
+          return {
+            ok: true,
+            data: buildProjectDetail(
+              project,
+              current,
+              profiles.filter((fp) => !fp.isCurrent),
+            ),
+          };
+        }
+
+        // 7. FormatProfile 变化：下游依赖阻断检查（写入前，纯读）
+        if (profileChanged) {
+          const blocked = await repositories.formatProfiles.isCurrentReferencedByShotContract(
+            projectId,
+            current.id,
+          );
+          if (blocked) {
+            return error(
+              'FORMAT_PROFILE_DEPENDENCY_BLOCKED',
+              '当前画幅已被分镜引用，暂不可修改',
+              traceId,
+            );
+          }
+        }
+
+        // 8. 单调 updatedAt + 乐观锁更新 Project（false = 冲突或不存在，前面已排除 not-found）
+        const nowIso = monotonicUpdatedAt(deps.clock.now(), project.updatedAt);
+        const newProject: Project = {
+          ...project,
+          name: input.name,
+          genre: input.genre,
+          style: input.style,
+          dialogueRenderMode: input.dialogueRenderMode,
+          updatedAt: nowIso,
+        };
+        const hit = await repositories.projects.update(newProject, input.expectedUpdatedAt);
+        if (!hit) {
+          return error(
+            'PROJECT_VERSION_CONFLICT',
+            '项目已被修改，请刷新后重试',
+            traceId,
+            null,
+            true,
+          );
+        }
+
+        // 9. FormatProfile 版本链切换（同事务：unsetCurrent 旧 + insert 新）
+        let resultProfile = current;
+        if (profileChanged) {
+          const maxVersionNo = await repositories.formatProfiles.findMaxVersionNo(projectId);
+          const newProfileId = deps.idGenerator.newId();
+          resultProfile = {
+            id: newProfileId,
+            projectId,
+            versionNo: maxVersionNo + 1,
+            parentId: current.id,
+            spec: newSpec,
+            isCurrent: true,
+            createdAt: nowIso,
+          };
+          await repositories.formatProfiles.unsetCurrent(projectId, current.id);
+          await repositories.formatProfiles.insert(resultProfile);
+          await repositories.audit.record({
+            projectId,
+            action: 'FORMAT_PROFILE_VERSIONED',
+            objectType: 'FORMAT_PROFILE',
+            objectId: newProfileId,
+            traceId,
+            occurredAt: nowIso,
+          });
+        }
+
+        // 10. 元数据 audit（元数据变即写；与 FORMAT_PROFILE_VERSIONED 独立，两者都变写两条）
+        await repositories.audit.record({
+          projectId,
+          action: 'PROJECT_UPDATED',
+          objectType: 'PROJECT',
+          objectId: projectId,
+          traceId,
+          occurredAt: nowIso,
+        });
+
+        // 11. analytics：仅 dialogueRenderMode 变化时写 dialogue_mode_selected
+        if (dialogueModeChanged) {
+          await repositories.analytics.record({
+            projectId,
+            eventName: 'dialogue_mode_selected',
+            properties: {
+              dialogueRenderMode: input.dialogueRenderMode,
+              source: 'PROJECT_SETTINGS',
+            },
+            occurredAt: nowIso,
+          });
+        }
+
+        // 12. receipt（changed=true）
+        await repositories.receipts.insert({
+          requestId: input.requestId,
+          commandName: 'UPDATE_PROJECT',
+          payloadSha256,
+          projectId,
+          resultRef: {
+            projectId,
+            formatProfileId: resultProfile.id,
+            updatedAt: nowIso,
+            changed: true,
+          },
+          traceId,
+          committedAt: nowIso,
+        });
+
+        // 13. 返回（重读 history：旧 current 现 isCurrent=false，落入 history）
+        const profiles = await repositories.formatProfiles.findAllByProject(projectId);
+        return {
+          ok: true,
+          data: buildProjectDetail(
+            newProject,
+            resultProfile,
+            profiles.filter((fp) => !fp.isCurrent),
+          ),
+        };
+      })
+      .catch(
+        // 事务内任一写入 reject → unitOfWork 快照回滚后 rethrow；归一化为安全错误（§3.7 进一步脱敏）
+        () =>
+          error<ProjectDetailDto>('PROJECT_PERSISTENCE_FAILED', '项目更新失败，请重试', traceId),
+      );
+  };
+
+  return { list, get, create, update };
 };
