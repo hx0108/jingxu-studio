@@ -15,6 +15,7 @@
     "pnpm": ">=11.16.0 <12"
   },
   "dependencies": {
+    "@jingxu/domain": "workspace:*",
     "zod": "4.4.3"
   }
 }

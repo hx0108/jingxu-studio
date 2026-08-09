@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { ProjectApi } from './project-api';
+
 export const startupStateSchema = z.enum([
   'BOOTING',
   'CHECKING',
@@ -103,7 +105,13 @@ export const RUNTIME_IPC_CHANNELS = {
   retryStartup: 'runtime.retryStartup',
 } as const;
 
+export * from './app-result';
+export * from './project-api';
+export * from './project-command';
+export * from './project-dto';
+
 export interface JingxuApi {
+  readonly project: ProjectApi;
   readonly runtime: RuntimeApi;
 }
 
