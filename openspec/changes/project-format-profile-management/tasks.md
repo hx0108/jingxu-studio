@@ -72,7 +72,9 @@
 
 ## 8. Renderer 项目列表与创作设定
 
-- [ ] 8.1 添加并锁定 React Query、React Hook Form、Zustand 后，配置 QueryClient 和最小 store；测试证明 Query 是 Project 事实源、RHF 是表单源、Zustand 不复制 Project/FormatProfile 数据。（Design §8）
+- [x] 8.1 添加并锁定 React Query、React Hook Form、Zustand 后，配置 QueryClient 和最小 store；测试证明 Query 是 Project 事实源、RHF 是表单源、Zustand 不复制 Project/FormatProfile 数据。（Design §8）
+
+  > ✅ §8.1 完成于本 commit（worktree `codex/pfpm-8-renderer`）：精确锁定并安装 `@tanstack/react-query@5.101.4` / `react-hook-form@7.85.0` / `zustand@5.0.14`（saveExact，peer 含 React 19，§1.1 已核验 2026-08-09）。新增 `lib/query-client.ts`（projectKeys list/detail + `createQueryClient`：关 window-focus refetch、queries retry 1、staleTime 0、mutations retry 0）+ `store/project-ui-store.ts`（仅 `selectedProjectId`/`listScope`/`listFilter`/`isDirty` 四个 UI 协调字段，绝不复制 Project/FormatProfile 事实，Design §8 line 180/215）+ `main.tsx` 包 `QueryClientProvider`。`state-separation.test.tsx` 三测试（node 环境 + `renderToStaticMarkup`）：React Query 缓存命中即同步渲染 Project 名（事实源）/ RHF `getValues` 即读出 defaultValues（表单源）/ Zustand 键集恰为 4 协调字段且编译期 `@ts-expect-error` 拒绝 Project 事实。门禁：全量 `tsc -b` exit 0、renderer vitest 6/6、eslint 0、prettier clean。注：§1.1 所注「安装推迟至 §9 renderer 段」中的 renderer 段即 §8（§9 为文档/打包），本节按 §8.1 任务文落地安装；§3.6/§3.7 在主干 `codex/project-format-profile-management` 追踪（本 worktree 自 §3.5 `021bd9a` 分出，tasks.md §3.6 行 26 与 §8.1 行 71 不相邻，合回主干无冲突）。
 - [ ] 8.2 先添加 ProjectList 组件测试：启动加载、真实空、活动列表、筛选无结果、分页加载、回收站、Query 错误和“创建第一个项目”唯一主操作。（R: 项目查询必须稳定且区分活动与已删除状态；R: 项目页面必须覆盖完整交互状态并保护未提交编辑）
 - [ ] 8.3 先添加 ProjectForm 测试：默认 9:16/NARRATION_FIRST/5-5-12-5、横屏、四种 DialogueRenderMode、名称/安全区字段错误、1 秒内保存反馈、失败保留输入和成功才清 dirty。（R: 创建项目必须原子保存 Project 与首个 FormatProfile；R: 保存成功以后端提交为准；R: 保存失败保留输入）
 - [ ] 8.4 实现 ProjectList/ProjectForm、React Query hooks 和错误映射，使 8.2–8.3 通过；UI 不提交 width/height/fps/language/deployment/path，禁用操作保持可见并说明原因。（Design §2–§3、§8）

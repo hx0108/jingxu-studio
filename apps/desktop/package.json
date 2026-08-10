@@ -18,8 +18,11 @@
     "@jingxu/application": "workspace:*",
     "@jingxu/contracts": "workspace:*",
     "@jingxu/persistence": "workspace:*",
+    "@tanstack/react-query": "5.101.4",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "react-hook-form": "7.85.0",
+    "zustand": "5.0.14"
   },
   "devDependencies": {
     "@electron-forge/cli": "8.0.0-alpha.10",
