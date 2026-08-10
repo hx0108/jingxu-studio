@@ -26,12 +26,14 @@
 
 ## 4. `0002` Migration 与回滚证据
 
-- [ ] 4.1 先添加 migration 集成测试，要求新资源集合为连续 `0001`/`0002`、`0001_initial.sql` 的已发布字节/checksum 不变、空库最终版本 2、重复启动跳过且 Forge 资源清单包含 0002。（Design Migration Plan）
-- [ ] 4.2 先添加 `command_receipts` DDL 负例：非法 command、非 64 位小写 hash、非法 JSON、重复 requestId、缺失 project FK；正例证明 result_ref 只需安全 ID/revision 且不要求用户内容。（R: Project Command 必须幂等且提交证据一致；Design §4）
-- [ ] 4.3 新增不可变 `0002_project_command_receipts.sql` 和必要索引，使 4.1–4.2 通过；不得修改 `0001_initial.sql` 或使用 `PRAGMA user_version`。（Design §4、Migration Plan）
-- [ ] 4.4 添加仅 0001 上一版本库的在线备份先行/manifest source=1 target=2/升级成功测试，以及 0002 中途失败、checksum 漂移、高版本库和备份失败的回滚/只读故障测试。（Design Migration Plan；复用 sqlite-migration-runtime Requirements）
-- [ ] 4.5 在 100+ 历史对象压力库执行 0001→0002 演练，对账历史行数/hash/父链、command_receipts 初始为空、`integrity_check`/`foreign_key_check`/当前 invariant audit，并记录耗时。（TECH_DESIGN v1.1 §17；Design §10）
-- [ ] 4.6 更新 `docs/SQLITE_SCHEMA_TRACE.md`、初始 schema trace/测试和 TECH_DESIGN v1.1 §8.4.1/§8.5，登记 `command_receipts`、约束、索引、回滚方式和“不保存用户内容”；不改 PRD 或四份业务 Schema。（Proposal Impact；Design §4）
+> ✅ §4.1–4.6 完成于 worktree commit `353da58`，经 merge `19e2b4c` 合回主干；勾选依据：`git show --stat`（7 文件）+ grep 核验 4.1 资源集合连续性 / 4.4 受管理备份与回滚 4 场景 / 4.5 压力库演练 + foreign_key_check。
+
+- [x] 4.1 先添加 migration 集成测试，要求新资源集合为连续 `0001`/`0002`、`0001_initial.sql` 的已发布字节/checksum 不变、空库最终版本 2、重复启动跳过且 Forge 资源清单包含 0002。（Design Migration Plan）
+- [x] 4.2 先添加 `command_receipts` DDL 负例：非法 command、非 64 位小写 hash、非法 JSON、重复 requestId、缺失 project FK；正例证明 result_ref 只需安全 ID/revision 且不要求用户内容。（R: Project Command 必须幂等且提交证据一致；Design §4）
+- [x] 4.3 新增不可变 `0002_project_command_receipts.sql` 和必要索引，使 4.1–4.2 通过；不得修改 `0001_initial.sql` 或使用 `PRAGMA user_version`。（Design §4、Migration Plan）
+- [x] 4.4 添加仅 0001 上一版本库的在线备份先行/manifest source=1 target=2/升级成功测试，以及 0002 中途失败、checksum 漂移、高版本库和备份失败的回滚/只读故障测试。（Design Migration Plan；复用 sqlite-migration-runtime Requirements）
+- [x] 4.5 在 100+ 历史对象压力库执行 0001→0002 演练，对账历史行数/hash/父链、command_receipts 初始为空、`integrity_check`/`foreign_key_check`/当前 invariant audit，并记录耗时。（TECH_DESIGN v1.1 §17；Design §10）
+- [x] 4.6 更新 `docs/SQLITE_SCHEMA_TRACE.md`、初始 schema trace/测试和 TECH_DESIGN v1.1 §8.4.1/§8.5，登记 `command_receipts`、约束、索引、回滚方式和“不保存用户内容”；不改 PRD 或四份业务 Schema。（Proposal Impact；Design §4）
 
 ## 5. SQLite Repository、UnitOfWork 与 invariant audit
 
@@ -48,9 +50,11 @@
 
 ## 6. 受管理项目目录 Adapter
 
-- [ ] 6.1 先添加 Unit/Integration 测试，覆盖 `projects/<project_id>` 系统派生、非法 ID、路径逃逸、符号链接、父目录不可写、临时写入/flush/delete 探测、Renderer 零路径输入及返回 handle 不含路径。（R: 项目目录不可用；Design §5、§9）
-- [ ] 6.2 先添加补偿测试：仅删除本次创建且仍为空的目录；预存目录、非空目录、清理失败和崩溃遗留目录不递归删除、不覆盖、不写成功记录，并只产生脱敏 WARN。（Design §5；Risk: 目录与 SQLite 无同一 ACID）
-- [ ] 6.3 在 Main 平台 Adapter 实现 `ProjectDirectoryPort` 并由 Composition Root 注入；所有文件 I/O 发生在事务外，不把绝对路径、FileHandle 或 fs 异常返回 Renderer。（Design §1、§5、§9）
+> ✅ §6.1–6.3 完成于 worktree commit `64b58cb`，经 merge `ed0614b` 合回主干；勾选依据：`git show --stat`（4 文件）+ grep 核验 prepare（§6.1）9 用例 + cleanup（§6.2）6 用例（含符号链接/路径逃逸/非空不递归/rmdir 失败脱敏 WARN）。
+
+- [x] 6.1 先添加 Unit/Integration 测试，覆盖 `projects/<project_id>` 系统派生、非法 ID、路径逃逸、符号链接、父目录不可写、临时写入/flush/delete 探测、Renderer 零路径输入及返回 handle 不含路径。（R: 项目目录不可用；Design §5、§9）
+- [x] 6.2 先添加补偿测试：仅删除本次创建且仍为空的目录；预存目录、非空目录、清理失败和崩溃遗留目录不递归删除、不覆盖、不写成功记录，并只产生脱敏 WARN。（Design §5；Risk: 目录与 SQLite 无同一 ACID）
+- [x] 6.3 在 Main 平台 Adapter 实现 `ProjectDirectoryPort` 并由 Composition Root 注入；所有文件 I/O 发生在事务外，不把绝对路径、FileHandle 或 fs 异常返回 Renderer。（Design §1、§5、§9）
 
 ## 7. Main IPC、Preload 与 Composition Root
 
