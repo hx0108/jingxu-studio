@@ -107,6 +107,9 @@ importers:
       '@jingxu/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@jingxu/domain':
+        specifier: workspace:*
+        version: link:../domain
 
 packages:
 

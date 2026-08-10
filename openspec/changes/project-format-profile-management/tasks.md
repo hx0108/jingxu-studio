@@ -43,7 +43,7 @@
 
 ## 5. SQLite Repository、UnitOfWork 与 invariant audit
 
-- [ ] 5.1 先添加 Row mapper 集成测试，覆盖 Project nullable 字段、软删除状态、FormatProfile JSON 安全区、current/history、坏 JSON/无 current/多 current 的错误归一化，且 Repository 外部不可见 Row/Statement/连接。（Design §1、§6）
+- [x] 5.1 先添加 Row mapper 集成测试，覆盖 Project nullable 字段、软删除状态、FormatProfile JSON 安全区、current/history、坏 JSON/无 current/多 current 的错误归一化，且 Repository 外部不可见 Row/Statement/连接。（Design §1、§6）— 已完成 2026-08-10：新增 row-mapper.ts（Project/FormatProfile Row→聚合，越界安全区(>30)/坏JSON/缺字段/非数字归一化为 PersistenceRuntimeError，data_root_rel 不进聚合）+ sqlite-project-repository（findById 带 ACTIVE/DELETED scope 过滤、findActiveNameRefs）+ sqlite-format-profile-repository（findCurrent 多 current 抛错、findAllByProject 升序、findMaxVersionNo COALESCE→0）；syncToPromise 把同步 throw 桥接为 reject 以满足 Port 契约又避开 require-await；导出 SqliteOutputValue、persistence 新增 @jingxu/domain 依赖；9 集成测试全过。listPage/scanForSearch/insert/update/isCurrentReferencedByShotContract/unsetCurrent 留 Promise.reject 占位，待 §5.2–5.6。
 - [ ] 5.2 先添加 list/get 集成测试，覆盖稳定 keyset、同更新时间 tie-break、ACTIVE/DELETED、limit 1/100/101、名称搜索有界扫描与显式截断标志、cursor mismatch 和生产 SQL 不使用 `SELECT *`/OFFSET。（R: 项目查询必须稳定且区分活动与已删除状态 / 全部 Scenario；Design §7）
 - [ ] 5.3 先添加 create 集成测试，在单一 `BEGIN IMMEDIATE` 中断言 Project、FormatProfile v1/current、Audit、两个 Analytics、Receipt 同时提交；从 FormatProfile/Audit/Analytics/Receipt 各故障点回滚零残留。（R: 创建项目必须原子保存 Project 与首个 FormatProfile / 创建事务中途失败）
 - [ ] 5.4 先添加活动名称冲突集成测试，覆盖 NFC/大小写等价、软删除后可复用、恢复冲突和单写事务内检查；不得通过关闭外键或部分 unique 规则制造通过。（R: 项目字段非法或名称冲突；R: 恢复时名称发生冲突）

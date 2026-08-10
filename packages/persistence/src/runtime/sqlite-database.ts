@@ -1,7 +1,7 @@
 import { backup, DatabaseSync } from 'node:sqlite';
 
 type SqliteInputValue = null | number | bigint | string | NodeJS.ArrayBufferView;
-type SqliteOutputValue = null | number | bigint | string | Uint8Array;
+export type SqliteOutputValue = null | number | bigint | string | Uint8Array;
 
 export interface SqliteStatement {
   readonly all: (...parameters: SqliteInputValue[]) => Record<string, SqliteOutputValue>[];

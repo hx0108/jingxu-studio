@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@jingxu/application": "workspace:*",
-    "@jingxu/contracts": "workspace:*"
+    "@jingxu/contracts": "workspace:*",
+    "@jingxu/domain": "workspace:*"
   }
 }
