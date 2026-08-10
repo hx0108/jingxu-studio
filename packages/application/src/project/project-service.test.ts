@@ -516,7 +516,12 @@ describe('ProjectService.update — 乐观并发与 FormatProfile 版本链（§
     const first = await okUpdate(service, baseUpdateInput({ name: '第一次' }));
     const second = await okUpdate(
       service,
-      baseUpdateInput({ name: '第二次', expectedUpdatedAt: first.updatedAt }),
+      // 两次是不同命令 → 不同 requestId（§3.5 幂等契约：同 requestId+不同载荷会 REQUEST_ID_REUSED）
+      baseUpdateInput({
+        requestId: 'req-bbbbbbbb',
+        name: '第二次',
+        expectedUpdatedAt: first.updatedAt,
+      }),
     );
 
     expect(first.updatedAt).toBe('2026-08-09T12:00:00.000Z');
@@ -909,4 +914,144 @@ describe('ProjectService.restore — 恢复与名称冲突重检（§3.4）', ()
       expect(store.receipts).toHaveLength(0);
     },
   );
+});
+
+// ─── §3.5 幂等回执：replay / REQUEST_ID_REUSED / 失败不留回执 / no-op ───────
+//
+// 范围说明：「同时重复调用共享执行」协调器按 Design §4「Main 内的轻量 requestId 协调器」
+// 拆至 §3.6（task 3.6 owns 请求协调器）；DB request_id PK 真并发兜底留 §5。本节覆盖顺序 replay。
+
+describe('ProjectService 幂等回执 replay / REQUEST_ID_REUSED（§3.5）', () => {
+  it('CREATE replay：同 requestId+载荷重试返回原项目，不重复 id-gen/prepare/写入（R5-S1）', async () => {
+    const { service, store, directory } = setup({ ids: [pid(1), fid(1)] });
+
+    const first = await okCreate(service, baseCreateInput());
+    const second = await service.create(baseCreateInput(), TRACE);
+
+    expect(second.ok).toBe(true);
+    if (second.ok) {
+      expect(second.data.id).toBe(pid(1));
+      expect(second.data).toEqual(first);
+    }
+    expect(store.projects).toHaveLength(1);
+    expect(store.profiles).toHaveLength(1);
+    expect(store.audit).toHaveLength(1);
+    expect(store.receipts).toHaveLength(1);
+    // replay 在 prepare 之前短路 → 不第二次准备目录
+    expect(directory.prepareCalls).toBe(1);
+  });
+
+  it('UPDATE replay：同 requestId+载荷重试返回首次结果，不重复版本链/审计/回执', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    const first = await okUpdate(service, baseUpdateInput({ aspectRatio: '16:9' }));
+    const second = await service.update(baseUpdateInput({ aspectRatio: '16:9' }), TRACE);
+
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.data).toEqual(first);
+    expect(store.profiles).toHaveLength(2);
+    expect(store.audit).toHaveLength(2);
+    expect(store.receipts).toHaveLength(1);
+  });
+
+  it('DELETE replay：同 requestId+载荷重试，项目仍软删除，不重复审计/回执', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    await okDelete(service, baseMutationInput());
+    const second = await service.delete(baseMutationInput(), TRACE);
+
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.data.deletedAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(store.projects[0]?.deletedAt).toBe('2026-08-09T12:00:00.000Z');
+    expect(store.audit).toHaveLength(1);
+    expect(store.receipts).toHaveLength(1);
+  });
+
+  it('RESTORE replay：同 requestId+载荷重试，项目仍活动，不重复审计/回执', async () => {
+    const { service, store } = setup();
+    seedDeletedProject(store);
+
+    await okRestore(service, baseMutationInput());
+    const second = await service.restore(baseMutationInput(), TRACE);
+
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.data.deletedAt).toBeNull();
+    expect(store.projects[0]?.deletedAt).toBeNull();
+    expect(store.audit).toHaveLength(1);
+    expect(store.receipts).toHaveLength(1);
+  });
+
+  it('CREATE 不同载荷同 requestId → REQUEST_ID_REUSED，不重复 prepare/写入（R5-S2）', async () => {
+    const { service, store, directory } = setup({ ids: [pid(1), fid(1)] });
+
+    await okCreate(service, baseCreateInput());
+    const second = await service.create(baseCreateInput({ name: '另一个名字' }), TRACE);
+
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error.code).toBe('REQUEST_ID_REUSED');
+    expect(store.projects).toHaveLength(1);
+    // REQUEST_ID_REUSED 同样在 prepare 之前短路
+    expect(directory.prepareCalls).toBe(1);
+  });
+
+  it('UPDATE 不同载荷同 requestId → REQUEST_ID_REUSED，无额外写入', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    await okUpdate(service, baseUpdateInput({ name: '名字A' }));
+    const second = await service.update(baseUpdateInput({ name: '名字B' }), TRACE);
+
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error.code).toBe('REQUEST_ID_REUSED');
+    expect(store.profiles).toHaveLength(1);
+    expect(store.audit).toHaveLength(1);
+    expect(store.receipts).toHaveLength(1);
+  });
+
+  it('跨命令复用 requestId → REQUEST_ID_REUSED（commandName 是身份三元组一部分）', async () => {
+    const { service, store } = setup({ ids: [pid(1), fid(1)] });
+
+    await okCreate(service, baseCreateInput());
+    // create 已绑定 requestId='req-aaaaaaaa'(CREATE_PROJECT)；delete 同 requestId 但 commandName 不同
+    const second = await service.delete(baseMutationInput(), TRACE);
+
+    expect(second.ok).toBe(false);
+    if (!second.ok) expect(second.error.code).toBe('REQUEST_ID_REUSED');
+    expect(store.projects[0]?.deletedAt).toBeNull();
+    expect(store.receipts).toHaveLength(1);
+  });
+
+  it('CREATE 失败不留回执 → 同 requestId 可安全重试（R5-S3 / Design §4 失败事务不留回执）', async () => {
+    // 失败环境：insertProject 故障 → 事务回滚，零回执
+    const fail = setup({ ids: [pid(1), fid(1)], faults: singleFault('insertProject') });
+    const failed = await fail.service.create(baseCreateInput(), TRACE);
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+    expect(fail.store.receipts).toHaveLength(0);
+
+    // 清洁环境同 requestId 重试：无回执 → 非重放/非 REUSED → 正常执行
+    //（两 setup 模拟「失败回滚 → 清障 → 同 requestId 重试」，语义等价单 store）
+    const retry = setup({ ids: [pid(1), fid(1)] });
+    const result = await retry.service.create(baseCreateInput(), TRACE);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.data.id).toBe(pid(1));
+    expect(retry.store.projects).toHaveLength(1);
+    expect(retry.store.receipts).toHaveLength(1);
+  });
+
+  it('UPDATE no-op receipt replay：无变更载荷重试仍 replay，updatedAt 不动（Design §6）', async () => {
+    const { service, store } = setup();
+    seedSingleProject(store);
+
+    await okUpdate(service, baseUpdateInput());
+    const second = await service.update(baseUpdateInput(), TRACE);
+
+    expect(second.ok).toBe(true);
+    if (second.ok) expect(second.data.updatedAt).toBe(T10);
+    expect(store.projects[0]?.updatedAt).toBe(T10);
+    expect(store.audit).toHaveLength(0);
+    expect(store.receipts).toHaveLength(1);
+  });
 });

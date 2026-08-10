@@ -25,7 +25,11 @@ import type {
   ProjectDirectoryPort,
 } from '../ports/project/project-directory-port';
 import type { ProjectKeyset, ProjectListItem } from '../ports/project/project-repository';
-import type { ProjectUnitOfWorkPort } from '../ports/project/project-unit-of-work';
+import type {
+  ProjectRepositories,
+  ProjectUnitOfWorkPort,
+} from '../ports/project/project-unit-of-work';
+import type { CommandReceipt } from '../ports/project/command-receipt-repository';
 
 import { decodeCursor, encodeCursor } from './project-cursor';
 import { monotonicUpdatedAt } from './monotonic-timestamp';
@@ -148,6 +152,31 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
     formatProfileHistory: history.map(toFormatProfileDto),
   });
 
+  /**
+   * replay（Design §4「按安全引用重建结果」）：按 receipt.resultRef 的 projectId 作句柄，
+   * 事务内重读当前态重建完整 ProjectDetailDto（保持 4 命令统一返回契约）。scope 由 commandName
+   * 推导（DELETE→DELETED，其余→ACTIVE）。project/current 不可解析视为不变量违例（§5.10 兜底）。
+   */
+  const replayProjectDetail = async (
+    repositories: ProjectRepositories,
+    found: CommandReceipt,
+    traceId: string,
+  ): Promise<AppResultDto<ProjectDetailDto>> => {
+    const scope = found.commandName === 'DELETE_PROJECT' ? 'DELETED' : 'ACTIVE';
+    const project = await repositories.projects.findById(found.resultRef.projectId, scope);
+    if (project === null) {
+      return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常，请重试', traceId);
+    }
+    const current = await repositories.formatProfiles.findCurrent(found.resultRef.projectId);
+    if (current === null) {
+      return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常，请重试', traceId);
+    }
+    const history = (
+      await repositories.formatProfiles.findAllByProject(found.resultRef.projectId)
+    ).filter((fp) => fp.id !== current.id);
+    return { ok: true, data: buildProjectDetail(project, current, history) };
+  };
+
   const list: ProjectService['list'] = (input, traceId) =>
     deps.unitOfWork.run(async (repositories) => {
       const searchHash =
@@ -238,6 +267,32 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
       return error<ProjectDetailDto>('IPC_INVALID_REQUEST', message, traceId, { name: message });
     }
 
+    // payloadSha256 覆盖全部业务字段（不含 requestId），与 §3.5 幂等判定一致
+    const payloadSha256 = deps.hasher.hash({
+      name: input.name,
+      genre: input.genre,
+      style: input.style,
+      creationMode: input.creationMode,
+      dialogueRenderMode: input.dialogueRenderMode,
+      aspectRatio: input.aspectRatio,
+      subtitleSafeArea: input.subtitleSafeArea,
+    });
+
+    // 幂等预查（事务内读回执）：命中 replay/REQUEST_ID_REUSED 则短路，避免重复 id-gen/prepare（Design §4）
+    const prechecked = await deps.unitOfWork.run(async (repositories) => {
+      const found = await repositories.receipts.findByRequestId(input.requestId);
+      if (found === null) return null;
+      if (found.commandName !== 'CREATE_PROJECT' || found.payloadSha256 !== payloadSha256) {
+        return error<ProjectDetailDto>(
+          'REQUEST_ID_REUSED',
+          '请求 ID 已用于其他操作，请刷新后重试',
+          traceId,
+        );
+      }
+      return replayProjectDetail(repositories, found, traceId);
+    });
+    if (prechecked !== null) return prechecked;
+
     // 目录准备在事务外完成（Design §5）；projectId 先派生以供目录与事务共用
     const projectId = deps.idGenerator.newId();
     let handle: ProjectDirectoryHandle;
@@ -309,17 +364,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
           occurredAt: nowIso,
         });
 
-        // 幂等回执：只写不读，replay/REQUEST_ID_REUSED 逻辑留 §3.5；payloadSha256 覆盖
-        // 全部业务字段（不含 requestId），与 §3.5 幂等判定一致
-        const payloadSha256 = deps.hasher.hash({
-          name: input.name,
-          genre: input.genre,
-          style: input.style,
-          creationMode: input.creationMode,
-          dialogueRenderMode: input.dialogueRenderMode,
-          aspectRatio: input.aspectRatio,
-          subtitleSafeArea: input.subtitleSafeArea,
-        });
+        // 幂等回执：payloadSha256 复用 prepare 前的预计算值（§3.5）
         await repositories.receipts.insert({
           requestId: input.requestId,
           commandName: 'CREATE_PROJECT',
@@ -358,6 +403,19 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
     });
     return deps.unitOfWork
       .run<AppResultDto<ProjectDetailDto>>(async (repositories) => {
+        // 0. 幂等：同 requestId 已提交 → replay；不同 command/hash → REQUEST_ID_REUSED（Design §4）
+        const found = await repositories.receipts.findByRequestId(input.requestId);
+        if (found !== null) {
+          if (found.commandName !== 'UPDATE_PROJECT' || found.payloadSha256 !== payloadSha256) {
+            return error<ProjectDetailDto>(
+              'REQUEST_ID_REUSED',
+              '请求 ID 已用于其他操作，请刷新后重试',
+              traceId,
+            );
+          }
+          return replayProjectDetail(repositories, found, traceId);
+        }
+
         // 1. NOT_FOUND guard（乐观锁 false 含 not-found，先 findById 区分）
         const project = await repositories.projects.findById(projectId, 'ACTIVE');
         if (project === null) return error('PROJECT_NOT_FOUND', '项目不存在', traceId);
@@ -549,6 +607,19 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
     });
     return deps.unitOfWork
       .run<AppResultDto<ProjectDetailDto>>(async (repositories) => {
+        // 0. 幂等：同 requestId 已提交 → replay；不同 command/hash → REQUEST_ID_REUSED（Design §4）
+        const found = await repositories.receipts.findByRequestId(input.requestId);
+        if (found !== null) {
+          if (found.commandName !== 'DELETE_PROJECT' || found.payloadSha256 !== payloadSha256) {
+            return error<ProjectDetailDto>(
+              'REQUEST_ID_REUSED',
+              '请求 ID 已用于其他操作，请刷新后重试',
+              traceId,
+            );
+          }
+          return replayProjectDetail(repositories, found, traceId);
+        }
+
         // 1. ACTIVE 查不到 → 区分 ALREADY_DELETED / NOT_FOUND（无 ANY scope，两次 scope 查询）
         const active = await repositories.projects.findById(projectId, 'ACTIVE');
         if (active === null) {
@@ -628,6 +699,19 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
     });
     return deps.unitOfWork
       .run<AppResultDto<ProjectDetailDto>>(async (repositories) => {
+        // 0. 幂等：同 requestId 已提交 → replay；不同 command/hash → REQUEST_ID_REUSED（Design §4）
+        const found = await repositories.receipts.findByRequestId(input.requestId);
+        if (found !== null) {
+          if (found.commandName !== 'RESTORE_PROJECT' || found.payloadSha256 !== payloadSha256) {
+            return error<ProjectDetailDto>(
+              'REQUEST_ID_REUSED',
+              '请求 ID 已用于其他操作，请刷新后重试',
+              traceId,
+            );
+          }
+          return replayProjectDetail(repositories, found, traceId);
+        }
+
         // 1. DELETED 查不到 → 区分 NOT_DELETED / NOT_FOUND（无 ANY scope，两次 scope 查询）
         const deleted = await repositories.projects.findById(projectId, 'DELETED');
         if (deleted === null) {

@@ -20,7 +20,9 @@
 - [x] 3.2 先添加 create Unit 测试：9:16/NARRATION_FIRST 默认、16:9/四种对白模式、LOCAL_DEMO、系统字段派生、目录先于事务、名称冲突/字段错误/目录失败及任一写入故障的零部分结果。（R: 创建项目必须原子保存 Project 与首个 FormatProfile / 全部 Scenario）
 - [x] 3.3 先添加 update Unit 测试：仅元数据更新、Dialogue event 仅变化时写、FormatProfile v2 parent/current、no-op 不制造版本/变更事件、单调 revision、陈旧 expectedUpdatedAt 和下游依赖阻断。（R: 项目更新必须使用乐观并发并保留 FormatProfile 版本链 / 全部 Scenario）
 - [x] 3.4 先添加 delete/restore Unit 测试：二次确认后的软删除、陈旧版本、重复删除、恢复、重复恢复、恢复名称冲突、Project 目录零删除调用和审计证据。（R: 项目删除与恢复必须可审计且不静默删除文件 / 全部 Scenario）
-- [ ] 3.5 先添加幂等 Unit 测试：响应丢失后同 requestId/hash 返回原安全引用、不同 hash/command 返回 `REQUEST_ID_REUSED`、失败不留回执、同时重复调用共享执行、no-op receipt 和失败零成功事件。（R: Project Command 必须幂等且提交证据一致 / 全部 Scenario；Design §4）
+- [x] 3.5 先添加幂等 Unit 测试：响应丢失后同 requestId/hash 返回原安全引用、不同 hash/command 返回 `REQUEST_ID_REUSED`、失败不留回执、同时重复调用共享执行、no-op receipt 和失败零成功事件。（R: Project Command 必须幂等且提交证据一致 / 全部 Scenario；Design §4）
+
+  > ✅ §3.5 完成于本 commit：4 命令 receipt replay（同 requestId+command/hash → 重读当前态重建完整 `ProjectDetailDto`）/ 不同 command/hash → `REQUEST_ID_REUSED` / 失败不留回执 → 同 requestId 可安全重试 / no-op receipt replay（project-service.test 65 passed）。「同时重复调用共享执行」按 Design §4「Main 内的轻量 requestId 协调器」拆至 §3.6（task 3.6 owns 请求协调器）；DB `request_id` PK 真并发兜底留 §5（§4.2 已建表）。
 - [ ] 3.6 实现 `ProjectService`、错误归一化和请求协调器，使 3.1–3.5 通过；所有业务写入仅通过 UnitOfWork，事务内不得调用目录/网络/长文件操作。（Design §1、§4–§7）
 - [ ] 3.7 添加 AppError 安全 Unit 测试，注入 SQLite/文件异常、SQL、路径和堆栈，断言 Application 输出只保留稳定 code、userAction、fieldErrors 和 traceId。（Design §2、§9）
 
