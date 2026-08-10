@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/domain" },
     { "path": "./packages/contracts" },
+    { "path": "./packages/validation" },
     { "path": "./packages/application" },
     { "path": "./packages/persistence" },
     { "path": "./apps/desktop" },

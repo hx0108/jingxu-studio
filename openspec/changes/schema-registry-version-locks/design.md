@@ -58,7 +58,7 @@ Main Adapter 负责受管理资源目录、文件存在性、普通文件/符号
 
 ### 4. Ajv 2020 预注册后同步编译，禁止异步网络加载
 
-实施前核验并精确锁定支持当前 Node 22/TypeScript 6 的 Ajv 8 版本，使用 `Ajv2020`。先解析并验证全部原始文档，再按完整 `$id` 全量 `addSchema`，最后编译四个根 ID；不配置 `loadSchema`，不使用 `compileAsync`。format checker 只注册 TECH_DESIGN v1.1 要求的日期时间等确定性格式，不把 Zod DTO 校验混入。
+2026-08-11 实施核验锁定 `ajv@8.20.0` 与 `ajv-formats@3.0.1`：Ajv 官方 npm 元数据声明支持 Node.js 18 至当前版本及 Draft 2020-12，ajv-formats 官方包元数据声明 peer dependency `ajv ^8.0.0`；项目在 Node 22.16.0、TypeScript 6.0.3 下通过实际类型门禁。依赖使用精确版本和唯一 `pnpm-lock.yaml`，核验来源为 [Ajv npm](https://www.npmjs.com/package/ajv) 与 [ajv-formats package metadata](https://github.com/ajv-validator/ajv-formats/blob/master/package.json)。实现使用 `Ajv2020`。先解析并验证全部原始文档，再按完整 `$id` 全量 `addSchema`，最后编译四个根 ID；不配置 `loadSchema`，不使用 `compileAsync`。format checker 只注册 TECH_DESIGN v1.1 要求的日期时间等确定性格式，不把 Zod DTO 校验混入。
 
 Ajv 原始错误在 validation 边界映射为 `{instancePath, keyword, messageCode}`，按路径、关键字、消息码稳定排序并设置数量上限；日志只记录 schema ID、错误数和 traceId。
 
@@ -121,4 +121,4 @@ Renderer 只接收现有 `StartupStatusDto` 的阶段、错误码、可重试性
 
 ## Open Questions
 
-无。Ajv 精确补丁版本在 Apply 的依赖核验任务中确定；该选择不改变规范、分层或任务拆分。
+无。Ajv 精确补丁版本已在 Apply 任务 1.1 中核验并锁定为 `ajv@8.20.0` 与 `ajv-formats@3.0.1`；该选择不改变规范、分层或任务拆分。

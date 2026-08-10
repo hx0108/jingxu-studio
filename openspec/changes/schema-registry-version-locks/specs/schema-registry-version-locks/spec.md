@@ -44,7 +44,7 @@
 
 - **GIVEN** 任一资源缺失、不是合法 UTF-8 JSON、被截断或 SHA-256 与清单不同
 - **WHEN** 启动执行自检
-- **THEN** 系统 MUST 拒绝发布整个 Registry并返回对应稳定错误码
+- **THEN** 系统 MUST 拒绝发布整个 Registry 并返回对应稳定错误码
 - **THEN** 错误摘要 MUST NOT 包含 Schema 原文、绝对路径或堆栈
 
 #### Scenario: 身份、Draft 或版本不一致

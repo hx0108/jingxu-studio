@@ -1,10 +1,10 @@
 ## 1. 依赖、锁清单与资源基线
 
-- [ ] 1.1 在安装前核验 Ajv 8 与 ajv-formats 对 Node 22.16.0、TypeScript 6.0.3 和 Draft 2020-12 的当前兼容范围，精确锁定版本并记录核验日期；不得使用 `latest`、`compileAsync` 或第二个锁文件。（Design §4）
-- [ ] 1.2 先添加锁清单 Unit 测试，断言恰好四条、完整 `$id` 唯一、ASCII 逻辑资源名唯一、Draft/版本匹配、SHA-256 为 64 位小写，并覆盖重复/缺字段/未知 ID 的 `SCHEMA_MANIFEST_INVALID` 与 `SCHEMA_ID_NOT_REGISTERED`。（R: Registry 必须以固定清单离线解析四份正式 Schema / 全部 Scenario）
-- [ ] 1.3 实现只读 `V1_SCHEMA_LOCKS` 与公开 Schema ID 类型，写入 Design 锁定的四组实时文件 hash；公开入口不得暴露绝对路径、Ajv 类型或可变集合。（Design §1、§3）
-- [ ] 1.4 先添加资源同步测试，再实现确定性同步脚本，把根目录四份 PRD-owned Schema 按锁清单字节复制到 `packages/validation/resources/schemas/v1/`；断言源/副本 hash 相等、无额外启用文件且四份源文件字节未被改写。（R: 开发态与打包态资源一致；Proposal Impact）
-- [ ] 1.5 创建最小 `@jingxu/validation` package、strict tsconfig、公开入口和 workspace references，并扩展架构测试：Validation 可依赖公开 Contract/纯领域值，不得导入 Electron、Renderer、Persistence、文件系统或网络模块。（AGENTS.md §7.1、TECH_DESIGN v1.1 §4.2）
+- [x] 1.1 在安装前核验 Ajv 8 与 ajv-formats 对 Node 22.16.0、TypeScript 6.0.3 和 Draft 2020-12 的当前兼容范围，精确锁定版本并记录核验日期；不得使用 `latest`、`compileAsync` 或第二个锁文件。（Design §4）
+- [x] 1.2 先添加锁清单 Unit 测试，断言恰好四条、完整 `$id` 唯一、ASCII 逻辑资源名唯一、Draft/版本匹配、SHA-256 为 64 位小写，并覆盖重复/缺字段/未知 ID 的 `SCHEMA_MANIFEST_INVALID` 与 `SCHEMA_ID_NOT_REGISTERED`。（R: Registry 必须以固定清单离线解析四份正式 Schema / 全部 Scenario）
+- [x] 1.3 实现只读 `V1_SCHEMA_LOCKS` 与公开 Schema ID 类型，写入 Design 锁定的四组实时文件 hash；公开入口不得暴露绝对路径、Ajv 类型或可变集合。（Design §1、§3）
+- [x] 1.4 先添加资源同步测试，再实现确定性同步脚本，把根目录四份 PRD-owned Schema 按锁清单字节复制到 `packages/validation/resources/schemas/v1/`；断言源/副本 hash 相等、无额外启用文件且四份源文件字节未被改写。（R: 开发态与打包态资源一致；Proposal Impact）
+- [x] 1.5 创建最小 `@jingxu/validation` package、strict tsconfig、公开入口和 workspace references，并扩展架构测试：Validation 可依赖公开 Contract/纯领域值，不得导入 Electron、Renderer、Persistence、文件系统或网络模块。（AGENTS.md §7.1、TECH_DESIGN v1.1 §4.2）
 
 ## 2. Registry 核验与 Ajv 2020 内核
 

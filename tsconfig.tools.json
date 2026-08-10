@@ -6,5 +6,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["*.config.ts", "scripts/**/*.ts", "vitest*.ts"]
+  "include": ["*.config.ts", "scripts/**/*.ts", "vitest*.ts"],
+  "references": [{ "path": "./packages/validation" }]
 }

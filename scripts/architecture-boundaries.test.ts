@@ -47,6 +47,13 @@ describe('跨包依赖边界', () => {
     );
   });
 
+  it('Validation 源码—检查依赖—不导入 Electron、Renderer、Persistence、文件系统或网络模块', async () => {
+    await assertFilesExclude(
+      path.join(repositoryRoot, 'packages', 'validation', 'src'),
+      /from\s+['"]electron['"]|@jingxu\/persistence|apps\/desktop|node:(?:fs|http|https|net|tls|dns)/u,
+    );
+  });
+
   it('Main 构建—处理内置 SQLite—保留 node: external 且不声明外部 SQLite addon', async () => {
     const [viteMainConfig, desktopPackage, persistencePackage, persistenceEntry] =
       await Promise.all([
