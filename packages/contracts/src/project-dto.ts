@@ -31,10 +31,10 @@ export const dialogueRenderModeSchema = z.enum([
 
 export const subtitleSafeAreaSchema = z
   .object({
-    top: z.number().finite().min(0).max(30),
-    right: z.number().finite().min(0).max(30),
-    bottom: z.number().finite().min(0).max(30),
-    left: z.number().finite().min(0).max(30),
+    top: z.number().min(0).max(30),
+    right: z.number().min(0).max(30),
+    bottom: z.number().min(0).max(30),
+    left: z.number().min(0).max(30),
   })
   .strict();
 export type SubtitleSafeAreaDto = z.infer<typeof subtitleSafeAreaSchema>;

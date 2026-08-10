@@ -45,14 +45,14 @@
 
 - [x] 5.1 先添加 Row mapper 集成测试，覆盖 Project nullable 字段、软删除状态、FormatProfile JSON 安全区、current/history、坏 JSON/无 current/多 current 的错误归一化，且 Repository 外部不可见 Row/Statement/连接。（Design §1、§6）— 已完成 2026-08-10：新增 row-mapper.ts（Project/FormatProfile Row→聚合，越界安全区(>30)/坏JSON/缺字段/非数字归一化为 PersistenceRuntimeError，data_root_rel 不进聚合）+ sqlite-project-repository（findById 带 ACTIVE/DELETED scope 过滤、findActiveNameRefs）+ sqlite-format-profile-repository（findCurrent 多 current 抛错、findAllByProject 升序、findMaxVersionNo COALESCE→0）；syncToPromise 把同步 throw 桥接为 reject 以满足 Port 契约又避开 require-await；导出 SqliteOutputValue、persistence 新增 @jingxu/domain 依赖；9 集成测试全过。listPage/scanForSearch/insert/update/isCurrentReferencedByShotContract/unsetCurrent 留 Promise.reject 占位，待 §5.2–5.6。
 - [x] 5.2 先添加 list/get 集成测试，覆盖稳定 keyset、同更新时间 tie-break、ACTIVE/DELETED、limit 1/100/101、名称搜索有界扫描与显式截断标志、cursor mismatch 和生产 SQL 不使用 `SELECT *`/OFFSET。（R: 项目查询必须稳定且区分活动与已删除状态 / 全部 Scenario；Design §7）— 已完成 2026-08-10：listPage（`updated_at DESC, id DESC` keyset，取 limit+1 判截断、丢弃多余，LEFT JOIN current FormatProfile 取 aspect_ratio 进 ProjectListItem）+ scanForSearch（取 hardLimit+1 判截断、不做名称过滤交 Application normalizeNameKey）；稳定列投影 PROJECT_LIST_COLUMNS 无 SELECT *、KEYSET_AFTER_CLAUSE 无 OFFSET。7 集成测试覆盖稳定排序/tie-break/scope 隔离/翻页+nextAfter/JOIN 画幅/扫描截断三态/续扫。cursor mismatch（scope/search 变旧 cursor）属 Main 解码层职责（IPC_INVALID_REQUEST），待 §7。
-- [ ] 5.3 先添加 create 集成测试，在单一 `BEGIN IMMEDIATE` 中断言 Project、FormatProfile v1/current、Audit、两个 Analytics、Receipt 同时提交；从 FormatProfile/Audit/Analytics/Receipt 各故障点回滚零残留。（R: 创建项目必须原子保存 Project 与首个 FormatProfile / 创建事务中途失败）
-- [ ] 5.4 先添加活动名称冲突集成测试，覆盖 NFC/大小写等价、软删除后可复用、恢复冲突和单写事务内检查；不得通过关闭外键或部分 unique 规则制造通过。（R: 项目字段非法或名称冲突；R: 恢复时名称发生冲突）
-- [ ] 5.5 先添加 update 集成测试，覆盖 expectedUpdatedAt 条件更新、单调 revision、metadata-only、FormatProfile 旧 current→0/新 v2→1/parent/versionNo、no-op 和每一步故障回滚。（R: 项目更新必须使用乐观并发并保留 FormatProfile 版本链 / 前四个 Scenario）
-- [ ] 5.6 先添加 ShotContractVersion 引用 current FormatProfile 的 Fixture，断言画幅更新返回 `FORMAT_PROFILE_DEPENDENCY_BLOCKED` 且所有 Project/Profile/Shot/Audit/Event/Receipt 均不变。（R: 已存在下游分镜依赖时修改 FormatProfile）
-- [ ] 5.7 先添加 delete/restore 集成测试，断言仅 Project 聚合 `deleted_at/updated_at` 变化、FormatProfile/子表/目录不删除、审计原子提交、状态/并发/名称冲突错误正确。（R: 项目删除与恢复必须可审计且不静默删除文件）
-- [ ] 5.8 先添加 CommandReceipt 集成测试，覆盖跨 adapter 重建的响应丢失重试、同 requestId 不同 hash/command、失败无 receipt、安全 result_ref 和无重复 Audit/Analytics。（R: Project Command 必须幂等且提交证据一致）
-- [ ] 5.9 实现 SQLite Project UnitOfWork/Repositories、参数绑定 SQL、Row mapper 和错误归一化，使 5.1–5.8 通过；事务所有权保持在 Application 回调边界，Repository 不嵌套 commit。（Design §1、§4、§6–§7）
-- [ ] 5.10 扩展启动 invariant audit：每个活动/删除 Project 都恰有一个 current FormatProfile、父链/版本号合法、活动名称冲突键唯一、receipt 引用可解析；依赖后续 Schema/StoryBible 的规则继续标记 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`。（Design Risks；AGENTS.md §12.2）
+- [x] 5.3 先添加 create 集成测试，在单一 `BEGIN IMMEDIATE` 中断言 Project、FormatProfile v1/current、Audit、两个 Analytics、Receipt 同时提交；从 FormatProfile/Audit/Analytics/Receipt 各故障点回滚零残留。（R: 创建项目必须原子保存 Project 与首个 FormatProfile / 创建事务中途失败）
+- [x] 5.4 先添加活动名称冲突集成测试，覆盖 NFC/大小写等价、软删除后可复用、恢复冲突和单写事务内检查；不得通过关闭外键或部分 unique 规则制造通过。（R: 项目字段非法或名称冲突；R: 恢复时名称发生冲突）
+- [x] 5.5 先添加 update 集成测试，覆盖 expectedUpdatedAt 条件更新、单调 revision、metadata-only、FormatProfile 旧 current→0/新 v2→1/parent/versionNo、no-op 和每一步故障回滚。（R: 项目更新必须使用乐观并发并保留 FormatProfile 版本链 / 前四个 Scenario）
+- [x] 5.6 先添加 ShotContractVersion 引用 current FormatProfile 的 Fixture，断言画幅更新返回 `FORMAT_PROFILE_DEPENDENCY_BLOCKED` 且所有 Project/Profile/Shot/Audit/Event/Receipt 均不变。（R: 已存在下游分镜依赖时修改 FormatProfile）
+- [x] 5.7 先添加 delete/restore 集成测试，断言仅 Project 聚合 `deleted_at/updated_at` 变化、FormatProfile/子表/目录不删除、审计原子提交、状态/并发/名称冲突错误正确。（R: 项目删除与恢复必须可审计且不静默删除文件）
+- [x] 5.8 先添加 CommandReceipt 集成测试，覆盖跨 adapter 重建的响应丢失重试、同 requestId 不同 hash/command、失败无 receipt、安全 result_ref 和无重复 Audit/Analytics。（R: Project Command 必须幂等且提交证据一致）
+- [x] 5.9 实现 SQLite Project UnitOfWork/Repositories、参数绑定 SQL、Row mapper 和错误归一化，使 5.1–5.8 通过；事务所有权保持在 Application 回调边界，Repository 不嵌套 commit。（Design §1、§4、§6–§7）
+- [x] 5.10 扩展启动 invariant audit：每个活动/删除 Project 都恰有一个 current FormatProfile、父链/版本号合法、活动名称冲突键唯一、receipt 引用可解析；依赖后续 Schema/StoryBible 的规则继续标记 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`。（Design Risks；AGENTS.md §12.2）
 
 ## 6. 受管理项目目录 Adapter
 
@@ -64,10 +64,10 @@
 
 ## 7. Main IPC、Preload 与 Composition Root
 
-- [ ] 7.1 先添加 Project IPC Contract 测试，覆盖六个固定 channel、trusted main frame、子 frame/外部 URL 拒绝、参数个数、strict DTO、Result 输出校验、错误脱敏和 STARTUP 非 READY 写门。（R: Project IPC 必须是类型化白名单并服从启动写入门 / 全部 Scenario）
-- [ ] 7.2 实现 `registerProjectIpc`、共享但不通用化的 sender/error helper，并将 ProjectService 注入 Main；非受信 sender 直接拒绝，受信业务失败返回 AppResult。（Design §2、§9）
-- [ ] 7.3 先扩展 Preload Contract 测试，断言冻结的 `window.jingxu.project.list/get/create/update/delete/restore` 逐方法调用和双端 Zod 校验，且不存在通用 `send/on/invoke`、路径、SQL、Node 或 persistence 能力。（R: 合法 Renderer 创建项目；R: 非法 sender 或 DTO）
-- [ ] 7.4 更新 `JingxuApi`/Preload 实现并保持 RuntimeApi 回归通过；Renderer 只能从 `@jingxu/contracts` 获取 DTO，不深层导入其他包 `src/`。（Design §2、§9）
+- [x] 7.1 先添加 Project IPC Contract 测试，覆盖六个固定 channel、trusted main frame、子 frame/外部 URL 拒绝、参数个数、strict DTO、Result 输出校验、错误脱敏和 STARTUP 非 READY 写门。（R: Project IPC 必须是类型化白名单并服从启动写入门 / 全部 Scenario）
+- [x] 7.2 实现 `registerProjectIpc`、共享但不通用化的 sender/error helper，并将 ProjectService 注入 Main；非受信 sender 直接拒绝，受信业务失败返回 AppResult。（Design §2、§9）
+- [x] 7.3 先扩展 Preload Contract 测试，断言冻结的 `window.jingxu.project.list/get/create/update/delete/restore` 逐方法调用和双端 Zod 校验，且不存在通用 `send/on/invoke`、路径、SQL、Node 或 persistence 能力。（R: 合法 Renderer 创建项目；R: 非法 sender 或 DTO）
+- [x] 7.4 更新 `JingxuApi`/Preload 实现并保持 RuntimeApi 回归通过；Renderer 只能从 `@jingxu/contracts` 获取 DTO，不深层导入其他包 `src/`。（Design §2、§9）
 - [ ] 7.5 扩展 Composition Root 集成测试：single-instance lock 后只有一个 SQLite 写连接，Project Adapter/Service/IPC 注册一次，关闭应用释放资源，启动故障时不构造可写 Project 入口。（R: 只读故障状态尝试写入；Design §1、§9）
 
 ## 8. Renderer 项目列表与创作设定

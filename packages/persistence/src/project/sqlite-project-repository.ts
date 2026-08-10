@@ -10,7 +10,6 @@ import type { Project } from '@jingxu/domain';
 import type { ProjectListScope } from '@jingxu/contracts';
 
 import type { SqliteDatabase } from '../runtime/sqlite-database';
-import { PersistenceRuntimeError } from '../runtime/persistence-error';
 import { syncToPromise } from '../runtime/sync-to-promise';
 import { mapProjectListItemRow, mapProjectRow, type Row } from './row-mapper';
 
@@ -24,9 +23,6 @@ const PROJECT_LIST_COLUMNS =
 
 /** keyset 定位点之后的筛选子句（同 updated_at 用 id DESC 做 tie-break，不用 OFFSET）。 */
 const KEYSET_AFTER_CLAUSE = ' AND (p.updated_at < ? OR (p.updated_at = ? AND p.id < ?))';
-
-const notImplemented = (task: string): Promise<never> =>
-  Promise.reject(new PersistenceRuntimeError(`NOT_IMPLEMENTED:${task}`));
 
 /**
  * Project 聚合的 SQLite 实现（Design §1、§6、§7）。
@@ -124,11 +120,53 @@ export class SqliteProjectRepository implements ProjectRepository {
     });
   }
 
-  public insert(): Promise<never> {
-    return notImplemented('§5.3 ProjectRepository.insert');
+  public insert(project: Project): Promise<void> {
+    return syncToPromise(() => {
+      this.database
+        .prepare(
+          `INSERT INTO projects (
+            id, name, genre, style, creation_mode, dialogue_render_mode, deployment_mode,
+            data_root_rel, created_at, updated_at, deleted_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          project.id,
+          project.name,
+          project.genre,
+          project.style,
+          project.creationMode,
+          project.dialogueRenderMode,
+          project.deploymentMode,
+          `projects/${project.id}`,
+          project.createdAt,
+          project.updatedAt,
+          project.deletedAt,
+        );
+    });
   }
 
-  public update(): Promise<never> {
-    return notImplemented('§5.5 ProjectRepository.update');
+  public update(project: Project, expectedUpdatedAt: string): Promise<boolean> {
+    return syncToPromise(() => {
+      const result = this.database
+        .prepare(
+          `UPDATE projects
+           SET name = ?, genre = ?, style = ?, creation_mode = ?, dialogue_render_mode = ?,
+               deployment_mode = ?, updated_at = ?, deleted_at = ?
+           WHERE id = ? AND updated_at = ?`,
+        )
+        .run(
+          project.name,
+          project.genre,
+          project.style,
+          project.creationMode,
+          project.dialogueRenderMode,
+          project.deploymentMode,
+          project.updatedAt,
+          project.deletedAt,
+          project.id,
+          expectedUpdatedAt,
+        ) as { readonly changes?: number };
+      return result.changes === 1;
+    });
   }
 }

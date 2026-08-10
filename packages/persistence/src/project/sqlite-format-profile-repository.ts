@@ -10,9 +10,6 @@ import { mapFormatProfileRow, type Row } from './row-mapper';
 const FORMAT_PROFILE_COLUMNS =
   'id, project_id, version_no, parent_id, aspect_ratio, width, height, fps, language, subtitle_safe_area_json, is_current, created_at';
 
-const notImplemented = (task: string): Promise<never> =>
-  Promise.reject(new PersistenceRuntimeError(`NOT_IMPLEMENTED:${task}`));
-
 /**
  * FormatProfile 版本链的 SQLite 实现（Design §6）。
  *
@@ -63,15 +60,62 @@ export class SqliteFormatProfileRepository implements FormatProfileRepository {
     });
   }
 
-  public isCurrentReferencedByShotContract(): Promise<never> {
-    return notImplemented('§5.6 FormatProfileRepository.isCurrentReferencedByShotContract');
+  public isCurrentReferencedByShotContract(
+    projectId: string,
+    formatProfileId: string,
+  ): Promise<boolean> {
+    return syncToPromise(
+      () =>
+        this.database
+          .prepare(
+            `SELECT 1 AS found
+             FROM shot_contract_versions scv
+             INNER JOIN format_profiles fp ON fp.id = scv.format_profile_id
+             WHERE fp.project_id = ? AND scv.format_profile_id = ?
+             LIMIT 1`,
+          )
+          .get(projectId, formatProfileId) !== undefined,
+    );
   }
 
-  public insert(): Promise<never> {
-    return notImplemented('§5.3/§5.5 FormatProfileRepository.insert');
+  public insert(profile: FormatProfile): Promise<void> {
+    return syncToPromise(() => {
+      this.database
+        .prepare(
+          `INSERT INTO format_profiles (
+            id, project_id, version_no, parent_id, aspect_ratio, width, height, fps,
+            language, subtitle_safe_area_json, is_current, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          profile.id,
+          profile.projectId,
+          profile.versionNo,
+          profile.parentId,
+          profile.spec.aspectRatio,
+          profile.spec.width,
+          profile.spec.height,
+          profile.spec.fps,
+          profile.spec.language,
+          JSON.stringify(profile.spec.subtitleSafeArea),
+          profile.isCurrent ? 1 : 0,
+          profile.createdAt,
+        );
+    });
   }
 
-  public unsetCurrent(): Promise<never> {
-    return notImplemented('§5.5 FormatProfileRepository.unsetCurrent');
+  public unsetCurrent(projectId: string, formatProfileId: string): Promise<void> {
+    return syncToPromise(() => {
+      const result = this.database
+        .prepare(
+          `UPDATE format_profiles
+           SET is_current = 0
+           WHERE project_id = ? AND id = ? AND is_current = 1`,
+        )
+        .run(projectId, formatProfileId) as { readonly changes?: number };
+      if (result.changes !== 1) {
+        throw new PersistenceRuntimeError('FORMAT_PROFILE_CURRENT_NOT_FOUND');
+      }
+    });
   }
 }

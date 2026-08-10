@@ -113,4 +113,92 @@ describe('数据库启动 audit', () => {
       database.close();
     });
   });
+
+  it('Project 无 current FormatProfile、非法父链和 Unicode 活动重名—执行审计—分别 FAIL', async () => {
+    await withSqliteTestContext(async (context) => {
+      const database = new Database(path.join(context.root, 'project-invariants.sqlite'));
+      applyMigrations(database, await loadMigrationSet(MIGRATION_DIRECTORY), context.clock);
+      const insertProject = database.prepare(
+        `INSERT INTO projects
+         (id, name, creation_mode, dialogue_render_mode, deployment_mode, data_root_rel, created_at, updated_at)
+         VALUES (?, ?, 'AI_ORIGINAL', 'NARRATION_FIRST', 'LOCAL_DEMO', ?, ?, ?)`,
+      );
+      insertProject.run('p1', 'Éclair', 'projects/p1', context.clock(), context.clock());
+      insertProject.run('p2', 'e\u0301clair', 'projects/p2', context.clock(), context.clock());
+      database
+        .prepare(
+          `INSERT INTO format_profiles
+           (id, project_id, version_no, parent_id, aspect_ratio, width, height, fps, language,
+            subtitle_safe_area_json, is_current, created_at)
+           VALUES (?, ?, 2, NULL, '9:16', 1080, 1920, 30, 'zh-CN', ?, 1, ?)`,
+        )
+        .run(
+          'fp-invalid-v2',
+          'p1',
+          JSON.stringify({ top: 5, right: 5, bottom: 12, left: 5 }),
+          context.clock(),
+        );
+
+      const result = runDatabaseAudit(database);
+
+      expect(result.ok).toBe(false);
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            ruleId: 'projects.one-current-format-profile',
+            status: 'FAIL',
+            evidenceCount: 1,
+          }),
+          expect.objectContaining({
+            ruleId: 'format-profiles.version-chain',
+            status: 'FAIL',
+          }),
+          expect.objectContaining({
+            ruleId: 'projects.active-name-unique',
+            status: 'FAIL',
+          }),
+        ]),
+      );
+      database.close();
+    });
+  });
+
+  it('Receipt 的 Project/FormatProfile 安全引用不可解析—执行审计—返回 FAIL', async () => {
+    await withSqliteTestContext(async (context) => {
+      const database = new Database(path.join(context.root, 'receipt-invariant.sqlite'));
+      applyMigrations(database, await loadMigrationSet(MIGRATION_DIRECTORY), context.clock);
+      database
+        .prepare(
+          `INSERT INTO command_receipts
+           (request_id, command_name, payload_sha256, project_id, result_ref_json, trace_id, committed_at)
+           VALUES (?, 'CREATE_PROJECT', ?, NULL, ?, ?, ?)`,
+        )
+        .run(
+          'request-1',
+          'a'.repeat(64),
+          JSON.stringify({
+            projectId: 'missing-project',
+            formatProfileId: 'missing-profile',
+            updatedAt: context.clock(),
+            changed: true,
+          }),
+          'trace-1',
+          context.clock(),
+        );
+
+      const result = runDatabaseAudit(database);
+
+      expect(result.ok).toBe(false);
+      expect(result.findings).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            ruleId: 'command-receipts.references-resolve',
+            status: 'FAIL',
+            evidenceCount: 1,
+          }),
+        ]),
+      );
+      database.close();
+    });
+  });
 });

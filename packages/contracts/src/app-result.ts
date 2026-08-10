@@ -46,7 +46,7 @@ export type AppErrorDto = z.infer<typeof appErrorSchema>;
  * 避免依赖 Electron 对 thrown Error 的不稳定序列化；受信 sender 的字段/业务
  * 错误走 Result，非受信 sender 在 Main 边界直接拒绝。
  */
-export const appResultSchema = <T extends z.ZodTypeAny>(data: T) =>
+export const appResultSchema = <T extends z.ZodType>(data: T) =>
   z.discriminatedUnion('ok', [
     z.object({ ok: z.literal(true), data }).strict(),
     z.object({ ok: z.literal(false), error: appErrorSchema }).strict(),

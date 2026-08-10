@@ -442,6 +442,19 @@ describe('0002 压力库演练', () => {
           NOW,
           NOW,
         );
+      database
+        .prepare(
+          `INSERT INTO format_profiles
+           (id, project_id, version_no, parent_id, aspect_ratio, width, height, fps, language,
+            subtitle_safe_area_json, is_current, created_at)
+           VALUES (?, ?, 1, NULL, '9:16', 1080, 1920, 30, 'zh-CN', ?, 1, ?)`,
+        )
+        .run(
+          'format_pressure_1',
+          'project_pressure',
+          JSON.stringify({ top: 5, right: 5, bottom: 12, left: 5 }),
+          NOW,
+        );
       const insertVersion = database.prepare(
         `INSERT INTO story_bible_versions
          (id, project_id, version_no, parent_id, document_json, document_sha256, status, source, created_at)

@@ -1,24 +1,30 @@
 import {
+  appResultSchema,
+  createProjectInputSchema,
+  deleteProjectInputSchema,
+  PROJECT_IPC_CHANNELS,
+  projectDetailSchema,
+  projectGetInputSchema,
+  projectListInputSchema,
+  projectListResultSchema,
+  restoreProjectInputSchema,
   RUNTIME_IPC_CHANNELS,
   startupStatusSchema,
+  updateProjectInputSchema,
+  type CreateProjectInputDto,
+  type DeleteProjectInputDto,
   type JingxuApi,
+  type ProjectGetInputDto,
+  type ProjectListInputDto,
   type RestoreBackupCommandDto,
+  type RestoreProjectInputDto,
   type StartupCommandDto,
+  type UpdateProjectInputDto,
 } from '@jingxu/contracts';
 
-export { RUNTIME_IPC_CHANNELS };
+export { PROJECT_IPC_CHANNELS, RUNTIME_IPC_CHANNELS };
 
 export type InvokeIpc = (channel: string, ...arguments_: readonly unknown[]) => Promise<unknown>;
-
-/**
- * project IPC 桥接占位：§7 实现真正的 main↔preload 桥接前，冻结的
- * `window.jingxu.project.*` 调用一律 reject（不静默返回错数据）。
- * 返回 Promise<never> 协变到各方法的 Promise<AppResultDto<…>>。
- */
-const projectNotBridged =
-  (method: string): (() => Promise<never>) =>
-  () =>
-    Promise.reject(new Error(`jingxu.project.${method} 尚未桥接（§7 IPC 集成时实现）`));
 
 export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
   Object.freeze({
@@ -30,13 +36,42 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
       retryStartup: async (command: StartupCommandDto) =>
         startupStatusSchema.parse(await invoke(RUNTIME_IPC_CHANNELS.retryStartup, command)),
     }),
-    // §7 实现 list/get/create/update/delete/restore 真 IPC 桥接；当前一律 reject 占位
     project: Object.freeze({
-      list: projectNotBridged('list'),
-      get: projectNotBridged('get'),
-      create: projectNotBridged('create'),
-      update: projectNotBridged('update'),
-      delete: projectNotBridged('delete'),
-      restore: projectNotBridged('restore'),
+      list: async (input: ProjectListInputDto) => {
+        const validated = projectListInputSchema.parse(input);
+        return appResultSchema(projectListResultSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.list, validated),
+        );
+      },
+      get: async (input: ProjectGetInputDto) => {
+        const validated = projectGetInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.get, validated),
+        );
+      },
+      create: async (input: CreateProjectInputDto) => {
+        const validated = createProjectInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.create, validated),
+        );
+      },
+      update: async (input: UpdateProjectInputDto) => {
+        const validated = updateProjectInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.update, validated),
+        );
+      },
+      delete: async (input: DeleteProjectInputDto) => {
+        const validated = deleteProjectInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.delete, validated),
+        );
+      },
+      restore: async (input: RestoreProjectInputDto) => {
+        const validated = restoreProjectInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.restore, validated),
+        );
+      },
     }),
   });
