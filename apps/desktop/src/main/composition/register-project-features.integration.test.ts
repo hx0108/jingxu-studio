@@ -77,12 +77,15 @@ describe('Project Composition Root', () => {
     }
   });
 
-  it('启动故障—确保注册—不构造 Project handler 或可写 UnitOfWork', async () => {
+  it('启动故障—注册安全边界但不构造可写能力—四个 Command 返回稳定写门错误', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-project-fault-composition-'));
     const managedRoot = path.join(root, 'managed');
     await mkdir(path.join(managedRoot, 'data'), { recursive: true });
     await writeFile(path.join(managedRoot, 'data', 'jingxu.sqlite'), 'corrupt');
-    const handle = vi.fn();
+    const handlers = new Map<string, ProjectHandler>();
+    const handle = vi.fn((channel: string, listener: ProjectHandler) => {
+      handlers.set(channel, listener);
+    });
 
     try {
       const runtime = await createDesktopPersistenceRuntime({
@@ -103,7 +106,62 @@ describe('Project Composition Root', () => {
       });
       expect(runtime.getProjectUnitOfWork()).toBeNull();
       expect(registration.ensureRegistered()).toBe(false);
-      expect(handle).not.toHaveBeenCalled();
+      expect(handle).toHaveBeenCalledTimes(6);
+
+      const inputs = new Map<string, unknown>([
+        [
+          PROJECT_IPC_CHANNELS.create,
+          {
+            requestId: 'request-create-fault-0001',
+            name: '故障态项目',
+            genre: null,
+            style: null,
+            creationMode: 'AI_ORIGINAL',
+            dialogueRenderMode: 'NARRATION_FIRST',
+            aspectRatio: '9:16',
+            subtitleSafeArea: { top: 5, right: 5, bottom: 12, left: 5 },
+          },
+        ],
+        [
+          PROJECT_IPC_CHANNELS.update,
+          {
+            requestId: 'request-update-fault-0001',
+            projectId: 'project-fault-0001',
+            expectedUpdatedAt: FIXED_TIME,
+            name: '故障态项目',
+            genre: null,
+            style: null,
+            dialogueRenderMode: 'NARRATION_FIRST',
+            aspectRatio: '9:16',
+            subtitleSafeArea: { top: 5, right: 5, bottom: 12, left: 5 },
+          },
+        ],
+        [
+          PROJECT_IPC_CHANNELS.delete,
+          {
+            requestId: 'request-delete-fault-0001',
+            projectId: 'project-fault-0001',
+            expectedUpdatedAt: FIXED_TIME,
+          },
+        ],
+        [
+          PROJECT_IPC_CHANNELS.restore,
+          {
+            requestId: 'request-restore-fault-0001',
+            projectId: 'project-fault-0001',
+            expectedUpdatedAt: FIXED_TIME,
+          },
+        ],
+      ]);
+
+      for (const [channel, input] of inputs) {
+        const handler = handlers.get(channel);
+        if (handler === undefined) throw new Error(`${channel} handler missing`);
+        await expect(handler(trustedEvent(), input)).resolves.toMatchObject({
+          ok: false,
+          error: { code: 'STARTUP_WRITE_BLOCKED' },
+        });
+      }
       runtime.close();
     } finally {
       await rm(root, { force: true, recursive: true });

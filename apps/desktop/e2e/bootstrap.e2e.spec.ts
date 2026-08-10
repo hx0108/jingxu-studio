@@ -222,6 +222,19 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
     await page.getByRole('button', { name: /并发基准项目新版/u }).click();
     await page.getByRole('button', { name: '移入回收站' }).click();
     await expect(page.getByText(/不会删除 Provider 侧数据/u)).toBeVisible();
+    await page
+      .getByRole('dialog', { name: '将项目移入回收站？' })
+      .getByRole('button', { name: '取消' })
+      .click();
+    await expect(page.getByRole('button', { name: '移入回收站' })).toBeVisible();
+    const afterDeleteCancellation = await page.evaluate(() =>
+      window.jingxu.project.list({ scope: 'ACTIVE', limit: 20, cursor: null, search: null }),
+    );
+    expect(afterDeleteCancellation).toMatchObject({
+      ok: true,
+      data: { items: [expect.objectContaining({ name: '并发基准项目新版', deletedAt: null })] },
+    });
+    await page.getByRole('button', { name: '移入回收站' }).click();
     await page.getByRole('button', { name: '确认移入回收站' }).click();
     await page.getByRole('button', { name: '回收站' }).click();
     await expect(page.getByRole('button', { name: /并发基准项目新版/u })).toBeVisible();
@@ -232,6 +245,17 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
 
     await page.getByRole('button', { name: '编辑创作设定' }).click();
     await page.getByLabel('项目名称').fill('dirty 取消保留');
+    const refreshWasBlocked = await page.evaluate(() => {
+      const event = new Event('beforeunload', { cancelable: true });
+      return !globalThis.dispatchEvent(event);
+    });
+    expect(refreshWasBlocked).toBe(true);
+    await expect(page.getByRole('dialog', { name: '创作设定尚未保存' })).toBeVisible();
+    await page
+      .getByRole('dialog', { name: '创作设定尚未保存' })
+      .getByRole('button', { name: '取消', exact: true })
+      .click();
+    await expect(page.getByLabel('项目名称')).toHaveValue('dirty 取消保留');
     await page.getByRole('button', { name: '项目', exact: true }).click();
     await page
       .getByRole('dialog', { name: '创作设定尚未保存' })
@@ -332,7 +356,7 @@ test('§9.3 损坏库临时根—只读故障页—写命令和 Renderer 越界�
           () => 'resolved',
           () => 'rejected',
         );
-      const commands = await Promise.allSettled([
+      const commands = await Promise.all([
         window.jingxu.project.create({
           requestId: 'request_fault_create',
           name: '不应创建',
@@ -372,7 +396,7 @@ test('§9.3 损坏库临时根—只读故障页—写命令和 Renderer 越界�
         requestId: 'request-e2e-restore-0001',
       });
       return {
-        commandStatuses: commands.map(({ status }) => status),
+        commandErrors: commands.map((result) => (result.ok ? null : result.error.code)),
         hasIpcRenderer: Reflect.has(globalThis, 'ipcRenderer'),
         hasProcess: Reflect.has(globalThis, 'process'),
         hasRequire: Reflect.has(globalThis, 'require'),
@@ -382,7 +406,12 @@ test('§9.3 损坏库临时根—只读故障页—写命令和 Renderer 越界�
       };
     });
     expect(boundary).toMatchObject({
-      commandStatuses: ['rejected', 'rejected', 'rejected', 'rejected'],
+      commandErrors: [
+        'STARTUP_WRITE_BLOCKED',
+        'STARTUP_WRITE_BLOCKED',
+        'STARTUP_WRITE_BLOCKED',
+        'STARTUP_WRITE_BLOCKED',
+      ],
       hasIpcRenderer: false,
       hasProcess: false,
       hasRequire: false,

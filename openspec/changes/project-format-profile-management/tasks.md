@@ -94,5 +94,5 @@
 - [x] 9.4 从干净 `.vite/out` 使用已校验 Electron 缓存执行 Windows x64 package，确认 0001/0002 resources、零外部 SQLite `.node`、临时数据根升级/创建/重启/删除恢复、真实用户目录零访问。（Design §10、Migration Plan）
 - [x] 9.5 在固定环境记录 Project create/update 的 P50/P95、事务语句数和目录准备耗时；断言事务内无文件 I/O、列表 limit/keyset 有界，不用波动的墙钟阈值删除或隔离测试。（TECH_DESIGN v1.1 §15；Design §10）
 - [x] 9.6 同步 README、TECH_DESIGN v1.1 §3.3/§8.4.1/§11/§15、SQLite runtime/trace 文档和必要 AGENTS 架构示例；明确 SourceInput/Consent/Episode/Schema Registry/JobRunner 尚未实现，本 Change 不修改 PRD 和四份业务 Schema。（Proposal Impact）
-- [ ] 9.7 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:e2e`、`pnpm test:collection`、`pnpm package:win` 和 `openspec validate project-format-profile-management`，记录实际通过/失败数量、性能环境和未验证项。（AGENTS.md §15、§18）
-- [ ] 9.8 使用 `$openspec-verify-change` 核对 8 条 Requirement、30 个 Scenario、0002/备份/回滚、IPC/安全、页面状态和打包证据；阻断问题清零后才可 Sync/Archive，且不得声称 SourceInput、Episode、Schema Registry、剧本、分镜或 AC-V1-01 已完成。（OpenSpec archive guidance）
+- [x] 9.7 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:e2e`、`pnpm test:collection`、`pnpm package:win` 和 `openspec validate project-format-profile-management`，记录实际通过/失败数量、性能环境和未验证项。（AGENTS.md §15、§18）
+- [x] 9.8 使用 `$openspec-verify-change` 核对 8 条 Requirement、30 个 Scenario、0002/备份/回滚、IPC/安全、页面状态和打包证据；阻断问题清零后才可 Sync/Archive，且不得声称 SourceInput、Episode、Schema Registry、剧本、分镜或 AC-V1-01 已完成。（OpenSpec archive guidance）
