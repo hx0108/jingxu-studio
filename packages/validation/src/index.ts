@@ -11,3 +11,11 @@ export type {
   V1SchemaId,
   V1SchemaLock,
 } from './schema-locks';
+export { SchemaRegistryBuildError, buildSchemaRegistry } from './schema-registry';
+export type {
+  LockedSchemaResource,
+  SchemaRegistry,
+  SchemaRegistryBuildErrorCode,
+  SchemaValidationIssue,
+  SchemaValidationResult,
+} from './schema-registry';

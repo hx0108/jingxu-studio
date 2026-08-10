@@ -8,12 +8,12 @@
 
 ## 2. Registry 核验与 Ajv 2020 内核
 
-- [ ] 2.1 先添加 Unit 测试覆盖四资源完整成功、缺失、非法 UTF-8/JSON、截断、hash 漂移、`$id`/Draft/版本不一致和重复 ID；断言失败不发布部分 Registry、错误码稳定且零路径/原文/堆栈泄漏。（R: 启动自检必须核对资源字节、身份、版本和引用闭包 / 前三个 Scenario）
-- [ ] 2.2 先添加引用闭包 Unit 测试，覆盖合法本地/内部 `$ref`、未知 ID、错误版本、非登记外部目标和注册顺序变化；通过网络 API 调用即抛错的守卫证明零 HTTP/DNS/动态加载。（R: 外部引用不在闭包中；R: 跨 Schema 引用必须在断网环境完成闭包校验）
-- [ ] 2.3 实现字节 hash、严格 JSON 文档身份解析、外部 `$ref` 收集和清单闭包核验；任一失败返回有界内部结果，不修改输入文档或清单。（Design §1、§4）
-- [ ] 2.4 先添加校验结果 Unit 测试，覆盖合法对象、非法对象、输入不变、问题数量上限，以及按 `instancePath/keyword/messageCode` 稳定排序的重复执行一致性。（R: 正式业务 JSON 必须通过 Draft 2020-12 校验并返回确定性结果 / 全部 Scenario）
-- [ ] 2.5 实现 Ajv 2020 全量预注册和同步编译四根 ID，接入确定性 format checker 与安全错误映射；禁止 `loadSchema`、`compileAsync`、`removeAdditional`、类型强制和默认值注入。（Design §4）
-- [ ] 2.6 添加 Registry 生命周期测试：成功前不可查询、四个编译器全部成功后一次发布、未知/漂移 ID 稳定拒绝、失败后重试不会复用污染的 Ajv/部分缓存。（R: Registry 必须以固定清单离线解析；R: 四份资源完整通过）
+- [x] 2.1 先添加 Unit 测试覆盖四资源完整成功、缺失、非法 UTF-8/JSON、截断、hash 漂移、`$id`/Draft/版本不一致和重复 ID；断言失败不发布部分 Registry、错误码稳定且零路径/原文/堆栈泄漏。（R: 启动自检必须核对资源字节、身份、版本和引用闭包 / 前三个 Scenario）
+- [x] 2.2 先添加引用闭包 Unit 测试，覆盖合法本地/内部 `$ref`、未知 ID、错误版本、非登记外部目标和注册顺序变化；通过网络 API 调用即抛错的守卫证明零 HTTP/DNS/动态加载。（R: 外部引用不在闭包中；R: 跨 Schema 引用必须在断网环境完成闭包校验）
+- [x] 2.3 实现字节 hash、严格 JSON 文档身份解析、外部 `$ref` 收集和清单闭包核验；任一失败返回有界内部结果，不修改输入文档或清单。（Design §1、§4）
+- [x] 2.4 先添加校验结果 Unit 测试，覆盖合法对象、非法对象、输入不变、问题数量上限，以及按 `instancePath/keyword/messageCode` 稳定排序的重复执行一致性。（R: 正式业务 JSON 必须通过 Draft 2020-12 校验并返回确定性结果 / 全部 Scenario）
+- [x] 2.5 实现 Ajv 2020 全量预注册和同步编译四根 ID，接入确定性 format checker 与安全错误映射；禁止 `loadSchema`、`compileAsync`、`removeAdditional`、类型强制和默认值注入。（Design §4）
+- [x] 2.6 添加 Registry 生命周期测试：成功前不可查询、四个编译器全部成功后一次发布、未知/漂移 ID 稳定拒绝、失败后重试不会复用污染的 Ajv/部分缓存。（R: Registry 必须以固定清单离线解析；R: 四份资源完整通过）
 
 ## 3. 正式 Fixture 与断网 Contract
 
