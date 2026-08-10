@@ -1,3 +1,4 @@
+import type { ProjectListItem } from '@jingxu/application';
 import type {
   AspectRatio,
   CreationMode,
@@ -137,3 +138,13 @@ export const mapFormatProfileRow = (row: Row): FormatProfile => {
     createdAt: requiredString(row, 'created_at'),
   };
 };
+
+/**
+ * 把 list/scan 查询的 JOIN 行（projects 列 + current FormatProfile 的 aspect_ratio）
+ * 映射为 {@link ProjectListItem}。current_aspect_ratio 缺失表示 current 版本不存在
+ * （违反 §5.10 invariant），归一化为 {@link PersistenceRuntimeError} 使其可见而非静默跳过。
+ */
+export const mapProjectListItemRow = (row: Row): ProjectListItem => ({
+  project: mapProjectRow(row),
+  currentAspectRatio: requiredString(row, 'current_aspect_ratio') as AspectRatio,
+});

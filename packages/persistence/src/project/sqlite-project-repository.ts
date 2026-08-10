@@ -1,15 +1,29 @@
-import type { ProjectListScope } from '@jingxu/contracts';
-import type { ProjectNameRef, ProjectRepository } from '@jingxu/application';
+import type {
+  ProjectListPage,
+  ProjectListQuery,
+  ProjectNameRef,
+  ProjectRepository,
+  ProjectSearchScan,
+  ProjectSearchScanQuery,
+} from '@jingxu/application';
 import type { Project } from '@jingxu/domain';
+import type { ProjectListScope } from '@jingxu/contracts';
 
 import type { SqliteDatabase } from '../runtime/sqlite-database';
 import { PersistenceRuntimeError } from '../runtime/persistence-error';
 import { syncToPromise } from '../runtime/sync-to-promise';
-import { mapProjectRow, type Row } from './row-mapper';
+import { mapProjectListItemRow, mapProjectRow, type Row } from './row-mapper';
 
 /** projects 表的稳定列投影；不含 data_root_rel（不映射进领域聚合），不用 SELECT *。 */
 const PROJECT_COLUMNS =
   'id, name, genre, style, creation_mode, dialogue_render_mode, deployment_mode, created_at, updated_at, deleted_at';
+
+/** list/scan 查询带表别名的前缀列投影（JOIN 后 id 等列名歧义，必须显式 p.）。 */
+const PROJECT_LIST_COLUMNS =
+  'p.id, p.name, p.genre, p.style, p.creation_mode, p.dialogue_render_mode, p.deployment_mode, p.created_at, p.updated_at, p.deleted_at';
+
+/** keyset 定位点之后的筛选子句（同 updated_at 用 id DESC 做 tie-break，不用 OFFSET）。 */
+const KEYSET_AFTER_CLAUSE = ' AND (p.updated_at < ? OR (p.updated_at = ? AND p.id < ?))';
 
 const notImplemented = (task: string): Promise<never> =>
   Promise.reject(new PersistenceRuntimeError(`NOT_IMPLEMENTED:${task}`));
@@ -52,12 +66,62 @@ export class SqliteProjectRepository implements ProjectRepository {
     });
   }
 
-  public listPage(): Promise<never> {
-    return notImplemented('§5.2 ProjectRepository.listPage');
+  public listPage(query: ProjectListQuery): Promise<ProjectListPage> {
+    return syncToPromise(() => {
+      const scopeFilter =
+        query.scope === 'ACTIVE' ? 'p.deleted_at IS NULL' : 'p.deleted_at IS NOT NULL';
+      const sql = `SELECT ${PROJECT_LIST_COLUMNS}, fp.aspect_ratio AS current_aspect_ratio FROM projects p LEFT JOIN format_profiles fp ON fp.project_id = p.id AND fp.is_current = 1 WHERE ${scopeFilter}${
+        query.after === null ? '' : KEYSET_AFTER_CLAUSE
+      } ORDER BY p.updated_at DESC, p.id DESC LIMIT ?`;
+      // 多取 1 条判断是否还有下一页，避免用 OFFSET；多余那条丢弃，不进入 items/nextAfter。
+      const rows =
+        query.after === null
+          ? (this.database.prepare(sql).all(query.limit + 1) as Row[])
+          : (this.database
+              .prepare(sql)
+              .all(
+                query.after.updatedAt,
+                query.after.updatedAt,
+                query.after.id,
+                query.limit + 1,
+              ) as Row[]);
+      const truncated = rows.length > query.limit;
+      const page = truncated ? rows.slice(0, query.limit) : rows;
+      const items = page.map(mapProjectListItemRow);
+      const lastRow = page[page.length - 1];
+      const nextAfter =
+        truncated && lastRow !== undefined
+          ? { updatedAt: lastRow.updated_at as string, id: lastRow.id as string }
+          : null;
+      return { items, nextAfter, truncated };
+    });
   }
 
-  public scanForSearch(): Promise<never> {
-    return notImplemented('§5.2 ProjectRepository.scanForSearch');
+  public scanForSearch(query: ProjectSearchScanQuery): Promise<ProjectSearchScan> {
+    return syncToPromise(() => {
+      const scopeFilter =
+        query.scope === 'ACTIVE' ? 'p.deleted_at IS NULL' : 'p.deleted_at IS NOT NULL';
+      const sql = `SELECT ${PROJECT_LIST_COLUMNS}, fp.aspect_ratio AS current_aspect_ratio FROM projects p LEFT JOIN format_profiles fp ON fp.project_id = p.id AND fp.is_current = 1 WHERE ${scopeFilter}${
+        query.after === null ? '' : KEYSET_AFTER_CLAUSE
+      } ORDER BY p.updated_at DESC, p.id DESC LIMIT ?`;
+      // 多取 1 条判断是否触及硬上限，避免把“恰好 hardLimit 条且无更多”误判为截断。
+      const rows =
+        query.after === null
+          ? (this.database.prepare(sql).all(query.hardLimit + 1) as Row[])
+          : (this.database
+              .prepare(sql)
+              .all(
+                query.after.updatedAt,
+                query.after.updatedAt,
+                query.after.id,
+                query.hardLimit + 1,
+              ) as Row[]);
+      const truncated = rows.length > query.hardLimit;
+      return {
+        candidates: rows.slice(0, query.hardLimit).map(mapProjectListItemRow),
+        truncated,
+      };
+    });
   }
 
   public insert(): Promise<never> {
