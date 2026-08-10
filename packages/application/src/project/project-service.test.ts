@@ -1130,3 +1130,115 @@ describe('ProjectService 错误归一化（§3.6）', () => {
     }
   });
 });
+
+// §3.7：把 §3.6 的 4 个形状测试扩展为「载荷类型 × 注入点」对抗矩阵。
+// Design §9 / §3.7：所有 catch 块均为 binding-free（不绑定异常对象）→ 机械上无法泄漏入参异常内容。
+// 本矩阵锁定该不变式：跨 SQLite 错误码 / 文件 ENOENT / SQL 串 / 绝对路径 / 堆栈 / 用户内容 载荷，
+// 断言 AppError 仅含稳定 {code,message,retryable,userAction,fieldErrors,traceId} 且无任何载荷标记。
+// 若将来有人改为 catch(e) 并读取 e.message/.stack，此处即红。
+describe('ProjectService AppError 安全对抗矩阵（§3.7）', () => {
+  const PAYLOADS: readonly { readonly label: string; readonly fault: Error }[] = [
+    {
+      label: 'SQLite 约束异常',
+      fault: new Error('SQLITE_CONSTRAINT: UNIQUE constraint failed: projects.name'),
+    },
+    { label: 'SQLite 忙锁', fault: new Error('SQLITE_BUSY: database is locked') },
+    {
+      label: '文件 ENOENT',
+      fault: new Error("ENOENT: no such file, open 'C:\\Users\\leak\\app\\db.sqlite'"),
+    },
+    {
+      label: 'SQL 注入串',
+      fault: new Error('SELECT * FROM projects; DROP TABLE projects; -- password'),
+    },
+    {
+      label: '绝对路径堆栈',
+      fault: new Error('at Repository.insert (C:\\Users\\leak\\app\\project-repository.ts:42:17)'),
+    },
+    {
+      label: '用户内容 name/genre/style',
+      fault: new Error('rollback: name=秘密漫画 genre=热血 style=赛博朋克'),
+    },
+    {
+      label: '多帧堆栈',
+      fault: new Error(
+        'boom\n    at Object.<anonymous> (service.ts:10)\n    at Repository.insert (repo.ts:42)',
+      ),
+    },
+  ];
+  // 全载荷泄漏标记（大小写不敏感）。用子串标记避免反斜杠转义；命中任一 = 异常细节泄漏。
+  const LEAK =
+    /SELECT|INSERT|DROP|SQLITE|CONSTRAINT|BUSY|ENOENT|projects\.name|password|leak|Users|db\.sqlite|project-repository|repo\.ts|service\.ts|秘密漫画|热血|赛博|at Object|at Repository/i;
+  // AppError 稳定字段集（Design §3.7：仅保留 code/message/retryable/userAction/fieldErrors/traceId）
+  const STABLE_KEYS = ['code', 'fieldErrors', 'message', 'retryable', 'traceId', 'userAction'];
+
+  /** 序列化整个 AppError 后扫描载荷标记，覆盖将来可能新增的冗余字段也不会漏检。 */
+  const assertNoLeak = (error: unknown): void => {
+    expect(JSON.stringify(error)).not.toMatch(LEAK);
+  };
+
+  describe.each(PAYLOADS)('载荷「$label」', ({ fault }) => {
+    it('create 写入故障 → PROJECT_PERSISTENCE_FAILED，字段集稳定且无泄漏', async () => {
+      const { service } = setup({ faults: { insertProject: fault } });
+
+      const result = await service.create(baseCreateInput(), TRACE);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+        expect(result.error.retryable).toBe(true);
+        expect(Object.keys(result.error).sort()).toEqual(STABLE_KEYS);
+        assertNoLeak(result.error);
+      }
+    });
+
+    it('directory prepare 故障 → PROJECT_DIRECTORY_UNAVAILABLE，字段集稳定且无泄漏', async () => {
+      const { service } = setup({ prepareError: fault });
+
+      const result = await service.create(baseCreateInput(), TRACE);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('PROJECT_DIRECTORY_UNAVAILABLE');
+        expect(result.error.retryable).toBe(true);
+        expect(Object.keys(result.error).sort()).toEqual(STABLE_KEYS);
+        assertNoLeak(result.error);
+      }
+    });
+
+    it('update 写入故障 → PROJECT_PERSISTENCE_FAILED，无泄漏（delete/restore 共用同一 .catch 模式）', async () => {
+      const { service, store } = setup({ faults: { updateProject: fault } });
+      seedSingleProject(store);
+
+      // name 变更使 update 走入写入路径（no-op 跳过 projects.update，触发不到故障）
+      const result = await service.update(baseUpdateInput({ name: '改名' }), TRACE);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+        expect(Object.keys(result.error).sort()).toEqual(STABLE_KEYS);
+        assertNoLeak(result.error);
+      }
+    });
+  });
+
+  it('抛出非 Error 值（字符串/裸对象）也不泄漏：binding-free catch 丢弃入参异常', async () => {
+    // ProjectWriteFaults 类型约束为 Error；用 unknown 断言模拟"劣质 repo 抛字符串/裸对象"。
+    const adversarial = [
+      'SELECT password FROM users' as unknown as Error,
+      { sql: 'DROP TABLE projects', path: 'C:\\Users\\leak' } as unknown as Error,
+    ];
+
+    for (const fault of adversarial) {
+      const { service } = setup({ faults: { insertProject: fault } });
+
+      const result = await service.create(baseCreateInput(), TRACE);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+        assertNoLeak(result.error);
+      }
+    }
+  });
+});

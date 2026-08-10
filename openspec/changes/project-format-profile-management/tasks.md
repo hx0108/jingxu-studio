@@ -26,7 +26,9 @@
 - [x] 3.6 实现 `ProjectService`、错误归一化和请求协调器，使 3.1–3.5 通过；所有业务写入仅通过 UnitOfWork，事务内不得调用目录/网络/长文件操作。（Design §1、§4–§7）
 
   > ✅ §3.6 完成于本 commit：application 错误归一化——抽 `persistenceFailed(traceId,message)` 集中 4 命令 catch-all（create try/catch + update/delete/restore `.catch`），transient 类 `retryable` 修正（PROJECT_PERSISTENCE_FAILED / PROJECT_DIRECTORY_UNAVAILABLE 由 false→true，对齐「请重试」文案），binding-free catch 保证 SQL/堆栈/路径不泄漏；4 形状测试（create/update/directory/delete）断言 retryable+固定 message+对抗载荷不泄漏，project-service.test 合计 69 passed（65+4）。ProjectService 主体 +「写入仅走 UnitOfWork/事务内无文件 I/O」已于 §3.1–3.5 落实并通过。**请求协调器**按 Design §4 line 126「Main 内的轻量 requestId 协调器」属 Main 层（singleflight 共享执行 Promise），随 §7 Main IPC/Composition Root 实装——延续 §3.5 协调器拆分链条（§3.5→§3.6→§7）；§3.6 不写协调器代码。
-- [ ] 3.7 添加 AppError 安全 Unit 测试，注入 SQLite/文件异常、SQL、路径和堆栈，断言 Application 输出只保留稳定 code、userAction、fieldErrors 和 traceId。（Design §2、§9）
+- [x] 3.7 添加 AppError 安全 Unit 测试，注入 SQLite/文件异常、SQL、路径和堆栈，断言 Application 输出只保留稳定 code、userAction、fieldErrors 和 traceId。（Design §2、§9）
+
+  > ✅ §3.7 完成于本 commit：扩展 §3.6 的 4 形状测试为「载荷类型 × 注入点」对抗矩阵——7 类对抗载荷（SQLite 约束/忙锁、文件 ENOENT、SQL 注入串、绝对路径堆栈、用户内容 name/genre/style、多帧堆栈）× 3 注入点（create insertProject / directory prepare / update updateProject），每格断言 AppError 字段集 = 稳定 {code,message,retryable,userAction,fieldErrors,traceId} 且 JSON 序列化后无任何载荷标记；补「非 Error 值（字符串/裸对象）」对抗锁定 binding-free catch 不变量（将来改 `catch(e)` 读 e.message/.stack 即红）。project-service.test 合计 **91 passed**（69+22）。门禁全绿：eslint 0、prettier、全量 tsc -b exit0。
 
 ## 4. `0002` Migration 与回滚证据
 
