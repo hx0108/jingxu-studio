@@ -26,8 +26,8 @@
 ## 4. Application Ports 与启动编排
 
 - [ ] 4.1 先扩展 Startup Contract 测试：新增 `SCHEMA_REGISTRY` phase 和 Design §5 的十个稳定错误码，保持 `runtime.getStartupStatus/retryStartup/restoreBackup` 方法兼容并拒绝未知字段。（R: 启动门必须包含 Schema 与关键资源自检阶段）
-- [ ] 4.2 在 Application 定义带 TSDoc 的 `SchemaResourcePort`、`SchemaRegistryPort`、`SchemaManifestRepositoryPort` 和 Schema 校验结果类型；接口不得泄漏 Buffer 可变引用、绝对路径、Ajv、Row、Statement、连接或 SQL。（Design §3、§7）
-- [ ] 4.3 先用 Fake Ports 添加 `SchemaRegistryStartupService` Unit 测试：读资源→验证/编译→替换证据→发布顺序、任一阶段失败零发布、四条证据精确提交、错误归一化和相同输入确定性。（R: 四份资源完整通过；R: 证据写入失败）
+- [ ] 4.2 在 Application 定义带 TSDoc 的 `SchemaResourcePort`、`SchemaRegistryPort`、`SchemaManifestUnitOfWorkPort`、事务内 `SchemaManifestRepositoryPort` 和 Schema 校验结果类型；接口不得泄漏 Buffer 可变引用、绝对路径、Ajv、Row、Statement、连接或 SQL。（Design §3、§7）
+- [ ] 4.3 先用 Fake Ports 添加 `SchemaRegistryStartupService` Unit 测试：读资源→验证/编译→UnitOfWork 内替换并读回证据→发布顺序、任一阶段失败零发布、四条证据精确提交、错误归一化和相同输入确定性。（R: 四份资源完整通过；R: 证据写入失败）
 - [ ] 4.4 实现 `SchemaRegistryStartupService`，确保文件读取/hash/编译均在事务外，证据事务成功后才原子发布 Registry；Application 不实例化 Main/Persistence Adapter。（Design §3、§7）
 - [ ] 4.5 先扩展 `StartupService` Unit 测试：Persistence 成功后执行 Schema 阶段、成功才 READY、十类失败进入 `READ_ONLY_FAULT`、Schema 故障只允许 RETRY、revision 冲突和同 requestId singleflight。（R: Schema 阶段成功/失败；R: 修复资源后幂等重试）
 - [ ] 4.6 将 Schema 启动 Port 注入 `StartupService`，保留数据库 restore 语义；Retry 从完整 Persistence 检查重新开始并重验四份 Schema，不新增通用或 `schema.*` IPC。（Design §5）
@@ -35,9 +35,9 @@
 ## 5. SQLite manifest 证据
 
 - [ ] 5.1 先添加 `schema_registry_manifest` Row mapper/Repository 集成测试：空表、四条读取、坏 hash/版本/enabled 值归一化、参数绑定 SQL、无 `SELECT *`，且 Repository 外不见 Row/连接。（Design §1、§3）
-- [ ] 5.2 先添加原子替换集成测试：空表写四条、旧四条替换、额外/缺失行清理，delete/insert/审计各故障点回滚保持旧集合，无部分新证据。（R: 数据库存在旧 manifest；R: 证据写入失败）
-- [ ] 5.3 实现 `SqliteSchemaManifestRepository` 并接入既有单写连接/短事务所有权；不得修改 `0001_initial.sql`、`0002_project_command_receipts.sql` 或新增 migration。（Design §1、Migration Plan）
-- [ ] 5.4 扩展数据库 invariant audit：启用 manifest 必须恰好匹配当前静态清单；在静态锁尚未注入的测试/旧构建路径保持明确 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`，不从数据库反向批准资源。（Design §1；AGENTS.md §12.2）
+- [ ] 5.2 先添加原子替换集成测试：空表写四条、旧四条替换、额外/缺失行清理，delete/每一条 insert/读回各故障点回滚保持旧集合，无部分新证据。（R: 数据库存在旧 manifest；R: 证据写入失败）
+- [ ] 5.3 实现 `SqliteSchemaManifestUnitOfWork` 与事务内 `SqliteSchemaManifestRepository`，复用既有单写连接并由 Application 回调拥有短事务；Repository 不嵌套 commit，且不得修改 `0001_initial.sql`、`0002_project_command_receipts.sql` 或新增 migration。（Design §1、Migration Plan）
+- [ ] 5.4 添加 Schema 阶段提交后审计：事务读回的启用 manifest 必须恰好匹配当前静态清单；现有前置数据库 audit 只验证表/行结构，不得用旧 manifest 反向批准资源或在新构建替换证据前阻断启动。（Design §1；AGENTS.md §12.2）
 
 ## 6. Main 资源 Adapter、Composition 与故障页
 

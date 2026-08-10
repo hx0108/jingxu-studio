@@ -31,7 +31,7 @@
 
 ### 1. 静态锁是期望事实源，SQLite manifest 是成功核验证据
 
-在 `packages/validation` 的公开入口维护只读 `V1_SCHEMA_LOCKS`，每项包含完整 ID、Draft、版本、ASCII 逻辑资源名和小写 SHA-256。`schema_registry_manifest` Repository 在四份资源全部验证和编译成功后，以一个短 `BEGIN IMMEDIATE` 事务执行精确替换；启动审计要求启用行恰好等于静态清单。
+在 `packages/validation` 的公开入口维护只读 `V1_SCHEMA_LOCKS`，每项包含完整 ID、Draft、版本、ASCII 逻辑资源名和小写 SHA-256。四份资源全部验证和编译成功后，Application 通过 `SchemaManifestUnitOfWorkPort` 开启一个短 `BEGIN IMMEDIATE` 事务，令事务内 Repository 执行精确替换并读回对账；Schema 阶段的提交后审计要求启用行恰好等于静态清单。现有前置数据库审计只检查表结构和行级合法性，不得因旧构建 manifest 与新静态锁不同而提前阻断替换。
 
 数据库旧值不能批准新资源，也不能覆盖静态 hash。这样可避免用户数据库被篡改后放行包内漂移，同时保留“当前数据库最后由哪个构建成功核验”的本地证据。
 
@@ -48,10 +48,11 @@
 新增 Application Ports：
 
 - `SchemaResourcePort.readAllLocked()`：返回逻辑资源名和不可变字节，不暴露绝对路径。
-- `SchemaManifestRepositoryPort.replaceVerified()`：在一个持久化短事务提交四条证据。
+- `SchemaManifestUnitOfWorkPort.run()`：由 Application 拥有 Schema 证据事务边界，并向回调提供事务内 Repository。
+- `SchemaManifestRepositoryPort.replaceAll()/findEnabled()`：只在所属 UnitOfWork 内替换和读回四条证据，不自行提交。
 - `SchemaRegistryPort.verifyAndCompile()`：接受锁记录与字节，返回不可变 Registry 或归一化失败；接口不暴露 Ajv 类型。
 
-Main Adapter 负责受管理资源目录、文件存在性、普通文件/符号链接边界和读取字节；`packages/validation` 实现纯 hash/JSON/身份/引用/Ajv 编译；`packages/persistence` 实现 manifest Repository。Application 的 `SchemaRegistryStartupService` 按“读四份资源 → 验证/编译 → 短事务替换证据 → 原子发布 Registry”编排。业务调用方只依赖 Application/Validation 公开的 `validate(schemaId, unknown)` 能力。
+Main Adapter 负责受管理资源目录、文件存在性、普通文件/符号链接边界和读取字节；`packages/validation` 实现纯 hash/JSON/身份/引用/Ajv 编译；`packages/persistence` 实现 manifest UnitOfWork 与事务内 Repository。Application 的 `SchemaRegistryStartupService` 按“读四份资源 → 验证/编译 → UnitOfWork 内替换并读回证据 → 原子发布 Registry”编排。业务调用方只依赖 Application/Validation 公开的 `validate(schemaId, unknown)` 能力。
 
 事务内不读取文件、不计算 hash、不编译 Ajv；失败时不会发布半个 Registry。Provider/网络不参与任何阶段。
 
@@ -94,7 +95,8 @@ StartupService
   -> SchemaRegistryStartupService
        -> SchemaResourcePort (Main, 文件读取，事务外)
        -> SchemaRegistryPort (Validation, hash/parse/Ajv，纯本地)
-       -> SchemaManifestRepositoryPort (Persistence, 短事务)
+       -> SchemaManifestUnitOfWorkPort (Persistence, 短事务)
+            -> SchemaManifestRepositoryPort (事务内替换与读回)
   -> READY / READ_ONLY_FAULT
 ```
 
