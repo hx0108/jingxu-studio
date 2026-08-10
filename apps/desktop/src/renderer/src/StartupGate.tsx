@@ -1,5 +1,7 @@
 import type { StartupStatusDto } from '@jingxu/contracts';
 
+import { ProjectWorkspace } from './project/ProjectWorkspace';
+
 export interface StartupGateProps {
   readonly onRestore: (backupId: string) => void;
   readonly onRetry: () => void;
@@ -9,13 +11,9 @@ export interface StartupGateProps {
 }
 
 const ReadyWorkspace = () => (
-  <main className="workspace-shell" data-testid="workspace-ready">
-    <section className="status-card" aria-labelledby="workspace-title">
-      <p className="eyebrow">JINGXU STUDIO</p>
-      <h1 id="workspace-title">镜序 Studio V1 工程基线</h1>
-      <p>本地数据库已通过启动检查。当前 Change 仅提供持久化运行时，不包含业务功能。</p>
-    </section>
-  </main>
+  <div data-testid="workspace-ready">
+    <ProjectWorkspace />
+  </div>
 );
 
 export const StartupGate = ({
