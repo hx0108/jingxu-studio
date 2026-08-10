@@ -10,6 +10,10 @@ import {
   initializePersistenceAfterSingleInstanceLock,
   type DesktopPersistenceRuntime,
 } from './composition/create-persistence-runtime';
+import {
+  createProjectFeatureRegistration,
+  type ProjectFeatureRegistration,
+} from './composition/register-project-features';
 import { registerRuntimeIpc } from './ipc/runtime-ipc';
 import { registerAppProtocol } from './security/app-protocol';
 
@@ -22,6 +26,7 @@ const rendererName =
   typeof MAIN_WINDOW_VITE_NAME === 'string' ? MAIN_WINDOW_VITE_NAME : 'main_window';
 let appProtocolRegistered = false;
 let persistenceRuntime: DesktopPersistenceRuntime | null = null;
+let projectFeatureRegistration: ProjectFeatureRegistration | null = null;
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -103,23 +108,38 @@ if (!singleInstanceLockAcquired) {
         }),
       );
       if (persistenceRuntime !== null) {
-        registerRuntimeIpc(
-          {
-            handle: (channel, listener) => {
-              ipcMain.handle(channel, (event, ...arguments_: readonly unknown[]) =>
-                listener(
-                  {
-                    sender: { mainFrame: event.sender.mainFrame },
-                    senderFrame: event.senderFrame,
-                  },
-                  ...arguments_,
-                ),
-              );
-            },
+        const ipcRegistrar = {
+          handle: (
+            channel: string,
+            listener: (
+              event: {
+                readonly sender: { readonly mainFrame: { readonly url: string } };
+                readonly senderFrame: { readonly url: string } | null;
+              },
+              ...arguments_: readonly unknown[]
+            ) => Promise<unknown>,
+          ) => {
+            ipcMain.handle(channel, (event, ...arguments_: readonly unknown[]) =>
+              listener(
+                {
+                  sender: { mainFrame: event.sender.mainFrame },
+                  senderFrame: event.senderFrame,
+                },
+                ...arguments_,
+              ),
+            );
           },
-          persistenceRuntime.startupService,
-          getTrustedUrl(),
-        );
+        };
+        projectFeatureRegistration = createProjectFeatureRegistration({
+          ipcRegistrar,
+          managedRoot,
+          persistenceRuntime,
+          trustedUrl: getTrustedUrl(),
+        });
+        registerRuntimeIpc(ipcRegistrar, persistenceRuntime.startupService, getTrustedUrl(), () => {
+          projectFeatureRegistration?.ensureRegistered();
+        });
+        projectFeatureRegistration.ensureRegistered();
       }
       await createMainWindow();
     })
@@ -135,6 +155,7 @@ if (!singleInstanceLockAcquired) {
   });
 
   app.on('before-quit', () => {
+    projectFeatureRegistration = null;
     persistenceRuntime?.close();
     persistenceRuntime = null;
   });

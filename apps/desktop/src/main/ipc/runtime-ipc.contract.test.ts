@@ -30,6 +30,7 @@ const createHarness = () => {
   const getStatus = vi.fn(() => readyStatus);
   const restoreBackup = vi.fn(() => Promise.resolve(readyStatus));
   const retryStartup = vi.fn(() => Promise.resolve(readyStatus));
+  const onStatusChanged = vi.fn();
   const service = {
     getStatus,
     restoreBackup,
@@ -43,8 +44,9 @@ const createHarness = () => {
     },
     service,
     'jingxu://app/index.html',
+    onStatusChanged,
   );
-  return { handlers, serviceCalls: { getStatus, restoreBackup, retryStartup } };
+  return { handlers, onStatusChanged, serviceCalls: { getStatus, restoreBackup, retryStartup } };
 };
 
 const trustedEvent = (): RuntimeIpcEvent => {
@@ -60,7 +62,7 @@ describe('runtime IPC Contract', () => {
   });
 
   it('受信主 frame 调用—校验 DTO—逐方法委托 StartupService 并校验返回状态', async () => {
-    const { handlers, serviceCalls } = createHarness();
+    const { handlers, onStatusChanged, serviceCalls } = createHarness();
     const retryCommand = { expectedRevision: 2, requestId: 'request-retry-0001' };
     const restoreCommand = {
       backupId: 'backup_12345678',
@@ -79,6 +81,7 @@ describe('runtime IPC Contract', () => {
     ).resolves.toEqual(readyStatus);
     expect(serviceCalls.retryStartup).toHaveBeenCalledWith(retryCommand);
     expect(serviceCalls.restoreBackup).toHaveBeenCalledWith(restoreCommand);
+    expect(onStatusChanged).toHaveBeenCalledTimes(2);
   });
 
   it('非主 frame、非受信来源或多余参数—调用 runtime Host—先拒绝且不触发服务', async () => {

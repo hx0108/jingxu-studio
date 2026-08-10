@@ -28,6 +28,7 @@ export const registerRuntimeIpc = (
   registrar: RuntimeIpcRegistrar,
   startupService: StartupService,
   trustedUrl: string,
+  onStatusChanged: (() => void | Promise<void>) | null = null,
 ): void => {
   registrar.handle(RUNTIME_IPC_CHANNELS.getStartupStatus, (event, ...arguments_) => {
     assertTrustedIpcSender(event, trustedUrl);
@@ -38,12 +39,16 @@ export const registerRuntimeIpc = (
     assertTrustedIpcSender(event, trustedUrl);
     const command = parseSingleIpcArgument(startupCommandSchema, arguments_);
     if (command === null) throw new Error('IPC_INVALID_REQUEST');
-    return startupStatusSchema.parse(await startupService.retryStartup(command));
+    const status = startupStatusSchema.parse(await startupService.retryStartup(command));
+    await onStatusChanged?.();
+    return status;
   });
   registrar.handle(RUNTIME_IPC_CHANNELS.restoreBackup, async (event, ...arguments_) => {
     assertTrustedIpcSender(event, trustedUrl);
     const command = parseSingleIpcArgument(restoreBackupCommandSchema, arguments_);
     if (command === null) throw new Error('IPC_INVALID_REQUEST');
-    return startupStatusSchema.parse(await startupService.restoreBackup(command));
+    const status = startupStatusSchema.parse(await startupService.restoreBackup(command));
+    await onStatusChanged?.();
+    return status;
   });
 };

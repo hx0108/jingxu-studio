@@ -41,7 +41,10 @@ describe('Main Persistence Composition Root', () => {
         state: 'READY',
         writeEnabled: true,
       });
+      expect(runtime?.getProjectUnitOfWork()).not.toBeNull();
+      expect(runtime?.getProjectUnitOfWork()).toBe(runtime?.getProjectUnitOfWork());
       runtime?.close();
+      expect(runtime?.getProjectUnitOfWork()).toBeNull();
       const databaseFile = await readFile(path.join(root, 'managed', 'data', 'jingxu.sqlite'));
       expect(databaseFile.subarray(0, 16).toString('utf8')).toBe('SQLite format 3\0');
     } finally {

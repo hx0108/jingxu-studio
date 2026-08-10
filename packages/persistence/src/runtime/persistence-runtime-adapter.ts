@@ -5,6 +5,7 @@ import type {
   PersistenceFailure,
   PersistenceRestoreResult,
   PersistenceRuntimePort,
+  ProjectUnitOfWorkPort,
 } from '@jingxu/application';
 import {
   startupErrorCodeSchema,
@@ -17,6 +18,7 @@ import { runDatabaseAudit } from '../audit/database-audit';
 import { listVerifiedBackups, performManagedMigration } from '../backup/backup-manager';
 import { loadMigrationSet } from '../migrations/migration-loader';
 import { restoreManagedBackup } from '../recovery/recovery-manager';
+import { SqliteProjectUnitOfWork } from '../project/sqlite-project-unit-of-work';
 import { createManagedDirectories, createManagedPaths, type ManagedPaths } from './managed-paths';
 import { PersistenceRuntimeError } from './persistence-error';
 import { SqliteConnectionManager, type SqliteConnectionOptions } from './sqlite-connection';
@@ -130,6 +132,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   readonly #migrationDirectory: string;
   readonly #paths: ManagedPaths;
   #operationTail: Promise<void> = Promise.resolve();
+  #projectUnitOfWork: ProjectUnitOfWorkPort | null = null;
 
   public constructor({
     clock,
@@ -146,7 +149,13 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   }
 
   public close(): void {
+    this.#projectUnitOfWork = null;
     this.#manager.close();
+  }
+
+  /** Returns the single Project UnitOfWork only after the startup audit reached READY. */
+  public getProjectUnitOfWork(): ProjectUnitOfWorkPort | null {
+    return this.#projectUnitOfWork;
   }
 
   public prepare(): Promise<PersistenceCheckResult> {
@@ -218,9 +227,11 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
 
       phase = 'RECOVERY_GATE';
       const backups = await listVerifiedBackups(this.#paths);
+      this.#projectUnitOfWork ??= new SqliteProjectUnitOfWork(database);
       completedPhases.push('RECOVERY_GATE');
       return { backups, completedPhases, ok: true };
     } catch (error) {
+      this.#projectUnitOfWork = null;
       this.#manager.close();
       const backups = await this.#listBackupsWithoutThrowing();
       return {

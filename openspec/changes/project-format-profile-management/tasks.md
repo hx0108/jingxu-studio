@@ -23,9 +23,11 @@
 - [x] 3.5 先添加幂等 Unit 测试：响应丢失后同 requestId/hash 返回原安全引用、不同 hash/command 返回 `REQUEST_ID_REUSED`、失败不留回执、同时重复调用共享执行、no-op receipt 和失败零成功事件。（R: Project Command 必须幂等且提交证据一致 / 全部 Scenario；Design §4）
 
   > ✅ §3.5 完成于本 commit：4 命令 receipt replay（同 requestId+command/hash → 重读当前态重建完整 `ProjectDetailDto`）/ 不同 command/hash → `REQUEST_ID_REUSED` / 失败不留回执 → 同 requestId 可安全重试 / no-op receipt replay（project-service.test 65 passed）。「同时重复调用共享执行」按 Design §4「Main 内的轻量 requestId 协调器」拆至 §3.6（task 3.6 owns 请求协调器）；DB `request_id` PK 真并发兜底留 §5（§4.2 已建表）。
+
 - [x] 3.6 实现 `ProjectService`、错误归一化和请求协调器，使 3.1–3.5 通过；所有业务写入仅通过 UnitOfWork，事务内不得调用目录/网络/长文件操作。（Design §1、§4–§7）
 
   > ✅ §3.6 完成于本 commit：application 错误归一化——抽 `persistenceFailed(traceId,message)` 集中 4 命令 catch-all（create try/catch + update/delete/restore `.catch`），transient 类 `retryable` 修正（PROJECT_PERSISTENCE_FAILED / PROJECT_DIRECTORY_UNAVAILABLE 由 false→true，对齐「请重试」文案），binding-free catch 保证 SQL/堆栈/路径不泄漏；4 形状测试（create/update/directory/delete）断言 retryable+固定 message+对抗载荷不泄漏，project-service.test 合计 69 passed（65+4）。ProjectService 主体 +「写入仅走 UnitOfWork/事务内无文件 I/O」已于 §3.1–3.5 落实并通过。**请求协调器**按 Design §4 line 126「Main 内的轻量 requestId 协调器」属 Main 层（singleflight 共享执行 Promise），随 §7 Main IPC/Composition Root 实装——延续 §3.5 协调器拆分链条（§3.5→§3.6→§7）；§3.6 不写协调器代码。
+
 - [x] 3.7 添加 AppError 安全 Unit 测试，注入 SQLite/文件异常、SQL、路径和堆栈，断言 Application 输出只保留稳定 code、userAction、fieldErrors 和 traceId。（Design §2、§9）
 
   > ✅ §3.7 完成于本 commit：扩展 §3.6 的 4 形状测试为「载荷类型 × 注入点」对抗矩阵——7 类对抗载荷（SQLite 约束/忙锁、文件 ENOENT、SQL 注入串、绝对路径堆栈、用户内容 name/genre/style、多帧堆栈）× 3 注入点（create insertProject / directory prepare / update updateProject），每格断言 AppError 字段集 = 稳定 {code,message,retryable,userAction,fieldErrors,traceId} 且 JSON 序列化后无任何载荷标记；补「非 Error 值（字符串/裸对象）」对抗锁定 binding-free catch 不变量（将来改 `catch(e)` 读 e.message/.stack 即红）。project-service.test 合计 **91 passed**（69+22）。门禁全绿：eslint 0、prettier、全量 tsc -b exit0。
@@ -68,20 +70,21 @@
 - [x] 7.2 实现 `registerProjectIpc`、共享但不通用化的 sender/error helper，并将 ProjectService 注入 Main；非受信 sender 直接拒绝，受信业务失败返回 AppResult。（Design §2、§9）
 - [x] 7.3 先扩展 Preload Contract 测试，断言冻结的 `window.jingxu.project.list/get/create/update/delete/restore` 逐方法调用和双端 Zod 校验，且不存在通用 `send/on/invoke`、路径、SQL、Node 或 persistence 能力。（R: 合法 Renderer 创建项目；R: 非法 sender 或 DTO）
 - [x] 7.4 更新 `JingxuApi`/Preload 实现并保持 RuntimeApi 回归通过；Renderer 只能从 `@jingxu/contracts` 获取 DTO，不深层导入其他包 `src/`。（Design §2、§9）
-- [ ] 7.5 扩展 Composition Root 集成测试：single-instance lock 后只有一个 SQLite 写连接，Project Adapter/Service/IPC 注册一次，关闭应用释放资源，启动故障时不构造可写 Project 入口。（R: 只读故障状态尝试写入；Design §1、§9）
+- [x] 7.5 扩展 Composition Root 集成测试：single-instance lock 后只有一个 SQLite 写连接，Project Adapter/Service/IPC 注册一次，关闭应用释放资源，启动故障时不构造可写 Project 入口。（R: 只读故障状态尝试写入；Design §1、§9）
 
 ## 8. Renderer 项目列表与创作设定
 
 - [x] 8.1 添加并锁定 React Query、React Hook Form、Zustand 后，配置 QueryClient 和最小 store；测试证明 Query 是 Project 事实源、RHF 是表单源、Zustand 不复制 Project/FormatProfile 数据。（Design §8）
 
   > ✅ §8.1 完成于本 commit（worktree `codex/pfpm-8-renderer`）：精确锁定并安装 `@tanstack/react-query@5.101.4` / `react-hook-form@7.85.0` / `zustand@5.0.14`（saveExact，peer 含 React 19，§1.1 已核验 2026-08-09）。新增 `lib/query-client.ts`（projectKeys list/detail + `createQueryClient`：关 window-focus refetch、queries retry 1、staleTime 0、mutations retry 0）+ `store/project-ui-store.ts`（仅 `selectedProjectId`/`listScope`/`listFilter`/`isDirty` 四个 UI 协调字段，绝不复制 Project/FormatProfile 事实，Design §8 line 180/215）+ `main.tsx` 包 `QueryClientProvider`。`state-separation.test.tsx` 三测试（node 环境 + `renderToStaticMarkup`）：React Query 缓存命中即同步渲染 Project 名（事实源）/ RHF `getValues` 即读出 defaultValues（表单源）/ Zustand 键集恰为 4 协调字段且编译期 `@ts-expect-error` 拒绝 Project 事实。门禁：全量 `tsc -b` exit 0、renderer vitest 6/6、eslint 0、prettier clean。注：§1.1 所注「安装推迟至 §9 renderer 段」中的 renderer 段即 §8（§9 为文档/打包），本节按 §8.1 任务文落地安装；§3.6/§3.7 在主干 `codex/project-format-profile-management` 追踪（本 worktree 自 §3.5 `021bd9a` 分出，tasks.md §3.6 行 26 与 §8.1 行 71 不相邻，合回主干无冲突）。
-- [ ] 8.2 先添加 ProjectList 组件测试：启动加载、真实空、活动列表、筛选无结果、分页加载、回收站、Query 错误和“创建第一个项目”唯一主操作。（R: 项目查询必须稳定且区分活动与已删除状态；R: 项目页面必须覆盖完整交互状态并保护未提交编辑）
-- [ ] 8.3 先添加 ProjectForm 测试：默认 9:16/NARRATION_FIRST/5-5-12-5、横屏、四种 DialogueRenderMode、名称/安全区字段错误、1 秒内保存反馈、失败保留输入和成功才清 dirty。（R: 创建项目必须原子保存 Project 与首个 FormatProfile；R: 保存成功以后端提交为准；R: 保存失败保留输入）
-- [ ] 8.4 实现 ProjectList/ProjectForm、React Query hooks 和错误映射，使 8.2–8.3 通过；UI 不提交 width/height/fps/language/deployment/path，禁用操作保持可见并说明原因。（Design §2–§3、§8）
-- [ ] 8.5 先添加 ProjectDetail/设置测试：current+history、元数据更新、FormatProfile 新版本/no-op、陈旧冲突刷新、依赖阻断说明，以及未实现剧本/分镜入口可见禁用且无伪造数据。（R: 项目更新必须使用乐观并发并保留 FormatProfile 版本链；R: 后续能力尚未实现）
-- [ ] 8.6 先添加删除/回收站/恢复测试：影响范围二次确认、取消零 IPC、软删除列表迁移、恢复、恢复名称冲突和“不会删除 Provider 侧数据”边界文案。（R: 项目删除与恢复必须可审计且不静默删除文件 / 全部 Scenario）
-- [ ] 8.7 先添加 DirtyLeaveDialog 测试，覆盖项目切换、刷新、窗口关闭的“保存并离开/放弃修改/取消”，保存失败停留、放弃恢复最后提交值、取消保留编辑；再实现统一 dirty 协调。（R: dirty 表单离开；PRD v1.4 §15.1.1）
-- [ ] 8.8 完成键盘/焦点/ARIA/非颜色状态测试，确保分页、画幅选择、确认框、错误汇总和禁用原因均可无鼠标操作。（AGENTS.md §14）
+
+- [x] 8.2 先添加 ProjectList 组件测试：启动加载、真实空、活动列表、筛选无结果、分页加载、回收站、Query 错误和“创建第一个项目”唯一主操作。（R: 项目查询必须稳定且区分活动与已删除状态；R: 项目页面必须覆盖完整交互状态并保护未提交编辑）
+- [x] 8.3 先添加 ProjectForm 测试：默认 9:16/NARRATION_FIRST/5-5-12-5、横屏、四种 DialogueRenderMode、名称/安全区字段错误、1 秒内保存反馈、失败保留输入和成功才清 dirty。（R: 创建项目必须原子保存 Project 与首个 FormatProfile；R: 保存成功以后端提交为准；R: 保存失败保留输入）
+- [x] 8.4 实现 ProjectList/ProjectForm、React Query hooks 和错误映射，使 8.2–8.3 通过；UI 不提交 width/height/fps/language/deployment/path，禁用操作保持可见并说明原因。（Design §2–§3、§8）
+- [x] 8.5 先添加 ProjectDetail/设置测试：current+history、元数据更新、FormatProfile 新版本/no-op、陈旧冲突刷新、依赖阻断说明，以及未实现剧本/分镜入口可见禁用且无伪造数据。（R: 项目更新必须使用乐观并发并保留 FormatProfile 版本链；R: 后续能力尚未实现）
+- [x] 8.6 先添加删除/回收站/恢复测试：影响范围二次确认、取消零 IPC、软删除列表迁移、恢复、恢复名称冲突和“不会删除 Provider 侧数据”边界文案。（R: 项目删除与恢复必须可审计且不静默删除文件 / 全部 Scenario）
+- [x] 8.7 先添加 DirtyLeaveDialog 测试，覆盖项目切换、刷新、窗口关闭的“保存并离开/放弃修改/取消”，保存失败停留、放弃恢复最后提交值、取消保留编辑；再实现统一 dirty 协调。（R: dirty 表单离开；PRD v1.4 §15.1.1）
+- [x] 8.8 完成键盘/焦点/ARIA/非颜色状态测试，确保分页、画幅选择、确认框、错误汇总和禁用原因均可无鼠标操作。（AGENTS.md §14）
 
 ## 9. E2E、打包、文档与最终验证
 
