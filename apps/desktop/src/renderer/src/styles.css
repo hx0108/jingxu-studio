@@ -170,3 +170,255 @@ button:disabled {
     flex-direction: column;
   }
 }
+
+.project-shell {
+  min-height: 100vh;
+  padding: 32px clamp(20px, 5vw, 72px) 64px;
+  background: #0b1020;
+}
+
+.app-header,
+.detail-header,
+.list-toolbar,
+.form-actions,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.app-header {
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgb(150 168 220 / 20%);
+  margin-bottom: 28px;
+}
+
+.app-header h1 {
+  font-size: 28px;
+}
+
+.app-header nav {
+  display: flex;
+  gap: 8px;
+}
+
+.active-tab {
+  border-color: #b9c7ff;
+  background: #5269c5;
+}
+
+label {
+  display: grid;
+  gap: 8px;
+  color: #c7d0e5;
+  font-weight: 600;
+}
+
+input,
+select {
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid #52617f;
+  border-radius: 9px;
+  color: #f4f6ff;
+  background: #11182b;
+  font: inherit;
+}
+
+input:focus-visible,
+select:focus-visible {
+  outline: 3px solid #b9c7ff;
+  outline-offset: 2px;
+}
+
+[aria-invalid='true'] {
+  border-color: #ff8f82;
+}
+
+.list-toolbar {
+  margin-bottom: 24px;
+}
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 16px;
+  padding: 0;
+  list-style: none;
+}
+
+.project-card,
+.profile-card,
+.notice,
+.editor-panel,
+.detail-panel {
+  padding: 20px;
+  border: 1px solid rgb(150 168 220 / 22%);
+  border-radius: 14px;
+  background: #141b31;
+}
+
+.project-card-main {
+  display: grid;
+  width: 100%;
+  gap: 10px;
+  border: 0;
+  text-align: left;
+  background: transparent;
+}
+
+.project-card-main strong {
+  font-size: 18px;
+}
+
+.project-card-main span,
+.project-card-main small,
+.system-note,
+.profile-card dt,
+.capability-grid p {
+  color: #aeb9d1;
+}
+
+.project-card > .secondary-button {
+  width: 100%;
+  margin-top: 12px;
+}
+
+.notice {
+  max-width: 720px;
+  margin: 48px auto;
+  text-align: center;
+}
+
+.error-notice {
+  border-color: #8d493f;
+  background: #2b191c;
+}
+
+.load-more {
+  display: block;
+  margin: 24px auto;
+}
+
+.project-form {
+  display: grid;
+  max-width: 760px;
+  gap: 20px;
+}
+
+.field-row,
+.safe-area-grid,
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+fieldset {
+  display: flex;
+  gap: 20px;
+  padding: 16px;
+  border: 1px solid #52617f;
+  border-radius: 10px;
+}
+
+fieldset label {
+  display: flex;
+  align-items: center;
+}
+
+.field-error,
+.danger-zone {
+  color: #ffb4a9;
+}
+
+.success-text {
+  color: #8de7ae;
+}
+
+.secondary-button {
+  border-color: #52617f;
+  background: #202a42;
+}
+
+.danger-button {
+  border-color: #b25f53;
+  background: #78382f;
+}
+
+.detail-panel,
+.editor-panel {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.detail-header h2 {
+  margin: 0;
+  font-size: 32px;
+}
+
+.capability-grid {
+  margin: 28px 0;
+}
+
+.profile-card {
+  margin-top: 12px;
+  background: #10172a;
+}
+
+.profile-card dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.profile-card dl > div {
+  display: grid;
+  gap: 4px;
+}
+
+.profile-card dd {
+  margin: 0;
+}
+
+.danger-zone {
+  padding-top: 24px;
+  border-top: 1px solid rgb(150 168 220 / 20%);
+  margin-top: 28px;
+}
+
+.dialog-backdrop {
+  position: fixed;
+  z-index: 10;
+  display: grid;
+  background: rgb(0 0 0 / 72%);
+  inset: 0;
+  place-items: center;
+}
+
+.dialog-card {
+  width: min(540px, calc(100% - 40px));
+  padding: 28px;
+  border: 1px solid #6f7fa3;
+  border-radius: 16px;
+  background: #141b31;
+  box-shadow: 0 30px 100px rgb(0 0 0 / 55%);
+}
+
+@media (width <= 640px) {
+  .app-header,
+  .detail-header,
+  .list-toolbar,
+  .form-actions,
+  .dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .field-row,
+  .safe-area-grid,
+  .capability-grid {
+    grid-template-columns: 1fr;
+  }
+}

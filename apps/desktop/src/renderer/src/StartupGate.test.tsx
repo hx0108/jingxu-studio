@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { StartupStatusDto } from '@jingxu/contracts';
 
 import { StartupGate } from './StartupGate';
+import { createQueryClient } from './lib/query-client';
 
 const status = (overrides: Partial<StartupStatusDto>): StartupStatusDto => ({
   allowedActions: [],
@@ -70,16 +71,19 @@ describe('StartupGate', () => {
 
   it('全部阶段通过—渲染页面—只显示 READY 工程基线', () => {
     const markup = renderToStaticMarkup(
-      <StartupGate
-        onRestore={vi.fn()}
-        onRetry={vi.fn()}
-        pendingAction={false}
-        status={status({ state: 'READY', writeEnabled: true })}
-      />,
+      <QueryClientProvider client={createQueryClient()}>
+        <StartupGate
+          onRestore={vi.fn()}
+          onRetry={vi.fn()}
+          pendingAction={false}
+          status={status({ state: 'READY', writeEnabled: true })}
+        />
+      </QueryClientProvider>,
     );
 
     expect(markup).toContain('workspace-ready');
-    expect(markup).toContain('镜序 Studio V1 工程基线');
+    expect(markup).toContain('镜序 Studio');
     expect(markup).not.toContain('只读故障');
   });
 });
+import { QueryClientProvider } from '@tanstack/react-query';
