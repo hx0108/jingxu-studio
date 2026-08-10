@@ -23,7 +23,9 @@
 - [x] 3.5 先添加幂等 Unit 测试：响应丢失后同 requestId/hash 返回原安全引用、不同 hash/command 返回 `REQUEST_ID_REUSED`、失败不留回执、同时重复调用共享执行、no-op receipt 和失败零成功事件。（R: Project Command 必须幂等且提交证据一致 / 全部 Scenario；Design §4）
 
   > ✅ §3.5 完成于本 commit：4 命令 receipt replay（同 requestId+command/hash → 重读当前态重建完整 `ProjectDetailDto`）/ 不同 command/hash → `REQUEST_ID_REUSED` / 失败不留回执 → 同 requestId 可安全重试 / no-op receipt replay（project-service.test 65 passed）。「同时重复调用共享执行」按 Design §4「Main 内的轻量 requestId 协调器」拆至 §3.6（task 3.6 owns 请求协调器）；DB `request_id` PK 真并发兜底留 §5（§4.2 已建表）。
-- [ ] 3.6 实现 `ProjectService`、错误归一化和请求协调器，使 3.1–3.5 通过；所有业务写入仅通过 UnitOfWork，事务内不得调用目录/网络/长文件操作。（Design §1、§4–§7）
+- [x] 3.6 实现 `ProjectService`、错误归一化和请求协调器，使 3.1–3.5 通过；所有业务写入仅通过 UnitOfWork，事务内不得调用目录/网络/长文件操作。（Design §1、§4–§7）
+
+  > ✅ §3.6 完成于本 commit：application 错误归一化——抽 `persistenceFailed(traceId,message)` 集中 4 命令 catch-all（create try/catch + update/delete/restore `.catch`），transient 类 `retryable` 修正（PROJECT_PERSISTENCE_FAILED / PROJECT_DIRECTORY_UNAVAILABLE 由 false→true，对齐「请重试」文案），binding-free catch 保证 SQL/堆栈/路径不泄漏；4 形状测试（create/update/directory/delete）断言 retryable+固定 message+对抗载荷不泄漏，project-service.test 合计 69 passed（65+4）。ProjectService 主体 +「写入仅走 UnitOfWork/事务内无文件 I/O」已于 §3.1–3.5 落实并通过。**请求协调器**按 Design §4 line 126「Main 内的轻量 requestId 协调器」属 Main 层（singleflight 共享执行 Promise），随 §7 Main IPC/Composition Root 实装——延续 §3.5 协调器拆分链条（§3.5→§3.6→§7）；§3.6 不写协调器代码。
 - [ ] 3.7 添加 AppError 安全 Unit 测试，注入 SQLite/文件异常、SQL、路径和堆栈，断言 Application 输出只保留稳定 code、userAction、fieldErrors 和 traceId。（Design §2、§9）
 
 ## 4. `0002` Migration 与回滚证据

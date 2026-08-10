@@ -104,6 +104,13 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
     error: { code, message, retryable, userAction: null, fieldErrors, traceId },
   });
 
+  /**
+   * 意外异常归一化：固定 code/脱敏 message + retryable=true（transient，可重试）。
+   * 调用点为 binding-free catch（不绑定异常对象），保证 SQL/堆栈/路径不泄漏（Design §9、§3.7）。
+   */
+  const persistenceFailed = <T>(traceId: string, message: string): AppResultDto<T> =>
+    error<T>('PROJECT_PERSISTENCE_FAILED', message, traceId, null, true);
+
   const toSummary = (item: ProjectListItem): ProjectSummaryDto => ({
     id: item.project.id,
     name: item.project.name,
@@ -299,7 +306,13 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
     try {
       handle = await deps.directory.prepare(projectId);
     } catch {
-      return error('PROJECT_DIRECTORY_UNAVAILABLE', '项目目录不可用，请检查存储后重试', traceId);
+      return error(
+        'PROJECT_DIRECTORY_UNAVAILABLE',
+        '项目目录不可用，请检查存储后重试',
+        traceId,
+        null,
+        true,
+      );
     }
 
     try {
@@ -384,7 +397,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
       } catch {
         /* 不向 Renderer 暴露 fs 细节（§3.7 进一步覆盖注入测试） */
       }
-      return error('PROJECT_PERSISTENCE_FAILED', '项目创建失败，请重试', traceId);
+      return persistenceFailed(traceId, '项目创建失败，请重试');
     }
   };
 
@@ -593,8 +606,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
       })
       .catch(
         // 事务内任一写入 reject → unitOfWork 快照回滚后 rethrow；归一化为安全错误（§3.7 进一步脱敏）
-        () =>
-          error<ProjectDetailDto>('PROJECT_PERSISTENCE_FAILED', '项目更新失败，请重试', traceId),
+        () => persistenceFailed<ProjectDetailDto>(traceId, '项目更新失败，请重试'),
       );
   };
 
@@ -685,8 +697,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
       })
       .catch(
         // 事务内任一写入 reject → unitOfWork 快照回滚后 rethrow；归一化为安全错误（§3.7 进一步脱敏）
-        () =>
-          error<ProjectDetailDto>('PROJECT_PERSISTENCE_FAILED', '项目删除失败，请重试', traceId),
+        () => persistenceFailed<ProjectDetailDto>(traceId, '项目删除失败，请重试'),
       );
   };
 
@@ -785,8 +796,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
       })
       .catch(
         // 事务内任一写入 reject → unitOfWork 快照回滚后 rethrow；归一化为安全错误（§3.7 进一步脱敏）
-        () =>
-          error<ProjectDetailDto>('PROJECT_PERSISTENCE_FAILED', '项目恢复失败，请重试', traceId),
+        () => persistenceFailed<ProjectDetailDto>(traceId, '项目恢复失败，请重试'),
       );
   };
 

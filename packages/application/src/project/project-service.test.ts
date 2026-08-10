@@ -1055,3 +1055,78 @@ describe('ProjectService 幂等回执 replay / REQUEST_ID_REUSED（§3.5）', ()
     expect(store.receipts).toHaveLength(1);
   });
 });
+
+describe('ProjectService 错误归一化（§3.6）', () => {
+  // 对抗性异常载荷：携带 SQL / 绝对路径 / 堆栈片段，验证归一化后 AppError 不泄漏（Design §9；§3.7 全矩阵）
+  const adversarialFault = (fault: ProjectWriteFault): ProjectWriteFaults => {
+    const f: ProjectWriteFaults = {};
+    f[fault] = new Error('SELECT * FROM projects; at C:\\Users\\leak\\app\\db.ts:42');
+    return f;
+  };
+  const LEAK = /SELECT|leak|db\.ts|Users/i;
+
+  it('create 写入故障 → PROJECT_PERSISTENCE_FAILED(retryable)，固定 message 不泄漏 SQL/路径/堆栈', async () => {
+    const { service } = setup({ faults: adversarialFault('insertProject') });
+
+    const result = await service.create(baseCreateInput(), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+      expect(result.error.retryable).toBe(true);
+      expect(result.error.message).toBe('项目创建失败，请重试');
+      expect(result.error.userAction).toBeNull();
+      expect(result.error.fieldErrors).toBeNull();
+      expect(result.error.message).not.toMatch(LEAK);
+    }
+  });
+
+  it('update 写入故障 → PROJECT_PERSISTENCE_FAILED(retryable)，固定 message 不泄漏', async () => {
+    const { service, store } = setup({ faults: adversarialFault('updateProject') });
+    seedSingleProject(store);
+
+    // name 变更使 update 走入写入路径（no-op 会跳过 projects.update，触发不到故障）
+    const result = await service.update(baseUpdateInput({ name: '改名' }), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+      expect(result.error.retryable).toBe(true);
+      expect(result.error.message).toBe('项目更新失败，请重试');
+      expect(result.error.message).not.toMatch(LEAK);
+    }
+  });
+
+  it('directory prepare 故障（含 SQL/路径/堆栈）→ PROJECT_DIRECTORY_UNAVAILABLE(retryable)，不泄漏', async () => {
+    const { service, store } = setup({
+      prepareError: new Error('SELECT * FROM projects; at C:\\Users\\leak\\app\\db.ts:42'),
+    });
+
+    const result = await service.create(baseCreateInput(), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('PROJECT_DIRECTORY_UNAVAILABLE');
+      expect(result.error.retryable).toBe(true);
+      expect(result.error.message).toBe('项目目录不可用，请检查存储后重试');
+      expect(result.error.message).not.toMatch(LEAK);
+    }
+    expect(store.projects).toHaveLength(0);
+  });
+
+  // delete/restore 共用同一 .catch(persistenceFailed) 模式；delete 代表该路径，restore 同形（§3.7 全覆盖）
+  it('delete 写入故障 → PROJECT_PERSISTENCE_FAILED(retryable)，固定 message 不泄漏', async () => {
+    const { service, store } = setup({ faults: adversarialFault('updateProject') });
+    seedSingleProject(store);
+
+    const result = await service.delete(baseMutationInput(), TRACE);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
+      expect(result.error.retryable).toBe(true);
+      expect(result.error.message).toBe('项目删除失败，请重试');
+      expect(result.error.message).not.toMatch(LEAK);
+    }
+  });
+});
