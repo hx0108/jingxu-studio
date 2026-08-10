@@ -1,6 +1,6 @@
 # 镜序 Studio
 
-镜序 Studio 当前是面向 Windows x64 的 Electron/React V1 开发基线。当前已建立 Main/Preload/Renderer 进程隔离，以及 SQLite 启动、migration、升级备份、自检、只读故障和受控恢复运行时；这不代表 PRD 中的 Project、AI 剧本或结构化分镜业务能力已经实现。
+镜序 Studio 当前是面向 Windows x64 的 Electron/React V1 开发基线。当前已建立 Main/Preload/Renderer 进程隔离、SQLite 启动与恢复运行时，以及 Project/FormatProfile 的本地创建、查询、更新、软删除和恢复闭环；这不代表 AI 剧本、结构化分镜或 PRD v1.4 全量验收已经实现。
 
 ## 支持环境
 
@@ -63,6 +63,7 @@ pnpm package:win
 - 恢复诊断证据：`%LOCALAPPDATA%\JingxuStudio\diagnostics\`
 - 应用只有在数据库打开、PRAGMA、migration、audit 和 recovery gate 全部通过后才进入 `READY`；否则只显示独立只读故障页。
 - Renderer 只能通过 `runtime.getStartupStatus`、`runtime.retryStartup` 和 `runtime.restoreBackup` 使用 opaque backup id，不能提交路径、SQL 或连接。
+- Project 页面只通过 `project.list/get/create/update/delete/restore` 六个类型化方法访问 Main；Preload 不暴露通用 `send/on/invoke`。
 - V1 JSON 导入导出是 CURRENT_ONLY 交换格式，不是完整 SQLite 备份，不能替代受管理数据库备份。
 - 当前版本不会自动删除备份或诊断副本；空间治理需后续独立 Change。
 
@@ -74,13 +75,25 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前 Active Change 为 `sqlite-migration-runtime`。在 Codex 中使用 `$openspec-apply-change sqlite-migration-runtime` 实施，完成后使用 `$openspec-verify-change sqlite-migration-runtime` 验证。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前 Active Change 为 `project-format-profile-management`。在 Codex 中使用 `$openspec-apply-change project-format-profile-management` 继续实施，完成后使用 `$openspec-verify-change project-format-profile-management` 验证。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
-## 当前明确不做
+## 当前已实现的 Project 切片
 
-- Project Repository、UnitOfWork 和业务用例
-- Project、FormatProfile、剧本、分镜、导入导出和页面状态矩阵
+- `ProjectService` 支持稳定 keyset 列表、活动/回收站隔离、详情、原子创建、乐观并发更新、FormatProfile 不可变版本链、软删除、恢复和 requestId 幂等回放。
+- SQLite `ProjectUnitOfWork` 在单一 `BEGIN IMMEDIATE` 中提交 Project、FormatProfile、审计、本地分析事件和 `command_receipts`；失败回滚不留下部分记录。
+- `0002_project_command_receipts.sql` 只保存 requestId、命令名、payload SHA-256、traceId 和安全结果引用，不保存名称、题材、风格、目录或完整命令载荷。
+- Main Composition Root 只在启动状态 `READY/writeEnabled=true` 后构造 ProjectService 并注册六个 Project IPC；注册幂等且复用唯一 SQLite 写连接。
+- Renderer 已接入 React Query、React Hook Form 和最小 Zustand UI 协调状态，覆盖列表、创建设定、详情、回收站、错误反馈和 dirty 离开保护。
+- 当前自动化范围包含 Project Domain/Application 单元测试、DTO/IPC/Preload Contract、SQLite Repository/UnitOfWork/Composition Integration、Renderer 单元测试；完整 Electron E2E、Windows 打包验收和 OpenSpec Verify 仍以本 Change 最终门禁结果为准。
+
+## 当前尚未实现
+
+- SourceInput 文本输入和 Consent 授权记录业务用例
+- Episode、剧本、StoryBible、分镜、锁、导入导出和评测业务用例
+- 离线 Schema Registry、EpisodeValidator 和四份业务 Schema 的运行时接入
+- JobRunner、ScriptStageJob、ModelInvocation 和 Qwen 文本模型调用
 - Qwen、API Key、Provider 网络请求
 - 图片、视频、TTS、口型、成片和其他 V2/V3 能力
+- AC-V1-01 至 AC-V1-06 尚未完成；尤其不能声称 AC-V1-01 AI 原创链路已经验收
 
-这些能力将分别进入后续 OpenSpec Change；当前 SQLite 表结构只建立持久化约束，不提供伪造业务入口。
+这些能力将分别进入后续 OpenSpec Change。`0001_initial.sql` 中存在对应表结构不等于业务方法、页面、Schema 校验或验收链路已经实现。

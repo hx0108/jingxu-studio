@@ -14,4 +14,6 @@
 
 确定命名对象由 `packages/persistence/src/migrations/initial-schema-trace.ts` 登记：0001 提供 34 张表、18 个索引和 4 个 immutable UPDATE trigger；0002 追加 `command_receipts` 表与 `ix_command_receipts_project` 索引，合计 35 张表、19 个索引。`initial-schema.integration.test.ts` 执行空库 introspection、`foreign_key_check` 和分组负例；`project-command-receipts.integration.test.ts` 覆盖 0001/0002 连续性、0001 已发布 checksum 不变、空库终态 v2、重复启动跳过、`command_receipts` DDL 负例、受管理备份先行（manifest source=1 target=2）、0002 中途失败/checksum 漂移/高版本库/备份失败的回滚与只读故障，以及 100+ 历史对象压力库演练；`migration-runner.integration.test.ts` 覆盖顺序、checksum、重复启动、高版本库、未版本化库、单事务回滚及 101 历史版本升级。
 
-当前 DDL 只建立后续 Change 所需的存储结构，不实现 Project、Schema Registry、JobRunner、导入导出或评测业务方法。
+当前 Project 切片已实现 `projects`、`format_profiles`、`audit_events`、`analytics_events` 和 `command_receipts` 的 Repository/UnitOfWork 访问：创建在单一事务提交五类证据，更新保留 FormatProfile parent/version/current 链，删除与恢复只改变 Project 聚合，失败回滚零部分写入。对应证据位于 `sqlite-project-read.integration.test.ts`、`sqlite-project-list.integration.test.ts`、`sqlite-project-write.integration.test.ts`、`database-audit.integration.test.ts` 和 Main Composition Integration。
+
+其余 DDL 仍只是后续 Change 的存储基线：SourceInput、Consent、Episode、Schema Registry、JobRunner、导入导出和评测业务方法尚未实现。表存在、`integrity_check` 通过或 invariant 标记存在都不能替代对应业务验收；AC-V1-01 尚未完成。

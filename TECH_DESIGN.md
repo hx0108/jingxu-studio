@@ -8,7 +8,7 @@
 | 对应产品文档 | `镜序Studio_AI漫剧工作台_产品需求文档_PRD_v1.4.md` |
 | 设计范围 | V1：AI 剧本与结构化分镜 |
 | 文档版本 | TECH_DESIGN v1.1 |
-| 更新日期 | 2026-08-05 |
+| 更新日期 | 2026-08-10 |
 | 当前状态 | 可开发基线；真实模型验收前需完成 Provider 凭据配置和 Fixture 矩阵 |
 | 目标读者 | 独立开发者、前端/客户端开发、测试、后续技术评审者 |
 | 机器契约 | `镜序Studio_V1_ScriptStageOutput.schema.json`、`镜序Studio_V1_ShotContract.schema.json`、`镜序Studio_V1_EpisodeStoryboardExport.schema.json`、`镜序Studio_V1_ProjectTransferBundle.schema.json` |
@@ -145,6 +145,20 @@ flowchart LR
 | ProducibilityService | 确定性结构规则、静态能力规则、启发式规则、LLM 补充说明及人工覆盖 |
 | ImportExportService | UTF-8 `.txt/.md` 输入、JSON staging 导入、Markdown/JSON 可恢复导出与启动对账 |
 | AuditService | 审计事件、哈希、错误证据和本地分析事件 |
+
+### 3.4 当前实现快照（2026-08-10）
+
+本节记录当前代码事实，不改变 3.3 的 V1 目标架构，也不把后续规划描述为已实现。
+
+| 切片 | 当前实现 | 尚未实现边界 |
+|---|---|---|
+| Project/FormatProfile | `ProjectService` 已实现稳定列表与详情、原子创建、乐观并发更新、FormatProfile 不可变版本链、软删除、恢复、名称冲突检查和 requestId 幂等；Application 通过 ProjectUnitOfWork Port 持有事务边界 | ProjectService 目标职责中的 SourceInput 和授权声明尚未实现；Consent 仍是后续独立能力 |
+| Persistence | SQLite Project/FormatProfile/Audit/Analytics/CommandReceipt Repository、单连接 `BEGIN IMMEDIATE` UnitOfWork、Row mapper 错误归一化和 Project invariant audit 已实现 | SourceInput、Consent、Episode、脚本、StoryBible、Job、分镜、导入导出和评测表尚无业务 Repository/UnitOfWork 用例 |
+| Main/Preload | Composition Root 只在启动 `READY/writeEnabled=true` 后注入目录 Adapter、ProjectUnitOfWork 和 ProjectService；`project.list/get/create/update/delete/restore` 六个 IPC 已完成 sender、strict Zod DTO、AppResult 输出和启动写门校验；Preload 逐方法暴露 | `source`、`consent`、`script`、`job`、`storyboard`、`provider` 等命名空间尚未实现 |
+| Renderer | Project 列表/真实空态/筛选空态/回收站、创建与设置、详情与 FormatProfile 历史、软删除恢复、错误提示和 dirty 离开保护已实现；剧本和分镜入口保持可见禁用 | 剧本、分镜、Episode、Provider 和导入导出页面没有业务入口，不生成伪造数据 |
+| AI/契约 | 四份 PRD-owned Schema 继续作为上位机器契约文件保留 | 离线 Schema Registry、EpisodeValidator、JobRunner、Qwen Adapter、真实模型调用均未实现；AC-V1-01 尚未完成 |
+
+当前测试证据分布为：Domain/Application Unit、Project DTO 与 IPC/Preload Contract、SQLite Repository/UnitOfWork/Migration/Composition Integration、Renderer Unit。Electron Project E2E、Windows x64 完整打包 smoke、性能证据与 OpenSpec Verify 必须以 `project-format-profile-management` 的最终门禁运行结果为准，不能用分层测试通过提前替代。
 
 ---
 
@@ -1062,18 +1076,19 @@ interface LockCommand {
 
 Renderer 只使用 `window.jingxu` 的逐方法接口。所有 Command 带 `requestId`；修改类命令带 `expectedVersionId` 或 `expectedUpdatedAt` 进行乐观并发校验。
 
-| 命名空间 | 方法 |
-|---|---|
-| `project` | `list/get/create/update/delete/restore` |
-| `source` | `importText/savePasted/getOriginal` |
-| `consent` | `confirm/revoke/getCurrent` |
-| `script` | `getStageHead/listVersions/compare/restore/lock/unlock` |
-| `job` | `create/get/list/cancel/retry` |
-| `storyboard` | `getEpisode/generate/edit/split/merge/copy/reorder/delete/restore/validate` |
-| `producibility` | `run/getReport/overrideFinding` |
-| `transfer` | `exportJson/exportMarkdown/importJson` |
-| `provider` | `getProfile/saveProfile/saveCredential/testCredential/deleteCredential` |
-| `events` | `subscribeJobUpdates/subscribeProjectUpdates` |
+| 命名空间 | 方法 | 当前状态 |
+|---|---|---|
+| `runtime` | `getStartupStatus/retryStartup/restoreBackup` | 已实现；只接受受管理 backup id，不接受路径 |
+| `project` | `list/get/create/update/delete/restore` | 已实现；六个逐方法白名单、双端 DTO 校验、sender 校验和启动写门 |
+| `source` | `importText/savePasted/getOriginal` | 未实现 |
+| `consent` | `confirm/revoke/getCurrent` | 未实现 |
+| `script` | `getStageHead/listVersions/compare/restore/lock/unlock` | 未实现 |
+| `job` | `create/get/list/cancel/retry` | 未实现；JobRunner 也未实现 |
+| `storyboard` | `getEpisode/generate/edit/split/merge/copy/reorder/delete/restore/validate` | 未实现 |
+| `producibility` | `run/getReport/overrideFinding` | 未实现 |
+| `transfer` | `exportJson/exportMarkdown/importJson` | 未实现 |
+| `provider` | `getProfile/saveProfile/saveCredential/testCredential/deleteCredential` | 未实现 |
+| `events` | `subscribeJobUpdates/subscribeProjectUpdates` | 未实现 |
 
 统一错误结构：
 
@@ -1082,8 +1097,8 @@ interface AppError {
   code: string;
   message: string;
   retryable: boolean;
-  userAction?: string;
-  fieldErrors?: Array<{ path: string; message: string }>;
+  userAction: string | null;
+  fieldErrors: Record<string, string> | null;
   traceId: string;
 }
 ```

@@ -20,7 +20,9 @@
 
 ## 范围边界
 
-本 Change 只建立 SQLite 运行时、migration、备份、自检和恢复。它不实现 Project、Repository、UnitOfWork、Schema Registry、Provider、剧本或分镜业务用例。
+`sqlite-migration-runtime` Change 建立了 SQLite 运行时、migration、备份、自检和恢复。后续 `project-format-profile-management` 已在该运行时上实现 Project/FormatProfile Repository、ProjectUnitOfWork 和 ProjectService，但没有改变启动写入门、备份或恢复的安全语义。
+
+当前仍未实现 SourceInput、Consent、Episode、Schema Registry、JobRunner、Provider、剧本或分镜业务用例。DDL 中存在相应表不代表这些能力可调用或已通过验收。
 
 ## 启动写入门
 
@@ -47,4 +49,12 @@
 - 恢复只接受 Main 已登记的 opaque backup id，不接受 Renderer 提交的文件路径。
 - 替换前优先生成当前库的 online diagnostic snapshot，并在关闭连接后保留数据库、WAL、SHM 原始证据和 operation manifest。
 - 备份通过临时文件与可回退 rename 替换；随后从数据库打开阶段重跑完整自检。重新打开或任一自检失败统一返回 `DATABASE_RESTORE_FAILED`，继续保持只读故障。
-- 当前 Change 不自动删除或覆盖备份、诊断目录，也不把 V1 JSON 交换文件当作数据库备份。
+- 当前构建不自动删除或覆盖备份、诊断目录，也不把 V1 JSON 交换文件当作数据库备份。
+
+## Project 持久化扩展
+
+- `DesktopPersistenceRuntime.getProjectUnitOfWork()` 只在启动状态 `READY` 且写连接可用时返回 SQLite ProjectUnitOfWork；只读故障状态不构造可写 Project 入口。
+- Project 写命令由 Application 层持有事务边界。Project、FormatProfile current/version、审计、本地分析事件和 `command_receipts` 在同一 `BEGIN IMMEDIATE` 中提交，Repository 不自行嵌套 commit。
+- 项目目录准备发生在数据库事务外；创建失败时只清理由本次操作创建且仍为空的受管理目录，不递归删除预存或非空目录。
+- `command_receipts` 支持 CREATE/UPDATE/DELETE/RESTORE 的安全幂等回放；相同 requestId 绑定不同命令或 payload hash 时返回稳定冲突，不重复审计或业务写入。
+- 启动 invariant audit 已检查 Project current FormatProfile、版本父链/版本号、活动名称规范化冲突和 receipt 安全引用；依赖 StoryBible、Schema Registry 或后续业务服务的规则继续标记为 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`。

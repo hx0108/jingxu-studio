@@ -40,7 +40,11 @@ const writeMigrationSet = async (directory: string, includeSecond: boolean): Pro
 
 afterEach(async () => {
   await Promise.all(
-    roots.splice(0).map(async (root) => rm(root, { force: true, recursive: true })),
+    roots
+      .splice(0)
+      .map(async (root) =>
+        rm(root, { force: true, maxRetries: 5, recursive: true, retryDelay: 50 }),
+      ),
   );
 });
 
