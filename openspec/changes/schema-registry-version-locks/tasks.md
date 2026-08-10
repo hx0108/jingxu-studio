@@ -17,11 +17,11 @@
 
 ## 3. 正式 Fixture 与断网 Contract
 
-- [ ] 3.1 为 ScriptStageOutput 创建一个最小合法 Fixture 和一个只违反单一约束的非法 Fixture，并添加目标 ID、预期结果和唯一 messageCode 元数据。（R: Fixture 必须覆盖每份正式 Schema）
-- [ ] 3.2 为 ShotContract 创建一个最小合法 Fixture 和一个只违反单一约束的非法 Fixture，覆盖当前 1.1.0 DialogueRenderMode 条件而不伪造系统 ID。（R: Fixture 必须覆盖每份正式 Schema；AGENTS.md §15.4）
-- [ ] 3.3 为 EpisodeStoryboardExport 创建一个最小合法 Fixture 和一个只违反被引用 ShotContract 单一约束的非法 Fixture，证明问题路径落在根对象中的 shot 实例位置。（R: Episode 导出离线解析 ShotContract；R: 被引用对象违反下游 Schema）
-- [ ] 3.4 为 ProjectTransferBundle 创建一个最小合法 Fixture 和一个只违反被引用 ScriptStageOutput 单一约束的非法 Fixture，覆盖 Script→Episode→Shot 的传递引用闭包。（R: Transfer Bundle 离线解析完整引用链）
-- [ ] 3.5 添加互斥 `*.contract.test.ts` 全量执行八份 Fixture，网络访问守卫为零调用；合法样本 4/4 通过，非法样本各只命中声明的一个 messageCode，不使用模糊快照。（R: Fixture 合法/单错误 Scenario；AGENTS.md §15.3）
+- [x] 3.1 为 ScriptStageOutput 创建一个最小合法 Fixture 和一个只违反单一约束的非法 Fixture，并添加目标 ID、预期结果和唯一 messageCode 元数据。（R: Fixture 必须覆盖每份正式 Schema）
+- [x] 3.2 为 ShotContract 创建一个最小合法 Fixture 和一个只违反单一约束的非法 Fixture，覆盖当前 1.1.0 DialogueRenderMode 条件而不伪造系统 ID。（R: Fixture 必须覆盖每份正式 Schema；AGENTS.md §15.4）
+- [x] 3.3 为 EpisodeStoryboardExport 创建一个最小合法 Fixture 和一个只违反被引用 ShotContract 单一约束的非法 Fixture，证明问题路径落在根对象中的 shot 实例位置。（R: Episode 导出离线解析 ShotContract；R: 被引用对象违反下游 Schema）
+- [x] 3.4 为 ProjectTransferBundle 创建一个最小合法 Fixture 和一个只违反被引用 ScriptStageOutput 单一约束的非法 Fixture，覆盖 Script→Episode→Shot 的传递引用闭包。（R: Transfer Bundle 离线解析完整引用链）
+- [x] 3.5 添加互斥 `*.contract.test.ts` 全量执行八份 Fixture，网络访问守卫为零调用；合法样本 4/4 通过，非法样本各只命中声明的一个 messageCode，不使用模糊快照。（R: Fixture 合法/单错误 Scenario；AGENTS.md §15.3）
 
 ## 4. Application Ports 与启动编排
 

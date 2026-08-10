@@ -123,6 +123,12 @@ importers:
         specifier: workspace:*
         version: link:../domain
 
+  packages/test-fixtures:
+    dependencies:
+      '@jingxu/validation':
+        specifier: workspace:*
+        version: link:../validation
+
   packages/validation:
     dependencies:
       ajv:

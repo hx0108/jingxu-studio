@@ -113,6 +113,8 @@ const compareIssues = (left: SchemaValidationIssue, right: SchemaValidationIssue
 const mapValidationIssues = (errors: readonly ErrorObject[] | null | undefined) =>
   Object.freeze(
     (errors ?? [])
+      // Ajv's synthetic `if` summary duplicates the actionable error inside the selected branch.
+      .filter((error) => error.keyword !== 'if')
       .map((error) =>
         Object.freeze({
           instancePath: error.instancePath,
