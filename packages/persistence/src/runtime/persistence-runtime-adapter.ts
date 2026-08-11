@@ -6,6 +6,7 @@ import type {
   PersistenceRestoreResult,
   PersistenceRuntimePort,
   ProjectUnitOfWorkPort,
+  SchemaManifestUnitOfWorkPort,
 } from '@jingxu/application';
 import {
   startupErrorCodeSchema,
@@ -19,6 +20,7 @@ import { listVerifiedBackups, performManagedMigration } from '../backup/backup-m
 import { loadMigrationSet } from '../migrations/migration-loader';
 import { restoreManagedBackup } from '../recovery/recovery-manager';
 import { SqliteProjectUnitOfWork } from '../project/sqlite-project-unit-of-work';
+import { SqliteSchemaManifestUnitOfWork } from '../schema-manifest/sqlite-schema-manifest-unit-of-work';
 import { createManagedDirectories, createManagedPaths, type ManagedPaths } from './managed-paths';
 import { PersistenceRuntimeError } from './persistence-error';
 import { SqliteConnectionManager, type SqliteConnectionOptions } from './sqlite-connection';
@@ -32,7 +34,10 @@ export interface SqlitePersistenceRuntimeAdapterOptions {
   readonly sqliteConnectionOptions?: SqliteConnectionOptions;
 }
 
-const SUMMARY_BY_CODE: Readonly<Record<StartupErrorCode, string>> = {
+type PersistenceStartupErrorCode = Exclude<StartupErrorCode, `SCHEMA_${string}`>;
+type PersistenceStartupPhase = Exclude<StartupPhase, 'SCHEMA_REGISTRY'>;
+
+const SUMMARY_BY_CODE: Readonly<Record<PersistenceStartupErrorCode, string>> = {
   BACKUP_NOT_ALLOWED: '所选备份不可用，请从受管理备份清单中重新选择。',
   DATABASE_BACKUP_FAILED: '数据库升级前备份失败，原数据库未执行迁移。',
   DATABASE_INVARIANT_FAILED: '数据库自检未通过，当前仅允许只读恢复操作。',
@@ -47,7 +52,7 @@ const SUMMARY_BY_CODE: Readonly<Record<StartupErrorCode, string>> = {
   STARTUP_STATE_CONFLICT: '启动状态已经变化，请刷新后重试。',
 };
 
-const NON_RETRYABLE_CODES = new Set<StartupErrorCode>([
+const NON_RETRYABLE_CODES = new Set<PersistenceStartupErrorCode>([
   'BACKUP_NOT_ALLOWED',
   'DATABASE_UNVERSIONED_SCHEMA',
   'DATABASE_VERSION_TOO_NEW',
@@ -55,7 +60,7 @@ const NON_RETRYABLE_CODES = new Set<StartupErrorCode>([
   'MIGRATION_SEQUENCE_INVALID',
 ]);
 
-const fallbackCodeFor = (phase: StartupPhase): StartupErrorCode => {
+const fallbackCodeFor = (phase: PersistenceStartupPhase): PersistenceStartupErrorCode => {
   switch (phase) {
     case 'DATABASE_OPEN':
       return 'DATABASE_OPEN_FAILED';
@@ -70,15 +75,23 @@ const fallbackCodeFor = (phase: StartupPhase): StartupErrorCode => {
   }
 };
 
-const normalizeErrorCode = (error: unknown, phase: StartupPhase): StartupErrorCode => {
+const normalizeErrorCode = (
+  error: unknown,
+  phase: PersistenceStartupPhase,
+): PersistenceStartupErrorCode => {
   if (error instanceof PersistenceRuntimeError) {
     const parsed = startupErrorCodeSchema.safeParse(error.code);
-    if (parsed.success) return parsed.data;
+    if (parsed.success && !parsed.data.startsWith('SCHEMA_')) {
+      return parsed.data as PersistenceStartupErrorCode;
+    }
   }
   return fallbackCodeFor(phase);
 };
 
-const phaseForErrorCode = (errorCode: StartupErrorCode, fallback: StartupPhase): StartupPhase => {
+const phaseForErrorCode = (
+  errorCode: PersistenceStartupErrorCode,
+  fallback: PersistenceStartupPhase,
+): PersistenceStartupPhase => {
   switch (errorCode) {
     case 'DATABASE_OPEN_FAILED':
       return 'DATABASE_OPEN';
@@ -104,7 +117,7 @@ const phaseForErrorCode = (errorCode: StartupErrorCode, fallback: StartupPhase):
 /** Maps infrastructure failures to a stable, redacted Application failure. */
 export const toPersistenceFailure = (
   error: unknown,
-  phase: StartupPhase,
+  phase: PersistenceStartupPhase,
   backups: readonly BackupSummaryDto[],
 ): PersistenceFailure => {
   const errorCode = normalizeErrorCode(error, phase);
@@ -133,6 +146,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   readonly #paths: ManagedPaths;
   #operationTail: Promise<void> = Promise.resolve();
   #projectUnitOfWork: ProjectUnitOfWorkPort | null = null;
+  #schemaManifestUnitOfWork: SchemaManifestUnitOfWorkPort | null = null;
 
   public constructor({
     clock,
@@ -150,12 +164,18 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
 
   public close(): void {
     this.#projectUnitOfWork = null;
+    this.#schemaManifestUnitOfWork = null;
     this.#manager.close();
   }
 
   /** Returns the single Project UnitOfWork only after the startup audit reached READY. */
   public getProjectUnitOfWork(): ProjectUnitOfWorkPort | null {
     return this.#projectUnitOfWork;
+  }
+
+  /** Returns the Schema manifest UnitOfWork backed by the same audited write connection. */
+  public getSchemaManifestUnitOfWork(): SchemaManifestUnitOfWorkPort | null {
+    return this.#schemaManifestUnitOfWork;
   }
 
   public prepare(): Promise<PersistenceCheckResult> {
@@ -203,7 +223,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
 
   async #prepareUnsafe(): Promise<PersistenceCheckResult> {
     const completedPhases: StartupPhase[] = [];
-    let phase: StartupPhase = 'DATABASE_OPEN';
+    let phase: PersistenceStartupPhase = 'DATABASE_OPEN';
     try {
       await createManagedDirectories(this.#paths);
       const migrations = await loadMigrationSet(this.#migrationDirectory);
@@ -228,10 +248,12 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
       phase = 'RECOVERY_GATE';
       const backups = await listVerifiedBackups(this.#paths);
       this.#projectUnitOfWork ??= new SqliteProjectUnitOfWork(database);
+      this.#schemaManifestUnitOfWork ??= new SqliteSchemaManifestUnitOfWork(database);
       completedPhases.push('RECOVERY_GATE');
       return { backups, completedPhases, ok: true };
     } catch (error) {
       this.#projectUnitOfWork = null;
+      this.#schemaManifestUnitOfWork = null;
       this.#manager.close();
       const backups = await this.#listBackupsWithoutThrowing();
       return {

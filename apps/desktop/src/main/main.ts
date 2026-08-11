@@ -4,6 +4,7 @@ import os from 'node:os';
 import { app, BrowserWindow, ipcMain, net, protocol, session } from 'electron';
 import { deriveWindowsProductionRoot } from '@jingxu/persistence';
 
+import { deriveSchemaResourceDirectory } from './adapters/schema-resource-adapter';
 import { createSecureMainWindow } from './composition/create-main-window';
 import {
   createDesktopPersistenceRuntime,
@@ -105,6 +106,11 @@ if (!singleInstanceLockAcquired) {
           clock: () => new Date().toISOString(),
           managedRoot,
           migrationDirectory: getMigrationDirectory(),
+          schemaResourceDirectory: deriveSchemaResourceDirectory({
+            appPath: app.getAppPath(),
+            isPackaged: app.isPackaged,
+            resourcesPath: process.resourcesPath,
+          }),
         }),
       );
       if (persistenceRuntime !== null) {

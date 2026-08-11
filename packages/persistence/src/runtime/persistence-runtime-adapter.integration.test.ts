@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import os from 'node:os';
 import path from 'node:path';
 
-import { StartupService } from '@jingxu/application';
+import { StartupService, type SchemaRegistryStartupPort } from '@jingxu/application';
 import { startupStatusSchema } from '@jingxu/contracts';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -15,6 +15,9 @@ import { SqlitePersistenceRuntimeAdapter } from './persistence-runtime-adapter';
 
 const MIGRATION_DIRECTORY = path.resolve(import.meta.dirname, '../../resources/migrations');
 const roots: string[] = [];
+const SUCCESSFUL_SCHEMA_STARTUP: SchemaRegistryStartupPort = {
+  prepare: () => Promise.resolve({ manifest: [], ok: true }),
+};
 
 const createRoot = async (): Promise<string> => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-adapter-test-'));
@@ -26,7 +29,12 @@ const writeMigrationSet = async (directory: string, includeSecond: boolean): Pro
   await mkdir(directory, { recursive: true });
   await writeFile(
     path.join(directory, '0001_initial.sql'),
-    'CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, checksum TEXT NOT NULL, applied_at TEXT NOT NULL); CREATE TABLE sample (value TEXT);\n',
+    `CREATE TABLE schema_migrations
+     (version INTEGER PRIMARY KEY, name TEXT NOT NULL, checksum TEXT NOT NULL, applied_at TEXT NOT NULL);
+     CREATE TABLE schema_registry_manifest
+     (schema_id TEXT PRIMARY KEY, semantic_version TEXT NOT NULL, resource_path TEXT NOT NULL,
+      sha256 TEXT NOT NULL CHECK (length(sha256) = 64), enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)));
+     CREATE TABLE sample (value TEXT);\n`,
     'utf8',
   );
   if (includeSecond) {
@@ -56,7 +64,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
       managedRoot: path.join(await createRoot(), 'managed'),
       migrationDirectory: MIGRATION_DIRECTORY,
     });
-    const service = new StartupService(adapter);
+    const service = new StartupService(adapter, SUCCESSFUL_SCHEMA_STARTUP);
 
     const status = await service.start();
 
@@ -68,6 +76,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
         'MIGRATION',
         'DATABASE_AUDIT',
         'RECOVERY_GATE',
+        'SCHEMA_REGISTRY',
       ],
       errorCode: null,
       state: 'READY',
@@ -86,7 +95,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
       managedRoot: path.join(root, 'managed'),
       migrationDirectory: MIGRATION_DIRECTORY,
     });
-    const service = new StartupService(adapter);
+    const service = new StartupService(adapter, SUCCESSFUL_SCHEMA_STARTUP);
 
     const status = await service.start();
 
@@ -112,6 +121,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
         managedRoot,
         migrationDirectory,
       }),
+      SUCCESSFUL_SCHEMA_STARTUP,
     );
     expect((await initialService.start()).state).toBe('READY');
     initialService.close();
@@ -124,6 +134,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
         managedRoot,
         migrationDirectory,
       }),
+      SUCCESSFUL_SCHEMA_STARTUP,
     );
     expect((await upgradeService.start()).state).toBe('READY');
     upgradeService.close();
@@ -136,6 +147,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
         managedRoot,
         migrationDirectory,
       }),
+      SUCCESSFUL_SCHEMA_STARTUP,
     );
     const fault = await restoreService.start();
     expect(fault).toMatchObject({
@@ -157,6 +169,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
         'MIGRATION',
         'DATABASE_AUDIT',
         'RECOVERY_GATE',
+        'SCHEMA_REGISTRY',
       ],
       errorCode: null,
       state: 'READY',
@@ -224,6 +237,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
         managedRoot,
         migrationDirectory: MIGRATION_DIRECTORY,
       }),
+      SUCCESSFUL_SCHEMA_STARTUP,
     );
     const initialFault = await service.start();
     expect(initialFault.errorCode).toBe('DATABASE_INVARIANT_FAILED');
@@ -281,6 +295,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
           },
         },
       }),
+      SUCCESSFUL_SCHEMA_STARTUP,
     );
     const initialFault = await service.start();
     expect(initialFault.state).toBe('READ_ONLY_FAULT');

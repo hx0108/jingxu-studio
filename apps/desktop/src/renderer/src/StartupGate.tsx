@@ -24,6 +24,7 @@ export const StartupGate = ({
   transportFailed = false,
 }: StartupGateProps) => {
   if (status.state === 'READY') return <ReadyWorkspace />;
+  const isSchemaPhase = status.currentPhase === 'SCHEMA_REGISTRY';
 
   if (transportFailed) {
     return (
@@ -43,7 +44,7 @@ export const StartupGate = ({
       <main className="workspace-shell">
         <section className="status-card" aria-live="polite">
           <p className="eyebrow">STARTUP CHECK</p>
-          <h1>正在检查本地数据库</h1>
+          <h1>{isSchemaPhase ? '正在检查内置 Schema 契约' : '正在检查本地数据库'}</h1>
           <p>当前阶段：{status.currentPhase ?? 'DATABASE_OPEN'}</p>
           <p>检查完成前不会开放写入或正常工作区。</p>
         </section>
@@ -57,7 +58,7 @@ export const StartupGate = ({
     <main className="workspace-shell fault-shell">
       <section className="status-card fault-card" aria-labelledby="fault-title">
         <p className="eyebrow">READ-ONLY STARTUP FAULT</p>
-        <h1 id="fault-title">数据库只读故障</h1>
+        <h1 id="fault-title">{isSchemaPhase ? 'Schema 契约只读故障' : '数据库只读故障'}</h1>
         <dl className="fault-details">
           <div>
             <dt>错误码</dt>
@@ -75,30 +76,34 @@ export const StartupGate = ({
           </button>
           {!retryAllowed && <p className="action-hint">当前故障不能直接重试。</p>}
         </div>
-        <div className="backup-list">
-          <h2>可用受管理备份</h2>
-          {status.backups.length === 0 ? (
-            <p>没有通过验证的备份，恢复操作不可用。</p>
-          ) : (
-            status.backups.map((backup) => (
-              <article className="backup-card" key={backup.backupId}>
-                <div>
-                  <strong>{backup.summary}</strong>
-                  <small>{new Date(backup.createdAt).toLocaleString('zh-CN')}</small>
-                </div>
-                <button
-                  disabled={!restoreAllowed || pendingAction}
-                  onClick={() => {
-                    onRestore(backup.backupId);
-                  }}
-                  type="button"
-                >
-                  从此备份恢复
-                </button>
-              </article>
-            ))
-          )}
-        </div>
+        {isSchemaPhase ? (
+          <p className="action-hint">Schema 契约故障不能通过数据库备份恢复。</p>
+        ) : (
+          <div className="backup-list">
+            <h2>可用受管理备份</h2>
+            {status.backups.length === 0 ? (
+              <p>没有通过验证的备份，恢复操作不可用。</p>
+            ) : (
+              status.backups.map((backup) => (
+                <article className="backup-card" key={backup.backupId}>
+                  <div>
+                    <strong>{backup.summary}</strong>
+                    <small>{new Date(backup.createdAt).toLocaleString('zh-CN')}</small>
+                  </div>
+                  <button
+                    disabled={!restoreAllowed || pendingAction}
+                    onClick={() => {
+                      onRestore(backup.backupId);
+                    }}
+                    type="button"
+                  >
+                    从此备份恢复
+                  </button>
+                </article>
+              ))
+            )}
+          </div>
+        )}
       </section>
     </main>
   );

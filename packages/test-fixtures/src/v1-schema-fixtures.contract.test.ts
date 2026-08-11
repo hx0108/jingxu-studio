@@ -45,6 +45,7 @@ describe('四份正式 Schema 的合法与单错误 Fixture', () => {
         await readFile(path.join(fixtureRoot, fixtureCase.fixtureName), 'utf8'),
       );
       const result = registry.validate(fixtureCase.schemaId, fixture);
+      expect(result.schemaId, fixtureCase.fixtureName).toBe(fixtureCase.schemaId);
       expect(result.valid, fixtureCase.fixtureName).toBe(fixtureCase.expectedValid);
       if (!fixtureCase.expectedValid && !result.valid) {
         expect(result.issues, fixtureCase.fixtureName).toEqual([

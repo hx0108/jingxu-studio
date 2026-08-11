@@ -1,5 +1,6 @@
 import { queryPragmaRows, type SqliteDatabase } from '../runtime/sqlite-database';
 import { normalizeNameKey } from '@jingxu/domain';
+import { mapSchemaManifestRow } from '../schema-manifest/row-mapper';
 
 export type AuditStatus = 'FAIL' | 'NOT_IMPLEMENTED_BY_CURRENT_BUILD' | 'PASS';
 
@@ -135,6 +136,23 @@ export const runDatabaseAudit = (
             OR fp.id IS NULL`,
       )
     : 0;
+  const hasSchemaManifest = hasTable(database, 'schema_registry_manifest');
+  const invalidSchemaManifestRows = hasSchemaManifest
+    ? database
+        .prepare(
+          `SELECT schema_id, semantic_version, resource_path, sha256, enabled
+           FROM schema_registry_manifest`,
+        )
+        .all()
+        .reduce((count, row) => {
+          try {
+            mapSchemaManifestRow(row);
+            return count;
+          } catch {
+            return count + 1;
+          }
+        }, 0)
+    : 1;
   const findings: AuditFinding[] = [
     {
       evidenceCount:
@@ -200,6 +218,11 @@ export const runDatabaseAudit = (
           ? 'PASS'
           : 'FAIL'
         : 'NOT_IMPLEMENTED_BY_CURRENT_BUILD',
+    },
+    {
+      evidenceCount: invalidSchemaManifestRows,
+      ruleId: 'schema-manifest.row-shape',
+      status: hasSchemaManifest && invalidSchemaManifestRows === 0 ? 'PASS' : 'FAIL',
     },
     {
       evidenceCount: 0,

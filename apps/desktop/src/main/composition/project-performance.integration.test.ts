@@ -14,6 +14,10 @@ const MIGRATION_DIRECTORY = path.resolve(
   import.meta.dirname,
   '../../../../../packages/persistence/resources/migrations',
 );
+const SCHEMA_RESOURCE_DIRECTORY = path.resolve(
+  import.meta.dirname,
+  '../../../../../packages/validation/resources/schemas/v1',
+);
 const ITERATIONS = 30;
 
 const percentile = (values: readonly number[], quantile: number): number => {
@@ -37,6 +41,7 @@ describe('Project create/update 固定环境性能证据（§9.5）', () => {
       clock: () => new Date().toISOString(),
       managedRoot,
       migrationDirectory: MIGRATION_DIRECTORY,
+      schemaResourceDirectory: SCHEMA_RESOURCE_DIRECTORY,
     });
     const unitOfWork = runtime.getProjectUnitOfWork();
     if (unitOfWork === null) throw new Error('performance runtime must be READY');

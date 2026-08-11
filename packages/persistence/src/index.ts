@@ -11,3 +11,4 @@ export * from './runtime/persistence-error';
 export * from './runtime/persistence-runtime-adapter';
 export * from './runtime/sqlite-connection';
 export * from './runtime/sqlite-runtime';
+export * from './schema-manifest/sqlite-schema-manifest-unit-of-work';

@@ -11,6 +11,72 @@ import { runDatabaseAudit } from './database-audit';
 const MIGRATION_DIRECTORY = path.resolve(import.meta.dirname, '../../resources/migrations');
 
 describe('数据库启动 audit', () => {
+  it('旧构建 manifest 与当前静态锁不同但行结构合法—执行前置审计—允许进入 Schema 替换阶段', async () => {
+    await withSqliteTestContext(async (context) => {
+      const database = new Database(path.join(context.root, 'old-manifest.sqlite'));
+      try {
+        applyMigrations(database, await loadMigrationSet(MIGRATION_DIRECTORY), context.clock);
+        database
+          .prepare(
+            `INSERT INTO schema_registry_manifest
+             (schema_id, semantic_version, resource_path, sha256, enabled)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run(
+            'https://jingxu.studio/schemas/legacy-contract/0.9.0',
+            '0.9.0',
+            'legacy-contract.schema.json',
+            'a'.repeat(64),
+            1,
+          );
+
+        const result = runDatabaseAudit(database);
+
+        expect(result.ok).toBe(true);
+        expect(result.findings).toContainEqual({
+          evidenceCount: 0,
+          ruleId: 'schema-manifest.row-shape',
+          status: 'PASS',
+        });
+      } finally {
+        database.close();
+      }
+    });
+  });
+
+  it('manifest 行 hash 或版本结构非法—执行前置审计—失败但不与当前四锁做内容相等比较', async () => {
+    await withSqliteTestContext(async (context) => {
+      const database = new Database(path.join(context.root, 'invalid-manifest.sqlite'));
+      try {
+        applyMigrations(database, await loadMigrationSet(MIGRATION_DIRECTORY), context.clock);
+        database
+          .prepare(
+            `INSERT INTO schema_registry_manifest
+             (schema_id, semantic_version, resource_path, sha256, enabled)
+             VALUES (?, ?, ?, ?, ?)`,
+          )
+          .run(
+            'https://jingxu.studio/schemas/legacy-contract/not-semver',
+            'not-semver',
+            'legacy-contract.schema.json',
+            'A'.repeat(64),
+            1,
+          );
+
+        const result = runDatabaseAudit(database);
+
+        expect(result.ok).toBe(false);
+        expect(result.findings).toContainEqual({
+          evidenceCount: 1,
+          ruleId: 'schema-manifest.row-shape',
+          status: 'FAIL',
+        });
+      } finally {
+        database.close();
+      }
+    });
+  });
+
   it('完整初始库—执行审计—确定性检查 PASS 且后续能力明确未实现', async () => {
     await withSqliteTestContext(async (context) => {
       const database = new Database(path.join(context.root, 'audit.sqlite'));

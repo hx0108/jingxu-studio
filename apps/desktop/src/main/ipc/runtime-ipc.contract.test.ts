@@ -1,9 +1,10 @@
 import type { StartupService } from '@jingxu/application';
+import type { StartupStatusDto } from '@jingxu/contracts';
 import { describe, expect, it, vi } from 'vitest';
 
 import { registerRuntimeIpc, RUNTIME_IPC_CHANNELS, type RuntimeIpcEvent } from './runtime-ipc';
 
-const readyStatus = {
+const readyStatus: StartupStatusDto = {
   allowedActions: [],
   backups: [],
   completedPhases: [
@@ -12,6 +13,7 @@ const readyStatus = {
     'MIGRATION',
     'DATABASE_AUDIT',
     'RECOVERY_GATE',
+    'SCHEMA_REGISTRY',
   ],
   currentPhase: null,
   errorCode: null,
@@ -20,16 +22,16 @@ const readyStatus = {
   state: 'READY',
   summary: null,
   writeEnabled: true,
-} as const;
+};
 
-const createHarness = () => {
+const createHarness = (status: StartupStatusDto = readyStatus) => {
   const handlers = new Map<
     string,
     (event: RuntimeIpcEvent, ...arguments_: readonly unknown[]) => Promise<unknown>
   >();
-  const getStatus = vi.fn(() => readyStatus);
-  const restoreBackup = vi.fn(() => Promise.resolve(readyStatus));
-  const retryStartup = vi.fn(() => Promise.resolve(readyStatus));
+  const getStatus = vi.fn(() => status);
+  const restoreBackup = vi.fn(() => Promise.resolve(status));
+  const retryStartup = vi.fn(() => Promise.resolve(status));
   const onStatusChanged = vi.fn();
   const service = {
     getStatus,
@@ -82,6 +84,26 @@ describe('runtime IPC Contract', () => {
     expect(serviceCalls.retryStartup).toHaveBeenCalledWith(retryCommand);
     expect(serviceCalls.restoreBackup).toHaveBeenCalledWith(restoreCommand);
     expect(onStatusChanged).toHaveBeenCalledTimes(2);
+  });
+
+  it('Schema 阶段故障—读取状态—仅透传稳定阶段、错误码与脱敏摘要', async () => {
+    const schemaFault: StartupStatusDto = {
+      allowedActions: ['RETRY'],
+      backups: [],
+      completedPhases: readyStatus.completedPhases.filter((phase) => phase !== 'SCHEMA_REGISTRY'),
+      currentPhase: 'SCHEMA_REGISTRY',
+      errorCode: 'SCHEMA_HASH_MISMATCH',
+      retryable: true,
+      revision: 3,
+      state: 'READ_ONLY_FAULT',
+      summary: 'Schema 资源完整性检查未通过，请修复资源后重试。',
+      writeEnabled: false,
+    };
+    const { handlers } = createHarness(schemaFault);
+
+    await expect(
+      handlers.get(RUNTIME_IPC_CHANNELS.getStartupStatus)?.(trustedEvent()),
+    ).resolves.toEqual(schemaFault);
   });
 
   it('非主 frame、非受信来源或多余参数—调用 runtime Host—先拒绝且不触发服务', async () => {

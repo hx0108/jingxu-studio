@@ -69,6 +69,31 @@ describe('StartupGate', () => {
     expect(markup).not.toContain('workspace-ready');
   });
 
+  it('Schema 自检失败—渲染故障页—显示阶段与稳定错误且只提供重试', () => {
+    const markup = renderToStaticMarkup(
+      <StartupGate
+        onRestore={vi.fn()}
+        onRetry={vi.fn()}
+        pendingAction={false}
+        status={status({
+          allowedActions: ['RETRY'],
+          currentPhase: 'SCHEMA_REGISTRY',
+          errorCode: 'SCHEMA_HASH_MISMATCH',
+          retryable: true,
+          state: 'READ_ONLY_FAULT',
+          summary: 'Schema 资源完整性检查未通过，请修复资源后重试。',
+        })}
+      />,
+    );
+
+    expect(markup).toContain('Schema 契约只读故障');
+    expect(markup).toContain('SCHEMA_REGISTRY');
+    expect(markup).toContain('SCHEMA_HASH_MISMATCH');
+    expect(markup).toContain('重新检查');
+    expect(markup).not.toContain('从此备份恢复');
+    expect(markup).not.toContain('workspace-ready');
+  });
+
   it('全部阶段通过—渲染页面—只显示 READY 工程基线', () => {
     const markup = renderToStaticMarkup(
       <QueryClientProvider client={createQueryClient()}>

@@ -45,8 +45,12 @@ export interface SchemaValidationIssue {
 }
 
 export type SchemaValidationResult =
-  | Readonly<{ valid: true; issues: readonly [] }>
-  | Readonly<{ valid: false; issues: readonly SchemaValidationIssue[] }>;
+  | Readonly<{ schemaId: string; valid: true; issues: readonly [] }>
+  | Readonly<{
+      schemaId: string;
+      valid: false;
+      issues: readonly SchemaValidationIssue[];
+    }>;
 
 export interface SchemaRegistry {
   readonly schemaIds: readonly V1SchemaId[];
@@ -139,9 +143,13 @@ const createPublishedRegistry = (
       }
       if (validator(value)) {
         const issues: readonly [] = Object.freeze([]);
-        return Object.freeze({ valid: true, issues });
+        return Object.freeze({ schemaId, valid: true, issues });
       }
-      return Object.freeze({ valid: false, issues: mapValidationIssues(validator.errors) });
+      return Object.freeze({
+        schemaId,
+        valid: false,
+        issues: mapValidationIssues(validator.errors),
+      });
     },
   });
 };

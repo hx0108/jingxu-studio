@@ -62,6 +62,7 @@ describe('window.jingxu 白名单 Contract', () => {
           'MIGRATION',
           'DATABASE_AUDIT',
           'RECOVERY_GATE',
+          'SCHEMA_REGISTRY',
         ],
         currentPhase: null,
         errorCode: null,
@@ -99,6 +100,32 @@ describe('window.jingxu 白名单 Contract', () => {
       [RUNTIME_IPC_CHANNELS.retryStartup, retry],
       [RUNTIME_IPC_CHANNELS.restoreBackup, restore],
     ]);
+  });
+
+  it('Main 返回 Schema 只读故障—Preload 输出校验—保留稳定阶段且不暴露资源细节', async () => {
+    const schemaFault = {
+      allowedActions: ['RETRY'],
+      backups: [],
+      completedPhases: [
+        'DATABASE_OPEN',
+        'CONNECTION_BASELINE',
+        'MIGRATION',
+        'DATABASE_AUDIT',
+        'RECOVERY_GATE',
+      ],
+      currentPhase: 'SCHEMA_REGISTRY',
+      errorCode: 'SCHEMA_HASH_MISMATCH',
+      retryable: true,
+      revision: 3,
+      state: 'READ_ONLY_FAULT',
+      summary: 'Schema 资源完整性检查未通过，请修复资源后重试。',
+      writeEnabled: false,
+    } as const;
+    const api = createJingxuApi(vi.fn(() => Promise.resolve(schemaFault)));
+
+    await expect(api.runtime.getStartupStatus()).resolves.toEqual(schemaFault);
+    expect(JSON.stringify(schemaFault)).not.toContain('C:\\');
+    expect(JSON.stringify(schemaFault)).not.toContain('schema_registry_manifest');
   });
 
   it.each(['send', 'on', 'once', 'invoke'])(

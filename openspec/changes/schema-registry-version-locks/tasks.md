@@ -25,31 +25,31 @@
 
 ## 4. Application Ports 与启动编排
 
-- [ ] 4.1 先扩展 Startup Contract 测试：新增 `SCHEMA_REGISTRY` phase 和 Design §5 的十个稳定错误码，保持 `runtime.getStartupStatus/retryStartup/restoreBackup` 方法兼容并拒绝未知字段。（R: 启动门必须包含 Schema 与关键资源自检阶段）
-- [ ] 4.2 在 Application 定义带 TSDoc 的 `SchemaResourcePort`、`SchemaRegistryPort`、`SchemaManifestUnitOfWorkPort`、事务内 `SchemaManifestRepositoryPort` 和 Schema 校验结果类型；接口不得泄漏 Buffer 可变引用、绝对路径、Ajv、Row、Statement、连接或 SQL。（Design §3、§7）
-- [ ] 4.3 先用 Fake Ports 添加 `SchemaRegistryStartupService` Unit 测试：读资源→验证/编译→UnitOfWork 内替换并读回证据→发布顺序、任一阶段失败零发布、四条证据精确提交、错误归一化和相同输入确定性。（R: 四份资源完整通过；R: 证据写入失败）
-- [ ] 4.4 实现 `SchemaRegistryStartupService`，确保文件读取/hash/编译均在事务外，证据事务成功后才原子发布 Registry；Application 不实例化 Main/Persistence Adapter。（Design §3、§7）
-- [ ] 4.5 先扩展 `StartupService` Unit 测试：Persistence 成功后执行 Schema 阶段、成功才 READY、十类失败进入 `READ_ONLY_FAULT`、Schema 故障只允许 RETRY、revision 冲突和同 requestId singleflight。（R: Schema 阶段成功/失败；R: 修复资源后幂等重试）
-- [ ] 4.6 将 Schema 启动 Port 注入 `StartupService`，保留数据库 restore 语义；Retry 从完整 Persistence 检查重新开始并重验四份 Schema，不新增通用或 `schema.*` IPC。（Design §5）
+- [x] 4.1 先扩展 Startup Contract 测试：新增 `SCHEMA_REGISTRY` phase 和 Design §5 的十个稳定错误码，保持 `runtime.getStartupStatus/retryStartup/restoreBackup` 方法兼容并拒绝未知字段。（R: 启动门必须包含 Schema 与关键资源自检阶段）
+- [x] 4.2 在 Application 定义带 TSDoc 的 `SchemaResourcePort`、`SchemaRegistryPort`、`SchemaManifestUnitOfWorkPort`、事务内 `SchemaManifestRepositoryPort` 和 Schema 校验结果类型；接口不得泄漏 Buffer 可变引用、绝对路径、Ajv、Row、Statement、连接或 SQL。（Design §3、§7）
+- [x] 4.3 先用 Fake Ports 添加 `SchemaRegistryStartupService` Unit 测试：读资源→验证/编译→UnitOfWork 内替换并读回证据→发布顺序、任一阶段失败零发布、四条证据精确提交、错误归一化和相同输入确定性。（R: 四份资源完整通过；R: 证据写入失败）
+- [x] 4.4 实现 `SchemaRegistryStartupService`，确保文件读取/hash/编译均在事务外，证据事务成功后才原子发布 Registry；Application 不实例化 Main/Persistence Adapter。（Design §3、§7）
+- [x] 4.5 先扩展 `StartupService` Unit 测试：Persistence 成功后执行 Schema 阶段、成功才 READY、十类失败进入 `READ_ONLY_FAULT`、Schema 故障只允许 RETRY、revision 冲突和同 requestId singleflight。（R: Schema 阶段成功/失败；R: 修复资源后幂等重试）
+- [x] 4.6 将 Schema 启动 Port 注入 `StartupService`，保留数据库 restore 语义；Retry 从完整 Persistence 检查重新开始并重验四份 Schema，不新增通用或 `schema.*` IPC。（Design §5）
 
 ## 5. SQLite manifest 证据
 
-- [ ] 5.1 先添加 `schema_registry_manifest` Row mapper/Repository 集成测试：空表、四条读取、坏 hash/版本/enabled 值归一化、参数绑定 SQL、无 `SELECT *`，且 Repository 外不见 Row/连接。（Design §1、§3）
-- [ ] 5.2 先添加原子替换集成测试：空表写四条、旧四条替换、额外/缺失行清理，delete/每一条 insert/读回各故障点回滚保持旧集合，无部分新证据。（R: 数据库存在旧 manifest；R: 证据写入失败）
-- [ ] 5.3 实现 `SqliteSchemaManifestUnitOfWork` 与事务内 `SqliteSchemaManifestRepository`，复用既有单写连接并由 Application 回调拥有短事务；Repository 不嵌套 commit，且不得修改 `0001_initial.sql`、`0002_project_command_receipts.sql` 或新增 migration。（Design §1、Migration Plan）
-- [ ] 5.4 添加 Schema 阶段提交后审计：事务读回的启用 manifest 必须恰好匹配当前静态清单；现有前置数据库 audit 只验证表/行结构，不得用旧 manifest 反向批准资源或在新构建替换证据前阻断启动。（Design §1；AGENTS.md §12.2）
+- [x] 5.1 先添加 `schema_registry_manifest` Row mapper/Repository 集成测试：空表、四条读取、坏 hash/版本/enabled 值归一化、参数绑定 SQL、无 `SELECT *`，且 Repository 外不见 Row/连接。（Design §1、§3）
+- [x] 5.2 先添加原子替换集成测试：空表写四条、旧四条替换、额外/缺失行清理，delete/每一条 insert/读回各故障点回滚保持旧集合，无部分新证据。（R: 数据库存在旧 manifest；R: 证据写入失败）
+- [x] 5.3 实现 `SqliteSchemaManifestUnitOfWork` 与事务内 `SqliteSchemaManifestRepository`，复用既有单写连接并由 Application 回调拥有短事务；Repository 不嵌套 commit，且不得修改 `0001_initial.sql`、`0002_project_command_receipts.sql` 或新增 migration。（Design §1、Migration Plan）
+- [x] 5.4 添加 Schema 阶段提交后审计：事务读回的启用 manifest 必须恰好匹配当前静态清单；现有前置数据库 audit 只验证表/行结构，不得用旧 manifest 反向批准资源或在新构建替换证据前阻断启动。（Design §1；AGENTS.md §12.2）
 
 ## 6. Main 资源 Adapter、Composition 与故障页
 
-- [ ] 6.1 先添加 Main `SchemaResourceAdapter` 测试：只从注入的固定目录读四个逻辑资源名，拒绝缺失、目录项、符号链接、额外文件和路径逃逸；返回值与错误不含绝对路径且 Renderer 零路径输入。（R: Registry 离线解析；Design §2、§7）
-- [ ] 6.2 实现开发态/打包态 Schema 资源目录派生和 Adapter；开发态指向受控资源副本，打包态固定 `process.resourcesPath/schemas/v1`，不接受环境变量、Renderer 或用户提供的任意路径。（Design §2、§7）
-- [ ] 6.3 扩展 Composition Root 集成测试：single-instance lock 后复用单一数据库连接，依次执行 Persistence 与 Schema 自检，成功注入唯一 Registry；Schema 故障不构造真实 ProjectService/Job/导入导出入口。（R: Schema 阶段成功/失败）
-- [ ] 6.4 把 Validation、Resource Adapter、manifest Repository 和 StartupService 在 Main Composition Root 组装；关闭应用释放资源，retry 重用安全边界但重新构建干净 Registry。（Design §3、§5）
-- [ ] 6.5 扩展 Runtime IPC/Preload Contract 与故障页组件测试：显示 `SCHEMA_REGISTRY`、稳定错误码和脱敏摘要，保留冻结逐方法 API；故障状态四个 Project Command 返回 `STARTUP_WRITE_BLOCKED`，无通用 IPC/路径/Schema 原文。（R: Schema 阶段失败；R: 故障态尝试业务写入）
+- [x] 6.1 先添加 Main `SchemaResourceAdapter` 测试：只从注入的固定目录读四个逻辑资源名，拒绝缺失、目录项、符号链接、额外文件和路径逃逸；返回值与错误不含绝对路径且 Renderer 零路径输入。（R: Registry 离线解析；Design §2、§7）
+- [x] 6.2 实现开发态/打包态 Schema 资源目录派生和 Adapter；开发态指向受控资源副本，打包态固定 `process.resourcesPath/schemas/v1`，不接受环境变量、Renderer 或用户提供的任意路径。（Design §2、§7）
+- [x] 6.3 扩展 Composition Root 集成测试：single-instance lock 后复用单一数据库连接，依次执行 Persistence 与 Schema 自检，成功注入唯一 Registry；Schema 故障不构造真实 ProjectService/Job/导入导出入口。（R: Schema 阶段成功/失败）
+- [x] 6.4 把 Validation、Resource Adapter、manifest Repository 和 StartupService 在 Main Composition Root 组装；关闭应用释放资源，retry 重用安全边界但重新构建干净 Registry。（Design §3、§5）
+- [x] 6.5 扩展 Runtime IPC/Preload Contract 与故障页组件测试：显示 `SCHEMA_REGISTRY`、稳定错误码和脱敏摘要，保留冻结逐方法 API；故障状态四个 Project Command 返回 `STARTUP_WRITE_BLOCKED`，无通用 IPC/路径/Schema 原文。（R: Schema 阶段失败；R: 故障态尝试业务写入）
 
 ## 7. Forge 资源与发布证据
 
-- [ ] 7.1 先扩展 Forge 资源测试，再配置 migrations 与 `schemas/v1` 两组 `extraResource`；断言产物路径固定、四文件 hash 匹配且零第五个启用 Schema。（R: 开发态与打包态资源一致）
+- [x] 7.1 先扩展 Forge 资源测试，再配置 migrations 与 `schemas/v1` 两组 `extraResource`；断言产物路径固定、四文件 hash 匹配且零第五个启用 Schema。（R: 开发态与打包态资源一致）
 - [ ] 7.2 扩展 Electron E2E：正常临时根显示 READY；缺失、hash 漂移或引用失败显示 Schema 只读故障；四个 Project 写命令稳定阻断；修复测试资源后同一窗口幂等 retry 恢复 READY。（R: desktop-workspace-foundation 全部新增 Scenario）
 - [ ] 7.3 扩展 packaged smoke：从 Windows x64 产物读取四资源并对账 ID/版本/hash，在断网下验证 Episode 与 Transfer Bundle 引用链，确认零网络、零外部 SQLite `.node` 和真实用户目录零访问。（R: 开发态与打包态资源一致；R: 跨 Schema 引用）
 - [ ] 7.4 更新 README、TECH_DESIGN v1.1 §3.4/§7.2/§8.4/§11/§15、Schema/SQLite trace 与发布清单，登记真实实现、十个错误码、四组 hash、manifest 证据和未实现边界；不改 PRD 或四份正式 Schema。（Proposal Impact；AGENTS.md §17）

@@ -2,6 +2,8 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
   restoreBackupCommandSchema,
+  startupErrorCodeSchema,
+  startupPhaseSchema,
   startupStatusSchema,
   type RuntimeApi,
   type StartupStatusDto,
@@ -27,6 +29,28 @@ const readyStatus: StartupStatusDto = {
 };
 
 describe('runtime IPC Contract', () => {
+  it('Schema Registry 阶段与故障—校验公开枚举—接受新增阶段和十个稳定错误码', () => {
+    expect(startupPhaseSchema.parse('SCHEMA_REGISTRY')).toBe('SCHEMA_REGISTRY');
+    expect(
+      [
+        'SCHEMA_RESOURCE_MISSING',
+        'SCHEMA_RESOURCE_INVALID_JSON',
+        'SCHEMA_HASH_MISMATCH',
+        'SCHEMA_ID_MISMATCH',
+        'SCHEMA_DRAFT_MISMATCH',
+        'SCHEMA_VERSION_MISMATCH',
+        'SCHEMA_MANIFEST_INVALID',
+        'SCHEMA_REFERENCE_UNRESOLVED',
+        'SCHEMA_COMPILE_FAILED',
+        'SCHEMA_EVIDENCE_WRITE_FAILED',
+      ].map((code) => startupErrorCodeSchema.parse(code)),
+    ).toHaveLength(10);
+  });
+
+  it('未知 Schema 故障码—校验公开枚举—拒绝未登记值', () => {
+    expect(() => startupErrorCodeSchema.parse('SCHEMA_INTERNAL_ERROR')).toThrow();
+  });
+
   it('状态为 READY—校验公开 DTO—只允许可写且不包含基础设施字段', () => {
     const parsed = startupStatusSchema.parse(readyStatus);
 

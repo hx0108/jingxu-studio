@@ -9,6 +9,10 @@ import type {
   PersistenceFailure,
   PersistenceRuntimePort,
 } from '../ports/persistence/persistence-runtime-port';
+import type {
+  SchemaRegistryCheckResult,
+  SchemaRegistryStartupPort,
+} from '../ports/schema-registry';
 import { StartupStateMachine } from './startup-state-machine';
 
 const INITIAL_STATUS: StartupStatusDto = {
@@ -27,12 +31,14 @@ const INITIAL_STATUS: StartupStatusDto = {
 export class StartupService {
   readonly #commandResults = new Map<string, Promise<StartupStatusDto>>();
   readonly #port: PersistenceRuntimePort;
+  readonly #schemaPort: SchemaRegistryStartupPort;
   readonly #stateMachine = new StartupStateMachine();
   #operationTail: Promise<void> = Promise.resolve();
   #status: StartupStatusDto = INITIAL_STATUS;
 
-  public constructor(port: PersistenceRuntimePort) {
+  public constructor(port: PersistenceRuntimePort, schemaPort: SchemaRegistryStartupPort) {
     this.#port = port;
+    this.#schemaPort = schemaPort;
   }
 
   public close(): void {
@@ -70,6 +76,7 @@ export class StartupService {
       const conflict = this.#getConflict(command.expectedRevision);
       if (conflict !== null) return conflict;
       if (this.#status.state !== 'READ_ONLY_FAULT') return this.#stateConflict();
+      if (!this.#status.allowedActions.includes('RESTORE')) return this.#stateConflict();
 
       this.#status = this.#stateMachine.transition(this.#clearFault(this.#status), 'RESTORING');
       const restoreResult = await this.#port.restoreBackup(command.backupId, command.requestId);
@@ -111,25 +118,63 @@ export class StartupService {
     };
 
     const result = await this.#port.prepare();
-    this.#applyCheckResult(result);
+    if (!result.ok) {
+      this.#applyPersistenceFailure(result);
+      return this.getStatus();
+    }
+
+    this.#status = {
+      ...this.#status,
+      backups: [...result.backups],
+      completedPhases: [...result.completedPhases],
+      currentPhase: 'SCHEMA_REGISTRY',
+    };
+
+    let schemaResult: SchemaRegistryCheckResult;
+    try {
+      schemaResult = await this.#schemaPort.prepare();
+    } catch {
+      schemaResult = {
+        failure: {
+          allowedActions: ['RETRY'],
+          errorCode: 'SCHEMA_COMPILE_FAILED',
+          phase: 'SCHEMA_REGISTRY',
+          retryable: true,
+          summary: 'Schema 启动检查未完成，请重试。',
+        },
+        ok: false,
+      };
+    }
+    this.#applySchemaResult(schemaResult);
     return this.getStatus();
   }
 
-  #applyCheckResult(result: PersistenceCheckResult): void {
-    if (result.ok) {
-      this.#status = this.#stateMachine.transition(
-        {
-          ...this.#status,
-          backups: [...result.backups],
-          completedPhases: [...result.completedPhases],
-          currentPhase: null,
-        },
-        'READY',
-      );
+  #applyPersistenceFailure(result: Extract<PersistenceCheckResult, { ok: false }>): void {
+    this.#status = this.#toFault(this.#status, result.failure, result.completedPhases);
+  }
+
+  #applySchemaResult(result: SchemaRegistryCheckResult): void {
+    if (!result.ok) {
+      const fault = this.#stateMachine.transition(this.#status, 'READ_ONLY_FAULT');
+      this.#status = {
+        ...fault,
+        allowedActions: [...result.failure.allowedActions],
+        currentPhase: result.failure.phase,
+        errorCode: result.failure.errorCode,
+        retryable: result.failure.retryable,
+        summary: result.failure.summary,
+      };
       return;
     }
 
-    this.#status = this.#toFault(this.#status, result.failure, result.completedPhases);
+    this.#status = this.#stateMachine.transition(
+      {
+        ...this.#status,
+        completedPhases: [...this.#status.completedPhases, 'SCHEMA_REGISTRY'],
+        currentPhase: null,
+      },
+      'READY',
+    );
   }
 
   #toFault(

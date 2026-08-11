@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -12,6 +12,10 @@ import { createProjectFeatureRegistration } from './register-project-features';
 const MIGRATION_DIRECTORY = path.resolve(
   import.meta.dirname,
   '../../../../../packages/persistence/resources/migrations',
+);
+const SCHEMA_RESOURCE_DIRECTORY = path.resolve(
+  import.meta.dirname,
+  '../../../../../packages/validation/resources/schemas/v1',
 );
 const TRUSTED_URL = 'jingxu://app/index.html';
 const FIXED_TIME = '2026-08-10T00:00:00.000Z';
@@ -41,6 +45,7 @@ describe('Project Composition Root', () => {
         clock: () => FIXED_TIME,
         managedRoot,
         migrationDirectory: MIGRATION_DIRECTORY,
+        schemaResourceDirectory: SCHEMA_RESOURCE_DIRECTORY,
         sqliteConnectionOptions: { beforePragma },
       });
       const registration = createProjectFeatureRegistration({
@@ -77,11 +82,11 @@ describe('Project Composition Root', () => {
     }
   });
 
-  it('启动故障—注册安全边界但不构造可写能力—四个 Command 返回稳定写门错误', async () => {
+  it('Schema 启动故障—注册安全边界但不构造可写能力—四个 Command 返回稳定写门错误', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-project-fault-composition-'));
     const managedRoot = path.join(root, 'managed');
-    await mkdir(path.join(managedRoot, 'data'), { recursive: true });
-    await writeFile(path.join(managedRoot, 'data', 'jingxu.sqlite'), 'corrupt');
+    const emptySchemaDirectory = path.join(root, 'empty-schemas');
+    await mkdir(emptySchemaDirectory);
     const handlers = new Map<string, ProjectHandler>();
     const handle = vi.fn((channel: string, listener: ProjectHandler) => {
       handlers.set(channel, listener);
@@ -92,6 +97,7 @@ describe('Project Composition Root', () => {
         clock: () => FIXED_TIME,
         managedRoot,
         migrationDirectory: MIGRATION_DIRECTORY,
+        schemaResourceDirectory: emptySchemaDirectory,
       });
       const registration = createProjectFeatureRegistration({
         ipcRegistrar: { handle },
@@ -101,10 +107,12 @@ describe('Project Composition Root', () => {
       });
 
       expect(runtime.startupService.getStatus()).toMatchObject({
+        currentPhase: 'SCHEMA_REGISTRY',
+        errorCode: 'SCHEMA_RESOURCE_MISSING',
         state: 'READ_ONLY_FAULT',
         writeEnabled: false,
       });
-      expect(runtime.getProjectUnitOfWork()).toBeNull();
+      expect(runtime.getProjectUnitOfWork()).not.toBeNull();
       expect(registration.ensureRegistered()).toBe(false);
       expect(handle).toHaveBeenCalledTimes(6);
 
