@@ -220,6 +220,7 @@ describe('V1 Schema Registry 确定性校验', () => {
     const before = structuredClone(input);
 
     expect(registry.validate(V1_SCHEMA_IDS.scriptStageOutput, input)).toEqual({
+      schemaId: V1_SCHEMA_IDS.scriptStageOutput,
       valid: true,
       issues: [],
     });

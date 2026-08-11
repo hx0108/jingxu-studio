@@ -16,4 +16,6 @@
 
 当前 Project 切片已实现 `projects`、`format_profiles`、`audit_events`、`analytics_events` 和 `command_receipts` 的 Repository/UnitOfWork 访问：创建在单一事务提交五类证据，更新保留 FormatProfile parent/version/current 链，删除与恢复只改变 Project 聚合，失败回滚零部分写入。对应证据位于 `sqlite-project-read.integration.test.ts`、`sqlite-project-list.integration.test.ts`、`sqlite-project-write.integration.test.ts`、`database-audit.integration.test.ts` 和 Main Composition Integration。
 
-其余 DDL 仍只是后续 Change 的存储基线：SourceInput、Consent、Episode、Schema Registry、JobRunner、导入导出和评测业务方法尚未实现。表存在、`integrity_check` 通过或 invariant 标记存在都不能替代对应业务验收；AC-V1-01 尚未完成。
+Schema Registry 切片已实现 `schema_registry_manifest` Row mapper、事务内 Repository 和复用唯一写连接的 UnitOfWork。前置 `database-audit` 只拒绝结构非法行并允许合法旧集合进入替换阶段；Application 在资源全部验证和编译成功后短事务精确替换四条启用记录、事务内读回逐字段对账，删除/四个插入点/读回故障均回滚且不发布 Registry。对应证据位于 `sqlite-schema-manifest.integration.test.ts`、`schema-manifest-runtime.integration.test.ts`、`database-audit.integration.test.ts` 和 Main Composition Integration；没有修改 0001/0002，也没有新增 migration。
+
+其余 DDL 仍只是后续 Change 的存储基线：SourceInput、Consent、Episode/集合校验、JobRunner、导入导出和评测业务方法尚未实现。表存在、`integrity_check` 通过或 Registry 已发布都不能替代对应业务验收；AC-V1-01 尚未完成。

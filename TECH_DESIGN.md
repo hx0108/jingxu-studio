@@ -146,7 +146,7 @@ flowchart LR
 | ImportExportService | UTF-8 `.txt/.md` 输入、JSON staging 导入、Markdown/JSON 可恢复导出与启动对账 |
 | AuditService | 审计事件、哈希、错误证据和本地分析事件 |
 
-### 3.4 当前实现快照（2026-08-10）
+### 3.4 当前实现快照（2026-08-11）
 
 本节记录当前代码事实，不改变 3.3 的 V1 目标架构，也不把后续规划描述为已实现。
 
@@ -156,9 +156,9 @@ flowchart LR
 | Persistence | SQLite Project/FormatProfile/Audit/Analytics/CommandReceipt Repository、单连接 `BEGIN IMMEDIATE` UnitOfWork、Row mapper 错误归一化和 Project invariant audit 已实现 | SourceInput、Consent、Episode、脚本、StoryBible、Job、分镜、导入导出和评测表尚无业务 Repository/UnitOfWork 用例 |
 | Main/Preload | Composition Root 只在启动 `READY/writeEnabled=true` 后注入目录 Adapter、ProjectUnitOfWork 和 ProjectService；`project.list/get/create/update/delete/restore` 六个 IPC 已完成 sender、strict Zod DTO、AppResult 输出和启动写门校验；Preload 逐方法暴露 | `source`、`consent`、`script`、`job`、`storyboard`、`provider` 等命名空间尚未实现 |
 | Renderer | Project 列表/真实空态/筛选空态/回收站、创建与设置、详情与 FormatProfile 历史、软删除恢复、错误提示和 dirty 离开保护已实现；剧本和分镜入口保持可见禁用 | 剧本、分镜、Episode、Provider 和导入导出页面没有业务入口，不生成伪造数据 |
-| AI/契约 | 四份 PRD-owned Schema 继续作为上位机器契约文件保留 | 离线 Schema Registry、EpisodeValidator、JobRunner、Qwen Adapter、真实模型调用均未实现；AC-V1-01 尚未完成 |
+| AI/契约 | 四份 PRD-owned Schema 已复制到受控资源目录并由离线 Registry 核对 `$id`、Draft、版本、SHA-256 和 `$ref` 闭包；manifest 短事务提交后才发布四个校验器，开发态与 Windows x64 产物共用同一锁清单 | EpisodeValidator、业务版本写入、JobRunner、Qwen Adapter 和真实模型调用均未实现；AC-V1-01 尚未完成 |
 
-当前测试证据分布为：Domain/Application Unit、Project DTO 与 IPC/Preload Contract、SQLite Repository/UnitOfWork/Migration/Composition Integration、Renderer Unit。Electron Project E2E、Windows x64 完整打包 smoke、性能证据与 OpenSpec Verify 必须以 `project-format-profile-management` 的最终门禁运行结果为准，不能用分层测试通过提前替代。
+当前测试证据分布为：Domain/Application Unit、Project 与 Runtime DTO/IPC/Preload Contract、SQLite Repository/UnitOfWork/Migration/Composition Integration、Renderer Unit、Electron Project/Schema 故障 E2E，以及 Windows x64 Schema/Project packaged smoke。OpenSpec Verify 和 AC-V1-01 至 AC-V1-06 仍必须以各自 Change 的最终门禁结果为准，不能用当前基础切片替代。
 
 ---
 
@@ -584,6 +584,17 @@ IPC DTO 校验
 
 启动时校验 `$id`、Schema 版本、Draft、文件 SHA-256 和相互 `$ref`；任一不一致则进入只读故障页，不能继续生成或导入。运行时禁止为解析 `$ref` 请求 `jingxu.studio`。
 
+当前实现的四组小写 SHA-256 为：
+
+| 资源 | SHA-256 |
+|---|---|
+| `ScriptStageOutput.schema.json` | `128e7a49e1d5829c4b0c9cf89fc5e6fd883746f022e9759c157f70176309971f` |
+| `ShotContract.schema.json` | `3fa77aa85152ad2500fcc1c07da5bec697da8810c572d1c378b0bf432f437e4b` |
+| `EpisodeStoryboardExport.schema.json` | `55238d1958aae25341d137192cf544946b9d8b8767648a98a3956e01798fcb13` |
+| `ProjectTransferBundle.schema.json` | `9736ee2421fa8b8febe683c6e41e3cae47665df5d7afe85592a25e4fa4fbabbb` |
+
+启动顺序固定为 Persistence 自检成功后进入 `SCHEMA_REGISTRY`：Main 从受控目录读取恰好四个普通文件，Validation 在事务外构建干净 Registry，Application 在 `BEGIN IMMEDIATE` 中精确替换并读回 manifest，提交后一次发布。失败保持 Registry 未发布、Project 写门关闭且仅允许 `RETRY`。稳定错误码为 `SCHEMA_RESOURCE_MISSING`、`SCHEMA_RESOURCE_INVALID_JSON`、`SCHEMA_HASH_MISMATCH`、`SCHEMA_ID_MISMATCH`、`SCHEMA_DRAFT_MISMATCH`、`SCHEMA_VERSION_MISMATCH`、`SCHEMA_MANIFEST_INVALID`、`SCHEMA_REFERENCE_UNRESOLVED`、`SCHEMA_COMPILE_FAILED` 和 `SCHEMA_EVIDENCE_WRITE_FAILED`。
+
 #### 7.2.1 契约归属与版本治理
 
 | 归属 | 契约/交付物 | 变更规则 |
@@ -698,6 +709,8 @@ erDiagram
 | `reference_price_snapshots` | `id PK, price_version UNIQUE, provider, model, region, capability_type, billing_unit, currency, price_range_json, effective_at, expires_at, source_url, sha256, enabled` | 与 Provider 凭据/Profile 无关，随包发布；V1 Shot 只引用 `SHOT_PACKAGE + PER_SHOT` 整镜打包行 |
 | `prompt_templates` | `id PK, stage, version, template_text, sha256, active, created_at` | `(stage, version)` 唯一；发布构建内置且不可静默改写 |
 | `command_receipts` | `request_id PK, command_name, payload_sha256, project_id FK NULL, result_ref_json, trace_id, committed_at` | 由 `0002_project_command_receipts.sql` 追加；通用写命令幂等回执。合法 command 枚举、64 位小写 hex `payload_sha256`、`json_valid(result_ref_json)`、可空 Project 外键；`result_ref_json` 只存安全 ID/revision，不存名称、genre/style、目录或完整命令载荷 |
+
+`schema_registry_manifest` 的静态锁清单是期望事实源，SQLite 行只是本构建成功核验的本地证据。前置数据库 audit 只检查表与行结构，不能用旧 manifest 批准资源；Schema 阶段通过同一写连接短事务删除旧集合、写入四条启用记录并读回逐字段对账，任一故障回滚且不发布 Registry。
 
 #### 8.4.2 项目、输入与版本内容
 
@@ -1105,6 +1118,8 @@ interface AppError {
 
 Renderer 不接收 SQL、文件系统堆栈、请求 Authorization header、API Key 或未脱敏 Provider 原始错误。
 
+`StartupStatusDto.currentPhase` 已包含 `SCHEMA_REGISTRY`，上述十个 `SCHEMA_*` 错误通过既有三方法 Runtime API 返回，不新增 `schema.*` 或通用 IPC。Schema 故障的 `allowedActions` 仅为 `RETRY`；数据库恢复语义保持不变。
+
 ---
 
 ## 12. 导入、导出与文件一致性
@@ -1299,6 +1314,7 @@ user_operation_id
 | JSON 上限 | 输入 30,000 字符；单 Episode 最多 20 个 Shot；IPC 载荷超过 2 MB 改为文件/分页读取 |
 | 历史版本 | 每对象至少 100 个；不自动删除，达到软阈值只提示导出/清理 |
 | SQLite | 单写连接；WAL；短事务；读查询分页 |
+| Schema 启动 | 固定四资源离线读取、hash 与 Ajv 编译均在事务外；manifest 仅使用短事务，零网络 |
 
 若未来需要云同步或多人协作，应重新设计身份、冲突解决和服务端数据库，不能直接把本地 SQLite 文件共享到网络盘。
 
@@ -1360,8 +1376,9 @@ PRAGMA foreign_key_check;
 
 - Windows x64 安装包与 portable 测试包。
 - 应用代码签名在公开分发前完成；受控试用至少提供 SHA-256。
-- 四份 PRD-owned Schema、Prompt 模板、静态 ProviderCapabilitySnapshot 与 ReferencePriceSnapshot 随包发布并进入 manifest。
+- 四份 PRD-owned Schema 当前已固定发布到 `resources/schemas/v1` 并进入 `schema_registry_manifest`；Prompt 模板、静态 ProviderCapabilitySnapshot 与 ReferencePriceSnapshot 仍在后续 Change 接入。
 - 构建必须可从 lockfile 重现；CI 检查依赖漏洞、许可证和 Schema checksum。
+- Windows x64 smoke 必须逐文件对账四组 hash、离线编译 Episode→Shot 与 Transfer→Script 引用链、核对 manifest 四行、确认外部 SQLite `.node` 为零且不访问真实用户数据根。若使用本地 Electron ZIP，构建时通过 `JINGXU_ELECTRON_ZIP_DIR` 指向已校验目录，不进入产品运行时配置。
 
 ### 18.2 部署模式开关
 

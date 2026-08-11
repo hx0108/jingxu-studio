@@ -50,13 +50,13 @@
 ## 7. Forge 资源与发布证据
 
 - [x] 7.1 先扩展 Forge 资源测试，再配置 migrations 与 `schemas/v1` 两组 `extraResource`；断言产物路径固定、四文件 hash 匹配且零第五个启用 Schema。（R: 开发态与打包态资源一致）
-- [ ] 7.2 扩展 Electron E2E：正常临时根显示 READY；缺失、hash 漂移或引用失败显示 Schema 只读故障；四个 Project 写命令稳定阻断；修复测试资源后同一窗口幂等 retry 恢复 READY。（R: desktop-workspace-foundation 全部新增 Scenario）
-- [ ] 7.3 扩展 packaged smoke：从 Windows x64 产物读取四资源并对账 ID/版本/hash，在断网下验证 Episode 与 Transfer Bundle 引用链，确认零网络、零外部 SQLite `.node` 和真实用户目录零访问。（R: 开发态与打包态资源一致；R: 跨 Schema 引用）
-- [ ] 7.4 更新 README、TECH_DESIGN v1.1 §3.4/§7.2/§8.4/§11/§15、Schema/SQLite trace 与发布清单，登记真实实现、十个错误码、四组 hash、manifest 证据和未实现边界；不改 PRD 或四份正式 Schema。（Proposal Impact；AGENTS.md §17）
+- [x] 7.2 扩展 Electron E2E：正常临时根显示 READY；缺失、hash 漂移或引用失败显示 Schema 只读故障；四个 Project 写命令稳定阻断；修复测试资源后同一窗口幂等 retry 恢复 READY。（R: desktop-workspace-foundation 全部新增 Scenario）
+- [x] 7.3 扩展 packaged smoke：从 Windows x64 产物读取四资源并对账 ID/版本/hash，在断网下验证 Episode 与 Transfer Bundle 引用链，确认零网络、零外部 SQLite `.node` 和真实用户目录零访问。（R: 开发态与打包态资源一致；R: 跨 Schema 引用）
+- [x] 7.4 更新 README、TECH_DESIGN v1.1 §3.4/§7.2/§8.4/§11/§15、Schema/SQLite trace 与发布清单，登记真实实现、十个错误码、四组 hash、manifest 证据和未实现边界；不改 PRD 或四份正式 Schema。（Proposal Impact；AGENTS.md §17）
 
 ## 8. 完整验证与 OpenSpec 收口
 
-- [ ] 8.1 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:collection` 和 `pnpm test:e2e`，记录实际通过/失败数量及网络守卫证据。（AGENTS.md §15、§18）
-- [ ] 8.2 从干净 `.vite/out` 使用已校验 Electron 缓存运行 `pnpm package:win` 与 packaged smoke，记录四 Schema、两个外部引用链、manifest、零网络和用户目录隔离证据。（Design §6、Migration Plan）
-- [ ] 8.3 运行 `openspec validate schema-registry-version-locks --strict` 并使用 `$openspec-verify-change` 映射全部 Requirement/Scenario 到代码、Fixture 和测试；阻断问题清零后才可 Sync/Archive。（OpenSpec archive guidance）
-- [ ] 8.4 最终 diff 证明四份根 Schema、`0001_initial.sql`、`0002_project_command_receipts.sql` 字节未变，未引入 EpisodeValidator 集合规则、导入导出、JobRunner、Qwen、剧本、分镜或 V2/V3 能力。（Proposal Non-Goals）
+- [x] 8.1 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:collection` 和 `pnpm test:e2e`，记录实际通过/失败数量及网络守卫证据。（AGENTS.md §15、§18）
+- [x] 8.2 从干净 `.vite/out` 使用已校验 Electron 缓存运行 `pnpm package:win` 与 packaged smoke，记录四 Schema、两个外部引用链、manifest、零网络和用户目录隔离证据。（Design §6、Migration Plan）
+- [x] 8.3 运行 `openspec validate schema-registry-version-locks --strict` 并使用 `$openspec-verify-change` 映射全部 Requirement/Scenario 到代码、Fixture 和测试；阻断问题清零后才可 Sync/Archive。（OpenSpec archive guidance）
+- [x] 8.4 最终 diff 证明四份根 Schema、`0001_initial.sql`、`0002_project_command_receipts.sql` 字节未变，未引入 EpisodeValidator 集合规则、导入导出、JobRunner、Qwen、剧本、分镜或 V2/V3 能力。（Proposal Non-Goals）

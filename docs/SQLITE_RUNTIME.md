@@ -22,7 +22,7 @@
 
 `sqlite-migration-runtime` Change 建立了 SQLite 运行时、migration、备份、自检和恢复。后续 `project-format-profile-management` 已在该运行时上实现 Project/FormatProfile Repository、ProjectUnitOfWork 和 ProjectService，但没有改变启动写入门、备份或恢复的安全语义。
 
-当前仍未实现 SourceInput、Consent、Episode、Schema Registry、JobRunner、Provider、剧本或分镜业务用例。DDL 中存在相应表不代表这些能力可调用或已通过验收。
+后续 `schema-registry-version-locks` 已在同一 SQLite 运行时上实现离线 Schema Registry 启动门和 manifest 成功证据。当前仍未实现 SourceInput、Consent、EpisodeValidator、JobRunner、Provider、剧本或分镜业务用例；DDL 中存在相应表不代表这些能力可调用或已通过验收。
 
 ## 启动写入门
 
@@ -33,8 +33,9 @@
 3. `MIGRATION`
 4. `DATABASE_AUDIT`
 5. `RECOVERY_GATE`
+6. `SCHEMA_REGISTRY`
 
-只有五个阶段全部通过才进入 `READY` 并开放全局写入。任一失败都会关闭连接、返回稳定错误码和脱敏摘要，并保持 `READ_ONLY_FAULT`；原始 SQLite 错误、SQL、绝对路径和堆栈不会进入公开 DTO。
+只有六个阶段全部通过才进入 `READY` 并开放全局写入。Persistence 阶段失败会关闭连接；Schema 阶段失败会保持已审计连接供幂等重试复用，但不构造 ProjectService、不发布 Registry且全局写门保持关闭。两类失败都只返回稳定错误码和脱敏摘要；原始 SQLite/Ajv 错误、SQL、绝对路径、Schema 原文和堆栈不会进入公开 DTO。
 
 ## 升级备份
 
@@ -45,7 +46,7 @@
 
 ## 自检与恢复
 
-- 当前构建执行 `integrity_check`、`foreign_key_check`、Shot/Episode current pointer 所有权检查；依赖后续 Schema Registry 或业务服务的规则明确标记为 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`，不冒充已验证。
+- 当前构建执行 `integrity_check`、`foreign_key_check`、Shot/Episode current pointer 所有权检查和 manifest 行结构检查；依赖后续业务版本服务的规则明确标记为 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`，不冒充已验证。
 - 恢复只接受 Main 已登记的 opaque backup id，不接受 Renderer 提交的文件路径。
 - 替换前优先生成当前库的 online diagnostic snapshot，并在关闭连接后保留数据库、WAL、SHM 原始证据和 operation manifest。
 - 备份通过临时文件与可回退 rename 替换；随后从数据库打开阶段重跑完整自检。重新打开或任一自检失败统一返回 `DATABASE_RESTORE_FAILED`，继续保持只读故障。
@@ -53,8 +54,15 @@
 
 ## Project 持久化扩展
 
-- `DesktopPersistenceRuntime.getProjectUnitOfWork()` 只在启动状态 `READY` 且写连接可用时返回 SQLite ProjectUnitOfWork；只读故障状态不构造可写 Project 入口。
+- Persistence Adapter 在数据库阶段通过后可持有 SQLite ProjectUnitOfWork；Main Composition Root 仍只在全局状态 `READY/writeEnabled=true` 后构造 ProjectService。Schema 故障即使连接可用也只注册 gate-only Project IPC，四个写命令返回 `STARTUP_WRITE_BLOCKED`。
 - Project 写命令由 Application 层持有事务边界。Project、FormatProfile current/version、审计、本地分析事件和 `command_receipts` 在同一 `BEGIN IMMEDIATE` 中提交，Repository 不自行嵌套 commit。
 - 项目目录准备发生在数据库事务外；创建失败时只清理由本次操作创建且仍为空的受管理目录，不递归删除预存或非空目录。
 - `command_receipts` 支持 CREATE/UPDATE/DELETE/RESTORE 的安全幂等回放；相同 requestId 绑定不同命令或 payload hash 时返回稳定冲突，不重复审计或业务写入。
-- 启动 invariant audit 已检查 Project current FormatProfile、版本父链/版本号、活动名称规范化冲突和 receipt 安全引用；依赖 StoryBible、Schema Registry 或后续业务服务的规则继续标记为 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`。
+- 启动 invariant audit 已检查 Project current FormatProfile、版本父链/版本号、活动名称规范化冲突、receipt 安全引用和 manifest 行结构；依赖 StoryBible 或后续业务服务的规则继续标记为 `NOT_IMPLEMENTED_BY_CURRENT_BUILD`。
+
+## Schema manifest 成功证据
+
+- `V1_SCHEMA_LOCKS` 是四份资源的期望事实源；数据库旧行不能批准包内资源。
+- 文件读取、SHA-256、身份、版本、引用闭包和 Ajv 编译发生在事务外。全部成功后，`SqliteSchemaManifestUnitOfWork` 在同一写连接执行短 `BEGIN IMMEDIATE`，精确替换 `schema_registry_manifest` 并读回对账。
+- 删除、任一插入或读回故障都会回滚旧集合且保持 Registry 未发布；前置数据库 audit 不因合法旧 manifest 与新构建不同而提前阻断替换。
+- Windows x64 packaged smoke 从 `resources/schemas/v1` 读取恰好四个普通文件，验证 Episode→Shot 与 Transfer→Script 引用链、manifest 四行、零外部 `.node` 和真实用户数据根零访问。

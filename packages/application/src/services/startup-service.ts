@@ -76,7 +76,7 @@ export class StartupService {
       const conflict = this.#getConflict(command.expectedRevision);
       if (conflict !== null) return conflict;
       if (this.#status.state !== 'READ_ONLY_FAULT') return this.#stateConflict();
-      if (!this.#status.allowedActions.includes('RESTORE')) return this.#stateConflict();
+      if (this.#status.currentPhase === 'SCHEMA_REGISTRY') return this.#stateConflict();
 
       this.#status = this.#stateMachine.transition(this.#clearFault(this.#status), 'RESTORING');
       const restoreResult = await this.#port.restoreBackup(command.backupId, command.requestId);

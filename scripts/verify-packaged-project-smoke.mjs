@@ -5,6 +5,8 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { _electron as electron } from '@playwright/test';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 
 const workspaceRoot = path.resolve(import.meta.dirname, '..');
 const defaultExecutable = path.join(
@@ -19,7 +21,35 @@ const executablePath = path.resolve(process.argv[2] ?? defaultExecutable);
 const packageRoot = path.dirname(executablePath);
 const resourcesRoot = path.join(packageRoot, 'resources');
 const migrationRoot = path.join(resourcesRoot, 'migrations');
+const schemaRoot = path.join(resourcesRoot, 'schemas', 'v1');
+const fixtureRoot = path.join(workspaceRoot, 'packages', 'test-fixtures', 'src', 'fixtures', 'v1');
 const fixedTime = '2026-08-10T00:00:00.000Z';
+const schemaLocks = [
+  {
+    resourceName: 'ScriptStageOutput.schema.json',
+    schemaId: 'https://jingxu.studio/schemas/script-stage-output/1.0.0',
+    semanticVersion: '1.0.0',
+    sha256: '128e7a49e1d5829c4b0c9cf89fc5e6fd883746f022e9759c157f70176309971f',
+  },
+  {
+    resourceName: 'ShotContract.schema.json',
+    schemaId: 'https://jingxu.studio/schemas/shot-contract/1.1.0',
+    semanticVersion: '1.1.0',
+    sha256: '3fa77aa85152ad2500fcc1c07da5bec697da8810c572d1c378b0bf432f437e4b',
+  },
+  {
+    resourceName: 'EpisodeStoryboardExport.schema.json',
+    schemaId: 'https://jingxu.studio/schemas/episode-storyboard-export/1.1.0',
+    semanticVersion: '1.1.0',
+    sha256: '55238d1958aae25341d137192cf544946b9d8b8767648a98a3956e01798fcb13',
+  },
+  {
+    resourceName: 'ProjectTransferBundle.schema.json',
+    schemaId: 'https://jingxu.studio/schemas/project-transfer-bundle/1.0.0',
+    semanticVersion: '1.0.0',
+    sha256: '9736ee2421fa8b8febe683c6e41e3cae47665df5d7afe85592a25e4fa4fbabbb',
+  },
+];
 
 const listFiles = async (root) => {
   const found = [];
@@ -58,6 +88,57 @@ if (!migrationOne.includes(Buffer.from('CREATE TABLE projects'))) {
 }
 if (!migrationTwo.includes(Buffer.from('CREATE TABLE command_receipts'))) {
   throw new Error('PACKAGED_MIGRATION_0002_INVALID');
+}
+const schemaEntries = await readdir(schemaRoot, { withFileTypes: true });
+if (
+  schemaEntries.some((entry) => !entry.isFile() || entry.isSymbolicLink()) ||
+  JSON.stringify(schemaEntries.map((entry) => entry.name).sort()) !==
+    JSON.stringify(schemaLocks.map((lock) => lock.resourceName).sort())
+) {
+  throw new Error('PACKAGED_SCHEMA_RESOURCE_SET_INVALID');
+}
+const schemaDocuments = [];
+for (const lock of schemaLocks) {
+  const bytes = await readFile(path.join(schemaRoot, lock.resourceName));
+  const document = JSON.parse(bytes.toString('utf8'));
+  if (
+    sha256(bytes) !== lock.sha256 ||
+    document.$id !== lock.schemaId ||
+    document.$schema !== 'https://json-schema.org/draft/2020-12/schema' ||
+    document.properties?.schema_version?.const !== lock.semanticVersion
+  ) {
+    throw new Error(`PACKAGED_SCHEMA_LOCK_MISMATCH:${lock.resourceName}`);
+  }
+  schemaDocuments.push(document);
+}
+const ajv = new Ajv2020({
+  allErrors: true,
+  coerceTypes: false,
+  removeAdditional: false,
+  strict: true,
+  strictTypes: false,
+  useDefaults: false,
+  validateFormats: true,
+});
+addFormats(ajv);
+for (const [index, document] of schemaDocuments.entries()) {
+  ajv.addSchema(document, schemaLocks[index].schemaId);
+}
+for (const [schemaId, fixtureName] of [
+  [
+    'https://jingxu.studio/schemas/episode-storyboard-export/1.1.0',
+    'episode-storyboard-export.valid.json',
+  ],
+  [
+    'https://jingxu.studio/schemas/project-transfer-bundle/1.0.0',
+    'project-transfer-bundle.valid.json',
+  ],
+]) {
+  const validator = ajv.getSchema(schemaId);
+  const fixture = JSON.parse(await readFile(path.join(fixtureRoot, fixtureName), 'utf8'));
+  if (validator === undefined || !validator(fixture)) {
+    throw new Error(`PACKAGED_SCHEMA_REFERENCE_CHAIN_INVALID:${schemaId}`);
+  }
 }
 const nativeAddons = (await listFiles(packageRoot)).filter((file) => file.endsWith('.node'));
 if (nativeAddons.length > 0) {
@@ -152,6 +233,13 @@ try {
       .total,
     receiptCount: afterFirstRun.prepare('SELECT COUNT(*) AS total FROM command_receipts').get()
       .total,
+    schemaManifest: afterFirstRun
+      .prepare(
+        `SELECT schema_id, semantic_version, resource_path, sha256, enabled
+         FROM schema_registry_manifest
+         ORDER BY schema_id ASC`,
+      )
+      .all(),
   };
   afterFirstRun.close();
   if (
@@ -165,6 +253,33 @@ try {
   }
   if (evidence.formatProfileCount !== 2 || evidence.receiptCount !== 3 || evidence.auditCount < 4) {
     throw new Error(`PACKAGED_PROJECT_EVIDENCE_INVALID:${JSON.stringify(evidence)}`);
+  }
+  const expectedManifest = schemaLocks
+    .map((lock) => ({
+      enabled: 1,
+      resource_path: lock.resourceName,
+      schema_id: lock.schemaId,
+      semantic_version: lock.semanticVersion,
+      sha256: lock.sha256,
+    }))
+    .sort((left, right) =>
+      left.schema_id < right.schema_id ? -1 : left.schema_id > right.schema_id ? 1 : 0,
+    );
+  const manifestMatches =
+    evidence.schemaManifest.length === expectedManifest.length &&
+    evidence.schemaManifest.every((actual, index) => {
+      const expected = expectedManifest[index];
+      return (
+        expected !== undefined &&
+        actual.enabled === expected.enabled &&
+        actual.resource_path === expected.resource_path &&
+        actual.schema_id === expected.schema_id &&
+        actual.semantic_version === expected.semantic_version &&
+        actual.sha256 === expected.sha256
+      );
+    });
+  if (!manifestMatches) {
+    throw new Error(`PACKAGED_SCHEMA_MANIFEST_INVALID:${JSON.stringify(evidence.schemaManifest)}`);
   }
 
   const second = await launch(managedRoot, localAppDataTrap, userDataRoot);
@@ -201,6 +316,9 @@ try {
       migrationVersions: [1, 2],
       nativeAddonCount: nativeAddons.length,
       projectLifecycle: ['create', 'update', 'delete', 'restart', 'restore'],
+      schemaHashes: schemaLocks.map((lock) => lock.sha256),
+      schemaIds: schemaLocks.map((lock) => lock.schemaId),
+      schemaReferenceChains: ['episode-to-shot', 'transfer-to-script'],
       userManagedRootAccessed: false,
     })}\n`,
   );

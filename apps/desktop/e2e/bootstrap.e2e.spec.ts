@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -11,6 +11,29 @@ import {
 } from '@playwright/test';
 
 const desktopRoot = path.resolve(__dirname, '..');
+const schemaResourcePath = path.resolve(
+  desktopRoot,
+  '../../packages/validation/resources/schemas/v1/ShotContract.schema.json',
+);
+const schemaResourceBackupPath = path.resolve(
+  desktopRoot,
+  '../../packages/validation/resources/schemas/.ShotContract.schema.json.e2e-backup',
+);
+
+const pathExists = async (target: string): Promise<boolean> => {
+  try {
+    await access(target);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+const restoreSchemaResourceIfNeeded = async (): Promise<void> => {
+  if (!(await pathExists(schemaResourceBackupPath))) return;
+  await rm(schemaResourcePath, { force: true });
+  await rename(schemaResourceBackupPath, schemaResourcePath);
+};
 
 const getProcessEnvironment = (): Record<string, string> =>
   Object.fromEntries(
@@ -426,6 +449,83 @@ test('§9.3 损坏库临时根—只读故障页—写命令和 Renderer 越界�
     expect(await readFile(databasePath, 'utf8')).toBe(corruptFixture);
   } finally {
     await application.close();
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test('Schema 资源缺失—只读故障阻断四个写命令—原位修复后同窗口重试恢复 READY', async () => {
+  test.setTimeout(90_000);
+  const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-e2e-schema-fault-'));
+  const managedRoot = path.join(root, 'managed');
+  await restoreSchemaResourceIfNeeded();
+  await rename(schemaResourcePath, schemaResourceBackupPath);
+  const application = await launchApplication(managedRoot);
+
+  try {
+    const page = await application.firstWindow();
+    await expect(page.getByRole('heading', { name: 'Schema 契约只读故障' })).toBeVisible();
+    await expect(page.getByText('SCHEMA_RESOURCE_MISSING')).toBeVisible();
+    await expect(page.getByText('SCHEMA_REGISTRY', { exact: true })).toBeVisible();
+    await expect(page.getByTestId('workspace-ready')).toHaveCount(0);
+
+    const commandErrors = await page.evaluate(async () => {
+      const results = await Promise.all([
+        window.jingxu.project.create({
+          requestId: 'request_schema_fault_create',
+          name: '不应创建',
+          genre: null,
+          style: null,
+          creationMode: 'AI_ORIGINAL',
+          dialogueRenderMode: 'NARRATION_FIRST',
+          aspectRatio: '9:16',
+          subtitleSafeArea: { top: 5, right: 5, bottom: 12, left: 5 },
+        }),
+        window.jingxu.project.update({
+          requestId: 'request_schema_fault_update',
+          projectId: 'project_12345678',
+          expectedUpdatedAt: '2026-08-11T00:00:00.000Z',
+          name: '不应更新',
+          genre: null,
+          style: null,
+          dialogueRenderMode: 'NARRATION_FIRST',
+          aspectRatio: '9:16',
+          subtitleSafeArea: { top: 5, right: 5, bottom: 12, left: 5 },
+        }),
+        window.jingxu.project.delete({
+          requestId: 'request_schema_fault_delete',
+          projectId: 'project_12345678',
+          expectedUpdatedAt: '2026-08-11T00:00:00.000Z',
+        }),
+        window.jingxu.project.restore({
+          requestId: 'request_schema_fault_restore',
+          projectId: 'project_12345678',
+          expectedUpdatedAt: '2026-08-11T00:00:00.000Z',
+        }),
+      ]);
+      return results.map((result) => (result.ok ? null : result.error.code));
+    });
+    expect(commandErrors).toEqual([
+      'STARTUP_WRITE_BLOCKED',
+      'STARTUP_WRITE_BLOCKED',
+      'STARTUP_WRITE_BLOCKED',
+      'STARTUP_WRITE_BLOCKED',
+    ]);
+
+    await restoreSchemaResourceIfNeeded();
+    await page.getByRole('button', { name: '重新检查' }).click();
+    await expect(page.getByTestId('workspace-ready')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+    await expect
+      .poll(async () => page.evaluate(() => window.jingxu.runtime.getStartupStatus()))
+      .toMatchObject({
+        completedPhases: expect.arrayContaining(['SCHEMA_REGISTRY']),
+        errorCode: null,
+        state: 'READY',
+        writeEnabled: true,
+      });
+  } finally {
+    await application.close();
+    await restoreSchemaResourceIfNeeded();
     await rm(root, { force: true, recursive: true });
   }
 });
