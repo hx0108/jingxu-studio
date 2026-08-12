@@ -4,8 +4,10 @@ export type {
   PersistenceRestoreResult,
   PersistenceRuntimePort,
 } from './ports/persistence/persistence-runtime-port';
+export type * from './ports/credential/index';
 export type * from './ports/project/index';
 export type * from './ports/schema-registry/index';
+export type * from './ports/text-model/index';
 export { SchemaRegistryOperationError } from './ports/schema-registry/index';
 export { createProjectService, type ProjectService } from './project/project-service';
 export { createStableHasher } from './project/stable-serialization';

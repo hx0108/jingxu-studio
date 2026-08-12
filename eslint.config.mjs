@@ -111,4 +111,88 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ['packages/application/src/**/*.{ts,tsx}', 'packages/domain/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'electron',
+              message: 'Application/Domain 不得依赖 Electron；Main 基础设施经 Port 注入。',
+            },
+            {
+              name: 'better-sqlite3',
+              message: 'Application/Domain 不得直接访问 SQLite；经 Repository/UnitOfWork Port。',
+            },
+            {
+              name: 'node:sqlite',
+              message: 'Application/Domain 不得直接访问 SQLite；经 Repository/UnitOfWork Port。',
+            },
+            {
+              name: 'openai',
+              message: 'Application/Domain 不得依赖 Provider SDK；经 TextModelPort。',
+            },
+            {
+              name: 'dashscope',
+              message: 'Application/Domain 不得依赖 Provider SDK；经 TextModelPort。',
+            },
+            {
+              name: '@jingxu/persistence',
+              message: 'Application/Domain 不得依赖持久化实现；持久化实现 Application Port。',
+            },
+            {
+              name: '@jingxu/model-adapters',
+              message: 'Application/Domain 不得反向依赖 Adapter；Adapter 实现 Application Port。',
+            },
+          ],
+          patterns: [
+            {
+              group: ['@jingxu/*/src/*'],
+              message: '跨包只能使用公开入口，禁止深层导入其他包的 src。',
+            },
+            {
+              group: ['@dashscope/*'],
+              message: 'Application/Domain 不得依赖 Provider SDK；经 TextModelPort。',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['packages/model-adapters/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'electron',
+              message: 'Adapter 包保持纯净；Electron safeStorage 凭据适配器属 Main 基础设施。',
+            },
+            {
+              name: 'better-sqlite3',
+              message: 'Adapter 不得访问持久化；经 Port。',
+            },
+            {
+              name: 'node:sqlite',
+              message: 'Adapter 不得访问持久化；经 Port。',
+            },
+            {
+              name: '@jingxu/persistence',
+              message: 'Adapter 不得依赖持久化实现。',
+            },
+          ],
+          patterns: [
+            {
+              group: ['@jingxu/*/src/*'],
+              message: '跨包只能使用公开入口，禁止深层导入其他包的 src。',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

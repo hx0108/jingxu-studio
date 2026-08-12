@@ -111,6 +111,12 @@ importers:
 
   packages/domain: {}
 
+  packages/model-adapters:
+    dependencies:
+      '@jingxu/application':
+        specifier: workspace:*
+        version: link:../application
+
   packages/persistence:
     dependencies:
       '@jingxu/application':

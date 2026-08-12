@@ -120,6 +120,7 @@ export * from './app-result';
 export * from './project-api';
 export * from './project-command';
 export * from './project-dto';
+export * from './stage';
 
 export interface JingxuApi {
   readonly project: ProjectApi;
