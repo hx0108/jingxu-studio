@@ -106,6 +106,29 @@ describe('script_stage_jobs Repository', () => {
     });
   });
 
+  it('运行中 Job—请求取消—同一条件更新写取消时间与 CANCELLED 后拒绝重复取消', async () => {
+    await withDatabase(async (database) => {
+      const uow = new SqliteJobUnitOfWork(database);
+      await uow.run(({ jobs }) => jobs.insert(job('j1')));
+      const claim = { jobId: 'j1', leaseExpiresAt: NOW, startedAt: NOW, deadlineAt: NOW };
+      await uow.run(({ jobs }) => jobs.claimQueued({ ...claim, leaseToken: 'lease-a' }));
+
+      const command = {
+        cancelRequestedAt: NOW,
+        expectedStatus: 'RUNNING' as const,
+        finishedAt: NOW,
+        jobId: 'j1',
+      };
+      await expect(uow.run(({ jobs }) => jobs.cancel(command))).resolves.toBe(true);
+      await expect(uow.run(({ jobs }) => jobs.cancel(command))).resolves.toBe(false);
+      await expect(uow.run(({ jobs }) => jobs.findById('j1'))).resolves.toMatchObject({
+        cancelRequestedAt: NOW,
+        finishedAt: NOW,
+        status: 'CANCELLED',
+      });
+    });
+  });
+
   it.each([
     ['status', 'BROKEN'],
     ['transport_attempts', 9],

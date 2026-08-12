@@ -19,6 +19,13 @@ export interface TransitionJobCommand {
   readonly errorJson: string | null;
 }
 
+export interface CancelJobCommand {
+  readonly cancelRequestedAt: string;
+  readonly expectedStatus: 'QUEUED' | 'RUNNING' | 'VALIDATING';
+  readonly finishedAt: string;
+  readonly jobId: string;
+}
+
 /** Transaction-scoped Job persistence; never exposes SQLite rows, statements, or connections. */
 export interface JobRepositoryPort {
   findById(id: string): Promise<ScriptStageJob | null>;
@@ -26,5 +33,7 @@ export interface JobRepositoryPort {
   listByStatuses(statuses: readonly JobStatus[], limit: number): Promise<readonly ScriptStageJob[]>;
   insert(job: ScriptStageJob): Promise<void>;
   claimQueued(command: ClaimQueuedJobCommand): Promise<boolean>;
+  /** 原子持久化取消请求与 CANCELLED 终态；调用方只在成功后 abort。 */
+  cancel(command: CancelJobCommand): Promise<boolean>;
   transition(command: TransitionJobCommand): Promise<boolean>;
 }

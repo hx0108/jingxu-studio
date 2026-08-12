@@ -1,5 +1,6 @@
 import {
   assertJobTransition,
+  type CancelJobCommand,
   type ClaimQueuedJobCommand,
   type JobRepositoryPort,
   type JobStatus,
@@ -124,6 +125,25 @@ export class SqliteJobRepository implements JobRepositoryPort {
             command.startedAt,
             command.deadlineAt,
             command.jobId,
+          ) as { readonly changes?: number };
+        changes = result.changes ?? 0;
+      });
+      return changes === 1;
+    });
+  }
+  public cancel(command: CancelJobCommand): Promise<boolean> {
+    return syncToPromise(() => {
+      let changes = 0;
+      normalizeWrite(() => {
+        const result = this.database
+          .prepare(
+            `UPDATE script_stage_jobs SET status = 'CANCELLED', cancel_requested_at = ?, finished_at = ? WHERE id = ? AND status = ?`,
+          )
+          .run(
+            command.cancelRequestedAt,
+            command.finishedAt,
+            command.jobId,
+            command.expectedStatus,
           ) as { readonly changes?: number };
         changes = result.changes ?? 0;
       });
