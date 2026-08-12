@@ -24,6 +24,15 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   IPC_INVALID_REQUEST: ['提交内容无法验证', '检查标记字段并重新提交。'],
   IPC_SENDER_NOT_ALLOWED: ['操作来源不受信任', '关闭应用后从官方入口重新启动。'],
   PROJECT_PERSISTENCE_FAILED: ['本地保存失败', '你的输入仍已保留，请稍后重试。'],
+  JOB_NOT_FOUND: ['找不到这个任务', '刷新任务列表后重试。'],
+  JOB_VERSION_CONFLICT: ['任务已在其他操作中更新', '刷新最新任务状态后再操作。'],
+  JOB_NOT_CANCELLABLE: ['当前任务状态不可取消', '刷新查看最新状态。'],
+  JOB_PERSISTENCE_FAILED: ['任务保存失败', '请稍后重试。'],
+  JOB_SUBMISSION_UNAVAILABLE: ['任务暂不可创建或重试', '请稍后重试。'],
+  PROVIDER_PROFILE_NOT_FOUND: ['未配置 Provider', '先在设置中完成 Provider 配置。'],
+  PROVIDER_CREDENTIAL_MISSING: ['尚未保存 API Key', '先在设置中保存 API Key。'],
+  PROVIDER_CREDENTIAL_UNAVAILABLE: ['凭据安全存储不可用', '确认系统密钥串可用后重试。'],
+  PROVIDER_CALL_FAILED: ['Provider 调用失败', '稍后重试；若持续失败请检查网络与凭据。'],
 };
 
 /** 只按稳定 code 映射文案，绝不展示来自基础设施的 message。 */

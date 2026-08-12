@@ -11,14 +11,22 @@ import { SchemaResourceAdapter } from '../adapters/schema-resource-adapter';
 
 import type {
   CompiledSchemaRegistry,
+  JobRepositoryPort,
+  JobUnitOfWorkPort,
   ProjectUnitOfWorkPort,
+  ProviderProfileRepositoryPort,
+  ProviderUnitOfWorkPort,
   SchemaManifestRepositoryPort,
   SchemaManifestUnitOfWorkPort,
 } from '@jingxu/application';
 
 export interface DesktopPersistenceRuntime {
   readonly close: () => void;
+  readonly getJobUnitOfWork: () => JobUnitOfWorkPort | null;
+  readonly getJobRepository: () => JobRepositoryPort | null;
   readonly getProjectUnitOfWork: () => ProjectUnitOfWorkPort | null;
+  readonly getProviderUnitOfWork: () => ProviderUnitOfWorkPort | null;
+  readonly getProviderProfileRepository: () => ProviderProfileRepositoryPort | null;
   readonly getSchemaRegistry: () => CompiledSchemaRegistry | null;
   readonly startupService: StartupService;
 }
@@ -71,7 +79,11 @@ export const createDesktopPersistenceRuntime = async ({
       startupService.close();
       registry.close();
     },
+    getJobUnitOfWork: () => adapter.getJobUnitOfWork(),
+    getJobRepository: () => adapter.getJobRepository(),
     getProjectUnitOfWork: () => adapter.getProjectUnitOfWork(),
+    getProviderUnitOfWork: () => adapter.getProviderUnitOfWork(),
+    getProviderProfileRepository: () => adapter.getProviderProfileRepository(),
     getSchemaRegistry: () => registry.getPublished(),
     startupService,
   };

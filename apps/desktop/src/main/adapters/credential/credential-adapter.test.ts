@@ -73,4 +73,51 @@ describe('CredentialAdapter', () => {
     await adapter.deleteCredential(ref.id);
     expect(await readdir(root)).toEqual([]);
   });
+
+  it('凭据流期间—console 与 stderr 零明文 Key（日志白名单守卫）', async () => {
+    const root = await createRoot();
+    const plaintext = 'fake-credential-value-7890';
+    const adapter = new CredentialAdapter({
+      createId: () => 'credential-log',
+      safeStorage: {
+        decryptString: () => plaintext,
+        encryptString: () => new TextEncoder().encode('encrypted-payload'),
+        isEncryptionAvailable: () => true,
+      },
+      secretsDirectory: root,
+    });
+    const stderrWrites: string[] = [];
+    const stdoutWrites: string[] = [];
+    const stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      stderrWrites.push(String(chunk));
+      return true;
+    });
+    const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdoutWrites.push(String(chunk));
+      return true;
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+    try {
+      const ref = await adapter.saveCredential(plaintext);
+      await adapter.loadCredential(ref.id);
+      await adapter.deleteCredential(ref.id);
+      const captured = [
+        ...stderrWrites,
+        ...stdoutWrites,
+        ...consoleError.mock.calls.map((call) => call.join(' ')),
+        ...consoleWarn.mock.calls.map((call) => call.join(' ')),
+        ...consoleLog.mock.calls.map((call) => call.join(' ')),
+      ].join('\n');
+      // 当前实现零日志；此断言为白名单守卫，拦截未来回归（Key 不得进日志/埋点）。
+      expect(captured).not.toContain(plaintext);
+    } finally {
+      stderrSpy.mockRestore();
+      stdoutSpy.mockRestore();
+      consoleError.mockRestore();
+      consoleWarn.mockRestore();
+      consoleLog.mockRestore();
+    }
+  });
 });

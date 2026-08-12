@@ -38,7 +38,8 @@ const restoreSchemaResourceIfNeeded = async (): Promise<void> => {
 const getProcessEnvironment = (): Record<string, string> =>
   Object.fromEntries(
     Object.entries(process.env).filter(
-      (entry): entry is [string, string] => entry[1] !== undefined,
+      (entry): entry is [string, string] =>
+        entry[1] !== undefined && entry[0] !== 'ELECTRON_RUN_AS_NODE',
     ),
   );
 
@@ -147,7 +148,7 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
     });
     expect(surface).toEqual({
       apiFrozen: true,
-      apiKeys: ['project', 'runtime'],
+      apiKeys: ['events', 'job', 'project', 'provider', 'runtime'],
       contentSecurityPolicy:
         "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
       externalResourceUrls: [],

@@ -1,9 +1,23 @@
+/**
+ * 数据处理提示与验证时间戳：持久化为 `provider_profiles.config_json` 的有界子集。
+ * `lastValidatedAt` 单一来源于此，不再在 {@link ProviderProfile} 顶层重复。
+ */
+export interface ProviderProfileConfig {
+  readonly dataProcessingHints: readonly string[];
+  readonly lastValidatedAt: string | null;
+}
+
 export interface ProviderProfile {
-  readonly credentialRef: string | null;
+  readonly baseUrl: string;
+  readonly config: ProviderProfileConfig;
   readonly credentialLast4: string | null;
+  /**
+   * 持久化行恒为非空字符串（DB `credential_ref NOT NULL CHECK length>0`）；
+   * 仅在内存默认构造、尚未落行时为 null。
+   */
+  readonly credentialRef: string | null;
   readonly enabled: boolean;
   readonly id: string;
-  readonly lastValidatedAt: string | null;
   readonly modelId: string;
   readonly modelSnapshotDate: string;
   readonly provider: 'QWEN';
@@ -20,12 +34,27 @@ export interface ProviderProfileView {
   readonly modelSnapshotDate: string;
   readonly provider: 'QWEN';
   readonly region: 'cn-beijing';
+  /** 乐观并发令牌；当前等价于 profile id（行存在即配置即凭据三者同生命周期）。 */
+  readonly versionId: string;
+  readonly workspaceId: string;
+}
+
+/**
+ * 首次落行（`saveCredential`）所需的默认值；由 Composition Root 注入，
+ * 使 `provider_profiles` 行在创建时满足全部 NOT NULL 列。
+ */
+export interface ProviderProfileDefaults {
+  readonly baseUrl: string;
+  readonly modelId: string;
+  readonly modelSnapshotDate: string;
   readonly workspaceId: string;
 }
 
 export interface ProviderProfileRepositoryPort {
   findById(id: string): Promise<ProviderProfile | null>;
   save(profile: ProviderProfile): Promise<void>;
+  /** 删除整行——`credential_ref NOT NULL` 决定了清除凭据即销毁行。 */
+  delete(id: string): Promise<void>;
 }
 
 export interface ProviderAuditPort {

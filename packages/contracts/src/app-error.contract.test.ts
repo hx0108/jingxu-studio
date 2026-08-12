@@ -5,7 +5,7 @@ import { appErrorSchema, appResultSchema, projectErrorCodeSchema } from './index
 
 describe('AppError / AppResult Contract', () => {
   describe('projectErrorCodeSchema—全部业务错误码', () => {
-    it('13 个登记错误码均接受', () => {
+    it('登记错误码均接受（Project 13 + Job/Provider 9）', () => {
       const codes = [
         'PROJECT_NOT_FOUND',
         'PROJECT_NAME_CONFLICT',
@@ -20,6 +20,15 @@ describe('AppError / AppResult Contract', () => {
         'IPC_INVALID_REQUEST',
         'IPC_SENDER_NOT_ALLOWED',
         'PROJECT_PERSISTENCE_FAILED',
+        'JOB_NOT_FOUND',
+        'JOB_VERSION_CONFLICT',
+        'JOB_NOT_CANCELLABLE',
+        'JOB_PERSISTENCE_FAILED',
+        'JOB_SUBMISSION_UNAVAILABLE',
+        'PROVIDER_PROFILE_NOT_FOUND',
+        'PROVIDER_CREDENTIAL_MISSING',
+        'PROVIDER_CREDENTIAL_UNAVAILABLE',
+        'PROVIDER_CALL_FAILED',
       ];
       for (const code of codes) {
         expect(projectErrorCodeSchema.parse(code)).toBe(code);

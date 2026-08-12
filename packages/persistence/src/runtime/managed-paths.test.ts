@@ -65,4 +65,18 @@ describe('受管理路径', () => {
       assertManagedRealPaths('C:\\managed', ['C:\\managed\\data', 'C:\\outside\\linked-backups']);
     }).toThrow('MANAGED_PATH_INVALID');
   });
+
+  it('凭据密文目录（root/secrets）与诊断目录为并列 sibling—诊断范围无法触及密文（6.3）', async () => {
+    await withSqliteTestContext((context) => {
+      const paths = createManagedPaths(path.join(context.root, 'managed'));
+      // CredentialAdapter 把密文落在 root/secrets（managedRoot/secrets）。
+      const secretsDirectory = path.join(paths.root, 'secrets');
+      // secrets 是 root 的直接子目录（受管理 sibling），未逃逸出根。
+      expect(path.relative(paths.root, secretsDirectory)).toBe('secrets');
+      // secrets 与 diagnostics 互为并列：从 diagnostics 出发必须上行（..）才能到 secrets，
+      // 即任何以 diagnosticDirectory 为范围的打包/导出都无法触及密文。
+      const fromDiagnostics = path.relative(paths.diagnosticDirectory, secretsDirectory);
+      expect(fromDiagnostics === '..' || fromDiagnostics.startsWith(`..${path.sep}`)).toBe(true);
+    });
+  });
 });

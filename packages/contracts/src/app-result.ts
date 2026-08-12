@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
 /**
- * Project 业务 IPC 的稳定错误码（TECH_DESIGN v1.1 §11 / Design §2）。
+ * 应用级 IPC 的稳定错误码（TECH_DESIGN v1.1 §11 / Design §2）。
  *
  * 全部业务/字段/IPC/启动错误统一归一为这些 code；Renderer 据此分支，
- * 永不依赖 thrown Error 的 message。
+ * 永不依赖 thrown Error 的 message。历史命名 `projectErrorCodeSchema` 沿用；
+ * 实际为 Job/Provider/Project 共用的 AppError code 枚举。
  */
 export const projectErrorCodeSchema = z.enum([
   'PROJECT_NOT_FOUND',
@@ -20,6 +21,15 @@ export const projectErrorCodeSchema = z.enum([
   'IPC_INVALID_REQUEST',
   'IPC_SENDER_NOT_ALLOWED',
   'PROJECT_PERSISTENCE_FAILED',
+  'JOB_NOT_FOUND',
+  'JOB_VERSION_CONFLICT',
+  'JOB_NOT_CANCELLABLE',
+  'JOB_PERSISTENCE_FAILED',
+  'JOB_SUBMISSION_UNAVAILABLE',
+  'PROVIDER_PROFILE_NOT_FOUND',
+  'PROVIDER_CREDENTIAL_MISSING',
+  'PROVIDER_CREDENTIAL_UNAVAILABLE',
+  'PROVIDER_CALL_FAILED',
 ]);
 export type ProjectErrorCode = z.infer<typeof projectErrorCodeSchema>;
 

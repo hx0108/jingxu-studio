@@ -64,7 +64,11 @@ const listFiles = async (root) => {
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 
 const getEnvironment = () =>
-  Object.fromEntries(Object.entries(process.env).filter((entry) => entry[1] !== undefined));
+  Object.fromEntries(
+    Object.entries(process.env).filter(
+      (entry) => entry[1] !== undefined && entry[0] !== 'ELECTRON_RUN_AS_NODE',
+    ),
+  );
 
 const launch = async (managedRoot, localAppDataTrap, userDataRoot) =>
   electron.launch({
@@ -165,6 +169,7 @@ versionOne.close();
 
 let created;
 let deleted;
+let jobProviderSurface;
 try {
   const first = await launch(managedRoot, localAppDataTrap, userDataRoot);
   try {
@@ -189,6 +194,59 @@ try {
       safeArea,
     );
     if (!created.ok) throw new Error(`PACKAGED_CREATE_FAILED:${created.error.code}`);
+    jobProviderSurface = await page.evaluate(async (projectId) => {
+      const api = window.jingxu;
+      const provider = await api.provider.getProfile({ profileId: 'profile_qwen_default' });
+      const jobCreate = await api.job.create({
+        idempotencyKey: 'package-job-idempotency-0001',
+        inputVersionId: 'version_package_0001',
+        projectId,
+        requestId: 'package-job-create-0001',
+        stage: 'CONCEPT',
+      });
+      const jobs = await api.job.list({ limit: 10, projectId });
+      return {
+        apiFrozen: Object.isFrozen(api),
+        childApisFrozen: ['events', 'job', 'project', 'provider', 'runtime'].every((key) =>
+          Object.isFrozen(api[key]),
+        ),
+        jobCreate,
+        jobs,
+        keys: Object.keys(api).sort(),
+        provider,
+      };
+    }, created.data.id);
+    if (
+      !jobProviderSurface.apiFrozen ||
+      !jobProviderSurface.childApisFrozen ||
+      JSON.stringify(jobProviderSurface.keys) !==
+        JSON.stringify(['events', 'job', 'project', 'provider', 'runtime'])
+    ) {
+      throw new Error(
+        `PACKAGED_JOB_PROVIDER_SURFACE_INVALID:${JSON.stringify(jobProviderSurface)}`,
+      );
+    }
+    if (
+      !jobProviderSurface.provider.ok ||
+      jobProviderSurface.provider.data.configured !== false ||
+      jobProviderSurface.provider.data.last4 !== null ||
+      'apiKey' in jobProviderSurface.provider.data ||
+      'authorization' in jobProviderSurface.provider.data
+    ) {
+      throw new Error(
+        `PACKAGED_PROVIDER_DTO_INVALID:${JSON.stringify(jobProviderSurface.provider)}`,
+      );
+    }
+    if (
+      jobProviderSurface.jobCreate.ok ||
+      jobProviderSurface.jobCreate.error.code !== 'JOB_SUBMISSION_UNAVAILABLE' ||
+      !jobProviderSurface.jobs.ok ||
+      jobProviderSurface.jobs.data.length !== 0
+    ) {
+      throw new Error(
+        `PACKAGED_JOB_SAFE_DEGRADATION_INVALID:${JSON.stringify(jobProviderSurface)}`,
+      );
+    }
     const updated = await page.evaluate(
       async ({ detail, area }) =>
         window.jingxu.project.update({
@@ -231,6 +289,7 @@ try {
     auditCount: afterFirstRun.prepare('SELECT COUNT(*) AS total FROM audit_events').get().total,
     formatProfileCount: afterFirstRun.prepare('SELECT COUNT(*) AS total FROM format_profiles').get()
       .total,
+    jobCount: afterFirstRun.prepare('SELECT COUNT(*) AS total FROM script_stage_jobs').get().total,
     receiptCount: afterFirstRun.prepare('SELECT COUNT(*) AS total FROM command_receipts').get()
       .total,
     schemaManifest: afterFirstRun
@@ -251,7 +310,12 @@ try {
   ) {
     throw new Error(`PACKAGED_MIGRATION_SET_INVALID:${JSON.stringify(applied)}`);
   }
-  if (evidence.formatProfileCount !== 2 || evidence.receiptCount !== 3 || evidence.auditCount < 4) {
+  if (
+    evidence.formatProfileCount !== 2 ||
+    evidence.receiptCount !== 3 ||
+    evidence.auditCount < 4 ||
+    evidence.jobCount !== 0
+  ) {
     throw new Error(`PACKAGED_PROJECT_EVIDENCE_INVALID:${JSON.stringify(evidence)}`);
   }
   const expectedManifest = schemaLocks
@@ -310,9 +374,23 @@ try {
     }
   }
 
+  try {
+    await access(path.join(managedRoot, 'secrets'));
+    throw new Error('PACKAGED_SECRETS_CREATED_WITHOUT_CREDENTIAL');
+  } catch (error) {
+    if (error instanceof Error && error.message === 'PACKAGED_SECRETS_CREATED_WITHOUT_CREDENTIAL') {
+      throw error;
+    }
+  }
+
   process.stdout.write(
     `${JSON.stringify({
       executablePath,
+      jobProviderSurface: {
+        frozen: jobProviderSurface.apiFrozen && jobProviderSurface.childApisFrozen,
+        jobCreateError: jobProviderSurface.jobCreate.error.code,
+        providerConfigured: jobProviderSurface.provider.data.configured,
+      },
       migrationVersions: [1, 2],
       nativeAddonCount: nativeAddons.length,
       projectLifecycle: ['create', 'update', 'delete', 'restart', 'restore'],

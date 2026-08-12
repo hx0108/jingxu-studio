@@ -17,6 +17,7 @@
   "dependencies": {
     "@jingxu/application": "workspace:*",
     "@jingxu/contracts": "workspace:*",
+    "@jingxu/model-adapters": "workspace:*",
     "@jingxu/persistence": "workspace:*",
     "@tanstack/react-query": "5.101.4",
     "react": "19.2.8",

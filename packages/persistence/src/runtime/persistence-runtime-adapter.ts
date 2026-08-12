@@ -1,11 +1,15 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import type {
+  JobRepositoryPort,
+  JobUnitOfWorkPort,
   PersistenceCheckResult,
   PersistenceFailure,
   PersistenceRestoreResult,
   PersistenceRuntimePort,
   ProjectUnitOfWorkPort,
+  ProviderProfileRepositoryPort,
+  ProviderUnitOfWorkPort,
   SchemaManifestUnitOfWorkPort,
 } from '@jingxu/application';
 import {
@@ -19,7 +23,11 @@ import { runDatabaseAudit } from '../audit/database-audit';
 import { listVerifiedBackups, performManagedMigration } from '../backup/backup-manager';
 import { loadMigrationSet } from '../migrations/migration-loader';
 import { restoreManagedBackup } from '../recovery/recovery-manager';
+import { SqliteJobRepository } from '../job/sqlite-job-repository';
+import { SqliteJobUnitOfWork } from '../job/sqlite-job-unit-of-work';
 import { SqliteProjectUnitOfWork } from '../project/sqlite-project-unit-of-work';
+import { SqliteProviderProfileRepository } from '../provider/sqlite-provider-profile-repository';
+import { SqliteProviderUnitOfWork } from '../provider/sqlite-provider-unit-of-work';
 import { SqliteSchemaManifestUnitOfWork } from '../schema-manifest/sqlite-schema-manifest-unit-of-work';
 import { createManagedDirectories, createManagedPaths, type ManagedPaths } from './managed-paths';
 import { PersistenceRuntimeError } from './persistence-error';
@@ -147,6 +155,10 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   #operationTail: Promise<void> = Promise.resolve();
   #projectUnitOfWork: ProjectUnitOfWorkPort | null = null;
   #schemaManifestUnitOfWork: SchemaManifestUnitOfWorkPort | null = null;
+  #jobUnitOfWork: JobUnitOfWorkPort | null = null;
+  #jobRepository: JobRepositoryPort | null = null;
+  #providerUnitOfWork: ProviderUnitOfWorkPort | null = null;
+  #providerProfileRepository: ProviderProfileRepositoryPort | null = null;
 
   public constructor({
     clock,
@@ -165,6 +177,10 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   public close(): void {
     this.#projectUnitOfWork = null;
     this.#schemaManifestUnitOfWork = null;
+    this.#jobUnitOfWork = null;
+    this.#jobRepository = null;
+    this.#providerUnitOfWork = null;
+    this.#providerProfileRepository = null;
     this.#manager.close();
   }
 
@@ -176,6 +192,26 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   /** Returns the Schema manifest UnitOfWork backed by the same audited write connection. */
   public getSchemaManifestUnitOfWork(): SchemaManifestUnitOfWorkPort | null {
     return this.#schemaManifestUnitOfWork;
+  }
+
+  /** Returns the Job UnitOfWork only after the startup audit reached READY. */
+  public getJobUnitOfWork(): JobUnitOfWorkPort | null {
+    return this.#jobUnitOfWork;
+  }
+
+  /** Returns a standalone Job read Repository over the same audited write connection. */
+  public getJobRepository(): JobRepositoryPort | null {
+    return this.#jobRepository;
+  }
+
+  /** Returns the Provider UnitOfWork only after the startup audit reached READY. */
+  public getProviderUnitOfWork(): ProviderUnitOfWorkPort | null {
+    return this.#providerUnitOfWork;
+  }
+
+  /** Returns a standalone Provider profile read Repository over the same audited write connection. */
+  public getProviderProfileRepository(): ProviderProfileRepositoryPort | null {
+    return this.#providerProfileRepository;
   }
 
   public prepare(): Promise<PersistenceCheckResult> {
@@ -249,11 +285,19 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
       const backups = await listVerifiedBackups(this.#paths);
       this.#projectUnitOfWork ??= new SqliteProjectUnitOfWork(database);
       this.#schemaManifestUnitOfWork ??= new SqliteSchemaManifestUnitOfWork(database);
+      this.#jobUnitOfWork ??= new SqliteJobUnitOfWork(database);
+      this.#jobRepository ??= new SqliteJobRepository(database);
+      this.#providerUnitOfWork ??= new SqliteProviderUnitOfWork(database);
+      this.#providerProfileRepository ??= new SqliteProviderProfileRepository(database);
       completedPhases.push('RECOVERY_GATE');
       return { backups, completedPhases, ok: true };
     } catch (error) {
       this.#projectUnitOfWork = null;
       this.#schemaManifestUnitOfWork = null;
+      this.#jobUnitOfWork = null;
+      this.#jobRepository = null;
+      this.#providerUnitOfWork = null;
+      this.#providerProfileRepository = null;
       this.#manager.close();
       const backups = await this.#listBackupsWithoutThrowing();
       return {

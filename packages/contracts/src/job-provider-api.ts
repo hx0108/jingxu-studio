@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 import type { AppResultDto } from './app-result';
+import { projectIdSchema, requestIdSchema } from './project-dto';
 
-const idSchema = z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{7,127}$/u);
-const requestIdSchema = z.string().min(8).max(128);
+const idSchema = z.string().regex(/^[A-Za-z0-9_-]{8,128}$/u);
 const mutationSchema = z
   .object({ expectedVersionId: idSchema, requestId: requestIdSchema })
   .strict();
@@ -21,7 +21,7 @@ export const jobSummarySchema = z
   .object({
     errorCode: z.string().min(1).max(80).nullable(),
     id: idSchema,
-    projectId: idSchema,
+    projectId: projectIdSchema,
     status: jobStatusSchema,
     versionId: idSchema,
   })
@@ -30,7 +30,7 @@ export const jobCreateInputSchema = z
   .object({
     idempotencyKey: z.string().min(8).max(128),
     inputVersionId: idSchema,
-    projectId: idSchema,
+    projectId: projectIdSchema,
     requestId: requestIdSchema,
     stage: z.enum([
       'CONCEPT',
@@ -44,7 +44,7 @@ export const jobCreateInputSchema = z
   .strict();
 export const jobGetInputSchema = z.object({ jobId: idSchema }).strict();
 export const jobListInputSchema = z
-  .object({ limit: z.number().int().min(1).max(100), projectId: idSchema })
+  .object({ limit: z.number().int().min(1).max(100), projectId: projectIdSchema })
   .strict();
 export const jobMutationInputSchema = mutationSchema.extend({ jobId: idSchema }).strict();
 
@@ -75,7 +75,7 @@ export const providerCredentialCommandSchema = mutationSchema
   })
   .strict();
 export const providerMutationInputSchema = mutationSchema.extend({ profileId: idSchema }).strict();
-export const jobUpdatesSubscriptionSchema = z.object({ projectId: idSchema }).strict();
+export const jobUpdatesSubscriptionSchema = z.object({ projectId: projectIdSchema }).strict();
 export const subscriptionResultSchema = z.object({ subscriptionId: idSchema }).strict();
 
 export type JobSummaryDto = z.infer<typeof jobSummarySchema>;

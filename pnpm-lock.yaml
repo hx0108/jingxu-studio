@@ -50,6 +50,9 @@ importers:
       '@jingxu/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@jingxu/model-adapters':
+        specifier: workspace:*
+        version: link:../../packages/model-adapters
       '@jingxu/persistence':
         specifier: workspace:*
         version: link:../../packages/persistence

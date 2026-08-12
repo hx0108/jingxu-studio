@@ -1,16 +1,21 @@
 import path from 'node:path';
 import os from 'node:os';
 
-import { app, BrowserWindow, ipcMain, net, protocol, session } from 'electron';
+import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, session } from 'electron';
 import { deriveWindowsProductionRoot } from '@jingxu/persistence';
 
 import { deriveSchemaResourceDirectory } from './adapters/schema-resource-adapter';
+import type { SafeStorageFacade } from './adapters/credential';
 import { createSecureMainWindow } from './composition/create-main-window';
 import {
   createDesktopPersistenceRuntime,
   initializePersistenceAfterSingleInstanceLock,
   type DesktopPersistenceRuntime,
 } from './composition/create-persistence-runtime';
+import {
+  createJobProviderFeatureRegistration,
+  type JobProviderFeatureRegistration,
+} from './composition/register-job-provider-features';
 import {
   createProjectFeatureRegistration,
   type ProjectFeatureRegistration,
@@ -28,6 +33,13 @@ const rendererName =
 let appProtocolRegistered = false;
 let persistenceRuntime: DesktopPersistenceRuntime | null = null;
 let projectFeatureRegistration: ProjectFeatureRegistration | null = null;
+let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null;
+
+const createSafeStorageFacade = (): SafeStorageFacade => ({
+  decryptString: (encrypted) => safeStorage.decryptString(Buffer.from(encrypted)),
+  encryptString: (plaintext) => safeStorage.encryptString(plaintext),
+  isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+});
 
 protocol.registerSchemesAsPrivileged([
   {
@@ -142,10 +154,20 @@ if (!singleInstanceLockAcquired) {
           persistenceRuntime,
           trustedUrl: getTrustedUrl(),
         });
+        jobProviderFeatureRegistration = createJobProviderFeatureRegistration({
+          clock: () => new Date().toISOString(),
+          ipcRegistrar,
+          managedRoot,
+          persistenceRuntime,
+          safeStorage: createSafeStorageFacade(),
+          trustedUrl: getTrustedUrl(),
+        });
         registerRuntimeIpc(ipcRegistrar, persistenceRuntime.startupService, getTrustedUrl(), () => {
           projectFeatureRegistration?.ensureRegistered();
+          jobProviderFeatureRegistration?.ensureRegistered();
         });
         projectFeatureRegistration.ensureRegistered();
+        jobProviderFeatureRegistration.ensureRegistered();
       }
       await createMainWindow();
     })
@@ -162,6 +184,7 @@ if (!singleInstanceLockAcquired) {
 
   app.on('before-quit', () => {
     projectFeatureRegistration = null;
+    jobProviderFeatureRegistration = null;
     persistenceRuntime?.close();
     persistenceRuntime = null;
   });

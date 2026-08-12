@@ -63,6 +63,20 @@ describe('Job Provider Events IPC Contract', () => {
     ).toBe(false);
   });
 
+  it('Project ID—系统生成 UUID 以数字开头—Job create 接受并保持路径安全字符集', () => {
+    const input = {
+      idempotencyKey: 'idem-12345',
+      inputVersionId: 'version_12345678',
+      projectId: '12345678-abcd-4abc-8abc-1234567890ab',
+      requestId: 'request-123',
+      stage: 'CONCEPT',
+    };
+    expect(jobCreateInputSchema.safeParse(input).success).toBe(true);
+    expect(
+      jobCreateInputSchema.safeParse({ ...input, projectId: '../unsafe/project' }).success,
+    ).toBe(false);
+  });
+
   it('Provider 输出—完整 Key/Auth/未知字段—strict 输出契约拒绝', () => {
     const view = {
       configured: true,

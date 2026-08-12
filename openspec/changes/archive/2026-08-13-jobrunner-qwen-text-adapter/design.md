@@ -55,7 +55,7 @@
 
 JobRunner 固定执行「候选 Schema → 注入系统字段 → 正式 Schema → 集合校验」的确定性顺序（TECH_DESIGN v1.1 §6.1.1）。为保持本 Change 独立可验证又不侵入 Change #6/#7 的业务语义，JobRunner 通过一个 `JobCommitHandler` Port 完成最终业务提交（写版本、更新指针、依赖边、STALE_INPUT），提交协议本身（复检输入 hash、复检锁、校验 Job 未取消、写审计、置 `SUCCEEDED`、单事务原子）由 JobRunner 拥有。
 
-本 Change 提供一个最小 `JobCommitHandler` 实现：对 Mock 返回的合法候选完成两层校验并在短事务写一条证据性版本/指针，足以跑通 `QUEUED→…→SUCCEEDED` 的成功路径。Change #6 替换/增强为真实 `ScriptStage` 提交（`script_versions`、`stage_heads`、依赖传播），Change #7 提供 `SHOT_CONTRACT` 提交。失败路径（AC-V1-04 矩阵）不依赖任何业务版本提交，因此本 Change 可独立验证。
+本 Change 通过测试注入最小 `JobCommitHandler`，让真实 `MockTextModelAdapter × JobRunner` 跑通 `QUEUED→…→SUCCEEDED` 并验证原子提交；生产 Main 不写“证据性假版本”，而是在 Change #6 注入真实 `ScriptStage` 提交（`script_versions`、`stage_heads`、依赖传播）前，让 Job 写入口返回稳定不可用。Change #7 再提供 `SHOT_CONTRACT` 提交。失败路径（AC-V1-04 矩阵）不依赖业务版本提交，因此本 Change 可独立验证通用基座。
 
 被否决方案：在本 Change 内实现完整五阶段与分镜提交（超出 #5 边界，与 #6/#7 重叠）；把两层契约下沉到 Adapter（让 Provider 层决定系统字段，违反 §7.2「LLM 不决定系统 ID」）。
 
@@ -85,7 +85,7 @@ JobRunner 固定执行「候选 Schema → 注入系统字段 → 正式 Schema 
 
 ### 8. 启动门衔接：READY 后激活调度，非就绪阻断写命令
 
-JobRunner 领取与恢复扫描只在 `READY` 后激活；`READ_ONLY_FAULT` 或其他非 `READY` 状态暂停领取且不重发。`job`/`provider` 写命令复用既有启动写门，非 `READY` 时返回 `STARTUP_WRITE_BLOCKED` 且不构造写路径（详见 `desktop-workspace-foundation` delta）。恢复扫描在 `READY` 后按崩溃矩阵处理 `QUEUED/RUNNING/VALIDATING`，迁移失败时按 AGENTS.md §12.2 不启动 JobRunner。
+通用 Job/Provider Host 只在 `READY` 后构造；`READ_ONLY_FAULT` 或其他非 `READY` 状态不领取、不重发且不构造写路径，写命令返回 `STARTUP_WRITE_BLOCKED`（详见 `desktop-workspace-foundation` delta）。生产阶段 JobRunner、提交器与可提交恢复由 Change #6 在 READY 门后注入；注入前 Job 写命令返回稳定不可用，迁移失败时按 AGENTS.md §12.2 不启动任何 JobRunner。
 
 ### 9. 错误归一化与脱敏
 
@@ -100,6 +100,8 @@ JobRunner 领取与恢复扫描只在 `READY` 后激活；`READ_ONLY_FAULT` 或�
 - [Key 泄漏面随 IPC 扩大] → safeStorage + `credential_ref` + UI 末 4 位 + 产物白名单审计四重防护；新增 IPC 不得回吐 Key 或原始 Provider 错误。
 - [崩溃恢复矩阵路径多] → 以 §5.3.2 矩阵为 Contract Fixture 清单逐条覆盖，任一未覆盖点记为阻断。
 - [百炼依赖升级] → 精确锁版本到唯一 `pnpm-lock.yaml`；Provider 错误断言只针对稳定归一化 `code`，不绑百炼原始文本。**核验（2026-08-12，task 1.1）**：Node v22.16.0 全局 `fetch`/`AbortController`/`AbortSignal.timeout()` 已覆盖百炼 OpenAI 兼容 Chat Completions 的传输与超时；全仓零 `openai`/`dashscope`/`qwen`/`axios`/`node-fetch`/`undici` 依赖，本 Change 不引入任何 Provider SDK 依赖，`pnpm-lock.yaml` 无变更、无 `latest`、无第二锁文件；超时以 `AbortSignal.timeout(120_000)`（Invocation）/`(300_000)`（Job）实现，错误在 Adapter 边界归一化。
+- [`provider_profiles` 模型三方不一致（DB / Application / Contract）] → **已按 Option A「虚拟默认 + 配置后落行」收敛（2026-08-12，task 6.4）**。DB `credential_ref TEXT NOT NULL CHECK length>0`（0001 字节锁，8.4 不改）强制「行存在 ⟺ 凭据存在」：`saveCredential` 首次落行（INSERT）/换凭据（upsert），`deleteCredential` 删整行 + 写审计，`saveProfile` 仅改已存在行的 enabled/workspaceId（行不存在则 `PROVIDER_PROFILE_NOT_FOUND`，凭据先于配置）。`lastValidatedAt`/`credentialLast4`/数据处理提示同存 `config_json`（末四位属验证元数据、非密钥），`lastValidatedAt` 在 Application 类型单一来源于 `ProviderProfileConfig`（不再顶层重复）。`versionId = profile.id`；Contract DTO `providerProfileSchema` 字节未动，由 7.2 IPC Host 把 `ProviderProfileView`→DTO 投影（注入 versionId）。GPT 旧实现「save null credentialRef」对真实 DB 必然违反 NOT NULL，本 Change 已修正为删行语义并以集成测试固化。
+- [生产 JobRunner 依赖后续业务 seam] → **已选择显式推迟**。本 Change 注册类型化 IPC Host、Provider/Credential 基座与 READY 门，但不注入会写假业务版本的生产 handler；`job.create/retry/cancel` 在 `staged-script-generation` 接入前稳定返回不可用。Change #6 必须把阶段提交器、真实 `createJobRunner`、调度与恢复重校验一次性注入并补 E2E。
 
 ## Migration Plan
 

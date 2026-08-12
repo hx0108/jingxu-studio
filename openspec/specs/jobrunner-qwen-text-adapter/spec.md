@@ -1,9 +1,8 @@
+# jobrunner-qwen-text-adapter Specification
+
 ## Purpose
-
 为镜序 Studio V1 提供确定性的 AI 文本生成任务基线：Application 层 JobRunner 负责领取、事务外调用、证据落库、两层契约、原子提交、重试、取消与崩溃恢复；TextModelAdapter 契约与 Qwen/Mock 实现屏蔽 Provider 专有结构；凭据经 safeStorage 保管；Job/Provider IPC 服从启动门与幂等。该能力用 Mock 跑通 PRD v1.4 AC-V1-04 的失败恢复全矩阵，再用 Qwen 完成真实凭据验证，但不实现五个编剧阶段、分镜生成与可生产性。
-
-## ADDED Requirements
-
+## Requirements
 ### Requirement: TextModelAdapter 契约必须屏蔽 Provider 专有结构
 
 Application/Domain MUST 只依赖 `TextModelAdapter` 的 `validateCredential` / `generate(signal)` / `normalizeError` 接口与 `NormalizedModelError`，且 MUST NOT 读取百炼 `choices`、HTTP header、Authorization 或 Provider 专有错误结构。Provider 专有 DTO、字段与错误 SHALL 只存在于 `QwenTextModelAdapter`。每次真实 Provider 调用 SHALL 创建独立的 `ModelInvocation`。
@@ -195,11 +194,11 @@ API Key MUST 经 Electron `safeStorage` 加密保存；`safeStorage` 不可用�
 
 ### Requirement: Job/Provider IPC 必须服从启动写门与幂等
 
-`job create/get/list/cancel/retry`、`provider getProfile/saveProfile/saveCredential/testCredential/deleteCredential` 与 `events.subscribeJobUpdates` SHALL 经 Preload 逐方法白名单暴露。所有 Command MUST 携带 `requestId`，修改类命令 MUST 携带 `expectedVersionId`；同一 `(project_id, idempotency_key)` MUST 去重为同一 Job。非 `READY` 状态下，写命令 MUST 返回既有 `STARTUP_WRITE_BLOCKED` 且不构造 JobRunner/Provider 写路径。
+`job create/get/list/cancel/retry`、`provider getProfile/saveProfile/saveCredential/testCredential/deleteCredential` 与 `events.subscribeJobUpdates` SHALL 经 Preload 逐方法白名单暴露。所有 Command MUST 携带 `requestId`，修改类命令 MUST 携带 `expectedVersionId`；同一 `(project_id, idempotency_key)` MUST 去重为同一 Job。非 `READY` 状态下，写命令 MUST 返回既有 `STARTUP_WRITE_BLOCKED` 且不构造 JobRunner/Provider 写路径。本 Change 不实现具体 ScriptStage 提交器；在 `staged-script-generation` 注入阶段提交与恢复重校验 seam 前，READY 状态的 Job 写命令 MUST 返回稳定 `JOB_SUBMISSION_UNAVAILABLE` 或 `JOB_NOT_CANCELLABLE`，MUST NOT 创建空壳 Job 或伪造成功。
 
 #### Scenario: 幂等键去重重复提交
 
-- **GIVEN** 同一项目以相同 `idempotency_key` 重复提交 `job.create`
+- **GIVEN** `staged-script-generation` 已注入具体阶段提交器，且同一项目以相同 `idempotency_key` 重复提交 `job.create`
 - **WHEN** JobService 处理后续请求
 - **THEN** 系统 SHALL 返回同一 `job_id`，MUST NOT 创建重复 Job
 
@@ -210,9 +209,16 @@ API Key MUST 经 Electron `safeStorage` 加密保存；`safeStorage` 不可用�
 - **THEN** 系统 MUST 返回稳定 `STARTUP_WRITE_BLOCKED`
 - **THEN** 系统 MUST NOT 构造 JobRunner 领取或 Provider 写入
 
+#### Scenario: 未接入阶段提交器时安全降级
+
+- **GIVEN** 应用已进入 `READY`，但具体阶段提交与恢复重校验 seam 尚未由 `staged-script-generation` 注入
+- **WHEN** Renderer 调用 `job.create`、`job.retry` 或 `job.cancel`
+- **THEN** 系统 MUST 返回稳定 `JOB_SUBMISSION_UNAVAILABLE` 或 `JOB_NOT_CANCELLABLE`
+- **THEN** 系统 MUST NOT 创建空壳 Job、调用 Provider 或伪造成功
+
 ### Requirement: Job 基线必须以 Mock 全矩阵作为 AC-V1-04 证据
 
-`MockTextModelAdapter` MUST 能按固定序列输出 401、429、5xx、120 秒超时、非法 JSON、结构修复失败、STALE_INPUT、取消与取消后迟到响应，以及各崩溃恢复点。AC-V1-04 的失败恢复全矩阵 MUST 以 Mock 在单元/集成/E2E 下可重复地通过；真实 Qwen 调用在本 Change 内 SHALL 仅用于凭据验证与低成本受控连通性检查，MUST NOT 用于开始 AC-V1-01 真实用户验收。
+`MockTextModelAdapter` MUST 能按固定序列输出 401、429、5xx、120 秒超时、非法 JSON、结构修复失败、STALE_INPUT、取消与取消后迟到响应，以及各崩溃恢复点。AC-V1-04 的失败恢复全矩阵 MUST 以 Mock 在单元/集成测试下可重复地通过；真实 Qwen 调用在本 Change 内 SHALL 仅用于用户主动发起的凭据验证与低成本受控连通性检查，MUST NOT 用于开始 AC-V1-01 真实用户验收，也 MUST NOT 成为离线自动化归档门禁。
 
 #### Scenario: Mock 失败矩阵可重复
 
@@ -227,3 +233,10 @@ API Key MUST 经 Electron `safeStorage` 加密保存；`safeStorage` 不可用�
 - **WHEN** 执行 `provider.testCredential`
 - **THEN** 系统 SHALL 以低成本受控请求验证凭据可用性
 - **THEN** 本 Change MUST NOT 以真实模型调用关闭 AC-V1-01
+
+#### Scenario: 无真实凭据时离线验证可收口
+
+- **GIVEN** 自动化验证环境没有用户 Qwen 凭据或未获联网授权
+- **WHEN** 执行 Verify、Sync 与 Archive
+- **THEN** 系统 SHALL 以注入式 Adapter 测试验证连通性请求形态、错误归一化和零密钥泄漏
+- **THEN** 真实 `testCredential` SHALL 记录为发布前人工检查，MUST NOT 注入假凭据或阻断离线归档
