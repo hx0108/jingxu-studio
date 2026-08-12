@@ -7,16 +7,16 @@
 
 ## 2. Job/Invocation Repository 与 UnitOfWork（复用 0001 表）
 
-- [ ] 2.1 先添加 `script_stage_jobs` Row mapper/Repository 集成测试：空表、领取原子性（`WHERE status='QUEUED'` 条件更新只命中一个领取方）、`UNIQUE(project_id,idempotency_key)` 幂等冲突、坏 `status`/`transport_attempts`/`structure_repair_attempts` 值归一化、参数绑定 SQL、无 `SELECT *`，且 Repository 外不见 Row/连接。（R: Job 领取必须原子且仅领取成功方调用 Provider；Design §2）
-- [ ] 2.2 先添加 `model_invocations` Repository 集成测试：写 `request_sent_at`、写响应 blob/hash/`response_complete_at`、写 `late_response_at`、`attempt_kind`/`transport_attempt` 约束、超时 `timeout_at` 与崩溃恢复查询矩阵的精确读取。（R: Provider 调用必须事务外，证据与版本短事务原子提交；R: 崩溃恢复必须按持久化证据确定终态；Design §2、§4）
-- [ ] 2.3 实现 Job/Invocation Repository 与短事务 `UnitOfWork`（复用既有单写连接、`BEGIN IMMEDIATE`），由 Application/JobRunner 拥有事务边界；Repository 不嵌套提交，persistence 边界归一化数据库异常，不修改 `0001_initial.sql`/`0002_project_command_receipts.sql` 或新增 migration。（Design §2；AGENTS.md §11.2、§12.2）
-- [ ] 2.4 添加应用级不变量测试：`transport_attempts` 仅 0–3、`structure_repair_attempts` 仅 0–1 与状态机一致；DB CHECK 与应用守卫共同阻断越界转移。（R: 重试与结构修复必须受状态机、次数与错误类型约束；AGENTS.md §11.1）
+- [x] 2.1 先添加 `script_stage_jobs` Row mapper/Repository 集成测试：空表、领取原子性（`WHERE status='QUEUED'` 条件更新只命中一个领取方）、`UNIQUE(project_id,idempotency_key)` 幂等冲突、坏 `status`/`transport_attempts`/`structure_repair_attempts` 值归一化、参数绑定 SQL、无 `SELECT *`，且 Repository 外不见 Row/连接。（R: Job 领取必须原子且仅领取成功方调用 Provider；Design §2）
+- [x] 2.2 先添加 `model_invocations` Repository 集成测试：写 `request_sent_at`、写响应 blob/hash/`response_complete_at`、写 `late_response_at`、`attempt_kind`/`transport_attempt` 约束、超时 `timeout_at` 与崩溃恢复查询矩阵的精确读取。（R: Provider 调用必须事务外，证据与版本短事务原子提交；R: 崩溃恢复必须按持久化证据确定终态；Design §2、§4）
+- [x] 2.3 实现 Job/Invocation Repository 与短事务 `UnitOfWork`（复用既有单写连接、`BEGIN IMMEDIATE`），由 Application/JobRunner 拥有事务边界；Repository 不嵌套提交，persistence 边界归一化数据库异常，不修改 `0001_initial.sql`/`0002_project_command_receipts.sql` 或新增 migration。（Design §2；AGENTS.md §11.2、§12.2）
+- [x] 2.4 添加应用级不变量测试：`transport_attempts` 仅 0–3、`structure_repair_attempts` 仅 0–1 与状态机一致；DB CHECK 与应用守卫共同阻断越界转移。（R: 重试与结构修复必须受状态机、次数与错误类型约束；AGENTS.md §11.1）
 
 ## 3. MockTextModelAdapter 与两层契约
 
-- [ ] 3.1 先添加 Mock 单元测试：按声明序列确定性输出 401、429、5xx、120 秒超时、非法 JSON、结构修复失败、STALE_INPUT、取消与取消后迟到响应；时间/ID/随机可注入；不访问真实网络（网络守卫为零调用）。（R: Job 基线必须以 Mock 全矩阵作为 AC-V1-04 证据；AGENTS.md §15.3）
-- [ ] 3.2 实现 `MockTextModelAdapter` 与可注入的时钟/响应序列；提供合法候选输出以驱动 `QUEUED→RUNNING→VALIDATING→SUCCEEDED` 成功路径。（Design §7）
-- [ ] 3.3 先添加两层契约单元测试：候选 Schema → 注入系统字段 → 正式 Schema → 集合校验的固定顺序；系统字段每次由 JobRunner 重新生成；候选非法但可修复触发最多一次 structure repair；第二次结构失败终态 `FAILED`；任何一层失败不创建版本。（R: 重试与结构修复必须受状态机、次数与错误类型约束；TECH_DESIGN v1.1 §6.1.1）
+- [x] 3.1 先添加 Mock 单元测试：按声明序列确定性输出 401、429、5xx、120 秒超时、非法 JSON、结构修复失败、STALE_INPUT、取消与取消后迟到响应；时间/ID/随机可注入；不访问真实网络（网络守卫为零调用）。（R: Job 基线必须以 Mock 全矩阵作为 AC-V1-04 证据；AGENTS.md §15.3）
+- [x] 3.2 实现 `MockTextModelAdapter` 与可注入的时钟/响应序列；提供合法候选输出以驱动 `QUEUED→RUNNING→VALIDATING→SUCCEEDED` 成功路径。（Design §7）
+- [ ] 3.3 先添加两层契约单元测试：候选 Schema → 注入系统字段 → 正式 Schema → 集合校验的固定顺序；系统字段每次由 JobRunner 重新生成；候选非法但可修复触发最多一次 structure repair；第二次结构失败终态 `FAILED`；任何一层失败不创建版本。（R: 重试与结构修复必须受状态机、次数与错误类型约束；TECH_DESIGN v1.1 §6.1.1）▸ 通用管线及 6 个层级测试已完成；Job 终态持久化与版本零写证据待 4.x JobRunner 集成。
 
 ## 4. JobRunner 确定性编排
 
@@ -33,10 +33,10 @@
 
 ## 6. QwenTextModelAdapter、ProviderService 与凭据
 
-- [ ] 6.1 先添加 Qwen Adapter 单元测试：固定模型 `qwen3.7-plus-2026-05-26`、拒绝漂移别名、`response_format={"type":"json_object"}`、64K 输入超限阻断不裁剪、120s/300s 超时映射、401/429/5xx/超时/非法 JSON 归一化为稳定 `NormalizedModelError` 且不含 Authorization header/原始错误体。（R: Qwen Adapter 必须锁定固定模型与 JSON Mode 且归一化错误；Design §9）
-- [ ] 6.2 实现 `QwenTextModelAdapter`（百炼 OpenAI 兼容 Chat Completions，Base URL 由受校验配置派生），只支撑单次请求 + 归一化错误；transport retry 由 JobRunner 驱动。（Design §7、§9；AGENTS.md §11.3）
-- [ ] 6.3 先添加凭据单元/集成测试：`safeStorage` 不可用阻断保存不降级明文；SQLite 只存 `credential_ref`；UI 只显末 4 位；删除同步删密文并写审计；日志/诊断包/导出/Renderer 状态零完整 Key（白名单审计）。（R: 凭据必须经 safeStorage 加密且不回流 Renderer；AGENTS.md §13.2、§13.3）
-- [ ] 6.4 实现 Main `CredentialAdapter`（Electron `safeStorage`，密文独立保存）与 `ProviderService`（配置、凭据引用、数据处理提示、低成本 `testCredential` 连通性检查）；真实模型调用在本 Change 内仅限凭据验证。（Design §6、§7；PRD v1.4 §9.4.4）
+- [x] 6.1 先添加 Qwen Adapter 单元测试：固定模型 `qwen3.7-plus-2026-05-26`、拒绝漂移别名、`response_format={"type":"json_object"}`、64K 输入超限阻断不裁剪、120s/300s 超时映射、401/429/5xx/超时/非法 JSON 归一化为稳定 `NormalizedModelError` 且不含 Authorization header/原始错误体。（R: Qwen Adapter 必须锁定固定模型与 JSON Mode 且归一化错误；Design §9）
+- [x] 6.2 实现 `QwenTextModelAdapter`（百炼 OpenAI 兼容 Chat Completions，Base URL 由受校验配置派生），只支撑单次请求 + 归一化错误；transport retry 由 JobRunner 驱动。（Design §7、§9；AGENTS.md §11.3）
+- [ ] 6.3 先添加凭据单元/集成测试：`safeStorage` 不可用阻断保存不降级明文；SQLite 只存 `credential_ref`；UI 只显末 4 位；删除同步删密文并写审计；日志/诊断包/导出/Renderer 状态零完整 Key（白名单审计）。（R: 凭据必须经 safeStorage 加密且不回流 Renderer；AGENTS.md §13.2、§13.3）▸ safeStorage 不可用、密文独立、末四位与删除测试已完成；SQLite/UI/日志/诊断/导出白名单审计待 Provider Persistence 与 IPC/UI 集成。
+- [ ] 6.4 实现 Main `CredentialAdapter`（Electron `safeStorage`，密文独立保存）与 `ProviderService`（配置、凭据引用、数据处理提示、低成本 `testCredential` 连通性检查）；真实模型调用在本 Change 内仅限凭据验证。（Design §6、§7；PRD v1.4 §9.4.4）▸ CredentialAdapter、ProviderService 与注入式低成本验证已完成；provider_profiles 生产 Repository/UoW、数据处理提示及 Composition 接线待后续集成。
 
 ## 7. job/provider/events IPC、Preload 与启动门衔接
 

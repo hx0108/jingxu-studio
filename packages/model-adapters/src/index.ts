@@ -10,4 +10,5 @@
  * 边界由 `eslint.config.mjs` 的 `packages/model-adapters/src/**` zone 强制：
  * 禁止导入 `electron`、`better-sqlite3`、`node:sqlite`、`@jingxu/persistence`。
  */
-export {};
+export * from './mock/index';
+export * from './qwen/index';

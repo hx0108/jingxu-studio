@@ -5,3 +5,4 @@
  * 实例化 Persistence、Electron 或 Provider Adapter。
  */
 export {};
+export * from './candidate-contract/index';
