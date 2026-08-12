@@ -129,6 +129,155 @@ describe('script_stage_jobs Repository', () => {
     });
   });
 
+  it('恢复未发送请求—仅过期且无已发送证据的 RUNNING Job—原子清 lease 并重新排队', async () => {
+    await withDatabase(async (database) => {
+      const uow = new SqliteJobUnitOfWork(database);
+      await uow.run(({ jobs }) => jobs.insert(job('j1')));
+      await uow.run(({ jobs }) =>
+        jobs.claimQueued({
+          deadlineAt: '2026-08-12T00:10:00.000Z',
+          jobId: 'j1',
+          leaseExpiresAt: '2026-08-12T00:01:00.000Z',
+          leaseToken: 'lease-a',
+          startedAt: NOW,
+        }),
+      );
+      database
+        .prepare(
+          `INSERT INTO provider_profiles
+           (id,provider,region,base_url,workspace_id,model_id,model_snapshot_date,config_json,credential_ref,enabled)
+           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        )
+        .run(
+          'provider1',
+          'QWEN',
+          'cn-beijing',
+          'https://example.invalid',
+          'ws',
+          'model',
+          '2026-08-12',
+          '{}',
+          'ref',
+          1,
+        );
+      database
+        .prepare(
+          `INSERT INTO model_invocations
+           (id,job_id,status,attempt_kind,transport_attempt,provider_profile_id,model_id,model_version,
+            parameters_json,request_snapshot_json,request_sha256,started_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        )
+        .run(
+          'inv1',
+          'j1',
+          'STARTED',
+          'INITIAL',
+          1,
+          'provider1',
+          'model',
+          'snapshot',
+          '{}',
+          '{}',
+          'hash',
+          NOW,
+        );
+
+      const release = {
+        expectedLeaseToken: 'lease-a',
+        jobId: 'j1',
+        leaseExpiredAt: '2026-08-12T00:02:00.000Z',
+      };
+      await expect(uow.run(({ jobs }) => jobs.releaseUnsentForRecovery(release))).resolves.toBe(
+        true,
+      );
+      await expect(uow.run(({ jobs }) => jobs.releaseUnsentForRecovery(release))).resolves.toBe(
+        false,
+      );
+      await expect(uow.run(({ jobs }) => jobs.findById('j1'))).resolves.toMatchObject({
+        deadlineAt: '2026-08-12T00:10:00.000Z',
+        leaseExpiresAt: null,
+        leaseToken: null,
+        status: 'QUEUED',
+      });
+    });
+  });
+
+  it('恢复未发送请求—lease 未过期或存在已发送证据—拒绝重新排队', async () => {
+    await withDatabase(async (database) => {
+      const uow = new SqliteJobUnitOfWork(database);
+      database
+        .prepare(
+          `INSERT INTO provider_profiles
+           (id,provider,region,base_url,workspace_id,model_id,model_snapshot_date,config_json,credential_ref,enabled)
+           VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        )
+        .run(
+          'provider1',
+          'QWEN',
+          'cn-beijing',
+          'https://example.invalid',
+          'ws',
+          'model',
+          '2026-08-12',
+          '{}',
+          'ref',
+          1,
+        );
+      for (const id of ['active', 'sent']) {
+        await uow.run(({ jobs }) => jobs.insert(job(id)));
+        await uow.run(({ jobs }) =>
+          jobs.claimQueued({
+            deadlineAt: '2026-08-12T00:10:00.000Z',
+            jobId: id,
+            leaseExpiresAt: '2026-08-12T00:05:00.000Z',
+            leaseToken: `lease-${id}`,
+            startedAt: NOW,
+          }),
+        );
+        database
+          .prepare(
+            `INSERT INTO model_invocations
+             (id,job_id,status,attempt_kind,transport_attempt,provider_profile_id,model_id,model_version,
+              parameters_json,request_snapshot_json,request_sha256,request_sent_at,started_at)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          )
+          .run(
+            `inv-${id}`,
+            id,
+            'STARTED',
+            'INITIAL',
+            1,
+            'provider1',
+            'model',
+            'snapshot',
+            '{}',
+            '{}',
+            'hash',
+            id === 'sent' ? NOW : null,
+            NOW,
+          );
+      }
+      await expect(
+        uow.run(({ jobs }) =>
+          jobs.releaseUnsentForRecovery({
+            expectedLeaseToken: 'lease-active',
+            jobId: 'active',
+            leaseExpiredAt: '2026-08-12T00:02:00.000Z',
+          }),
+        ),
+      ).resolves.toBe(false);
+      await expect(
+        uow.run(({ jobs }) =>
+          jobs.releaseUnsentForRecovery({
+            expectedLeaseToken: 'lease-sent',
+            jobId: 'sent',
+            leaseExpiredAt: '2026-08-12T00:06:00.000Z',
+          }),
+        ),
+      ).resolves.toBe(false);
+    });
+  });
+
   it.each([
     ['status', 'BROKEN'],
     ['transport_attempts', 9],

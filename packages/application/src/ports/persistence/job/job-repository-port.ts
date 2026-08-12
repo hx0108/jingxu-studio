@@ -26,6 +26,12 @@ export interface CancelJobCommand {
   readonly jobId: string;
 }
 
+export interface ReleaseUnsentJobForRecoveryCommand {
+  readonly jobId: string;
+  readonly expectedLeaseToken: string;
+  readonly leaseExpiredAt: string;
+}
+
 /** Transaction-scoped Job persistence; never exposes SQLite rows, statements, or connections. */
 export interface JobRepositoryPort {
   findById(id: string): Promise<ScriptStageJob | null>;
@@ -35,5 +41,10 @@ export interface JobRepositoryPort {
   claimQueued(command: ClaimQueuedJobCommand): Promise<boolean>;
   /** 原子持久化取消请求与 CANCELLED 终态；调用方只在成功后 abort。 */
   cancel(command: CancelJobCommand): Promise<boolean>;
+  /**
+   * Releases only an expired RUNNING lease whose persisted invocations prove no request was sent.
+   * This recovery-only transition must not be replaced by the normal state transition API.
+   */
+  releaseUnsentForRecovery(command: ReleaseUnsentJobForRecoveryCommand): Promise<boolean>;
   transition(command: TransitionJobCommand): Promise<boolean>;
 }

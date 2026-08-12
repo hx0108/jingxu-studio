@@ -16,19 +16,19 @@
 
 - [x] 3.1 先添加 Mock 单元测试：按声明序列确定性输出 401、429、5xx、120 秒超时、非法 JSON、结构修复失败、STALE_INPUT、取消与取消后迟到响应；时间/ID/随机可注入；不访问真实网络（网络守卫为零调用）。（R: Job 基线必须以 Mock 全矩阵作为 AC-V1-04 证据；AGENTS.md §15.3）
 - [x] 3.2 实现 `MockTextModelAdapter` 与可注入的时钟/响应序列；提供合法候选输出以驱动 `QUEUED→RUNNING→VALIDATING→SUCCEEDED` 成功路径。（Design §7）
-- [ ] 3.3 先添加两层契约单元测试：候选 Schema → 注入系统字段 → 正式 Schema → 集合校验的固定顺序；系统字段每次由 JobRunner 重新生成；候选非法但可修复触发最多一次 structure repair；第二次结构失败终态 `FAILED`；任何一层失败不创建版本。（R: 重试与结构修复必须受状态机、次数与错误类型约束；TECH_DESIGN v1.1 §6.1.1）▸ 通用管线及 6 个层级测试已完成；Job 终态持久化与版本零写证据待 4.x JobRunner 集成。
+- [x] 3.3 先添加两层契约单元测试：候选 Schema → 注入系统字段 → 正式 Schema → 集合校验的固定顺序；系统字段每次由 JobRunner 重新生成；候选非法但可修复触发最多一次 structure repair；第二次结构失败终态 `FAILED`；任何一层失败不创建版本。（R: 重试与结构修复必须受状态机、次数与错误类型约束；TECH_DESIGN v1.1 §6.1.1）
 
 ## 4. JobRunner 确定性编排
 
-- [ ] 4.1 先用 Fake Ports 添加 JobRunner 单元测试：领取条件更新只让一个 runner 胜出；Provider 调用在事务外；标记发送先于网络；响应证据与 Job→`VALIDATING` 一致；最终提交在单一 `UnitOfWork` 短事务原子完成，任一步失败整体回滚不留半个版本。（R: Job 领取必须原子；R: Provider 调用必须事务外；Design §3、§4）
-- [ ] 4.2 实现 `JobRunner` 主循环：带条件领取、经 `TextModelPort.generate(signal)` 事务外调用、`ModelInvocation` 证据落库、两层契约与最小 `JobCommitHandler` 提交；JobRunner 不直接执行 SQL 或导入 `node:sqlite`/Adapter。（Design §1、§3、§4；AGENTS.md §11.2）
-- [ ] 4.3 先添加重试策略单元测试：网络错误/429/5xx 触发最多 2 次 `TRANSPORT_RETRY` 且每次独立 Invocation；401/内容拒绝/上下文超限/结构校验失败直接 `FAILED` 不重试；structure repair ≤1 只修候选；终态不回退。（R: 重试与结构修复必须受状态机、次数与错误类型约束）
-- [ ] 4.4 先添加取消与迟到响应单元测试：取消先原子写 `cancel_requested_at`+`CANCELLED` 再 abort；迟到响应只写 hash/`late_response_at`，不写 parsed JSON/版本/重试；页面刷新不取消非取消 Job。（R: 取消与迟到响应不得创建版本或触发重试）
-- [ ] 4.5 先添加并发门集成测试：全局同时最多 1 个真实 `RUNNING` Job；同项目严格串行；Mock Job 复用同一并发门并可验证。（R: 真实 LLM Job 全局唯一且同项目严格串行；Design §5）
+- [x] 4.1 先用 Fake Ports 添加 JobRunner 单元测试：领取条件更新只让一个 runner 胜出；Provider 调用在事务外；标记发送先于网络；响应证据与 Job→`VALIDATING` 一致；最终提交在单一 `UnitOfWork` 短事务原子完成，任一步失败整体回滚不留半个版本。（R: Job 领取必须原子；R: Provider 调用必须事务外；Design §3、§4）
+- [x] 4.2 实现 `JobRunner` 主循环：带条件领取、经 `TextModelPort.generate(signal)` 事务外调用、`ModelInvocation` 证据落库、两层契约与最小 `JobCommitHandler` 提交；JobRunner 不直接执行 SQL 或导入 `node:sqlite`/Adapter。（Design §1、§3、§4；AGENTS.md §11.2）
+- [x] 4.3 先添加重试策略单元测试：网络错误/429/5xx 触发最多 2 次 `TRANSPORT_RETRY` 且每次独立 Invocation；401/内容拒绝/上下文超限/结构校验失败直接 `FAILED` 不重试；structure repair ≤1 只修候选；终态不回退。（R: 重试与结构修复必须受状态机、次数与错误类型约束）
+- [x] 4.4 先添加取消与迟到响应单元测试：取消先原子写 `cancel_requested_at`+`CANCELLED` 再 abort；迟到响应只写 hash/`late_response_at`，不写 parsed JSON/版本/重试；页面刷新不取消非取消 Job。（R: 取消与迟到响应不得创建版本或触发重试）
+- [x] 4.5 先添加并发门集成测试：全局同时最多 1 个真实 `RUNNING` Job；同项目严格串行；Mock Job 复用同一并发门并可验证。（R: 真实 LLM Job 全局唯一且同项目严格串行；Design §5）
 
 ## 5. 崩溃恢复与 AC-V1-04 Mock 矩阵
 
-- [ ] 5.1 先按 TECH_DESIGN v1.1 §5.3.2 矩阵添加崩溃恢复集成测试逐条覆盖：`QUEUED` 无 Invocation 重新领取；`request_sent_at` 非空/`response_complete_at` 为空 → `FAILED`/`INTERRUPTED_UNKNOWN_OUTCOME` 禁止重发；完整响应 hash 正确 → 幂等重校验不重复版本；`cancel_requested_at` 非空保持 `CANCELLED`；超过 `deadline_at`/`timeout_at` → `FAILED`/`JOB_DEADLINE_EXCEEDED`；重启不重置 deadline/timeout。（R: 崩溃恢复必须按持久化证据确定终态且不自动重发未知请求）
+- [x] 5.1 先按 TECH_DESIGN v1.1 §5.3.2 矩阵添加崩溃恢复集成测试逐条覆盖：`QUEUED` 无 Invocation 重新领取；`request_sent_at` 非空/`response_complete_at` 为空 → `FAILED`/`INTERRUPTED_UNKNOWN_OUTCOME` 禁止重发；完整响应 hash 正确 → 幂等重校验不重复版本；`cancel_requested_at` 非空保持 `CANCELLED`；超过 `deadline_at`/`timeout_at` → `FAILED`/`JOB_DEADLINE_EXCEEDED`；重启不重置 deadline/timeout。（R: 崩溃恢复必须按持久化证据确定终态且不自动重发未知请求）
 - [ ] 5.2 添加 AC-V1-04 Provider Contract/Integration：固定 Mock 依次模拟 401、429、5xx、120 秒超时、非法 JSON、结构修复失败、STALE_INPUT、取消、迟到响应与各崩溃点；断言终态不回退、不重复版本、原始输入不丢失、保留 Provider 任务 ID。（R: Job 基线必须以 Mock 全矩阵作为 AC-V1-04 证据；PRD v1.4 AC-V1-04、§9.4.2/§9.4.3）
 
 ## 6. QwenTextModelAdapter、ProviderService 与凭据
@@ -40,9 +40,9 @@
 
 ## 7. job/provider/events IPC、Preload 与启动门衔接
 
-- [ ] 7.1 先扩展 IPC/Preload Contract 测试：`job create/get/list/cancel/retry`、`provider getProfile/saveProfile/saveCredential/testCredential/deleteCredential`、`events.subscribeJobUpdates` 逐方法白名单、双端 strict Zod DTO、`AppError` 输出；Renderer 无通用 `send/on/invoke` 入口。（R: Job/Provider IPC 必须服从启动写门与幂等；TECH_DESIGN v1.1 §11）
+- [x] 7.1 先扩展 IPC/Preload Contract 测试：`job create/get/list/cancel/retry`、`provider getProfile/saveProfile/saveCredential/testCredential/deleteCredential`、`events.subscribeJobUpdates` 逐方法白名单、双端 strict Zod DTO、`AppError` 输出；Renderer 无通用 `send/on/invoke` 入口。（R: Job/Provider IPC 必须服从启动写门与幂等；TECH_DESIGN v1.1 §11）
 - [ ] 7.2 实现 IPC Host、Preload `window.jingxu` 冻结白名单与 `JobService`：Command 携带 `requestId`、修改命令携带 `expectedVersionId`、`(project_id,idempotency_key)` 去重为同一 Job；Renderer 不接收 Key/Auth/原始 Provider 错误。（Design §9；AGENTS.md §13.2、§14）
-- [ ] 7.3 先扩展启动门测试：JobRunner 领取与恢复扫描只在 `READY` 后激活；非 `READY` 时 `job`/`provider` 写命令返回 `STARTUP_WRITE_BLOCKED` 且不构造写路径；恢复扫描不在自检完成前调用 Provider。（R: desktop-workspace-foundation 新增 Scenario；Design §8）
+- [x] 7.3 先扩展启动门测试：JobRunner 领取与恢复扫描只在 `READY` 后激活；非 `READY` 时 `job`/`provider` 写命令返回 `STARTUP_WRITE_BLOCKED` 且不构造写路径；恢复扫描不在自检完成前调用 Provider。（R: desktop-workspace-foundation 新增 Scenario；Design §8）
 - [ ] 7.4 把 JobRunner/ProviderService/CredentialAdapter 在 Main Composition Root 于 `READY` 后组装；关闭应用释放资源，retry 重用安全边界并从崩溃矩阵恢复。（Design §1、§8）
 
 ## 8. 完整验证与 OpenSpec 收口

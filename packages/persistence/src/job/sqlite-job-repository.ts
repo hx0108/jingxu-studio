@@ -4,6 +4,7 @@ import {
   type ClaimQueuedJobCommand,
   type JobRepositoryPort,
   type JobStatus,
+  type ReleaseUnsentJobForRecoveryCommand,
   type ScriptStageJob,
   type TransitionJobCommand,
 } from '@jingxu/application';
@@ -145,6 +146,36 @@ export class SqliteJobRepository implements JobRepositoryPort {
             command.jobId,
             command.expectedStatus,
           ) as { readonly changes?: number };
+        changes = result.changes ?? 0;
+      });
+      return changes === 1;
+    });
+  }
+  public releaseUnsentForRecovery(command: ReleaseUnsentJobForRecoveryCommand): Promise<boolean> {
+    return syncToPromise(() => {
+      let changes = 0;
+      normalizeWrite(() => {
+        const result = this.database
+          .prepare(
+            `UPDATE script_stage_jobs
+             SET status = 'QUEUED', lease_token = NULL, lease_expires_at = NULL
+             WHERE id = ?
+               AND status = 'RUNNING'
+               AND lease_token = ?
+               AND lease_expires_at IS NOT NULL
+               AND lease_expires_at <= ?
+               AND EXISTS (
+                 SELECT 1 FROM model_invocations
+                 WHERE job_id = script_stage_jobs.id AND request_sent_at IS NULL
+               )
+               AND NOT EXISTS (
+                 SELECT 1 FROM model_invocations
+                 WHERE job_id = script_stage_jobs.id AND request_sent_at IS NOT NULL
+               )`,
+          )
+          .run(command.jobId, command.expectedLeaseToken, command.leaseExpiredAt) as {
+          readonly changes?: number;
+        };
         changes = result.changes ?? 0;
       });
       return changes === 1;

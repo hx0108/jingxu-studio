@@ -78,7 +78,7 @@ describe('window.jingxu 白名单 Contract', () => {
     expect(Object.isFrozen(api)).toBe(true);
     expect(Object.isFrozen(api.runtime)).toBe(true);
     expect(Object.isFrozen(api.project)).toBe(true);
-    expect(Object.keys(api)).toEqual(['runtime', 'project']);
+    expect(Object.keys(api).sort()).toEqual(['events', 'job', 'project', 'provider', 'runtime']);
     expect(Object.keys(api.runtime).sort()).toEqual([
       'getStartupStatus',
       'restoreBackup',
@@ -135,6 +135,9 @@ describe('window.jingxu 白名单 Contract', () => {
       expect(Reflect.has(api, methodName)).toBe(false);
       expect(Reflect.has(api.runtime, methodName)).toBe(false);
       expect(Reflect.has(api.project, methodName)).toBe(false);
+      expect(Reflect.has(api.job, methodName)).toBe(false);
+      expect(Reflect.has(api.provider, methodName)).toBe(false);
+      expect(Reflect.has(api.events, methodName)).toBe(false);
     },
   );
 

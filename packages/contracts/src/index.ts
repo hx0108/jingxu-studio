@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { ProjectApi } from './project-api';
+import type { EventsApi, JobApi, ProviderApi } from './job-provider-api';
 
 export const startupStateSchema = z.enum([
   'BOOTING',
@@ -117,13 +118,17 @@ export const RUNTIME_IPC_CHANNELS = {
 } as const;
 
 export * from './app-result';
+export * from './job-provider-api';
 export * from './project-api';
 export * from './project-command';
 export * from './project-dto';
 export * from './stage';
 
 export interface JingxuApi {
+  readonly events: EventsApi;
+  readonly job: JobApi;
   readonly project: ProjectApi;
+  readonly provider: ProviderApi;
   readonly runtime: RuntimeApi;
 }
 
