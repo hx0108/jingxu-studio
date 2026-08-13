@@ -5,7 +5,7 @@ import { createJobRunner } from './job-runner';
 import type {
   JobRepositories,
   JobRepositoryPort,
-  JobUnitOfWorkPort,
+  JobRunnerUnitOfWorkPort,
   ModelInvocation,
   ModelInvocationRepositoryPort,
   NormalizedModelError,
@@ -66,6 +66,12 @@ interface Store {
   invocations: ModelInvocation[];
   job: ScriptStageJob;
   versions: unknown[];
+}
+
+interface TestJobRepositories extends JobRepositories {
+  readonly versions: Readonly<{
+    insert(value: unknown): Promise<void>;
+  }>;
 }
 
 const createHarness = (
@@ -177,8 +183,16 @@ const createHarness = (
       return Promise.resolve(found);
     },
   };
-  const repositories: JobRepositories = { invocations, jobs };
-  const unitOfWork: JobUnitOfWorkPort = {
+  const versions: TestJobRepositories['versions'] = {
+    insert: (value) => {
+      expect(transactionActive).toBe(true);
+      events.push('version:insert');
+      store.versions.push(value);
+      return Promise.resolve();
+    },
+  };
+  const repositories: TestJobRepositories = { invocations, jobs, versions };
+  const unitOfWork: JobRunnerUnitOfWorkPort<TestJobRepositories> = {
     run: async (work) => {
       const snapshot = structuredClone(store);
       transactionActive = true;
@@ -245,11 +259,11 @@ const createHarness = (
       };
     },
     commitHandler: {
-      commit: (_repositories, value) => {
+      commit: async (transactionRepositories, value) => {
         events.push('commit-handler');
-        store.versions.push(value);
+        expect(transactionRepositories).toBe(repositories);
+        await transactionRepositories.versions.insert(value);
         if (options?.commitFails === true) throw new Error('commit failed');
-        return Promise.resolve();
       },
     },
     createInvocationId: () => `invocation_${String(++sequence)}`,
@@ -286,9 +300,10 @@ describe('JobRunner', () => {
       'tx:commit',
     ]);
     const commit = harness.events.indexOf('commit-handler');
-    expect(harness.events.slice(commit - 1, commit + 3)).toEqual([
+    expect(harness.events.slice(commit - 1, commit + 4)).toEqual([
       'tx:begin',
       'commit-handler',
+      'version:insert',
       'transition:SUCCEEDED',
       'tx:commit',
     ]);

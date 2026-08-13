@@ -9,6 +9,7 @@ export type * from './ports/persistence/job/index';
 export { assertJobTransition, JobInvariantError } from './ports/persistence/job/index';
 export type * from './ports/project/index';
 export type * from './ports/schema-registry/index';
+export type * from './ports/script/index';
 export type * from './ports/text-model/index';
 export * from './jobs/index';
 export { SchemaRegistryOperationError } from './ports/schema-registry/index';

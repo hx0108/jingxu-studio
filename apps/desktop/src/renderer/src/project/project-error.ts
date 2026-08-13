@@ -33,6 +33,16 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   PROVIDER_CREDENTIAL_MISSING: ['尚未保存 API Key', '先在设置中保存 API Key。'],
   PROVIDER_CREDENTIAL_UNAVAILABLE: ['凭据安全存储不可用', '确认系统密钥串可用后重试。'],
   PROVIDER_CALL_FAILED: ['Provider 调用失败', '稍后重试；若持续失败请检查网络与凭据。'],
+  STALE_INPUT: ['剧本输入版本已变化', '刷新剧本工作区后重新操作。'],
+  SCRIPT_INPUT_LENGTH_INVALID: ['原创输入长度不符合要求', '请输入 20–2,000 个字符。'],
+  SCRIPT_INPUT_CONSENT_REQUIRED: ['尚未确认数据处理说明', '阅读并确认后重新提交。'],
+  SCRIPT_WORKSPACE_NOT_INITIALIZED: ['剧本工作区尚未初始化', '先提交原创创意。'],
+  SCRIPT_STAGE_PREREQUISITE_MISSING: ['阶段前置内容未就绪', '先生成并确认所需上游阶段。'],
+  SCRIPT_STAGE_NOT_READY: ['阶段尚未确认', '确认当前草稿后再继续。'],
+  SCRIPT_VERSION_NOT_FOUND: ['找不到剧本版本', '刷新历史版本后重试。'],
+  SCRIPT_VERSION_CONFLICT: ['剧本版本已变化', '刷新最新版本，再重新应用修改。'],
+  SCRIPT_SCHEMA_INVALID: ['剧本结构校验失败', '根据字段错误修正内容后重试。'],
+  SCRIPT_STAGE_UNSUPPORTED: ['当前阶段暂不支持', '使用已开放的五阶段剧本流程。'],
 };
 
 /** 只按稳定 code 映射文案，绝不展示来自基础设施的 message。 */

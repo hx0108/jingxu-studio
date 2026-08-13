@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import type { ProjectApi } from './project-api';
 import type { EventsApi, JobApi, ProviderApi } from './job-provider-api';
+import type { ScriptApi } from './script-api';
 
 export const startupStateSchema = z.enum([
   'BOOTING',
@@ -122,6 +123,7 @@ export * from './job-provider-api';
 export * from './project-api';
 export * from './project-command';
 export * from './project-dto';
+export * from './script-api';
 export * from './stage';
 
 export interface JingxuApi {
@@ -130,6 +132,7 @@ export interface JingxuApi {
   readonly project: ProjectApi;
   readonly provider: ProviderApi;
   readonly runtime: RuntimeApi;
+  readonly script: ScriptApi;
 }
 
 declare global {

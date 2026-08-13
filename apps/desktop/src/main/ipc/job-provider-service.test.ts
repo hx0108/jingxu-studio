@@ -68,8 +68,10 @@ const jobSummary: JobSummaryDto = {
 };
 
 const jobCreateInput: JobCreateInputDto = {
+  episodeId: null,
+  expectedInputVersionId: 'source_12345678',
   idempotencyKey: 'idem-12345',
-  inputVersionId: 'version_12345678',
+  operationType: 'GENERATE',
   projectId: 'project_12345678',
   requestId: 'request-create-0001',
   stage: 'CONCEPT',

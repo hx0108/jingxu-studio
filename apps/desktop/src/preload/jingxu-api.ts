@@ -23,6 +23,14 @@ import {
   projectListResultSchema,
   restoreProjectInputSchema,
   RUNTIME_IPC_CHANNELS,
+  SCRIPT_IPC_CHANNELS,
+  confirmScriptVersionInputSchema,
+  getScriptWorkspaceInputSchema,
+  initializeOriginalInputSchema,
+  restoreScriptVersionInputSchema,
+  saveScriptDraftInputSchema,
+  scriptVersionSchema,
+  scriptWorkspaceSchema,
   startupStatusSchema,
   subscriptionResultSchema,
   updateProjectInputSchema,
@@ -34,6 +42,9 @@ import {
   type JobUpdatesSubscriptionDto,
   type DeleteProjectInputDto,
   type JingxuApi,
+  type ConfirmScriptVersionInputDto,
+  type GetScriptWorkspaceInputDto,
+  type InitializeOriginalInputDto,
   type ProjectGetInputDto,
   type ProjectListInputDto,
   type ProviderCredentialCommandDto,
@@ -42,6 +53,8 @@ import {
   type ProviderProfileCommandDto,
   type RestoreBackupCommandDto,
   type RestoreProjectInputDto,
+  type RestoreScriptVersionInputDto,
+  type SaveScriptDraftInputDto,
   type StartupCommandDto,
   type UpdateProjectInputDto,
 } from '@jingxu/contracts';
@@ -52,6 +65,7 @@ export {
   PROJECT_IPC_CHANNELS,
   PROVIDER_IPC_CHANNELS,
   RUNTIME_IPC_CHANNELS,
+  SCRIPT_IPC_CHANNELS,
 };
 
 export type InvokeIpc = (channel: string, ...arguments_: readonly unknown[]) => Promise<unknown>;
@@ -165,6 +179,40 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
           await invoke(
             PROVIDER_IPC_CHANNELS.deleteCredential,
             providerMutationInputSchema.parse(input),
+          ),
+        ),
+    }),
+    script: Object.freeze({
+      initializeOriginal: async (input: InitializeOriginalInputDto) =>
+        appResultSchema(scriptWorkspaceSchema).parse(
+          await invoke(
+            SCRIPT_IPC_CHANNELS.initializeOriginal,
+            initializeOriginalInputSchema.parse(input),
+          ),
+        ),
+      getWorkspace: async (input: GetScriptWorkspaceInputDto) =>
+        appResultSchema(scriptWorkspaceSchema).parse(
+          await invoke(
+            SCRIPT_IPC_CHANNELS.getWorkspace,
+            getScriptWorkspaceInputSchema.parse(input),
+          ),
+        ),
+      saveDraft: async (input: SaveScriptDraftInputDto) =>
+        appResultSchema(scriptVersionSchema).parse(
+          await invoke(SCRIPT_IPC_CHANNELS.saveDraft, saveScriptDraftInputSchema.parse(input)),
+        ),
+      confirmVersion: async (input: ConfirmScriptVersionInputDto) =>
+        appResultSchema(scriptVersionSchema).parse(
+          await invoke(
+            SCRIPT_IPC_CHANNELS.confirmVersion,
+            confirmScriptVersionInputSchema.parse(input),
+          ),
+        ),
+      restoreVersion: async (input: RestoreScriptVersionInputDto) =>
+        appResultSchema(scriptVersionSchema).parse(
+          await invoke(
+            SCRIPT_IPC_CHANNELS.restoreVersion,
+            restoreScriptVersionInputSchema.parse(input),
           ),
         ),
     }),

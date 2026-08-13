@@ -6,7 +6,6 @@ import type {
 } from '../candidate-contract/index';
 import type {
   JobRepositories,
-  JobUnitOfWorkPort,
   ModelInvocation,
   ModelInvocationAttemptKind,
   NormalizedModelError,
@@ -20,9 +19,13 @@ export type JobRunnerOutcome =
   | Readonly<{ status: 'NOT_CLAIMED' | 'SUCCEEDED' | 'CANCELLED' }>
   | Readonly<{ errorCode: string; status: 'FAILED' }>;
 
-export interface JobCommitHandler {
+export interface JobRunnerUnitOfWorkPort<Repositories extends JobRepositories = JobRepositories> {
+  run<T>(work: (repositories: Repositories) => Promise<T>): Promise<T>;
+}
+
+export interface JobCommitHandler<Repositories extends JobRepositories = JobRepositories> {
   /** 在 JobRunner 提供的最终短事务中写业务版本、指针与审计；不得自行提交。 */
-  commit(repositories: JobRepositories, value: unknown, job: ScriptStageJob): Promise<void>;
+  commit(repositories: Repositories, value: unknown, job: ScriptStageJob): Promise<void>;
 }
 
 export interface JobStructureRepairRequest {
@@ -30,7 +33,7 @@ export interface JobStructureRepairRequest {
   readonly rawText: string;
 }
 
-export interface JobRunnerDependencies {
+export interface JobRunnerDependencies<Repositories extends JobRepositories = JobRepositories> {
   readonly buildContract: (
     job: ScriptStageJob,
     invocationId: string,
@@ -40,7 +43,7 @@ export interface JobRunnerDependencies {
     invocationId: string,
     repair?: JobStructureRepairRequest,
   ) => TextGenerationRequest;
-  readonly commitHandler: JobCommitHandler;
+  readonly commitHandler: JobCommitHandler<Repositories>;
   readonly createAbortController?: () => AbortController;
   readonly createInvocationId: (sequence: number) => string;
   readonly createLeaseToken: () => string;
@@ -49,7 +52,7 @@ export interface JobRunnerDependencies {
   readonly now: () => string;
   readonly onAbort?: (jobId: string) => void;
   readonly textModel: TextModelPort;
-  readonly unitOfWork: JobUnitOfWorkPort;
+  readonly unitOfWork: JobRunnerUnitOfWorkPort<Repositories>;
 }
 
 export interface JobRunner {
@@ -83,7 +86,9 @@ type InvocationGeneration = Readonly<{
 /**
  * 创建 Application 层确定性 JobRunner。所有 Provider 调用均在 UnitOfWork 外执行。
  */
-export const createJobRunner = (dependencies: JobRunnerDependencies): JobRunner => {
+export const createJobRunner = <Repositories extends JobRepositories = JobRepositories>(
+  dependencies: JobRunnerDependencies<Repositories>,
+): JobRunner => {
   const active = new Map<string, Readonly<{ controller: AbortController; invocationId: string }>>();
   let invocationSequence = 0;
 

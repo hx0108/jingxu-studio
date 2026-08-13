@@ -6,7 +6,14 @@ import { createJingxuApi } from './jingxu-api';
 describe('Job Provider Events Preload Contract', () => {
   it('创建 API—冻结三个逐方法 namespace—无通用 invoke/send/on', () => {
     const api = createJingxuApi(vi.fn());
-    expect(Object.keys(api).sort()).toEqual(['events', 'job', 'project', 'provider', 'runtime']);
+    expect(Object.keys(api).sort()).toEqual([
+      'events',
+      'job',
+      'project',
+      'provider',
+      'runtime',
+      'script',
+    ]);
     expect(Object.keys(api.job).sort()).toEqual(['cancel', 'create', 'get', 'list', 'retry']);
     expect(Object.keys(api.provider).sort()).toEqual([
       'deleteCredential',

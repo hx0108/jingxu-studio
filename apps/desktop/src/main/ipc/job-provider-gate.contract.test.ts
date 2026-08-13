@@ -25,8 +25,10 @@ describe('Job Provider 启动门 Contract', () => {
       [
         JOB_IPC_CHANNELS.create,
         {
+          episodeId: null,
+          expectedInputVersionId: 'source_12345678',
           idempotencyKey: 'idem-12345',
-          inputVersionId: 'version_12345678',
+          operationType: 'GENERATE',
           projectId: 'project_12345678',
           requestId: 'request-123',
           stage: 'CONCEPT',

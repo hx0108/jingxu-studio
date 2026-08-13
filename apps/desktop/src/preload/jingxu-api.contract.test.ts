@@ -78,7 +78,21 @@ describe('window.jingxu 白名单 Contract', () => {
     expect(Object.isFrozen(api)).toBe(true);
     expect(Object.isFrozen(api.runtime)).toBe(true);
     expect(Object.isFrozen(api.project)).toBe(true);
-    expect(Object.keys(api).sort()).toEqual(['events', 'job', 'project', 'provider', 'runtime']);
+    expect(Object.keys(api).sort()).toEqual([
+      'events',
+      'job',
+      'project',
+      'provider',
+      'runtime',
+      'script',
+    ]);
+    expect(Object.keys(api.script).sort()).toEqual([
+      'confirmVersion',
+      'getWorkspace',
+      'initializeOriginal',
+      'restoreVersion',
+      'saveDraft',
+    ]);
     expect(Object.keys(api.runtime).sort()).toEqual([
       'getStartupStatus',
       'restoreBackup',

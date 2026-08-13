@@ -4,5 +4,6 @@ export type {
   JobRunner,
   JobRunnerDependencies,
   JobRunnerOutcome,
+  JobRunnerUnitOfWorkPort,
   JobStructureRepairRequest,
 } from './job-runner';

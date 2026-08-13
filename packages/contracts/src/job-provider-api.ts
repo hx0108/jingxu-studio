@@ -28,20 +28,25 @@ export const jobSummarySchema = z
   .strict();
 export const jobCreateInputSchema = z
   .object({
+    episodeId: idSchema.nullable(),
+    expectedInputVersionId: idSchema,
     idempotencyKey: z.string().min(8).max(128),
-    inputVersionId: idSchema,
+    operationType: z.literal('GENERATE'),
     projectId: projectIdSchema,
     requestId: requestIdSchema,
-    stage: z.enum([
-      'CONCEPT',
-      'STORY_BIBLE',
-      'EPISODE_OUTLINE',
-      'BEAT_SHEET',
-      'SCENE_SCRIPT',
-      'SHOT_CONTRACT',
-    ]),
+    stage: z.enum(['CONCEPT', 'STORY_BIBLE', 'EPISODE_OUTLINE', 'BEAT_SHEET', 'SCENE_SCRIPT']),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const projectStage = value.stage === 'CONCEPT' || value.stage === 'STORY_BIBLE';
+    if ((projectStage && value.episodeId !== null) || (!projectStage && value.episodeId === null)) {
+      context.addIssue({
+        code: 'custom',
+        message: 'episodeId 与阶段层级不匹配。',
+        path: ['episodeId'],
+      });
+    }
+  });
 export const jobGetInputSchema = z.object({ jobId: idSchema }).strict();
 export const jobListInputSchema = z
   .object({ limit: z.number().int().min(1).max(100), projectId: projectIdSchema })
