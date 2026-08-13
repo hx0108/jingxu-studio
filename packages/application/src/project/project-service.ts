@@ -1,0 +1,804 @@
+import type {
+  AppResultDto,
+  CreateProjectInputDto,
+  DeleteProjectInputDto,
+  FormatProfileDto,
+  ProjectDetailDto,
+  ProjectErrorCode,
+  ProjectGetInputDto,
+  ProjectListInputDto,
+  ProjectListResultDto,
+  ProjectSummaryDto,
+  RestoreProjectInputDto,
+  UpdateProjectInputDto,
+} from '@jingxu/contracts';
+import type { FormatProfile, Project, ProjectNameValidationError } from '@jingxu/domain';
+import {
+  createFormatProfileSpec,
+  formatProfileSpecsEqual,
+  normalizeNameKey,
+  validateProjectName,
+} from '@jingxu/domain';
+import type { Clock, IdGenerator, StableHasher } from '../ports/project/service-dependencies';
+import type {
+  ProjectDirectoryHandle,
+  ProjectDirectoryPort,
+} from '../ports/project/project-directory-port';
+import type { ProjectKeyset, ProjectListItem } from '../ports/project/project-repository';
+import type {
+  ProjectRepositories,
+  ProjectUnitOfWorkPort,
+} from '../ports/project/project-unit-of-work';
+import type { CommandReceipt } from '../ports/project/command-receipt-repository';
+
+import { decodeCursor, encodeCursor } from './project-cursor';
+import { monotonicUpdatedAt } from './monotonic-timestamp';
+
+/**
+ * 名称搜索的内部扫描硬上限（Design §7）。
+ *
+ * Repository 在该上限内按 scope + after 扫描候选，Application 再做规范化名称 contains
+ * 过滤；触及上限时返回显式截断标志。V1 容量基线内不会触及；超出时通过独立 FTS/索引
+ * Change 调整，不在此预建。
+ */
+const SEARCH_SCAN_HARD_LIMIT = 200;
+
+/**
+ * ProjectService 的可注入依赖（Design §1）。
+ *
+ * 时间、ID、稳定 hash、目录与 UnitOfWork 全部抽象为 Port，由 Main Composition Root
+ * 注入生产实现、由测试注入确定性 Fake。traceId 由 IPC 层逐次生成并传入，service 用它
+ * 关联同一请求的 AppError 与审计/事件。
+ */
+export interface ProjectServiceDeps {
+  readonly unitOfWork: ProjectUnitOfWorkPort;
+  readonly clock: Clock;
+  readonly idGenerator: IdGenerator;
+  readonly hasher: StableHasher;
+  readonly directory: ProjectDirectoryPort;
+}
+
+/**
+ * Project 用例服务（Design §6、§7）。
+ *
+ * 方法签名比 IPC `ProjectApi` 多一个 `traceId`：IPC 层（§7）逐次生成 traceId 并传入，
+ * service 内用同一 traceId 关联错误与审计。所有读写仅在 {@link ProjectUnitOfWorkPort}
+ * 回调内经 Repository 完成，service 不持有连接或事务所有权。
+ */
+export interface ProjectService {
+  /** 按稳定 keyset 分页列出活动/已删除项目，可选规范化名称搜索。 */
+  list(input: ProjectListInputDto, traceId: string): Promise<AppResultDto<ProjectListResultDto>>;
+  /** 按 scope 取单个项目详情（current FormatProfile + 不含当前的版本历史）。 */
+  get(input: ProjectGetInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
+  /** 原子创建 Project 与首个 current FormatProfile（Design §5、§6）。 */
+  create(input: CreateProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
+  /** 乐观并发更新 Project 与 FormatProfile 版本链（Design §6）。 */
+  update(input: UpdateProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
+  /** 二次确认后软删除 Project 聚合（不删除目录/子表），审计可查（Design §6）。 */
+  delete(input: DeleteProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
+  /** 从回收站恢复软删除 Project，事务内重检名称冲突（Design §6）。 */
+  restore(input: RestoreProjectInputDto, traceId: string): Promise<AppResultDto<ProjectDetailDto>>;
+}
+
+/** 名称校验失败转用户可读 message（与 fieldErrors.name 共用）。 */
+const nameErrorMessage = (error: ProjectNameValidationError): string => {
+  switch (error.kind) {
+    case 'EMPTY':
+      return '项目名称不能为空';
+    case 'LEADING_OR_TRAILING_WHITESPACE':
+      return '项目名称不能包含首尾空白';
+    case 'TOO_LONG':
+      return '项目名称不能超过 100 个字符';
+  }
+};
+
+export const createProjectService = (deps: ProjectServiceDeps): ProjectService => {
+  const error = <T>(
+    code: ProjectErrorCode,
+    message: string,
+    traceId: string,
+    fieldErrors: Record<string, string> | null = null,
+    retryable = false,
+  ): AppResultDto<T> => ({
+    ok: false,
+    error: { code, message, retryable, userAction: null, fieldErrors, traceId },
+  });
+
+  /**
+   * 意外异常归一化：固定 code/脱敏 message + retryable=true（transient，可重试）。
+   * 调用点为 binding-free catch（不绑定异常对象），保证 SQL/堆栈/路径不泄漏（Design §9、§3.7）。
+   */
+  const persistenceFailed = <T>(traceId: string, message: string): AppResultDto<T> =>
+    error<T>('PROJECT_PERSISTENCE_FAILED', message, traceId, null, true);
+
+  const toSummary = (item: ProjectListItem): ProjectSummaryDto => ({
+    id: item.project.id,
+    name: item.project.name,
+    genre: item.project.genre,
+    style: item.project.style,
+    creationMode: item.project.creationMode,
+    dialogueRenderMode: item.project.dialogueRenderMode,
+    aspectRatio: item.currentAspectRatio,
+    updatedAt: item.project.updatedAt,
+    deletedAt: item.project.deletedAt,
+  });
+
+  const toFormatProfileDto = (profile: FormatProfile): FormatProfileDto => ({
+    id: profile.id,
+    projectId: profile.projectId,
+    versionNo: profile.versionNo,
+    parentId: profile.parentId,
+    aspectRatio: profile.spec.aspectRatio,
+    width: profile.spec.width,
+    height: profile.spec.height,
+    fps: profile.spec.fps,
+    language: profile.spec.language,
+    subtitleSafeArea: profile.spec.subtitleSafeArea,
+    isCurrent: profile.isCurrent,
+    createdAt: profile.createdAt,
+  });
+
+  /** 构造详情：current + 不含当前的版本历史（get/create 共用）。 */
+  const buildProjectDetail = (
+    project: Project,
+    current: FormatProfile,
+    history: readonly FormatProfile[],
+  ): ProjectDetailDto => ({
+    id: project.id,
+    name: project.name,
+    genre: project.genre,
+    style: project.style,
+    creationMode: project.creationMode,
+    dialogueRenderMode: project.dialogueRenderMode,
+    // V1 固定 LOCAL_DEMO（Design §1）；domain 枚举对齐 0001 CHECK 较宽，读路径按 invariant 收窄
+    deploymentMode: project.deploymentMode as 'LOCAL_DEMO',
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt,
+    deletedAt: project.deletedAt,
+    currentFormatProfile: toFormatProfileDto(current),
+    formatProfileHistory: history.map(toFormatProfileDto),
+  });
+
+  /**
+   * replay（Design §4「按安全引用重建结果」）：按 receipt.resultRef 的 projectId 作句柄，
+   * 事务内重读当前态重建完整 ProjectDetailDto（保持 4 命令统一返回契约）。scope 由 commandName
+   * 推导（DELETE→DELETED，其余→ACTIVE）。project/current 不可解析视为不变量违例（§5.10 兜底）。
+   */
+  const replayProjectDetail = async (
+    repositories: ProjectRepositories,
+    found: CommandReceipt,
+    traceId: string,
+  ): Promise<AppResultDto<ProjectDetailDto>> => {
+    const scope = found.commandName === 'DELETE_PROJECT' ? 'DELETED' : 'ACTIVE';
+    const project = await repositories.projects.findById(found.resultRef.projectId, scope);
+    if (project === null) {
+      return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常，请重试', traceId);
+    }
+    const current = await repositories.formatProfiles.findCurrent(found.resultRef.projectId);
+    if (current === null) {
+      return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常，请重试', traceId);
+    }
+    const history = (
+      await repositories.formatProfiles.findAllByProject(found.resultRef.projectId)
+    ).filter((fp) => fp.id !== current.id);
+    return { ok: true, data: buildProjectDetail(project, current, history) };
+  };
+
+  const list: ProjectService['list'] = (input, traceId) =>
+    deps.unitOfWork.run(async (repositories) => {
+      const searchHash =
+        input.search === null
+          ? null
+          : deps.hasher.hash({ scope: input.scope, search: input.search });
+
+      let after: ProjectKeyset | null = null;
+      if (input.cursor !== null) {
+        const decoded = decodeCursor(input.cursor, { scope: input.scope, searchHash });
+        if (!decoded.ok) return error('IPC_INVALID_REQUEST', '请求参数无效或游标已失效', traceId);
+        after = { updatedAt: decoded.payload.updatedAt, id: decoded.payload.id };
+      }
+
+      const encodeNext = (nextAfter: ProjectKeyset | null): string | null =>
+        nextAfter === null
+          ? null
+          : encodeCursor({
+              v: 1,
+              updatedAt: nextAfter.updatedAt,
+              id: nextAfter.id,
+              scope: input.scope,
+              searchHash,
+            });
+
+      if (input.search === null) {
+        const page = await repositories.projects.listPage({
+          scope: input.scope,
+          limit: input.limit,
+          after,
+        });
+        return {
+          ok: true,
+          data: {
+            items: page.items.map(toSummary),
+            nextCursor: encodeNext(page.nextAfter),
+            truncated: page.truncated,
+          },
+        };
+      }
+
+      const scan = await repositories.projects.scanForSearch({
+        scope: input.scope,
+        after,
+        hardLimit: SEARCH_SCAN_HARD_LIMIT,
+      });
+      const needle = normalizeNameKey(input.search);
+      const matched = scan.candidates.filter((c) =>
+        normalizeNameKey(c.project.name).includes(needle),
+      );
+      const limited = matched.slice(0, input.limit);
+      const hasMore = matched.length > input.limit;
+      const last = limited[limited.length - 1];
+      const nextAfter =
+        (hasMore || scan.truncated) && last !== undefined
+          ? { updatedAt: last.project.updatedAt, id: last.project.id }
+          : null;
+
+      return {
+        ok: true,
+        data: {
+          items: limited.map(toSummary),
+          nextCursor: encodeNext(nextAfter),
+          truncated: scan.truncated,
+        },
+      };
+    });
+
+  const get: ProjectService['get'] = (input, traceId) =>
+    deps.unitOfWork.run(async (repositories) => {
+      const project = await repositories.projects.findById(input.projectId, input.scope);
+      if (project === null) return error('PROJECT_NOT_FOUND', '项目不存在', traceId);
+
+      const profiles = await repositories.formatProfiles.findAllByProject(input.projectId);
+      const current = profiles.find((fp) => fp.isCurrent);
+      if (current === undefined) {
+        return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常', traceId);
+      }
+      const history = profiles.filter((fp) => !fp.isCurrent);
+      return { ok: true, data: buildProjectDetail(project, current, history) };
+    });
+
+  const create: ProjectService['create'] = async (input, traceId) => {
+    // 名称语义校验：zod 已在 IPC 拦空与 100，这里补首尾空白与 code point 计数
+    const nameError = validateProjectName(input.name);
+    if (nameError !== null) {
+      const message = nameErrorMessage(nameError);
+      return error<ProjectDetailDto>('IPC_INVALID_REQUEST', message, traceId, { name: message });
+    }
+
+    // payloadSha256 覆盖全部业务字段（不含 requestId），与 §3.5 幂等判定一致
+    const payloadSha256 = deps.hasher.hash({
+      name: input.name,
+      genre: input.genre,
+      style: input.style,
+      creationMode: input.creationMode,
+      dialogueRenderMode: input.dialogueRenderMode,
+      aspectRatio: input.aspectRatio,
+      subtitleSafeArea: input.subtitleSafeArea,
+    });
+
+    // 幂等预查（事务内读回执）：命中 replay/REQUEST_ID_REUSED 则短路，避免重复 id-gen/prepare（Design §4）
+    const prechecked = await deps.unitOfWork.run(async (repositories) => {
+      const found = await repositories.receipts.findByRequestId(input.requestId);
+      if (found === null) return null;
+      if (found.commandName !== 'CREATE_PROJECT' || found.payloadSha256 !== payloadSha256) {
+        return error<ProjectDetailDto>(
+          'REQUEST_ID_REUSED',
+          '请求 ID 已用于其他操作，请刷新后重试',
+          traceId,
+        );
+      }
+      return replayProjectDetail(repositories, found, traceId);
+    });
+    if (prechecked !== null) return prechecked;
+
+    // 目录准备在事务外完成（Design §5）；projectId 先派生以供目录与事务共用
+    const projectId = deps.idGenerator.newId();
+    let handle: ProjectDirectoryHandle;
+    try {
+      handle = await deps.directory.prepare(projectId);
+    } catch {
+      return error(
+        'PROJECT_DIRECTORY_UNAVAILABLE',
+        '项目目录不可用，请检查存储后重试',
+        traceId,
+        null,
+        true,
+      );
+    }
+
+    try {
+      return await deps.unitOfWork.run(async (repositories) => {
+        // 单一写连接内的名称冲突检查：不依赖数据库 lower()，按 normalizeNameKey 比对
+        const normalizedNew = normalizeNameKey(input.name);
+        const refs = await repositories.projects.findActiveNameRefs(null);
+        if (refs.some((ref) => normalizeNameKey(ref.name) === normalizedNew)) {
+          return error<ProjectDetailDto>('PROJECT_NAME_CONFLICT', '项目名称已被占用', traceId, {
+            name: '该名称已存在，请更换',
+          });
+        }
+
+        const formatProfileId = deps.idGenerator.newId();
+        const nowIso = new Date(deps.clock.now()).toISOString();
+        const project: Project = {
+          id: projectId,
+          name: input.name,
+          genre: input.genre,
+          style: input.style,
+          creationMode: input.creationMode,
+          dialogueRenderMode: input.dialogueRenderMode,
+          deploymentMode: 'LOCAL_DEMO',
+          createdAt: nowIso,
+          updatedAt: nowIso,
+          deletedAt: null,
+        };
+        const profile: FormatProfile = {
+          id: formatProfileId,
+          projectId,
+          versionNo: 1,
+          parentId: null,
+          spec: createFormatProfileSpec(input.aspectRatio, input.subtitleSafeArea),
+          isCurrent: true,
+          createdAt: nowIso,
+        };
+
+        // 单事务顺序写入：任一步 reject → unitOfWork 回滚全部，保证零部分结果
+        await repositories.projects.insert(project);
+        await repositories.formatProfiles.insert(profile);
+        await repositories.audit.record({
+          projectId,
+          action: 'PROJECT_CREATED',
+          objectType: 'PROJECT',
+          objectId: projectId,
+          traceId,
+          occurredAt: nowIso,
+        });
+        await repositories.analytics.record({
+          projectId,
+          eventName: 'project_created',
+          properties: { source: 'PROJECT_SETTINGS' },
+          occurredAt: nowIso,
+        });
+        await repositories.analytics.record({
+          projectId,
+          eventName: 'dialogue_mode_selected',
+          properties: {
+            dialogueRenderMode: input.dialogueRenderMode,
+            source: 'PROJECT_SETTINGS',
+          },
+          occurredAt: nowIso,
+        });
+
+        // 幂等回执：payloadSha256 复用 prepare 前的预计算值（§3.5）
+        await repositories.receipts.insert({
+          requestId: input.requestId,
+          commandName: 'CREATE_PROJECT',
+          payloadSha256,
+          projectId,
+          resultRef: { projectId, formatProfileId, updatedAt: nowIso, changed: true },
+          traceId,
+          committedAt: nowIso,
+        });
+
+        return { ok: true, data: buildProjectDetail(project, profile, []) };
+      });
+    } catch {
+      // 事务回滚后补偿清理本次新建目录；补偿失败仅脱敏 WARN，不影响返回的安全错误（Design §5）
+      try {
+        await deps.directory.cleanupIfCreatedEmpty(handle);
+      } catch {
+        /* 不向 Renderer 暴露 fs 细节（§3.7 进一步覆盖注入测试） */
+      }
+      return persistenceFailed(traceId, '项目创建失败，请重试');
+    }
+  };
+
+  const update: ProjectService['update'] = (input, traceId) => {
+    const projectId = input.projectId;
+    // payloadSha256 覆盖命令定位 + 业务字段（不含 requestId），与 §3.5 幂等约定一致
+    const payloadSha256 = deps.hasher.hash({
+      projectId,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+      name: input.name,
+      genre: input.genre,
+      style: input.style,
+      dialogueRenderMode: input.dialogueRenderMode,
+      aspectRatio: input.aspectRatio,
+      subtitleSafeArea: input.subtitleSafeArea,
+    });
+    return deps.unitOfWork
+      .run<AppResultDto<ProjectDetailDto>>(async (repositories) => {
+        // 0. 幂等：同 requestId 已提交 → replay；不同 command/hash → REQUEST_ID_REUSED（Design §4）
+        const found = await repositories.receipts.findByRequestId(input.requestId);
+        if (found !== null) {
+          if (found.commandName !== 'UPDATE_PROJECT' || found.payloadSha256 !== payloadSha256) {
+            return error<ProjectDetailDto>(
+              'REQUEST_ID_REUSED',
+              '请求 ID 已用于其他操作，请刷新后重试',
+              traceId,
+            );
+          }
+          return replayProjectDetail(repositories, found, traceId);
+        }
+
+        // 1. NOT_FOUND guard（乐观锁 false 含 not-found，先 findById 区分）
+        const project = await repositories.projects.findById(projectId, 'ACTIVE');
+        if (project === null) return error('PROJECT_NOT_FOUND', '项目不存在', traceId);
+
+        // 2. 名称语义校验（zod 已在 IPC 拦空与 100，这里补首尾空白）
+        const nameError = validateProjectName(input.name);
+        if (nameError !== null) {
+          const message = nameErrorMessage(nameError);
+          return error('IPC_INVALID_REQUEST', message, traceId, { name: message });
+        }
+
+        // 3. 名称冲突检查（排除自身）：单写连接内按 normalizeNameKey 比对，不依赖数据库 lower()
+        const normalizedNew = normalizeNameKey(input.name);
+        const refs = await repositories.projects.findActiveNameRefs(projectId);
+        if (refs.some((ref) => normalizeNameKey(ref.name) === normalizedNew)) {
+          return error('PROJECT_NAME_CONFLICT', '项目名称已被占用', traceId, {
+            name: '该名称已存在，请更换',
+          });
+        }
+
+        // 4. 读 current FormatProfile
+        const current = await repositories.formatProfiles.findCurrent(projectId);
+        if (current === null) {
+          return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常', traceId);
+        }
+
+        // 5. 判定变化（creationMode 不可改，不参与）
+        const newSpec = createFormatProfileSpec(input.aspectRatio, input.subtitleSafeArea);
+        const profileChanged = !formatProfileSpecsEqual(newSpec, current.spec);
+        const metadataChanged =
+          input.name !== project.name ||
+          input.genre !== project.genre ||
+          input.style !== project.style ||
+          input.dialogueRenderMode !== project.dialogueRenderMode;
+        const dialogueModeChanged = input.dialogueRenderMode !== project.dialogueRenderMode;
+
+        // 6. no-op：写 NO_OP receipt（changed=false），不写 audit/event，updatedAt 不动，返回当前
+        if (!profileChanged && !metadataChanged) {
+          const profiles = await repositories.formatProfiles.findAllByProject(projectId);
+          await repositories.receipts.insert({
+            requestId: input.requestId,
+            commandName: 'UPDATE_PROJECT',
+            payloadSha256,
+            projectId,
+            resultRef: {
+              projectId,
+              formatProfileId: current.id,
+              updatedAt: project.updatedAt,
+              changed: false,
+            },
+            traceId,
+            committedAt: new Date(deps.clock.now()).toISOString(),
+          });
+          return {
+            ok: true,
+            data: buildProjectDetail(
+              project,
+              current,
+              profiles.filter((fp) => !fp.isCurrent),
+            ),
+          };
+        }
+
+        // 7. FormatProfile 变化：下游依赖阻断检查（写入前，纯读）
+        if (profileChanged) {
+          const blocked = await repositories.formatProfiles.isCurrentReferencedByShotContract(
+            projectId,
+            current.id,
+          );
+          if (blocked) {
+            return error(
+              'FORMAT_PROFILE_DEPENDENCY_BLOCKED',
+              '当前画幅已被分镜引用，暂不可修改',
+              traceId,
+            );
+          }
+        }
+
+        // 8. 单调 updatedAt + 乐观锁更新 Project（false = 冲突或不存在，前面已排除 not-found）
+        const nowIso = monotonicUpdatedAt(deps.clock.now(), project.updatedAt);
+        const newProject: Project = {
+          ...project,
+          name: input.name,
+          genre: input.genre,
+          style: input.style,
+          dialogueRenderMode: input.dialogueRenderMode,
+          updatedAt: nowIso,
+        };
+        const hit = await repositories.projects.update(newProject, input.expectedUpdatedAt);
+        if (!hit) {
+          return error(
+            'PROJECT_VERSION_CONFLICT',
+            '项目已被修改，请刷新后重试',
+            traceId,
+            null,
+            true,
+          );
+        }
+
+        // 9. FormatProfile 版本链切换（同事务：unsetCurrent 旧 + insert 新）
+        let resultProfile = current;
+        if (profileChanged) {
+          const maxVersionNo = await repositories.formatProfiles.findMaxVersionNo(projectId);
+          const newProfileId = deps.idGenerator.newId();
+          resultProfile = {
+            id: newProfileId,
+            projectId,
+            versionNo: maxVersionNo + 1,
+            parentId: current.id,
+            spec: newSpec,
+            isCurrent: true,
+            createdAt: nowIso,
+          };
+          await repositories.formatProfiles.unsetCurrent(projectId, current.id);
+          await repositories.formatProfiles.insert(resultProfile);
+          await repositories.audit.record({
+            projectId,
+            action: 'FORMAT_PROFILE_VERSIONED',
+            objectType: 'FORMAT_PROFILE',
+            objectId: newProfileId,
+            traceId,
+            occurredAt: nowIso,
+          });
+        }
+
+        // 10. 元数据 audit（元数据变即写；与 FORMAT_PROFILE_VERSIONED 独立，两者都变写两条）
+        await repositories.audit.record({
+          projectId,
+          action: 'PROJECT_UPDATED',
+          objectType: 'PROJECT',
+          objectId: projectId,
+          traceId,
+          occurredAt: nowIso,
+        });
+
+        // 11. analytics：仅 dialogueRenderMode 变化时写 dialogue_mode_selected
+        if (dialogueModeChanged) {
+          await repositories.analytics.record({
+            projectId,
+            eventName: 'dialogue_mode_selected',
+            properties: {
+              dialogueRenderMode: input.dialogueRenderMode,
+              source: 'PROJECT_SETTINGS',
+            },
+            occurredAt: nowIso,
+          });
+        }
+
+        // 12. receipt（changed=true）
+        await repositories.receipts.insert({
+          requestId: input.requestId,
+          commandName: 'UPDATE_PROJECT',
+          payloadSha256,
+          projectId,
+          resultRef: {
+            projectId,
+            formatProfileId: resultProfile.id,
+            updatedAt: nowIso,
+            changed: true,
+          },
+          traceId,
+          committedAt: nowIso,
+        });
+
+        // 13. 返回（重读 history：旧 current 现 isCurrent=false，落入 history）
+        const profiles = await repositories.formatProfiles.findAllByProject(projectId);
+        return {
+          ok: true,
+          data: buildProjectDetail(
+            newProject,
+            resultProfile,
+            profiles.filter((fp) => !fp.isCurrent),
+          ),
+        };
+      })
+      .catch(
+        // 事务内任一写入 reject → unitOfWork 快照回滚后 rethrow；归一化为安全错误（§3.7 进一步脱敏）
+        () => persistenceFailed<ProjectDetailDto>(traceId, '项目更新失败，请重试'),
+      );
+  };
+
+  const deleteProject: ProjectService['delete'] = (input, traceId) => {
+    const projectId = input.projectId;
+    // payloadSha256 覆盖命令定位（不含 requestId），与 §3.5 幂等约定一致
+    const payloadSha256 = deps.hasher.hash({
+      projectId,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    });
+    return deps.unitOfWork
+      .run<AppResultDto<ProjectDetailDto>>(async (repositories) => {
+        // 0. 幂等：同 requestId 已提交 → replay；不同 command/hash → REQUEST_ID_REUSED（Design §4）
+        const found = await repositories.receipts.findByRequestId(input.requestId);
+        if (found !== null) {
+          if (found.commandName !== 'DELETE_PROJECT' || found.payloadSha256 !== payloadSha256) {
+            return error<ProjectDetailDto>(
+              'REQUEST_ID_REUSED',
+              '请求 ID 已用于其他操作，请刷新后重试',
+              traceId,
+            );
+          }
+          return replayProjectDetail(repositories, found, traceId);
+        }
+
+        // 1. ACTIVE 查不到 → 区分 ALREADY_DELETED / NOT_FOUND（无 ANY scope，两次 scope 查询）
+        const active = await repositories.projects.findById(projectId, 'ACTIVE');
+        if (active === null) {
+          const alreadyDeleted = await repositories.projects.findById(projectId, 'DELETED');
+          return alreadyDeleted !== null
+            ? error('PROJECT_ALREADY_DELETED', '项目已被删除，无需重复操作', traceId)
+            : error('PROJECT_NOT_FOUND', '项目不存在', traceId);
+        }
+
+        // 2. current 不变性守卫（写入前；纯读返回 error 不触发回滚，无副作用）
+        const current = await repositories.formatProfiles.findCurrent(projectId);
+        if (current === null) {
+          return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常', traceId);
+        }
+
+        // 3. 单调 updatedAt + 原子设 deleted_at（Design §6：仅 Project deleted_at/updated_at 变）
+        const nowIso = monotonicUpdatedAt(deps.clock.now(), active.updatedAt);
+        const deletedProject: Project = { ...active, deletedAt: nowIso, updatedAt: nowIso };
+
+        // 4. 乐观锁（此后才有写入；false = 版本冲突，此前无写入）
+        const hit = await repositories.projects.update(deletedProject, input.expectedUpdatedAt);
+        if (!hit) {
+          return error(
+            'PROJECT_VERSION_CONFLICT',
+            '项目已被修改，请刷新后重试',
+            traceId,
+            null,
+            true,
+          );
+        }
+
+        // 5. 审计 PROJECT_DELETED（目录/导出/Provider 侧数据零删除）
+        await repositories.audit.record({
+          projectId,
+          action: 'PROJECT_DELETED',
+          objectType: 'PROJECT',
+          objectId: projectId,
+          traceId,
+          occurredAt: nowIso,
+        });
+
+        // 6. 回执（changed=true；FormatProfile 不删除，formatProfileId 不变）
+        await repositories.receipts.insert({
+          requestId: input.requestId,
+          commandName: 'DELETE_PROJECT',
+          payloadSha256,
+          projectId,
+          resultRef: { projectId, formatProfileId: current.id, updatedAt: nowIso, changed: true },
+          traceId,
+          committedAt: nowIso,
+        });
+
+        // 7. 返回（重读 history：current 不变，profile 链完整保留）
+        const profiles = await repositories.formatProfiles.findAllByProject(projectId);
+        return {
+          ok: true,
+          data: buildProjectDetail(
+            deletedProject,
+            current,
+            profiles.filter((fp) => !fp.isCurrent),
+          ),
+        };
+      })
+      .catch(
+        // 事务内任一写入 reject → unitOfWork 快照回滚后 rethrow；归一化为安全错误（§3.7 进一步脱敏）
+        () => persistenceFailed<ProjectDetailDto>(traceId, '项目删除失败，请重试'),
+      );
+  };
+
+  const restore: ProjectService['restore'] = (input, traceId) => {
+    const projectId = input.projectId;
+    // payloadSha256 覆盖命令定位（不含 requestId），与 §3.5 幂等约定一致
+    const payloadSha256 = deps.hasher.hash({
+      projectId,
+      expectedUpdatedAt: input.expectedUpdatedAt,
+    });
+    return deps.unitOfWork
+      .run<AppResultDto<ProjectDetailDto>>(async (repositories) => {
+        // 0. 幂等：同 requestId 已提交 → replay；不同 command/hash → REQUEST_ID_REUSED（Design §4）
+        const found = await repositories.receipts.findByRequestId(input.requestId);
+        if (found !== null) {
+          if (found.commandName !== 'RESTORE_PROJECT' || found.payloadSha256 !== payloadSha256) {
+            return error<ProjectDetailDto>(
+              'REQUEST_ID_REUSED',
+              '请求 ID 已用于其他操作，请刷新后重试',
+              traceId,
+            );
+          }
+          return replayProjectDetail(repositories, found, traceId);
+        }
+
+        // 1. DELETED 查不到 → 区分 NOT_DELETED / NOT_FOUND（无 ANY scope，两次 scope 查询）
+        const deleted = await repositories.projects.findById(projectId, 'DELETED');
+        if (deleted === null) {
+          const active = await repositories.projects.findById(projectId, 'ACTIVE');
+          return active !== null
+            ? error('PROJECT_NOT_DELETED', '项目未被删除，无需恢复', traceId)
+            : error('PROJECT_NOT_FOUND', '项目不存在', traceId);
+        }
+
+        // 2. 名称冲突重检（事务内，排除自身；按 normalizeNameKey 比对，不依赖数据库 lower()）
+        const wantedKey = normalizeNameKey(deleted.name);
+        const refs = await repositories.projects.findActiveNameRefs(projectId);
+        if (refs.some((ref) => normalizeNameKey(ref.name) === wantedKey)) {
+          // 原项目保持软删除，不自动改名
+          return error('PROJECT_NAME_CONFLICT', '存在同名活动项目，无法恢复', traceId);
+        }
+
+        // 3. current 不变性守卫（写入前；纯读返回 error 不触发回滚，无副作用）
+        const current = await repositories.formatProfiles.findCurrent(projectId);
+        if (current === null) {
+          return error('PROJECT_PERSISTENCE_FAILED', '项目数据异常', traceId);
+        }
+
+        // 4. 单调 updatedAt + 清 deleted_at
+        const nowIso = monotonicUpdatedAt(deps.clock.now(), deleted.updatedAt);
+        const restoredProject: Project = { ...deleted, deletedAt: null, updatedAt: nowIso };
+
+        // 5. 乐观锁（此后才有写入；false = 版本冲突，此前无写入）
+        const hit = await repositories.projects.update(restoredProject, input.expectedUpdatedAt);
+        if (!hit) {
+          return error(
+            'PROJECT_VERSION_CONFLICT',
+            '项目已被修改，请刷新后重试',
+            traceId,
+            null,
+            true,
+          );
+        }
+
+        // 6. 审计 PROJECT_RESTORED
+        await repositories.audit.record({
+          projectId,
+          action: 'PROJECT_RESTORED',
+          objectType: 'PROJECT',
+          objectId: projectId,
+          traceId,
+          occurredAt: nowIso,
+        });
+
+        // 7. 回执（changed=true；FormatProfile 链恢复可见）
+        await repositories.receipts.insert({
+          requestId: input.requestId,
+          commandName: 'RESTORE_PROJECT',
+          payloadSha256,
+          projectId,
+          resultRef: { projectId, formatProfileId: current.id, updatedAt: nowIso, changed: true },
+          traceId,
+          committedAt: nowIso,
+        });
+
+        // 8. 返回（重读 history：current 不变）
+        const profiles = await repositories.formatProfiles.findAllByProject(projectId);
+        return {
+          ok: true,
+          data: buildProjectDetail(
+            restoredProject,
+            current,
+            profiles.filter((fp) => !fp.isCurrent),
+          ),
+        };
+      })
+      .catch(
+        // 事务内任一写入 reject → unitOfWork 快照回滚后 rethrow；归一化为安全错误（§3.7 进一步脱敏）
+        () => persistenceFailed<ProjectDetailDto>(traceId, '项目恢复失败，请重试'),
+      );
+  };
+
+  return { list, get, create, update, delete: deleteProject, restore };
+};

@@ -1,0 +1,53 @@
+{
+  "name": "jingxu-studio",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "镜序 Studio V1 本地桌面工作台工程基线",
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": ">=22.16.0 <23",
+    "pnpm": ">=11.16.0 <12"
+  },
+  "scripts": {
+    "check:env": "node ./scripts/assert-environment.mjs",
+    "preinstall": "node ./scripts/assert-environment.mjs",
+    "predev": "pnpm check:env",
+    "dev": "pnpm --filter @jingxu/desktop start",
+    "prebuild": "pnpm check:env",
+    "build": "pnpm --filter @jingxu/desktop build",
+    "preformat": "pnpm check:env",
+    "format": "prettier --write package.json pnpm-workspace.yaml \"*.config.{mjs,ts}\" \"scripts/**/*.{mjs,ts}\" \"apps/**/*.{json,ts,tsx,css,html}\" \"packages/**/*.{json,ts,tsx}\" docs/SQLITE_RUNTIME.md docs/SQLITE_SCHEMA_TRACE.md README.md",
+    "preformat:check": "pnpm check:env",
+    "format:check": "prettier --check package.json pnpm-workspace.yaml \"*.config.{mjs,ts}\" \"scripts/**/*.{mjs,ts}\" \"apps/**/*.{json,ts,tsx,css,html}\" \"packages/**/*.{json,ts,tsx}\" docs/SQLITE_RUNTIME.md docs/SQLITE_SCHEMA_TRACE.md README.md",
+    "prelint": "pnpm check:env",
+    "lint": "eslint . --max-warnings=0",
+    "pretypecheck": "pnpm check:env",
+    "typecheck": "tsc -b",
+    "pretest": "pnpm check:env",
+    "test": "vitest run --config vitest.config.ts",
+    "pretest:contract": "pnpm check:env",
+    "test:contract": "vitest run --config vitest.contract.config.ts",
+    "pretest:integration": "pnpm check:env",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "pretest:e2e": "pnpm build",
+    "test:e2e": "playwright test --config playwright.config.ts",
+    "pretest:collection": "pnpm check:env",
+    "test:collection": "node ./scripts/verify-test-collection.mjs",
+    "prepackage:win": "pnpm check:env",
+    "package:win": "pnpm --filter @jingxu/desktop package:win"
+  },
+  "devDependencies": {
+    "@jingxu/contracts": "workspace:*",
+    "@jingxu/domain": "workspace:*",
+    "@jingxu/validation": "workspace:*",
+    "@playwright/test": "^1.62.1",
+    "@types/node": "^26.1.2",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "prettier": "^3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "^8.66.0",
+    "vitest": "^4.1.10"
+  }
+}

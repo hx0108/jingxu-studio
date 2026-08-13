@@ -1,0 +1,171 @@
+import {
+  appResultSchema,
+  EVENTS_IPC_CHANNELS,
+  jobCreateInputSchema,
+  jobGetInputSchema,
+  JOB_IPC_CHANNELS,
+  jobListInputSchema,
+  jobMutationInputSchema,
+  jobSummarySchema,
+  jobUpdatesSubscriptionSchema,
+  createProjectInputSchema,
+  deleteProjectInputSchema,
+  PROJECT_IPC_CHANNELS,
+  providerCredentialCommandSchema,
+  providerGetInputSchema,
+  PROVIDER_IPC_CHANNELS,
+  providerMutationInputSchema,
+  providerProfileCommandSchema,
+  providerProfileSchema,
+  projectDetailSchema,
+  projectGetInputSchema,
+  projectListInputSchema,
+  projectListResultSchema,
+  restoreProjectInputSchema,
+  RUNTIME_IPC_CHANNELS,
+  startupStatusSchema,
+  subscriptionResultSchema,
+  updateProjectInputSchema,
+  type CreateProjectInputDto,
+  type JobCreateInputDto,
+  type JobGetInputDto,
+  type JobListInputDto,
+  type JobMutationInputDto,
+  type JobUpdatesSubscriptionDto,
+  type DeleteProjectInputDto,
+  type JingxuApi,
+  type ProjectGetInputDto,
+  type ProjectListInputDto,
+  type ProviderCredentialCommandDto,
+  type ProviderGetInputDto,
+  type ProviderMutationInputDto,
+  type ProviderProfileCommandDto,
+  type RestoreBackupCommandDto,
+  type RestoreProjectInputDto,
+  type StartupCommandDto,
+  type UpdateProjectInputDto,
+} from '@jingxu/contracts';
+
+export {
+  EVENTS_IPC_CHANNELS,
+  JOB_IPC_CHANNELS,
+  PROJECT_IPC_CHANNELS,
+  PROVIDER_IPC_CHANNELS,
+  RUNTIME_IPC_CHANNELS,
+};
+
+export type InvokeIpc = (channel: string, ...arguments_: readonly unknown[]) => Promise<unknown>;
+
+export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
+  Object.freeze({
+    events: Object.freeze({
+      subscribeJobUpdates: async (input: JobUpdatesSubscriptionDto) => {
+        const validated = jobUpdatesSubscriptionSchema.parse(input);
+        return appResultSchema(subscriptionResultSchema).parse(
+          await invoke(EVENTS_IPC_CHANNELS.subscribeJobUpdates, validated),
+        );
+      },
+    }),
+    job: Object.freeze({
+      create: async (input: JobCreateInputDto) =>
+        appResultSchema(jobSummarySchema).parse(
+          await invoke(JOB_IPC_CHANNELS.create, jobCreateInputSchema.parse(input)),
+        ),
+      get: async (input: JobGetInputDto) =>
+        appResultSchema(jobSummarySchema).parse(
+          await invoke(JOB_IPC_CHANNELS.get, jobGetInputSchema.parse(input)),
+        ),
+      list: async (input: JobListInputDto) =>
+        appResultSchema(jobSummarySchema.array()).parse(
+          await invoke(JOB_IPC_CHANNELS.list, jobListInputSchema.parse(input)),
+        ),
+      cancel: async (input: JobMutationInputDto) =>
+        appResultSchema(jobSummarySchema).parse(
+          await invoke(JOB_IPC_CHANNELS.cancel, jobMutationInputSchema.parse(input)),
+        ),
+      retry: async (input: JobMutationInputDto) =>
+        appResultSchema(jobSummarySchema).parse(
+          await invoke(JOB_IPC_CHANNELS.retry, jobMutationInputSchema.parse(input)),
+        ),
+    }),
+    runtime: Object.freeze({
+      getStartupStatus: async () =>
+        startupStatusSchema.parse(await invoke(RUNTIME_IPC_CHANNELS.getStartupStatus)),
+      restoreBackup: async (command: RestoreBackupCommandDto) =>
+        startupStatusSchema.parse(await invoke(RUNTIME_IPC_CHANNELS.restoreBackup, command)),
+      retryStartup: async (command: StartupCommandDto) =>
+        startupStatusSchema.parse(await invoke(RUNTIME_IPC_CHANNELS.retryStartup, command)),
+    }),
+    project: Object.freeze({
+      list: async (input: ProjectListInputDto) => {
+        const validated = projectListInputSchema.parse(input);
+        return appResultSchema(projectListResultSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.list, validated),
+        );
+      },
+      get: async (input: ProjectGetInputDto) => {
+        const validated = projectGetInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.get, validated),
+        );
+      },
+      create: async (input: CreateProjectInputDto) => {
+        const validated = createProjectInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.create, validated),
+        );
+      },
+      update: async (input: UpdateProjectInputDto) => {
+        const validated = updateProjectInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.update, validated),
+        );
+      },
+      delete: async (input: DeleteProjectInputDto) => {
+        const validated = deleteProjectInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.delete, validated),
+        );
+      },
+      restore: async (input: RestoreProjectInputDto) => {
+        const validated = restoreProjectInputSchema.parse(input);
+        return appResultSchema(projectDetailSchema).parse(
+          await invoke(PROJECT_IPC_CHANNELS.restore, validated),
+        );
+      },
+    }),
+    provider: Object.freeze({
+      getProfile: async (input: ProviderGetInputDto) =>
+        appResultSchema(providerProfileSchema).parse(
+          await invoke(PROVIDER_IPC_CHANNELS.getProfile, providerGetInputSchema.parse(input)),
+        ),
+      saveProfile: async (input: ProviderProfileCommandDto) =>
+        appResultSchema(providerProfileSchema).parse(
+          await invoke(
+            PROVIDER_IPC_CHANNELS.saveProfile,
+            providerProfileCommandSchema.parse(input),
+          ),
+        ),
+      saveCredential: async (input: ProviderCredentialCommandDto) =>
+        appResultSchema(providerProfileSchema).parse(
+          await invoke(
+            PROVIDER_IPC_CHANNELS.saveCredential,
+            providerCredentialCommandSchema.parse(input),
+          ),
+        ),
+      testCredential: async (input: ProviderMutationInputDto) =>
+        appResultSchema(providerProfileSchema).parse(
+          await invoke(
+            PROVIDER_IPC_CHANNELS.testCredential,
+            providerMutationInputSchema.parse(input),
+          ),
+        ),
+      deleteCredential: async (input: ProviderMutationInputDto) =>
+        appResultSchema(providerProfileSchema).parse(
+          await invoke(
+            PROVIDER_IPC_CHANNELS.deleteCredential,
+            providerMutationInputSchema.parse(input),
+          ),
+        ),
+    }),
+  });

@@ -1,0 +1,14 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/domain" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/validation" },
+    { "path": "./packages/test-fixtures" },
+    { "path": "./packages/application" },
+    { "path": "./packages/persistence" },
+    { "path": "./packages/model-adapters" },
+    { "path": "./apps/desktop" },
+    { "path": "./tsconfig.tools.json" }
+  ]
+}

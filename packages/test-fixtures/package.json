@@ -1,0 +1,13 @@
+{
+  "name": "@jingxu/test-fixtures",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.16.0 <23",
+    "pnpm": ">=11.16.0 <12"
+  },
+  "dependencies": {
+    "@jingxu/validation": "workspace:*"
+  }
+}

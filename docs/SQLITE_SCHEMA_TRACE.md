@@ -1,0 +1,21 @@
+# SQLite 初始结构追踪
+
+本追踪表把 TECH_DESIGN v1.1 §8.4 的持久化对象映射到已发布 migration 与自动化测试。数据库事实源是 `packages/persistence/resources/migrations/` 下的 `0001_initial.sql`（不可变初始结构）与 `0002_project_command_receipts.sql`（追加的命令幂等回执表，Design §4）；本文件不复制完整 DDL。下表登记 `0001_initial.sql` 建立的对象。
+
+| TECH 表组               | `0001_initial.sql` 表                                                                                                                                                                           | 主要约束证据                                                                         |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| §8.4.1 系统与配置       | `schema_migrations`、`app_settings`、`schema_registry_manifest`、`provider_profiles`、`provider_capability_snapshots`、`model_price_snapshots`、`reference_price_snapshots`、`prompt_templates` | JSON、FK、枚举、唯一价格版本、`SHOT_PACKAGE + PER_SHOT`、不透明 `credential_ref`     |
+| §8.4.2 项目、输入与版本 | `projects`、`format_profiles`、`source_inputs`、`consent_records`、`episodes`、`episode_versions`、`episode_version_shots`、`story_bible_versions`、`script_versions`、`stage_heads`            | FK、版本唯一、单 current、单 active Episode、项目级/集级 stage head、JSON 基础合法性 |
+| §8.4.3 任务、锁与依赖   | `script_stage_jobs`、`model_invocations`、`lock_records`、`dependency_edges`、`audit_events`                                                                                                    | 状态枚举、幂等键、重试次数、有效锁唯一、复合边唯一、审计 JSON 与敏感字段缺席         |
+| §8.4.4 分镜与可生产性   | `shots`、`shot_contract_versions`、`shot_derivations`、`producibility_reports`、`producibility_findings`、`finding_overrides`                                                                   | lifecycle/版本/血缘枚举、契约镜像字段、Episode sequence、LLM 不得产生 BLOCK          |
+| §8.4.5 导入导出与评测   | `export_records`、`import_records`、`evaluation_samples`、`evaluation_annotations`、`analytics_events`                                                                                          | 状态、成功导入幂等、JSON、样本去重和必要查询索引                                     |
+
+`command_receipts`（Design §4，由 0002 建立）以 `request_id` 为主键，约束包括合法 command 枚举（`CREATE_PROJECT`/`UPDATE_PROJECT`/`DELETE_PROJECT`/`RESTORE_PROJECT`）、64 位小写 hex `payload_sha256`、`json_valid(result_ref_json)`、可空 `project_id` 外键指向 `projects(id)` 以及 `ix_command_receipts_project` 部分索引。`result_ref_json` 只保存 Project/FormatProfile ID 与提交 revision/时间等安全引用，不保存名称、genre/style、目录或完整命令载荷。0002 不修改 `0001_initial.sql`、不使用 `PRAGMA user_version`；发布回滚不执行 down migration，需要回退时使用升级前受管理备份恢复，旧二进制遇到 schema version 2 以 `DATABASE_VERSION_TOO_NEW` 阻断。
+
+确定命名对象由 `packages/persistence/src/migrations/initial-schema-trace.ts` 登记：0001 提供 34 张表、18 个索引和 4 个 immutable UPDATE trigger；0002 追加 `command_receipts` 表与 `ix_command_receipts_project` 索引，合计 35 张表、19 个索引。`initial-schema.integration.test.ts` 执行空库 introspection、`foreign_key_check` 和分组负例；`project-command-receipts.integration.test.ts` 覆盖 0001/0002 连续性、0001 已发布 checksum 不变、空库终态 v2、重复启动跳过、`command_receipts` DDL 负例、受管理备份先行（manifest source=1 target=2）、0002 中途失败/checksum 漂移/高版本库/备份失败的回滚与只读故障，以及 100+ 历史对象压力库演练；`migration-runner.integration.test.ts` 覆盖顺序、checksum、重复启动、高版本库、未版本化库、单事务回滚及 101 历史版本升级。
+
+当前 Project 切片已实现 `projects`、`format_profiles`、`audit_events`、`analytics_events` 和 `command_receipts` 的 Repository/UnitOfWork 访问：创建在单一事务提交五类证据，更新保留 FormatProfile parent/version/current 链，删除与恢复只改变 Project 聚合，失败回滚零部分写入。对应证据位于 `sqlite-project-read.integration.test.ts`、`sqlite-project-list.integration.test.ts`、`sqlite-project-write.integration.test.ts`、`database-audit.integration.test.ts` 和 Main Composition Integration。
+
+Schema Registry 切片已实现 `schema_registry_manifest` Row mapper、事务内 Repository 和复用唯一写连接的 UnitOfWork。前置 `database-audit` 只拒绝结构非法行并允许合法旧集合进入替换阶段；Application 在资源全部验证和编译成功后短事务精确替换四条启用记录、事务内读回逐字段对账，删除/四个插入点/读回故障均回滚且不发布 Registry。对应证据位于 `sqlite-schema-manifest.integration.test.ts`、`schema-manifest-runtime.integration.test.ts`、`database-audit.integration.test.ts` 和 Main Composition Integration；没有修改 0001/0002，也没有新增 migration。
+
+其余 DDL 仍只是后续 Change 的存储基线：SourceInput、Consent、Episode/集合校验、JobRunner、导入导出和评测业务方法尚未实现。表存在、`integrity_check` 通过或 Registry 已发布都不能替代对应业务验收；AC-V1-01 尚未完成。

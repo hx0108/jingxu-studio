@@ -1,0 +1,2 @@
+# These are byte-for-byte controlled copies of the PRD-owned root schemas.
+packages/validation/resources/schemas/v1/*.json

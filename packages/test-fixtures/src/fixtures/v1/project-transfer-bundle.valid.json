@@ -1,0 +1,239 @@
+{
+  "schema_version": "1.0.0",
+  "bundle_id": "bundle_rain_station_v1",
+  "exported_at": "2026-08-05T02:30:00+08:00",
+  "project_snapshot": {
+    "project_id": "project_rain_station",
+    "name": "雨夜旧车站",
+    "creation_mode": "AI_ORIGINAL",
+    "dialogue_render_mode": "NARRATION_FIRST"
+  },
+  "story_bible": {
+    "version_id": "story_bible_v1",
+    "output": {
+      "schema_version": "1.0.0",
+      "project_id": "project_rain_station",
+      "episode_id": null,
+      "source_invocation_id": "inv_story_bible_v1",
+      "stage": "STORY_BIBLE",
+      "data": {
+        "characters": {
+          "char_lin": {
+            "name": "林晚",
+            "appearance": "黑色长发，深色风衣，手持红伞",
+            "personality": "克制、敏锐",
+            "motivation": "确认失约者留下的真相"
+          }
+        },
+        "world_rules": ["故事发生在现实世界的雨夜旧车站"],
+        "scenes": {
+          "scene_old_station_night": {
+            "name": "雨夜旧车站",
+            "description": "停运多年的站台，只有入口灯仍亮着"
+          }
+        },
+        "props": {
+          "prop_red_umbrella": {
+            "name": "红伞",
+            "description": "林晚随身携带的旧红伞"
+          }
+        }
+      }
+    }
+  },
+  "script_stage_outputs": [
+    {
+      "version_id": "script_concept_v1",
+      "output": {
+        "schema_version": "1.0.0",
+        "project_id": "project_rain_station",
+        "episode_id": null,
+        "source_invocation_id": "inv_concept_v1",
+        "stage": "CONCEPT",
+        "data": {
+          "title": "雨夜旧车站",
+          "genre": "悬疑",
+          "target_audience": "喜欢情绪悬疑的年轻观众",
+          "core_conflict": "林晚必须在等待与离开之间作出选择",
+          "theme": "等待并不等于停滞",
+          "synopsis": "林晚在雨夜旧车站等待失约十年的人，并发现一条新的线索。"
+        }
+      }
+    },
+    {
+      "version_id": "script_outline_v1",
+      "output": {
+        "schema_version": "1.0.0",
+        "project_id": "project_rain_station",
+        "episode_id": "episode_01",
+        "source_invocation_id": "inv_outline_v1",
+        "stage": "EPISODE_OUTLINE",
+        "data": {
+          "episode_goal": "让林晚发现失约者可能仍然活着",
+          "opening": "林晚抵达停运的旧车站",
+          "midpoint": "她在站台发现熟悉的记号",
+          "climax": "入口灯突然熄灭",
+          "ending_hook": "黑暗中传来脚步声",
+          "target_duration_sec": 90
+        }
+      }
+    },
+    {
+      "version_id": "script_beats_v1",
+      "output": {
+        "schema_version": "1.0.0",
+        "project_id": "project_rain_station",
+        "episode_id": "episode_01",
+        "source_invocation_id": "inv_beats_v1",
+        "stage": "BEAT_SHEET",
+        "data": {
+          "beats": [
+            {
+              "beat_id": "beat_1",
+              "sequence": 1,
+              "purpose": "建立",
+              "description": "林晚进入雨夜车站",
+              "estimated_duration_sec": 30
+            },
+            {
+              "beat_id": "beat_2",
+              "sequence": 2,
+              "purpose": "发展",
+              "description": "林晚发现旧记号",
+              "estimated_duration_sec": 30
+            },
+            {
+              "beat_id": "beat_3",
+              "sequence": 3,
+              "purpose": "悬念",
+              "description": "灯灭并传来脚步声",
+              "estimated_duration_sec": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "version_id": "script_scene_v1",
+      "output": {
+        "schema_version": "1.0.0",
+        "project_id": "project_rain_station",
+        "episode_id": "episode_01",
+        "source_invocation_id": "inv_scene_v1",
+        "stage": "SCENE_SCRIPT",
+        "data": {
+          "scenes": [
+            {
+              "script_scene_id": "script_scene_1",
+              "sequence": 1,
+              "scene_id": "scene_old_station_night",
+              "character_ids": ["char_lin"],
+              "action": "林晚撑着红伞站在空站台边缘，望向没有列车驶来的轨道。",
+              "spoken_lines": [
+                { "speaker_id": "narrator", "line_type": "NARRATION", "text": "她等了整整十年。" }
+              ],
+              "estimated_duration_sec": 90
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "episode_storyboard": {
+    "schema_version": "1.1.0",
+    "export_id": "export_rain_station_ep01_v1",
+    "exported_at": "2026-08-05T02:30:00+08:00",
+    "project_id": "project_rain_station",
+    "episode_id": "episode_01",
+    "episode_version": 1,
+    "target_duration_sec": 90,
+    "lineage_completeness": "CURRENT_ONLY",
+    "story_bible_version_id": "story_bible_v1",
+    "format_profile": {
+      "id": "format_vertical_1080p",
+      "aspect_ratio": "9:16",
+      "width": 1080,
+      "height": 1920,
+      "fps": 30,
+      "language": "zh-CN",
+      "subtitle_safe_area": { "top_pct": 5, "right_pct": 5, "bottom_pct": 12, "left_pct": 5 }
+    },
+    "shot_contracts": [
+      {
+        "schema_version": "1.1.0",
+        "shot_id": "shot_ep01_001",
+        "version_id": "scv_shot_ep01_001_v1",
+        "contract_version": 1,
+        "parent_version_id": null,
+        "derived_from_shot_ids": [],
+        "sequence": 1,
+        "status": "READY",
+        "provenance": {
+          "source_type": "AI_ASSISTED",
+          "source_invocation_id": "invocation_ep01_storyboard_001",
+          "last_edit_source": "HUMAN"
+        },
+        "format_profile_id": "format_vertical_1080p",
+        "target_duration_sec": 6,
+        "narrative_purpose": "建立雨夜旧车站与主角等待失约之人的情绪基调",
+        "cinematography": {
+          "shot_size": "LONG",
+          "camera_angle": "EYE_LEVEL",
+          "composition": "主角位于画面右侧三分线，左侧保留空站台",
+          "focus": "主角背影与车站入口",
+          "camera_motion": "DOLLY",
+          "frontal_face": false,
+          "mouth_visible": false
+        },
+        "content": {
+          "character_ids": ["char_lin"],
+          "scene_id": "scene_old_station_night",
+          "prop_ids": ["prop_red_umbrella"],
+          "action": "林晚缓慢抬头看向轨道",
+          "emotion": "克制的失落",
+          "spoken_text": "她等了整整十年。"
+        },
+        "dialogue": {
+          "dialogue_render_mode": "NARRATION_FIRST",
+          "dialogue_mode_source": "PROJECT_DEFAULT",
+          "override_reason": null,
+          "speaker_id": "narrator",
+          "estimated_speech_duration_sec": 3,
+          "audio_required": true,
+          "lip_sync_required": false
+        },
+        "continuity": {
+          "continuity_mode": "SCENE_CHANGE",
+          "previous_shot_id": null,
+          "asset_version_ids": [],
+          "first_frame_requirement": "雨夜旧车站全景",
+          "last_frame_requirement": "镜头靠近主角肩部"
+        },
+        "generation_constraints": {
+          "capability_requirements": [{ "capability": "FIRST_FRAME", "required": true }],
+          "image_prompt": "竖屏，雨夜旧车站，青年女性背影，红伞",
+          "video_prompt": "镜头缓慢推进，雨丝稳定落下",
+          "negative_constraints": ["人物正脸", "额外角色"],
+          "budget_estimate": {
+            "currency_or_credit": "UNKNOWN",
+            "min": null,
+            "max": null,
+            "price_version": null,
+            "is_estimate": true
+          }
+        },
+        "acceptance": {
+          "must_include": ["主角", "红伞", "雨夜车站"],
+          "must_not_include": ["额外人物", "白天"],
+          "human_review_required": true
+        },
+        "locked_paths": []
+      }
+    ],
+    "export_provenance": {
+      "app_version": "0.1.0",
+      "exported_by": "LOCAL_USER",
+      "contains_ai_assisted_content": true
+    }
+  }
+}

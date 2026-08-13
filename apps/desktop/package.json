@@ -1,0 +1,38 @@
+{
+  "name": "@jingxu/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "镜序 Studio Electron 桌面宿主",
+  "productName": "镜序 Studio",
+  "main": ".vite/build/main.js",
+  "engines": {
+    "node": ">=22.16.0 <23",
+    "pnpm": ">=11.16.0 <12"
+  },
+  "scripts": {
+    "start": "electron-forge start",
+    "build": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts && vite build --config vite.renderer.config.ts",
+    "package:win": "electron-forge package --platform=win32 --arch=x64"
+  },
+  "dependencies": {
+    "@jingxu/application": "workspace:*",
+    "@jingxu/contracts": "workspace:*",
+    "@jingxu/model-adapters": "workspace:*",
+    "@jingxu/persistence": "workspace:*",
+    "@tanstack/react-query": "5.101.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-hook-form": "7.85.0",
+    "zustand": "5.0.14"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "8.0.0-alpha.10",
+    "@electron-forge/maker-squirrel": "8.0.0-alpha.10",
+    "@electron-forge/plugin-vite": "8.0.0-alpha.10",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "5.0.0",
+    "electron": "43.3.0",
+    "vite": "7.3.3"
+  }
+}

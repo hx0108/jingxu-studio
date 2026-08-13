@@ -1,0 +1,70 @@
+{
+  "schema_version": "1.1.0",
+  "shot_id": "shot_ep01_invalid_duration",
+  "version_id": "scv_shot_ep01_invalid_duration_v1",
+  "contract_version": 1,
+  "parent_version_id": null,
+  "derived_from_shot_ids": [],
+  "sequence": 1,
+  "status": "READY",
+  "provenance": {
+    "source_type": "HUMAN_CREATED",
+    "source_invocation_id": null,
+    "last_edit_source": "HUMAN"
+  },
+  "format_profile_id": "format_vertical_1080p",
+  "target_duration_sec": 21,
+  "narrative_purpose": "用于验证单一镜头时长上限错误",
+  "cinematography": {
+    "shot_size": "LONG",
+    "camera_angle": "EYE_LEVEL",
+    "composition": "主角位于画面右侧三分线",
+    "focus": "主角背影",
+    "camera_motion": "STATIC",
+    "frontal_face": false,
+    "mouth_visible": false
+  },
+  "content": {
+    "character_ids": ["char_lin"],
+    "scene_id": "scene_old_station_night",
+    "prop_ids": ["prop_red_umbrella"],
+    "action": "主角撑伞站在站台边缘",
+    "emotion": "克制的失落",
+    "spoken_text": "她仍然在等待。"
+  },
+  "dialogue": {
+    "dialogue_render_mode": "NARRATION_FIRST",
+    "dialogue_mode_source": "PROJECT_DEFAULT",
+    "override_reason": null,
+    "speaker_id": "narrator",
+    "estimated_speech_duration_sec": 2,
+    "audio_required": true,
+    "lip_sync_required": false
+  },
+  "continuity": {
+    "continuity_mode": "SCENE_CHANGE",
+    "previous_shot_id": null,
+    "asset_version_ids": [],
+    "first_frame_requirement": "雨夜旧车站全景",
+    "last_frame_requirement": "主角仍站在原位"
+  },
+  "generation_constraints": {
+    "capability_requirements": [],
+    "image_prompt": "竖屏，雨夜车站，主角背影",
+    "video_prompt": "固定镜头，雨丝稳定落下",
+    "negative_constraints": ["额外角色"],
+    "budget_estimate": {
+      "currency_or_credit": "UNKNOWN",
+      "min": null,
+      "max": null,
+      "price_version": null,
+      "is_estimate": true
+    }
+  },
+  "acceptance": {
+    "must_include": ["主角", "雨夜车站"],
+    "must_not_include": ["额外人物"],
+    "human_review_required": true
+  },
+  "locked_paths": []
+}

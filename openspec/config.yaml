@@ -1,0 +1,39 @@
+schema: spec-driven
+
+context: |
+  项目：镜序 Studio V1，面向个人 AI 漫剧创作者的 Windows x64 本地优先桌面工作台。
+  当前范围：AI 剧本与结构化分镜；不包含图片、视频、TTS、口型或成片生成。
+  产品事实源：镜序Studio_AI漫剧工作台_产品需求文档_PRD_v1.4.md。
+  技术事实源：TECH_DESIGN.md v1.1。
+  机器契约：四份镜序Studio_V1_*.schema.json；字段、枚举、必填项和跨字段条件以 Schema 为准。
+  Agent 执行护栏：AGENTS.md。
+  技术栈：Electron、React、TypeScript、Vite、pnpm workspace、SQLite/node:sqlite、Ajv 2020、Zod、Vitest、Playwright Electron、Electron Forge。
+  依赖方向：Renderer -> Preload/IPC -> Main Host/Composition Root -> Application -> Domain + Application Ports；基础设施 Adapter 实现 Application Ports。
+  规范正文使用中文；Change ID、目录和代码标识符使用英文。
+
+rules:
+  proposal:
+    - 引用相关 PRD v1.4 验收项和 TECH_DESIGN v1.1 章节，不得只写裸章节号。
+    - 明确写出目标、范围、非目标、兼容性以及 Schema、数据库、IPC、进程和安全影响。
+    - 不得以未来扩展为理由引入 PRD v1.4 明确排除的 V2/V3 能力。
+  specs:
+    - 使用中文 Requirement，并使用 MUST 或 SHALL 表达可验证约束。
+    - 每条 Requirement 至少包含一个 GIVEN/WHEN/THEN 可观察 Scenario。
+    - 按变更风险覆盖正常、边界、失败和恢复路径，不重复转写整份 PRD 或 JSON Schema。
+  design:
+    - 说明受影响的分层、Application Ports、IPC/DTO、数据流、事务、错误码、migration、安全边界和被否决方案。
+    - 如某项不适用，显式标记不适用及原因，不得静默遗漏。
+  tasks:
+    - 任务按可验证结果拆分，包含测试先行、最小实现、文档同步和验证命令。
+    - 每个行为任务都要能追溯到 Requirement/Scenario，禁止仅写“完成某功能”。
+    - 明确需运行的 format、lint、typecheck、unit、contract、integration 和适用的 E2E 门禁。
+
+operations:
+  apply:
+    guidance:
+      - 严格遵守 AGENTS.md，保留用户现有修改，不得扩大当前 Change 或 V1 范围。
+      - 先添加可失败测试或 Fixture，再完成最小实现；不得通过放宽门禁制造通过。
+  archive:
+    guidance:
+      - 归档前必须先执行 Verify，处理所有阻断问题，并确认需要的主规范同步已完成。
+      - 归档摘要只记录实际完成项、当前验证证据、剩余风险和未执行项。
