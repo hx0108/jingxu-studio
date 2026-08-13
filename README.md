@@ -1,6 +1,8 @@
 # 镜序 Studio
 
-镜序 Studio 当前是面向 Windows x64 的 Electron/React V1 开发基线。当前已建立 Main/Preload/Renderer 进程隔离、SQLite 启动与恢复运行时、离线 Schema Registry，以及 Project/FormatProfile 的本地创建、查询、更新、软删除和恢复闭环；这不代表 AI 剧本、结构化分镜或 PRD v1.4 全量验收已经实现。
+镜序 Studio 是面向个人 AI 漫剧创作者的本地优先质量工作台，当前开发目标为 V1“AI 剧本与结构化分镜”。项目尝试把模型生成转化为可编辑、可锁定、可恢复、可追溯的阶段化工作流，而不是直接承诺生成图片、视频或成片。
+
+截至 2026-08-13，仓库已具备可运行的 Windows x64 Electron/React 工程、SQLite 启动与恢复运行时、Project/FormatProfile 管理、离线 Schema Registry，以及 JobRunner、文本模型 Adapter、凭据安全和类型化 IPC 基础。项目仍处于开发验证阶段，尚未上线、完成真实用户试用或通过 PRD v1.4 全量验收。
 
 ## 支持环境
 
@@ -79,9 +81,9 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前 Active Change 为 `schema-registry-version-locks`。在 Codex 中使用 `$openspec-apply-change schema-registry-version-locks` 继续实施，完成后使用 `$openspec-verify-change schema-registry-version-locks` 验证。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前没有 Active Change；已完成的增量规范保存在 `openspec/changes/archive/`。下一阶段在建立并审查新的 Active Change 后，继续接入分阶段剧本生成与结构化分镜业务。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
-## 当前已实现的 Project 与 Schema Registry 切片
+## 当前已实现
 
 - `ProjectService` 支持稳定 keyset 列表、活动/回收站隔离、详情、原子创建、乐观并发更新、FormatProfile 不可变版本链、软删除、恢复和 requestId 幂等回放。
 - SQLite `ProjectUnitOfWork` 在单一 `BEGIN IMMEDIATE` 中提交 Project、FormatProfile、审计、本地分析事件和 `command_receipts`；失败回滚不留下部分记录。
@@ -90,16 +92,30 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - Renderer 已接入 React Query、React Hook Form 和最小 Zustand UI 协调状态，覆盖列表、创建设定、详情、回收站、错误反馈和 dirty 离开保护。
 - 四份 PRD-owned Schema 使用固定 `$id`、Draft、语义版本和 SHA-256 离线编译；启动时在短事务精确替换 `schema_registry_manifest`，提交成功后才发布完整 Registry。
 - Forge 产物固定包含 `resources/schemas/v1` 四文件；Schema 故障只允许重试，不开放 Project 写服务，也不提供路径或通用 IPC。
-- 当前自动化范围包含 Project 与 Schema Registry 的 Unit、Contract、Integration、Electron E2E 和 Windows x64 packaged smoke；OpenSpec Verify 与全量发布门禁仍以本 Change 最终运行结果为准。
+- Application 层已定义 `TextModelPort`、`CredentialPort` 和确定性 `JobRunner`，覆盖任务领取、调用证据、受限重试、结构修复、取消、迟到响应、崩溃恢复和并发门；Provider 调用发生在事务外，业务提交保持短事务边界。
+- `MockTextModelAdapter` 提供可重复的失败矩阵；`QwenTextModelAdapter` 锁定受控配置、JSON Mode 和错误归一化。当前生产入口只开放低成本凭据连通性检查，尚未接入真实五阶段剧本生成。
+- API Key 由 Electron `safeStorage` 加密并独立保存，SQLite 只记录不透明凭据引用和验证元数据；Renderer 不接收完整 Key、Authorization 或原始 Provider 错误。
+- Main/Preload 已提供逐方法的 `job`、`provider` 和 `events` IPC 白名单；未注入阶段提交器时，Job 写入口返回稳定不可用，不创建假版本或空壳任务。
+
+## 最近验证证据
+
+2026-08-13 归档的 `jobrunner-qwen-text-adapter` Change 记录：
+
+- Format、ESLint 和 TypeScript 门禁零错误。
+- Unit 41 文件/382 项、Contract 10 文件/69 项、Integration 27 文件/142 项，共 593 项 Vitest 断言通过。
+- Playwright Electron E2E 4/4 通过。
+- Windows x64 packaged smoke 通过；Mock 失败矩阵不访问真实网络或真实用户目录。
+
+完整映射与边界见 `openspec/changes/archive/2026-08-13-jobrunner-qwen-text-adapter/tasks.md`。真实 Qwen 凭据连通性和真实用户生成链路不包含在上述离线验证中。
 
 ## 当前尚未实现
 
 - SourceInput 文本输入和 Consent 授权记录业务用例
-- Episode、剧本、StoryBible、分镜、锁、导入导出和评测业务用例
+- 五阶段 ScriptService、阶段提交/恢复接入，以及真实剧本生成链路
+- Episode、StoryBible、分镜生成与编辑、锁、导入导出和评测业务用例
 - EpisodeValidator 集合规则，以及剧本/分镜业务调用方对已发布 Registry 的接入
-- JobRunner、ScriptStageJob、ModelInvocation 和 Qwen 文本模型调用
-- Qwen、API Key、Provider 网络请求
+- 面向最终用户的 Provider 设置页面和真实 Qwen 阶段生成验收
 - 图片、视频、TTS、口型、成片和其他 V2/V3 能力
-- AC-V1-01 至 AC-V1-06 尚未完成；尤其不能声称 AC-V1-01 AI 原创链路已经验收
+- AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 当前仅具备可重复的 Mock 自动化证据，不能据此声称 AI 原创链路或 V1 发布验收已经完成
 
 这些能力将分别进入后续 OpenSpec Change。`0001_initial.sql` 中存在对应表结构不等于业务方法、页面、Schema 校验或验收链路已经实现。
