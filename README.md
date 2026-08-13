@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前 Active Change 为 `staged-script-generation`。该 Change 正在接入 AI 原创初始化、五阶段剧本版本链、JobRunner 生产接线、Provider 设置和剧本工作区；尚未完成最终全量门禁、Windows clean packaged smoke、真实 Qwen 连通性或真实用户验收。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前 Active Change 为 `staged-script-generation`。该 Change 已在代码层完成 AI 原创初始化、五阶段剧本版本链、JobRunner 生产接线、Provider 设置和剧本工作区，并通过最终全量门禁与 Windows x64 clean packaged smoke（离线 Mock）；真实 Qwen 凭据连通性与真实用户验收仍待人工核验，合并后归档。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 
@@ -93,12 +93,20 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - 四份 PRD-owned Schema 使用固定 `$id`、Draft、语义版本和 SHA-256 离线编译；启动时在短事务精确替换 `schema_registry_manifest`，提交成功后才发布完整 Registry。
 - Forge 产物固定包含 `resources/schemas/v1` 四文件；Schema 故障只允许重试，不开放 Project 写服务，也不提供路径或通用 IPC。
 - Application 层已定义 `TextModelPort`、`CredentialPort` 和确定性 `JobRunner`，覆盖任务领取、调用证据、受限重试、结构修复、取消、迟到响应、崩溃恢复和并发门；Provider 调用发生在事务外，业务提交保持短事务边界。
-- `MockTextModelAdapter` 提供可重复的失败矩阵；`QwenTextModelAdapter` 锁定受控配置、JSON Mode 和错误归一化。当前生产入口只开放低成本凭据连通性检查，尚未接入真实五阶段剧本生成。
+- `MockTextModelAdapter` 提供可重复的失败矩阵；`QwenTextModelAdapter` 锁定受控配置、JSON Mode 和错误归一化。生产入口已接入真实五阶段剧本生成（ScriptJobSubmission/Runner/Scheduler/Recovery），五阶段闭环经离线 Mock 验证；真实 Qwen 凭据连通性仍未联调。
 - API Key 由 Electron `safeStorage` 加密并独立保存，SQLite 只记录不透明凭据引用和验证元数据；Renderer 不接收完整 Key、Authorization 或原始 Provider 错误。
-- Main/Preload 已提供逐方法的 `job`、`provider` 和 `events` IPC 白名单；未注入阶段提交器时，Job 写入口返回稳定不可用，不创建假版本或空壳任务。
-- `staged-script-generation` 当前代码已实现 SourceInput/Consent/Episode 初始化、五阶段 ScriptService、不可变 DRAFT/READY/STALE_INPUT 版本链、版本历史与恢复、五份 `*/v1` Prompt、Script Job 提交/校验/恢复，以及 `script` 五方法白名单和剧本工作区。上述事实仍须以本 Change 最终 Verify 和 clean packaged smoke 复核后才能作为归档基线。
+- Main/Preload 已提供逐方法的 `script`、`job`、`provider` 和 `events` IPC 白名单；`staged-script-generation` 已注入阶段提交器，`job.create` 开放真实剧本生成，不再返回 `JOB_SUBMISSION_UNAVAILABLE`，也不创建假版本或空壳任务。
+- `staged-script-generation` 已实现 SourceInput/Consent/Episode 初始化、五阶段 ScriptService、不可变 DRAFT/READY/STALE_INPUT 版本链、版本历史与恢复、五份 `*/v1` Prompt、Script Job 提交/校验/恢复，以及 `script` 五方法白名单和剧本工作区；已通过 `openspec validate --strict`、全量门禁与 clean packaged smoke（离线 Mock）。待真实 Qwen 联调与合并后归档。
 
 ## 最近验证证据
+
+2026-08-13 `staged-script-generation` Change 记录（离线 Mock，未含真实 Qwen 联调）：
+
+- Format、ESLint、TypeScript 门禁零错误。
+- Unit 487、Contract 83、Integration 159，共 729 项 Vitest 断言通过。
+- Playwright Electron E2E 7/7 通过（bootstrap 4 + staged-script 2 + packaged-smoke 1）。
+- Windows x64 clean packaged smoke 通过；`openspec validate staged-script-generation --strict` 通过；四根 Schema 与 0001/0002 字节未变。
+- 真实 Qwen 凭据连通性、真实用户生成链路和 AC-V1-01 至 AC-V1-06 仍待人工核验。
 
 2026-08-13 归档的 `jobrunner-qwen-text-adapter` Change 记录：
 

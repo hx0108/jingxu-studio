@@ -152,15 +152,15 @@ flowchart LR
 
 | 切片 | 当前实现 | 尚未实现边界 |
 |---|---|---|
-| Project/FormatProfile | `ProjectService` 已实现稳定列表与详情、原子创建、乐观并发更新、FormatProfile 不可变版本链、软删除、恢复、名称冲突检查和 requestId 幂等；Application 通过 ProjectUnitOfWork Port 持有事务边界 | ProjectService 目标职责中的 SourceInput 和授权声明尚未实现；Consent 仍是后续独立能力 |
-| Persistence | SQLite Project/FormatProfile/Audit/Analytics/CommandReceipt Repository、单连接 `BEGIN IMMEDIATE` UnitOfWork、Row mapper 错误归一化和 Project invariant audit 已实现 | SourceInput、Consent、Episode、脚本、StoryBible、Job、分镜、导入导出和评测表尚无业务 Repository/UnitOfWork 用例 |
-| Main/Preload | Composition Root 只在启动 `READY/writeEnabled=true` 后注入目录 Adapter、ProjectUnitOfWork 和 ProjectService；`project.list/get/create/update/delete/restore` 六个 IPC 已完成 sender、strict Zod DTO、AppResult 输出和启动写门校验；Preload 逐方法暴露 | `source`、`consent`、`script`、`job`、`storyboard`、`provider` 等命名空间尚未实现 |
-| Renderer | Project 列表/真实空态/筛选空态/回收站、创建与设置、详情与 FormatProfile 历史、软删除恢复、错误提示和 dirty 离开保护已实现；剧本和分镜入口保持可见禁用 | 剧本、分镜、Episode、Provider 和导入导出页面没有业务入口，不生成伪造数据 |
-| AI/契约 | 四份 PRD-owned Schema 已复制到受控资源目录并由离线 Registry 核对 `$id`、Draft、版本、SHA-256 和 `$ref` 闭包；manifest 短事务提交后才发布四个校验器，开发态与 Windows x64 产物共用同一锁清单 | EpisodeValidator、业务版本写入、JobRunner、Qwen Adapter 和真实模型调用均未实现；AC-V1-01 尚未完成 |
+| Project/FormatProfile | `ProjectService` 已实现稳定列表与详情、原子创建、乐观并发更新、FormatProfile 不可变版本链、软删除、恢复、名称冲突检查和 requestId 幂等；Application 通过 ProjectUnitOfWork Port 持有事务边界 | 授权改编声明仍是后续独立能力 |
+| Persistence | SQLite Project/FormatProfile/Audit/Analytics/CommandReceipt、SourceInput/Consent/Episode/Script/StoryBible/Job/ModelInvocation Repository、单连接 `BEGIN IMMEDIATE` UnitOfWork、Row mapper 错误归一化和 Project/Script invariant audit 已实现 | 分镜、导入导出和评测表尚无业务 Repository/UnitOfWork 用例 |
+| Main/Preload | Composition Root 只在启动 `READY/writeEnabled=true` 后注入目录 Adapter、ProjectUnitOfWork、ProjectService、ScriptService 和 JobRunner 生产接线；`project`、`script`、`job`、`provider`、`events` 逐方法 IPC 已完成 sender、strict Zod DTO、AppResult 输出和启动写门校验；Preload 逐方法暴露 | `storyboard` 命名空间尚未实现 |
+| Renderer | Project 列表/真实空态/筛选空态/回收站、创建与设置、详情与 FormatProfile 历史、软删除恢复、错误提示和 dirty 离开保护已实现；剧本工作区、原创初始化（SourceInput/Consent/Episode）、Provider 设置、五阶段导航与阶段编辑器已实现 | 分镜工作台和导入导出页面没有业务入口，不生成伪造数据 |
+| AI/契约 | 四份 PRD-owned Schema 已复制到受控资源目录并由离线 Registry 核对 `$id`、Draft、版本、SHA-256 和 `$ref` 闭包；manifest 短事务提交后才发布四个校验器；JobRunner 状态机、ModelInvocation 证据、重试/取消/超时/恢复、Mock 失败矩阵、Qwen Adapter 与五份 `*/v1` Prompt 已实现，五阶段版本链经离线 Mock 闭环验证 | EpisodeValidator、真实 Qwen 阶段生成连通性和 AC-V1-01 至 AC-V1-06 验收尚未完成 |
 
-当前测试证据分布为：Domain/Application Unit、Project 与 Runtime DTO/IPC/Preload Contract、SQLite Repository/UnitOfWork/Migration/Composition Integration、Renderer Unit、Electron Project/Schema 故障 E2E，以及 Windows x64 Schema/Project packaged smoke。OpenSpec Verify 和 AC-V1-01 至 AC-V1-06 仍必须以各自 Change 的最终门禁结果为准，不能用当前基础切片替代。
+当前测试证据分布为：Domain/Application Unit、Project/Runtime DTO/IPC/Preload Contract、SQLite Repository/UnitOfWork/Migration/Composition Integration、Script 五阶段/JobRunner/Provider Integration、Renderer Unit、Electron Project/Schema/bootstrap/staged-script E2E，以及 Windows x64 Schema/Project/packaged smoke。OpenSpec Verify 和 AC-V1-01 至 AC-V1-06 仍必须以各自 Change 的最终门禁结果为准，不能用当前基础切片替代。
 
-`staged-script-generation` Active Change 当前已在代码层接入 SourceInput/Consent/Episode、五阶段不可变版本链、五份 `*/v1` Prompt、Script JobRunner/恢复、`script` IPC 与剧本工作区；这些仍是待最终 Verify 的开发事实。clean Windows x64 packaged smoke、真实 Qwen 连通性、真实用户试用和 AC-V1-01 完整链路尚未完成。
+`staged-script-generation` Active Change 已在代码层接入 SourceInput/Consent/Episode、五阶段不可变版本链、五份 `*/v1` Prompt、Script JobRunner/恢复、`script` IPC 与剧本工作区，并通过 `openspec validate --strict`、全量门禁与 clean Windows x64 packaged smoke（离线 Mock）。真实 Qwen 连通性、真实用户试用和 AC-V1-01 完整链路仍待人工核验。
 
 ---
 
