@@ -25,6 +25,7 @@ export type {
   ScriptAuditRepositoryPort,
   ScriptCommandReceiptRepositoryPort,
   ScriptDependencyRepositoryPort,
+  ScriptFormatProfileRepositoryPort,
   ScriptRepositories,
   ScriptVersionRepositoryPort,
   SourceInputRepositoryPort,

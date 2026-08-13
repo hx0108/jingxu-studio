@@ -386,6 +386,20 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
         );
       } catch (error) {
         if (error instanceof TerminalOutcomeError) return error.outcome;
+        const latest = await dependencies.unitOfWork.run(({ jobs }) => jobs.findById(jobId));
+        if (latest?.status === 'VALIDATING') {
+          const errorCode =
+            error instanceof Error && error.message === 'STALE_INPUT'
+              ? 'STALE_INPUT'
+              : 'JOB_COMMIT_FAILED';
+          return await failJob(
+            jobId,
+            'VALIDATING',
+            errorCode,
+            latest.transportAttempts,
+            latest.structureRepairAttempts,
+          );
+        }
         throw error;
       }
     },

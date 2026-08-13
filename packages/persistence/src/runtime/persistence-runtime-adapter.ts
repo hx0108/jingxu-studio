@@ -11,6 +11,8 @@ import type {
   ProviderProfileRepositoryPort,
   ProviderUnitOfWorkPort,
   SchemaManifestUnitOfWorkPort,
+  ScriptUnitOfWorkPort,
+  ScriptWorkspaceQueryPort,
 } from '@jingxu/application';
 import {
   startupErrorCodeSchema,
@@ -29,9 +31,12 @@ import { SqliteProjectUnitOfWork } from '../project/sqlite-project-unit-of-work'
 import { SqliteProviderProfileRepository } from '../provider/sqlite-provider-profile-repository';
 import { SqliteProviderUnitOfWork } from '../provider/sqlite-provider-unit-of-work';
 import { SqliteSchemaManifestUnitOfWork } from '../schema-manifest/sqlite-schema-manifest-unit-of-work';
+import { SqliteScriptUnitOfWork } from '../script/sqlite-script-unit-of-work';
+import { SqliteScriptWorkspaceQuery } from '../script/sqlite-script-workspace-query';
 import { createManagedDirectories, createManagedPaths, type ManagedPaths } from './managed-paths';
 import { PersistenceRuntimeError } from './persistence-error';
 import { SqliteConnectionManager, type SqliteConnectionOptions } from './sqlite-connection';
+import { SqliteTransactionCoordinator } from './sqlite-transaction-coordinator';
 
 export interface SqlitePersistenceRuntimeAdapterOptions {
   readonly clock: () => string;
@@ -159,6 +164,9 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   #jobRepository: JobRepositoryPort | null = null;
   #providerUnitOfWork: ProviderUnitOfWorkPort | null = null;
   #providerProfileRepository: ProviderProfileRepositoryPort | null = null;
+  #scriptUnitOfWork: ScriptUnitOfWorkPort | null = null;
+  #scriptWorkspaceQuery: ScriptWorkspaceQueryPort | null = null;
+  #transactionCoordinator: SqliteTransactionCoordinator | null = null;
 
   public constructor({
     clock,
@@ -181,6 +189,9 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
     this.#jobRepository = null;
     this.#providerUnitOfWork = null;
     this.#providerProfileRepository = null;
+    this.#scriptUnitOfWork = null;
+    this.#scriptWorkspaceQuery = null;
+    this.#transactionCoordinator = null;
     this.#manager.close();
   }
 
@@ -212,6 +223,14 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   /** Returns a standalone Provider profile read Repository over the same audited write connection. */
   public getProviderProfileRepository(): ProviderProfileRepositoryPort | null {
     return this.#providerProfileRepository;
+  }
+
+  public getScriptUnitOfWork(): ScriptUnitOfWorkPort | null {
+    return this.#scriptUnitOfWork;
+  }
+
+  public getScriptWorkspaceQuery(): ScriptWorkspaceQueryPort | null {
+    return this.#scriptWorkspaceQuery;
   }
 
   public prepare(): Promise<PersistenceCheckResult> {
@@ -283,12 +302,16 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
 
       phase = 'RECOVERY_GATE';
       const backups = await listVerifiedBackups(this.#paths);
-      this.#projectUnitOfWork ??= new SqliteProjectUnitOfWork(database);
-      this.#schemaManifestUnitOfWork ??= new SqliteSchemaManifestUnitOfWork(database);
-      this.#jobUnitOfWork ??= new SqliteJobUnitOfWork(database);
+      this.#transactionCoordinator ??= new SqliteTransactionCoordinator(database);
+      const coordinator = this.#transactionCoordinator;
+      this.#projectUnitOfWork ??= new SqliteProjectUnitOfWork(database, coordinator);
+      this.#schemaManifestUnitOfWork ??= new SqliteSchemaManifestUnitOfWork(database, coordinator);
+      this.#jobUnitOfWork ??= new SqliteJobUnitOfWork(database, coordinator);
       this.#jobRepository ??= new SqliteJobRepository(database);
-      this.#providerUnitOfWork ??= new SqliteProviderUnitOfWork(database);
+      this.#providerUnitOfWork ??= new SqliteProviderUnitOfWork(database, {}, coordinator);
       this.#providerProfileRepository ??= new SqliteProviderProfileRepository(database);
+      this.#scriptUnitOfWork ??= new SqliteScriptUnitOfWork(database, coordinator);
+      this.#scriptWorkspaceQuery ??= new SqliteScriptWorkspaceQuery(database);
       completedPhases.push('RECOVERY_GATE');
       return { backups, completedPhases, ok: true };
     } catch (error) {
@@ -298,6 +321,9 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
       this.#jobRepository = null;
       this.#providerUnitOfWork = null;
       this.#providerProfileRepository = null;
+      this.#scriptUnitOfWork = null;
+      this.#scriptWorkspaceQuery = null;
+      this.#transactionCoordinator = null;
       this.#manager.close();
       const backups = await this.#listBackupsWithoutThrowing();
       return {

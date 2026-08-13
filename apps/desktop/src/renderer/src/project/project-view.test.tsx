@@ -146,15 +146,15 @@ describe('ProjectFormView — §8.3 创作设定', () => {
 });
 
 describe('ProjectDetailView — §8.5 详情与后续入口', () => {
-  it('展示 current/history 与禁用的剧本、分镜入口', () => {
+  it('展示 current/history、已开放剧本入口与禁用分镜入口', () => {
     const html = renderToStaticMarkup(
       <ProjectDetailView detail={DETAIL} onDelete={vi.fn()} onEdit={vi.fn()} onRestore={vi.fn()} />,
     );
     expect(html).toContain('当前版本 v2');
     expect(html).toContain('历史版本 v1');
-    expect(html).toContain('剧本生成');
+    expect(html).toContain('进入剧本工作区');
     expect(html).toContain('分镜工作台');
-    expect((html.match(/disabled=""/g) ?? []).length).toBeGreaterThanOrEqual(2);
+    expect((html.match(/disabled=""/g) ?? []).length).toBe(1);
     expect(html).toContain('将在后续 Change 实现');
   });
 });

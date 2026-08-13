@@ -226,7 +226,7 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
     await createOnlineBackup({
       backupId: 'backup_invalidaudit',
       clock: () => '2026-08-08T00:00:00.000Z',
-      currentVersion: 2,
+      currentVersion: 3,
       database,
       paths,
     });

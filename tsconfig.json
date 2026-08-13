@@ -8,6 +8,7 @@
     { "path": "./packages/application" },
     { "path": "./packages/persistence" },
     { "path": "./packages/model-adapters" },
+    { "path": "./packages/prompts" },
     { "path": "./apps/desktop" },
     { "path": "./tsconfig.tools.json" }
   ]

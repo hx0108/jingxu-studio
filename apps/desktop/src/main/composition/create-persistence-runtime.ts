@@ -18,6 +18,8 @@ import type {
   ProviderUnitOfWorkPort,
   SchemaManifestRepositoryPort,
   SchemaManifestUnitOfWorkPort,
+  ScriptUnitOfWorkPort,
+  ScriptWorkspaceQueryPort,
 } from '@jingxu/application';
 
 export interface DesktopPersistenceRuntime {
@@ -28,6 +30,8 @@ export interface DesktopPersistenceRuntime {
   readonly getProviderUnitOfWork: () => ProviderUnitOfWorkPort | null;
   readonly getProviderProfileRepository: () => ProviderProfileRepositoryPort | null;
   readonly getSchemaRegistry: () => CompiledSchemaRegistry | null;
+  readonly getScriptUnitOfWork: () => ScriptUnitOfWorkPort | null;
+  readonly getScriptWorkspaceQuery: () => ScriptWorkspaceQueryPort | null;
   readonly startupService: StartupService;
 }
 
@@ -85,6 +89,8 @@ export const createDesktopPersistenceRuntime = async ({
     getProviderUnitOfWork: () => adapter.getProviderUnitOfWork(),
     getProviderProfileRepository: () => adapter.getProviderProfileRepository(),
     getSchemaRegistry: () => registry.getPublished(),
+    getScriptUnitOfWork: () => adapter.getScriptUnitOfWork(),
+    getScriptWorkspaceQuery: () => adapter.getScriptWorkspaceQuery(),
     startupService,
   };
 };

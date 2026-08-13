@@ -132,6 +132,8 @@ importers:
         specifier: workspace:*
         version: link:../domain
 
+  packages/prompts: {}
+
   packages/test-fixtures:
     dependencies:
       '@jingxu/validation':

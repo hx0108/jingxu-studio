@@ -1,0 +1,172 @@
+import type {
+  AppResultDto,
+  ConfirmScriptVersionInputDto,
+  GetScriptWorkspaceInputDto,
+  InitializeOriginalInputDto,
+  JobSummaryDto,
+  RestoreScriptVersionInputDto,
+  SaveScriptDraftInputDto,
+  ScriptVersionDto,
+  ScriptWorkspaceDto,
+} from '@jingxu/contracts';
+
+import type {
+  ScriptStageWorkspace,
+  ScriptWorkspaceQueryPort,
+  ScriptWorkspaceSnapshot,
+} from '../ports/script/index';
+import type { OriginalInitializationService } from './original-initialization-service';
+import { scriptFailure, scriptPersistenceFailure } from './script-service-error';
+import type { ScriptVersionService } from './script-version-service';
+
+export interface ScriptServiceDependencies {
+  readonly initialization: OriginalInitializationService;
+  readonly versions: ScriptVersionService;
+  readonly workspaceQuery: ScriptWorkspaceQueryPort;
+  readonly findCurrentJob: (projectId: string) => Promise<JobSummaryDto | null>;
+}
+
+export interface ScriptService {
+  initializeOriginal(
+    input: InitializeOriginalInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptWorkspaceDto>>;
+  getWorkspace(
+    input: GetScriptWorkspaceInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptWorkspaceDto>>;
+  saveDraft(
+    input: SaveScriptDraftInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptVersionDto>>;
+  confirmVersion(
+    input: ConfirmScriptVersionInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptVersionDto>>;
+  restoreVersion(
+    input: RestoreScriptVersionInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptVersionDto>>;
+}
+
+const stageToDto = async (
+  projectId: string,
+  stage: ScriptStageWorkspace,
+  workspaceQuery: ScriptWorkspaceQueryPort,
+) => {
+  const history = await Promise.all(
+    stage.history.map(async (summary): Promise<ScriptVersionDto | null> => {
+      const persisted = await workspaceQuery.getVersionDocument(projectId, summary.id);
+      if (persisted === null) return null;
+      return {
+        createdAt: summary.createdAt,
+        document: JSON.parse(persisted.document) as ScriptVersionDto['document'],
+        documentHash: persisted.documentSha256,
+        id: summary.id,
+        parentId: summary.parentId,
+        projectId,
+        source: summary.source,
+        status: summary.status,
+        versionNo: summary.versionNo,
+      };
+    }),
+  );
+  return {
+    current:
+      stage.current === null
+        ? null
+        : {
+            createdAt: stage.current.createdAt,
+            document: JSON.parse(stage.current.document) as ScriptVersionDto['document'],
+            documentHash: stage.current.documentSha256,
+            id: stage.current.id,
+            parentId: stage.current.parentId,
+            projectId: stage.current.projectId,
+            source: stage.current.source,
+            status: stage.current.status,
+            versionNo: stage.current.versionNo,
+          },
+    history: history.filter((version): version is ScriptVersionDto => version !== null),
+    prerequisiteReady: stage.stage === 'CONCEPT',
+    stage: stage.stage,
+  };
+};
+
+const toWorkspaceDto = async (
+  snapshot: ScriptWorkspaceSnapshot,
+  findCurrentJob: ScriptServiceDependencies['findCurrentJob'],
+  workspaceQuery: ScriptWorkspaceQueryPort,
+): Promise<ScriptWorkspaceDto | null> => {
+  if (snapshot.sourceInput === null || snapshot.episode === null) return null;
+  const stages = await Promise.all(
+    snapshot.stages.map((stage) => stageToDto(snapshot.projectId, stage, workspaceQuery)),
+  );
+  const ready = new Set(
+    stages.filter((stage) => stage.current?.status === 'READY').map((stage) => stage.stage),
+  );
+  const requiredByStage = {
+    BEAT_SHEET: ['STORY_BIBLE', 'EPISODE_OUTLINE'],
+    CONCEPT: [],
+    EPISODE_OUTLINE: ['CONCEPT', 'STORY_BIBLE'],
+    SCENE_SCRIPT: ['STORY_BIBLE', 'BEAT_SHEET'],
+    STORY_BIBLE: ['CONCEPT'],
+  } as const;
+  const prerequisites = stages.map((stage) => {
+    const missing = requiredByStage[stage.stage].filter((required) => !ready.has(required));
+    return {
+      message:
+        missing.length === 0 ? '前置条件已满足' : `请先确认 ${missing.join('、')} READY 版本`,
+      ready: missing.length === 0,
+      stage: stage.stage,
+    };
+  });
+  return {
+    currentJob: await findCurrentJob(snapshot.projectId),
+    episode: {
+      id: snapshot.episode.id,
+      projectId: snapshot.episode.projectId,
+      targetDurationSec: snapshot.episode.targetDurationSec,
+      title: snapshot.episode.title,
+    },
+    prerequisites,
+    projectId: snapshot.projectId,
+    source: {
+      characterCount: snapshot.sourceInput.charCount,
+      contentHash: snapshot.sourceInput.sha256,
+      creativeText: snapshot.sourceInput.content,
+      id: snapshot.sourceInput.id,
+      projectId: snapshot.sourceInput.projectId,
+    },
+    stages,
+  };
+};
+
+export const createScriptService = (dependencies: ScriptServiceDependencies): ScriptService => {
+  const getWorkspace: ScriptService['getWorkspace'] = async (input, traceId) => {
+    try {
+      const snapshot = await dependencies.workspaceQuery.getWorkspace(input.projectId);
+      if (snapshot === null) {
+        return scriptFailure('SCRIPT_WORKSPACE_NOT_INITIALIZED', '剧本工作区尚未初始化', traceId);
+      }
+      const dto = await toWorkspaceDto(
+        snapshot,
+        dependencies.findCurrentJob,
+        dependencies.workspaceQuery,
+      );
+      return dto === null ? scriptPersistenceFailure(traceId) : { data: dto, ok: true };
+    } catch {
+      return scriptPersistenceFailure(traceId);
+    }
+  };
+  return {
+    confirmVersion: (input, traceId) => dependencies.versions.confirmVersion(input, traceId),
+    getWorkspace,
+    initializeOriginal: async (input, traceId) => {
+      const initialized = await dependencies.initialization.initialize(input, traceId);
+      if (!initialized.ok) return initialized;
+      return getWorkspace({ projectId: input.projectId }, traceId);
+    },
+    restoreVersion: (input, traceId) => dependencies.versions.restoreVersion(input, traceId),
+    saveDraft: (input, traceId) => dependencies.versions.saveDraft(input, traceId),
+  };
+};

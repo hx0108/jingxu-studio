@@ -44,6 +44,7 @@ describe('Job Provider Events Preload Contract', () => {
       modelId: 'qwen3.7-plus-2026-05-26',
       provider: 'QWEN',
       region: 'cn-beijing',
+      validated: true,
       versionId: 'version_12345678',
       workspaceId: 'workspace-1',
     };

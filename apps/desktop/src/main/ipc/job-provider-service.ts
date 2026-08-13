@@ -75,6 +75,7 @@ const toProviderDto = (view: ProviderProfileView): ProviderProfileDto => ({
   modelId: view.modelId,
   provider: view.provider,
   region: view.region,
+  validated: view.lastValidatedAt !== null,
   versionId: view.versionId,
   workspaceId: view.workspaceId,
 });

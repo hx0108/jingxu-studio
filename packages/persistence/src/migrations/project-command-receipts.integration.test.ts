@@ -124,7 +124,7 @@ const openVersionOneDatabase = async (
   const database = new SqliteTestDatabase(paths.databasePath);
   database.pragma('foreign_keys = ON');
   applyMigrations(database, migrations.slice(0, 1), () => NOW);
-  return { database, migrations, paths };
+  return { database, migrations: migrations.slice(0, 2), paths };
 };
 
 describe('0002 migration 资源集合', () => {
@@ -134,13 +134,18 @@ describe('0002 migration 资源集合', () => {
     expect(migrations.map(({ name, version }) => ({ name, version }))).toEqual([
       { name: '0001_initial.sql', version: 1 },
       { name: '0002_project_command_receipts.sql', version: 2 },
+      { name: '0003_script_version_receipts.sql', version: 3 },
     ]);
     expect(migrations[0]?.sha256).toBe(FROZEN_0001_SHA256);
     expect(migrations[1]?.sha256).toMatch(/^[a-f0-9]{64}$/u);
     // apps/desktop/forge.config.ts 通过 packagerConfig.extraResource 打包本目录。
     const entries = await readdir(MIGRATION_DIRECTORY);
     expect(entries).toEqual(
-      expect.arrayContaining(['0001_initial.sql', '0002_project_command_receipts.sql']),
+      expect.arrayContaining([
+        '0001_initial.sql',
+        '0002_project_command_receipts.sql',
+        '0003_script_version_receipts.sql',
+      ]),
     );
   });
 
@@ -148,7 +153,7 @@ describe('0002 migration 资源集合', () => {
     await withMigratedDatabase((database) => {
       expect(
         database.prepare('SELECT version FROM schema_migrations ORDER BY version').all(),
-      ).toEqual([{ version: 1 }, { version: 2 }]);
+      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
       const objects = database
         .prepare(
           "SELECT name FROM sqlite_master WHERE name IN ('command_receipts','ix_command_receipts_project')",
@@ -178,7 +183,7 @@ describe('0002 migration 资源集合', () => {
         .all();
       expect(after).toEqual(before);
       expect(database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get()).toEqual({
-        count: 2,
+        count: 3,
       });
       database.close();
     });
@@ -377,7 +382,7 @@ describe('0002 受管理升级、备份与回滚', () => {
         .prepare(
           'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
         )
-        .run(3, '0003_future.sql', 'b'.repeat(64), NOW);
+        .run(4, '0004_future.sql', 'b'.repeat(64), NOW);
 
       const before = database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get();
       expect(() => inspectMigrationPlan(database, migrations)).toThrow('DATABASE_VERSION_TOO_NEW');

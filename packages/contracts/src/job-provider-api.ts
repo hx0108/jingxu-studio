@@ -61,6 +61,7 @@ export const providerProfileSchema = z
     modelId: z.string().min(1).max(128),
     provider: z.literal('QWEN'),
     region: z.literal('cn-beijing'),
+    validated: z.boolean(),
     versionId: idSchema,
     workspaceId: z.string().regex(/^[A-Za-z0-9-]+$/u),
   })

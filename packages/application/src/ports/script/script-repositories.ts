@@ -10,6 +10,10 @@ import type {
   StoryBibleVersion,
   SourceInput,
 } from './script-types';
+import type { FormatProfileRepository } from '../project/format-profile-repository';
+
+/** Script input freezing only needs the current immutable FormatProfile snapshot. */
+export type ScriptFormatProfileRepositoryPort = Pick<FormatProfileRepository, 'findCurrent'>;
 
 export interface SourceInputRepositoryPort {
   findById(id: string): Promise<SourceInput | null>;
@@ -93,4 +97,5 @@ export interface ScriptRepositories {
   readonly dependencies: ScriptDependencyRepositoryPort;
   readonly audit: ScriptAuditRepositoryPort;
   readonly receipts: ScriptCommandReceiptRepositoryPort;
+  readonly formatProfiles: ScriptFormatProfileRepositoryPort;
 }

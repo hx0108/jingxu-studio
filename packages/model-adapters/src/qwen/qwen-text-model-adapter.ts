@@ -142,13 +142,6 @@ export class QwenTextModelAdapter implements TextModelPort {
           normalized('MODEL_INVALID_RESPONSE', false, '重新生成或进行一次结构修复'),
         );
       }
-      try {
-        JSON.parse(choice.message.content);
-      } catch {
-        throw new QwenAdapterError(
-          normalized('MODEL_INVALID_RESPONSE', false, '重新生成或进行一次结构修复'),
-        );
-      }
       return {
         finishReason: typeof choice.finish_reason === 'string' ? choice.finish_reason : null,
         modelReported: typeof payload.model === 'string' ? payload.model : null,

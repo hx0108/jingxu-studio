@@ -162,7 +162,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/model-adapters/src/**/*.{ts,tsx}'],
+    files: ['packages/model-adapters/src/**/*.{ts,tsx}', 'packages/prompts/src/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': [
         'error',

@@ -312,9 +312,12 @@ describe('JobRunner', () => {
 
   it('最终业务提交失败—整个 UnitOfWork 回滚—不留半个版本或 SUCCEEDED', async () => {
     const harness = createHarness([result()], { commitFails: true });
-    await expect(harness.runner.run('job_1')).rejects.toThrow('commit failed');
+    await expect(harness.runner.run('job_1')).resolves.toEqual({
+      errorCode: 'JOB_COMMIT_FAILED',
+      status: 'FAILED',
+    });
     expect(harness.store.versions).toHaveLength(0);
-    expect(harness.store.job.status).toBe('VALIDATING');
+    expect(harness.store.job.status).toBe('FAILED');
     expect(harness.events).toContain('tx:rollback');
   });
 

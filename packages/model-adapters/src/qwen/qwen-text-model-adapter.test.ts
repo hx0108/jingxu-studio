@@ -146,4 +146,20 @@ describe('QwenTextModelAdapter', () => {
       expect(adapter.normalizeError(error).code).toBe('MODEL_TIMEOUT');
     }
   });
+
+  it('message.content 为字符串但 JSON 非法—原样返回—交给 Candidate Pipeline 修复', async () => {
+    const adapter = new QwenTextModelAdapter({
+      credentialId: 'credential-1',
+      credentialPort,
+      fetch: vi.fn(() =>
+        Promise.resolve(
+          response(200, { choices: [{ finish_reason: 'stop', message: { content: '{' } }] }),
+        ),
+      ),
+      workspaceId: 'workspace-123',
+    });
+    await expect(adapter.generate(request, new AbortController().signal)).resolves.toMatchObject({
+      rawText: '{',
+    });
+  });
 });

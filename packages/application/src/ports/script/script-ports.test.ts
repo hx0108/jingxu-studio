@@ -45,6 +45,7 @@ describe('Script Application Ports', () => {
       dependencies: {} as ScriptJobRepositories['dependencies'],
       audit: {} as ScriptJobRepositories['audit'],
       receipts: {} as ScriptJobRepositories['receipts'],
+      formatProfiles: { findCurrent: () => Promise.resolve(null) },
     } satisfies ScriptJobRepositories;
 
     const unitOfWork: ScriptUnitOfWorkPort = {

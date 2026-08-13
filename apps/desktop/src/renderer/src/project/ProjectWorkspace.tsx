@@ -11,8 +11,9 @@ import { ProjectListView } from './ProjectList';
 import { createRequestId } from './project-api';
 import { describeProjectError } from './project-error';
 import { useProjectCommands, useProjectDetail, useProjectList } from './project-hooks';
+import { ScriptWorkspaceView } from '../script/ScriptWorkspace';
 
-type Screen = 'list' | 'create' | 'detail' | 'edit';
+type Screen = 'list' | 'create' | 'detail' | 'edit' | 'script';
 type PendingTarget = Screen | 'close';
 interface ConfirmState {
   readonly action: 'delete' | 'restore';
@@ -260,7 +261,7 @@ export const ProjectWorkspace = () => {
           />
         </section>
       )}
-      {(screen === 'detail' || screen === 'edit') &&
+      {(screen === 'detail' || screen === 'edit' || screen === 'script') &&
         (detail.isPending ? (
           <p aria-live="polite">正在加载项目详情…</p>
         ) : detailResult?.ok === false ? (
@@ -268,6 +269,31 @@ export const ProjectWorkspace = () => {
         ) : currentDetail === null ? (
           <section className="notice error-notice" role="alert">
             找不到项目详情，请返回列表刷新。
+          </section>
+        ) : screen === 'script' ? (
+          <section className="editor-panel script-shell">
+            <div className="script-heading">
+              <div>
+                <p className="eyebrow">SCRIPT WORKSPACE</p>
+                <h2>{currentDetail.name}</h2>
+              </div>
+              <button
+                className="secondary-button"
+                onClick={() => {
+                  moveTo('detail');
+                }}
+                type="button"
+              >
+                返回项目
+              </button>
+            </div>
+            <ScriptWorkspaceView
+              onCommitted={() => {
+                if (pendingScreen !== null) finishPendingNavigation();
+              }}
+              onDirtyChange={setDirty}
+              projectId={currentDetail.id}
+            />
           </section>
         ) : screen === 'edit' ? (
           <section className="editor-panel">
@@ -299,6 +325,9 @@ export const ProjectWorkspace = () => {
             onRestore={() => {
               setConfirmState({ action: 'restore', project: currentDetail });
             }}
+            onOpenScript={() => {
+              setScreen('script');
+            }}
           />
         ))}
       <DirtyLeaveDialog
@@ -310,7 +339,9 @@ export const ProjectWorkspace = () => {
           finishPendingNavigation();
         }}
         onSaveAndLeave={() => {
-          document.querySelector<HTMLFormElement>('#project-editor')?.requestSubmit();
+          document
+            .querySelector<HTMLFormElement>('#project-editor, #script-stage-editor')
+            ?.requestSubmit();
         }}
         open={pendingScreen !== null}
         pending={commands.create.isPending || commands.update.isPending}

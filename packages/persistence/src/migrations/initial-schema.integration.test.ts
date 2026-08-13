@@ -159,7 +159,7 @@ describe('0001_initial.sql', () => {
       expect(database.pragma('foreign_key_check')).toEqual([]);
       expect(
         database.prepare('SELECT version FROM schema_migrations ORDER BY version').all(),
-      ).toEqual([{ version: 1 }, { version: 2 }]);
+      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
     });
   });
 

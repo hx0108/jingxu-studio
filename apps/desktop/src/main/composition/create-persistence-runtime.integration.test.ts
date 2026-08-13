@@ -51,8 +51,14 @@ describe('Main Persistence Composition Root', () => {
       expect(runtime?.getSchemaRegistry()?.schemaIds).toHaveLength(4);
       expect(runtime?.getProjectUnitOfWork()).not.toBeNull();
       expect(runtime?.getProjectUnitOfWork()).toBe(runtime?.getProjectUnitOfWork());
+      expect(runtime?.getScriptUnitOfWork()).not.toBeNull();
+      expect(runtime?.getScriptUnitOfWork()).toBe(runtime?.getScriptUnitOfWork());
+      expect(runtime?.getScriptWorkspaceQuery()).not.toBeNull();
+      expect(runtime?.getScriptWorkspaceQuery()).toBe(runtime?.getScriptWorkspaceQuery());
       runtime?.close();
       expect(runtime?.getProjectUnitOfWork()).toBeNull();
+      expect(runtime?.getScriptUnitOfWork()).toBeNull();
+      expect(runtime?.getScriptWorkspaceQuery()).toBeNull();
       expect(runtime?.getSchemaRegistry()).toBeNull();
       const databaseFile = await readFile(path.join(root, 'managed', 'data', 'jingxu.sqlite'));
       expect(databaseFile.subarray(0, 16).toString('utf8')).toBe('SQLite format 3\0');
