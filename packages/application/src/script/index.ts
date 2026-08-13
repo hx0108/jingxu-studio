@@ -25,6 +25,11 @@ export {
   createScriptCommitHandler,
   type ScriptJobContractDependencies,
 } from './script-job-contract';
+export {
+  createScriptJobRequestBuilder,
+  type ScriptJobRequestDependencies,
+  type ScriptPromptSnapshot,
+} from './script-job-request';
 export { createScriptJobScheduler, type ScriptJobScheduler } from './script-job-scheduler';
 export {
   createScriptRecoveryRevalidator,

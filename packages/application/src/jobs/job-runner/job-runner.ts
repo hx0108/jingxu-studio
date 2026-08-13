@@ -42,7 +42,7 @@ export interface JobRunnerDependencies<Repositories extends JobRepositories = Jo
     job: ScriptStageJob,
     invocationId: string,
     repair?: JobStructureRepairRequest,
-  ) => TextGenerationRequest;
+  ) => Promise<TextGenerationRequest> | TextGenerationRequest;
   readonly commitHandler: JobCommitHandler<Repositories>;
   readonly createAbortController?: () => AbortController;
   readonly createInvocationId: (sequence: number) => string;
@@ -129,7 +129,7 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
     for (;;) {
       const invocationId = dependencies.createInvocationId(++invocationSequence);
       const at = dependencies.now();
-      const request = dependencies.buildRequest(job, invocationId, repair);
+      const request = await dependencies.buildRequest(job, invocationId, repair);
       const invocation: ModelInvocation = {
         attemptKind: currentKind,
         currency: null,
@@ -387,6 +387,9 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
       } catch (error) {
         if (error instanceof TerminalOutcomeError) return error.outcome;
         const latest = await dependencies.unitOfWork.run(({ jobs }) => jobs.findById(jobId));
+        if (latest?.status === 'CANCELLED') {
+          return Object.freeze({ status: 'CANCELLED' as const });
+        }
         if (latest?.status === 'VALIDATING') {
           const errorCode =
             error instanceof Error && error.message === 'STALE_INPUT'

@@ -55,7 +55,8 @@ const requireSupported: (
 const primaryInputVersionId = (job: ScriptStageJob): string => {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(job.inputVersionsJson) as unknown;
+    const value: unknown = JSON.parse(job.inputVersionsJson);
+    parsed = value;
   } catch {
     throw new ScriptJobSubmissionError('JOB_VERSION_CONFLICT');
   }

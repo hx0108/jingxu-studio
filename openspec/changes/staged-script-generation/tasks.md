@@ -26,7 +26,7 @@
 - [x] 3.5 创建 `packages/prompts` 五个 `*/v1` 模板和 manifest/hash；测试用户内容边界、显式版本、固定 Candidate ID、无隐含“最新”、无 API Key、64K 超限阻断与 Prompt 可重复。（Design §5）
 - [x] 3.6 新增 TECH-internal ModelScriptStageCandidate 五阶段 strict Contract、每阶段 valid/single-error invalid Fixture 与模型伪造系统字段负例；不得进入四 Schema Registry manifest/Forge resources。（两层契约 Requirement）
 - [x] 3.7 调整 Qwen Adapter 只保证 message.content 为 string，把候选 JSON parse 留给 Candidate Pipeline；保持 Provider envelope JSON、401/429/5xx/timeout 脱敏映射，并证明 invalid candidate 能进入一次结构修复。（Design §5）
-- [ ] 3.8 实现 Script JobSubmissionPort：同事务复检 prerequisites、冻结输入/Prompt/write_set、创建 QUEUED Job并支持 FAILED 人工 retry；延期模式/operation/SHOT_CONTRACT 在建 Job 前拒绝。（JobRunner Modified Requirement）
+- [x] 3.8 实现 Script JobSubmissionPort：同事务复检 prerequisites、冻结输入/Prompt/write_set、创建 QUEUED Job并支持 FAILED 人工 retry；延期模式/operation/SHOT_CONTRACT 在建 Job 前拒绝。（JobRunner Modified Requirement）
 - [ ] 3.9 实现五阶段 buildRequest/buildContract/system injection/ScriptCommitHandler；修正 PRE_COMMIT `STALE_INPUT` 透传、commit 异常终态化及取消竞态，验证任何失败零业务版本且不会卡在 VALIDATING。（两层契约 Requirement）
 - [ ] 3.10 实现序列化 scheduler 与恢复 revalidate：READY 后 kick、全局/项目并发门、完整响应 hash 校验后确定性幂等提交、未知结果不重发、页面切换不取消。（Desktop Modified Requirement）
 
