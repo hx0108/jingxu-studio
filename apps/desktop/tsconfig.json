@@ -11,6 +11,8 @@
   "references": [
     { "path": "../../packages/contracts" },
     { "path": "../../packages/application" },
-    { "path": "../../packages/persistence" }
+    { "path": "../../packages/persistence" },
+    { "path": "../../packages/prompts" },
+    { "path": "../../packages/validation" }
   ]
 }

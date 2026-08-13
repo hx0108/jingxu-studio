@@ -1,4 +1,18 @@
-import type { ScriptUnitOfWorkPort, ScriptWorkspaceQueryPort } from '@jingxu/application';
+import { createHash, randomUUID } from 'node:crypto';
+
+import {
+  createOriginalInitializationService,
+  createScriptService,
+  createScriptVersionService,
+} from '@jingxu/application';
+import type {
+  CompiledSchemaRegistry,
+  JobRepositoryPort,
+  ProjectUnitOfWorkPort,
+  ScriptUnitOfWorkPort,
+  ScriptWorkspaceQueryPort,
+} from '@jingxu/application';
+import type { JobSummaryDto } from '@jingxu/contracts';
 
 import {
   registerScriptIpc,
@@ -9,6 +23,9 @@ import {
 import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
 
 export interface ScriptRuntimeHandles {
+  readonly jobs: JobRepositoryPort;
+  readonly projects: ProjectUnitOfWorkPort;
+  readonly registry: CompiledSchemaRegistry;
   readonly unitOfWork: ScriptUnitOfWorkPort;
   readonly workspaceQuery: ScriptWorkspaceQueryPort;
 }
@@ -25,6 +42,75 @@ export interface ScriptFeatureRegistration {
   /** Registers the five Script-only IPC channels exactly once after persistence is writable. */
   ensureRegistered(): boolean;
 }
+
+const SCRIPT_STAGE_OUTPUT_SCHEMA_ID = 'https://jingxu.studio/schemas/script-stage-output/1.0.0';
+const DEFAULT_EPISODE_DURATION_SEC = 90;
+const ACTIVE_JOB_STATUSES = ['QUEUED', 'RUNNING', 'VALIDATING'] as const;
+
+const hashText = (value: string): string =>
+  createHash('sha256').update(value, 'utf8').digest('hex');
+
+const hashPayload = (value: Readonly<Record<string, unknown>>): string =>
+  hashText(JSON.stringify(value));
+
+const toJobSummary = (
+  job: Awaited<ReturnType<JobRepositoryPort['findById']>>,
+): JobSummaryDto | null =>
+  job === null
+    ? null
+    : {
+        errorCode: job.errorCode,
+        id: job.id,
+        projectId: job.projectId,
+        status: job.status,
+        versionId: job.id,
+      };
+
+/** Creates the production CRUD service without constructing Provider or JobRunner infrastructure. */
+export const createProductionScriptService = (handles: ScriptRuntimeHandles): ScriptIpcService => {
+  const now = (): string => new Date().toISOString();
+  const getProjectDefaults = async (
+    projectId: string,
+  ): Promise<Readonly<{ targetDurationSec: number }> | null> => {
+    const activeProject = await handles.projects.run(({ projects }) =>
+      projects.findById(projectId, 'ACTIVE'),
+    );
+    if (activeProject === null) return null;
+    const currentProfile = await handles.unitOfWork.run(({ formatProfiles }) =>
+      formatProfiles.findCurrent(projectId),
+    );
+    if (currentProfile === null) return null;
+    // V1 does not persist a duration field on FormatProfile. One initialized Episode therefore
+    // uses the PRD normal target midpoint; no database or public contract is expanded here.
+    return { targetDurationSec: DEFAULT_EPISODE_DURATION_SEC };
+  };
+  const initialization = createOriginalInitializationService({
+    getProjectDefaults,
+    hashPayload,
+    hashText,
+    newId: randomUUID,
+    now,
+    unitOfWork: handles.unitOfWork,
+    workspaceQuery: handles.workspaceQuery,
+  });
+  const versions = createScriptVersionService({
+    hashPayload,
+    newId: randomUUID,
+    now,
+    unitOfWork: handles.unitOfWork,
+    validateDocument: (document) =>
+      handles.registry.validate(SCRIPT_STAGE_OUTPUT_SCHEMA_ID, document).valid,
+  });
+  return createScriptService({
+    findCurrentJob: async (projectId) => {
+      const jobs = await handles.jobs.listByStatuses(ACTIVE_JOB_STATUSES, 100);
+      return toJobSummary(jobs.find((job) => job.projectId === projectId) ?? null);
+    },
+    initialization,
+    versions,
+    workspaceQuery: handles.workspaceQuery,
+  });
+};
 
 /**
  * Pure Script composition boundary. It deliberately does not register or wrap Job/Provider channels;
@@ -43,8 +129,18 @@ export const createScriptFeatureRegistration = ({
       if (registered || !persistenceRuntime.startupService.getStatus().writeEnabled) return false;
       const unitOfWork = persistenceRuntime.getScriptUnitOfWork();
       const workspaceQuery = persistenceRuntime.getScriptWorkspaceQuery();
-      if (unitOfWork === null || workspaceQuery === null) return false;
-      const service = createService({ unitOfWork, workspaceQuery });
+      const jobs = persistenceRuntime.getJobRepository();
+      const projects = persistenceRuntime.getProjectUnitOfWork();
+      const registry = persistenceRuntime.getSchemaRegistry();
+      if (
+        unitOfWork === null ||
+        workspaceQuery === null ||
+        jobs === null ||
+        projects === null ||
+        registry === null
+      )
+        return false;
+      const service = createService({ jobs, projects, registry, unitOfWork, workspaceQuery });
       registerScriptIpc(
         ipcRegistrar,
         service,

@@ -76,7 +76,12 @@ interface TestJobRepositories extends JobRepositories {
 
 const createHarness = (
   steps: readonly (NormalizedModelError | TextGenerationResult)[],
-  options?: Readonly<{ commitFails?: boolean; finalInvalid?: boolean }>,
+  options?: Readonly<{
+    commitError?: 'STALE_INPUT';
+    commitFails?: boolean;
+    finalInvalid?: boolean;
+    preCommitStale?: boolean;
+  }>,
 ) => {
   const events: string[] = [];
   const store: Store = { invocations: [], job: queuedJob(), versions: [] };
@@ -244,6 +249,9 @@ const createHarness = (
       validateCollection: () => valid,
       validateFinal: () =>
         options?.finalInvalid === true ? { code: 'FINAL_SCHEMA_INVALID', valid: false } : valid,
+      ...(options?.preCommitStale === true
+        ? { validatePreCommit: () => ({ code: 'STALE_INPUT', valid: false as const }) }
+        : {}),
     }),
     buildRequest: (job, invocationId, repair) => {
       if (repair !== undefined) events.push(`repair-input:${repair.rawText}`);
@@ -263,6 +271,7 @@ const createHarness = (
         events.push('commit-handler');
         expect(transactionRepositories).toBe(repositories);
         await transactionRepositories.versions.insert(value);
+        if (options?.commitError !== undefined) throw new Error(options.commitError);
         if (options?.commitFails === true) throw new Error('commit failed');
       },
     },
@@ -319,6 +328,41 @@ describe('JobRunner', () => {
     expect(harness.store.versions).toHaveLength(0);
     expect(harness.store.job.status).toBe('FAILED');
     expect(harness.events).toContain('tx:rollback');
+  });
+
+  it('条件—PRE_COMMIT 输入复检为 STALE_INPUT—不进入 commit 且 Job 终态 FAILED', async () => {
+    const harness = createHarness([result()], { preCommitStale: true });
+    await expect(harness.runner.run('job_1')).resolves.toEqual({
+      errorCode: 'CONTRACT_VALIDATION_FAILED',
+      status: 'FAILED',
+    });
+    expect(harness.store.versions).toHaveLength(0);
+    expect(harness.store.job).toMatchObject({
+      errorCode: 'CONTRACT_VALIDATION_FAILED',
+      status: 'FAILED',
+    });
+    expect(harness.events).not.toContain('commit-handler');
+  });
+
+  it('条件—提交事务内输入复检抛 STALE_INPUT—业务写入回滚并以 STALE_INPUT 终态化', async () => {
+    const harness = createHarness([result()], { commitError: 'STALE_INPUT' });
+    await expect(harness.runner.run('job_1')).resolves.toEqual({
+      errorCode: 'STALE_INPUT',
+      status: 'FAILED',
+    });
+    expect(harness.store.versions).toHaveLength(0);
+    expect(harness.store.job).toMatchObject({ errorCode: 'STALE_INPUT', status: 'FAILED' });
+    expect(harness.events).toContain('tx:rollback');
+  });
+
+  it('条件—Job 已进入 VALIDATING—取消只写 CANCELLED 且不产生业务版本', async () => {
+    const harness = createHarness([]);
+    harness.store.job = { ...harness.store.job, status: 'VALIDATING' };
+
+    await expect(harness.runner.cancel('job_1')).resolves.toEqual({ status: 'CANCELLED' });
+    expect(harness.store.job.status).toBe('CANCELLED');
+    expect(harness.store.versions).toHaveLength(0);
+    expect(harness.events).not.toContain('abort');
   });
 
   it.each(['MODEL_NETWORK_ERROR', 'MODEL_RATE_LIMITED', 'MODEL_PROVIDER_ERROR'] as const)(

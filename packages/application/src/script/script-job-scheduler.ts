@@ -3,6 +3,7 @@ import type { ScriptUnitOfWorkPort } from '../ports/script/index';
 
 export interface ScriptJobScheduler {
   kick(): void;
+  stop(): Promise<void>;
   whenIdle(): Promise<void>;
 }
 
@@ -12,9 +13,12 @@ export const createScriptJobScheduler = (
   runner: JobRunner,
 ): ScriptJobScheduler => {
   let active: Promise<void> | null = null;
+  let stopped = false;
+  const isStopped = (): boolean => stopped;
   const drain = async (): Promise<void> => {
-    for (;;) {
+    while (!isStopped()) {
       const queued = await unitOfWork.run(({ jobs }) => jobs.listByStatuses(['QUEUED'], 1));
+      if (isStopped()) return;
       const next = queued[0];
       if (next === undefined) return;
       const outcome = await runner.run(next.id);
@@ -22,13 +26,17 @@ export const createScriptJobScheduler = (
     }
   };
   const kick = (): void => {
-    if (active !== null) return;
+    if (active !== null || stopped) return;
     active = drain().finally(() => {
       active = null;
     });
   };
   return {
     kick,
+    stop: async () => {
+      stopped = true;
+      await (active ?? Promise.resolve());
+    },
     whenIdle: () => active ?? Promise.resolve(),
   };
 };

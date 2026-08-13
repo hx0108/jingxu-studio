@@ -19,3 +19,12 @@ export type {
   SchemaValidationIssue,
   SchemaValidationResult,
 } from './schema-registry';
+export {
+  MODEL_SCRIPT_STAGE_CANDIDATE_SCHEMA_ID,
+  validateModelScriptStageCandidate,
+} from './internal/model-script-stage-candidate';
+export type {
+  CandidateValidationResult,
+  ModelScriptCandidateStage,
+  ModelScriptStageCandidate,
+} from './internal/model-script-stage-candidate';

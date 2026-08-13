@@ -20,6 +20,11 @@ import {
   createProjectFeatureRegistration,
   type ProjectFeatureRegistration,
 } from './composition/register-project-features';
+import {
+  createProductionScriptService,
+  createScriptFeatureRegistration,
+  type ScriptFeatureRegistration,
+} from './composition/register-script-features';
 import { registerRuntimeIpc } from './ipc/runtime-ipc';
 import { registerAppProtocol } from './security/app-protocol';
 
@@ -34,6 +39,7 @@ let appProtocolRegistered = false;
 let persistenceRuntime: DesktopPersistenceRuntime | null = null;
 let projectFeatureRegistration: ProjectFeatureRegistration | null = null;
 let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null;
+let scriptFeatureRegistration: ScriptFeatureRegistration | null = null;
 
 const createSafeStorageFacade = (): SafeStorageFacade => ({
   decryptString: (encrypted) => safeStorage.decryptString(Buffer.from(encrypted)),
@@ -162,12 +168,20 @@ if (!singleInstanceLockAcquired) {
           safeStorage: createSafeStorageFacade(),
           trustedUrl: getTrustedUrl(),
         });
+        scriptFeatureRegistration = createScriptFeatureRegistration({
+          createService: createProductionScriptService,
+          ipcRegistrar,
+          persistenceRuntime,
+          trustedUrl: getTrustedUrl(),
+        });
         registerRuntimeIpc(ipcRegistrar, persistenceRuntime.startupService, getTrustedUrl(), () => {
           projectFeatureRegistration?.ensureRegistered();
           jobProviderFeatureRegistration?.ensureRegistered();
+          scriptFeatureRegistration?.ensureRegistered();
         });
         projectFeatureRegistration.ensureRegistered();
         jobProviderFeatureRegistration.ensureRegistered();
+        scriptFeatureRegistration.ensureRegistered();
       }
       await createMainWindow();
     })
@@ -185,6 +199,7 @@ if (!singleInstanceLockAcquired) {
   app.on('before-quit', () => {
     projectFeatureRegistration = null;
     jobProviderFeatureRegistration = null;
+    scriptFeatureRegistration = null;
     persistenceRuntime?.close();
     persistenceRuntime = null;
   });

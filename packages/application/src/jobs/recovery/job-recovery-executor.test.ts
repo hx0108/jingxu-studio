@@ -144,6 +144,55 @@ describe('recoverPendingJobs', () => {
     expect(transition).not.toHaveBeenCalled();
   });
 
+  it('条件—完整响应 hash 不匹配—不重校验并终态为证据无效', async () => {
+    const validating = job('hash-mismatch', 'VALIDATING');
+    const complete = invocation(validating.id, {
+      rawResponse: new Uint8Array([1]),
+      rawResponseSha256: 'persisted-hash',
+      responseCompleteAt: '2026-08-12T00:00:10.000Z',
+    });
+    const { transition, unitOfWork } = setup([validating], [complete]);
+    const revalidate = vi.fn(() => Promise.resolve());
+
+    const results = await recoverPendingJobs(unitOfWork, {
+      now: () => '2026-08-12T00:01:00.000Z',
+      responseHashMatches: () => false,
+      revalidate,
+    });
+
+    expect(results[0]?.kind).toBe('FAIL_INVALID_EVIDENCE');
+    expect(revalidate).not.toHaveBeenCalled();
+    expect(transition).toHaveBeenCalledWith(
+      expect.objectContaining({ errorCode: 'RECOVERY_EVIDENCE_INVALID', nextStatus: 'FAILED' }),
+    );
+  });
+
+  it.each([
+    ['STALE_INPUT', 'STALE_INPUT'],
+    ['SCRIPT_SCHEMA_INVALID', 'JOB_COMMIT_FAILED'],
+  ] as const)(
+    '条件—恢复重校验抛 %s—不得卡在 VALIDATING 并以 %s 终态化',
+    async (message, expectedCode) => {
+      const validating = job(`revalidate-${message}`, 'VALIDATING');
+      const complete = invocation(validating.id, {
+        rawResponse: new Uint8Array([1]),
+        rawResponseSha256: 'response-hash',
+        responseCompleteAt: '2026-08-12T00:00:10.000Z',
+      });
+      const { transition, unitOfWork } = setup([validating], [complete]);
+
+      await recoverPendingJobs(unitOfWork, {
+        now: () => '2026-08-12T00:01:00.000Z',
+        responseHashMatches: () => true,
+        revalidate: () => Promise.reject(new Error(message)),
+      });
+
+      expect(transition).toHaveBeenCalledWith(
+        expect.objectContaining({ errorCode: expectedCode, nextStatus: 'FAILED' }),
+      );
+    },
+  );
+
   it('取消保持不写；未发送仅调用专用 release 且保留原 deadline/timeout', async () => {
     const cancelled = job('cancelled', 'RUNNING', {
       cancelRequestedAt: '2026-08-12T00:00:30.000Z',

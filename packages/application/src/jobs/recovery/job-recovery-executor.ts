@@ -36,6 +36,28 @@ const failureErrorJson = (decision: JobRecoveryDecision): string | null => {
   }
 };
 
+const terminalizeRecoveryFailure = async (
+  unitOfWork: JobUnitOfWorkPort,
+  job: ScriptStageJob,
+  errorCode: string,
+  errorJson: string | null,
+  finishedAt: string,
+): Promise<void> => {
+  await unitOfWork.run(async ({ jobs }) => {
+    const transitioned = await jobs.transition({
+      errorCode,
+      errorJson,
+      expectedStatus: job.status,
+      finishedAt,
+      jobId: job.id,
+      nextStatus: 'FAILED',
+      structureRepairAttempts: job.structureRepairAttempts,
+      transportAttempts: job.transportAttempts,
+    });
+    if (!transitioned) throw new Error('RECOVERY_CONCURRENT_WRITE');
+  });
+};
+
 /** Executes startup recovery from persisted evidence without issuing Provider requests. */
 export const recoverPendingJobs = async (
   unitOfWork: JobUnitOfWorkPort,
@@ -78,23 +100,35 @@ export const recoverPendingJobs = async (
     } else if (
       decision.kind === 'FAIL_DEADLINE' ||
       decision.kind === 'FAIL_TIMEOUT' ||
-      decision.kind === 'FAIL_UNKNOWN_OUTCOME'
+      decision.kind === 'FAIL_UNKNOWN_OUTCOME' ||
+      decision.kind === 'FAIL_INVALID_EVIDENCE'
     ) {
-      await unitOfWork.run(({ jobs }) =>
-        jobs.transition({
-          errorCode: decision.errorCode,
-          errorJson: failureErrorJson(decision),
-          expectedStatus: job.status,
-          finishedAt: recoveryNow,
-          jobId: job.id,
-          nextStatus: 'FAILED',
-          structureRepairAttempts: job.structureRepairAttempts,
-          transportAttempts: job.transportAttempts,
-        }),
+      await terminalizeRecoveryFailure(
+        unitOfWork,
+        job,
+        decision.errorCode,
+        failureErrorJson(decision),
+        recoveryNow,
       );
     } else if (decision.kind === 'RESUME_VALIDATION') {
       const invocation = invocations.find((item) => item.id === decision.invocationId);
-      if (invocation !== undefined) await dependencies.revalidate(job, invocation);
+      if (invocation !== undefined) {
+        try {
+          await dependencies.revalidate(job, invocation);
+        } catch (error) {
+          const errorCode =
+            error instanceof Error && error.message === 'STALE_INPUT'
+              ? 'STALE_INPUT'
+              : 'JOB_COMMIT_FAILED';
+          await terminalizeRecoveryFailure(
+            unitOfWork,
+            job,
+            errorCode,
+            JSON.stringify({ code: errorCode }),
+            recoveryNow,
+          );
+        }
+      }
     }
 
     results.push(Object.freeze({ decision, jobId: job.id, kind: decision.kind }));

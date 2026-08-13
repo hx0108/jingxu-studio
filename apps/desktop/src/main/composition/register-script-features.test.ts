@@ -11,7 +11,13 @@ const createHarness = (writeEnabled: boolean, scriptAvailable = true) => {
   const createService = vi.fn(() => service);
   const unitOfWork = { run: vi.fn() };
   const workspaceQuery = { getVersionDocument: vi.fn(), getWorkspace: vi.fn() };
+  const jobs = { listByStatuses: vi.fn() };
+  const projects = { run: vi.fn() };
+  const registry = { schemaIds: [], validate: vi.fn() };
   const runtime = {
+    getJobRepository: () => (scriptAvailable ? jobs : null),
+    getProjectUnitOfWork: () => (scriptAvailable ? projects : null),
+    getSchemaRegistry: () => (scriptAvailable ? registry : null),
     getScriptUnitOfWork: () => (scriptAvailable ? unitOfWork : null),
     getScriptWorkspaceQuery: () => (scriptAvailable ? workspaceQuery : null),
     startupService: { getStatus: () => ({ writeEnabled }) },
@@ -27,7 +33,16 @@ const createHarness = (writeEnabled: boolean, scriptAvailable = true) => {
     persistenceRuntime: runtime,
     trustedUrl: 'file://jingxu/index.html',
   });
-  return { channels, createService, registration, unitOfWork, workspaceQuery };
+  return {
+    channels,
+    createService,
+    jobs,
+    projects,
+    registration,
+    registry,
+    unitOfWork,
+    workspaceQuery,
+  };
 };
 
 describe('createScriptFeatureRegistration', () => {
@@ -38,6 +53,9 @@ describe('createScriptFeatureRegistration', () => {
     expect(harness.channels.sort()).toEqual(Object.values(SCRIPT_IPC_CHANNELS).sort());
     expect(harness.channels.every((channel) => channel.startsWith('script.'))).toBe(true);
     expect(harness.createService).toHaveBeenCalledWith({
+      jobs: harness.jobs,
+      projects: harness.projects,
+      registry: harness.registry,
       unitOfWork: harness.unitOfWork,
       workspaceQuery: harness.workspaceQuery,
     });
