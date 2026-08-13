@@ -245,7 +245,7 @@ describe('SQLite Script repositories and UnitOfWork', () => {
         database
           .prepare(
             `INSERT INTO prompt_templates (id,stage,version,template_text,sha256,active,created_at)
-             VALUES ('prompt_script','CONCEPT',1,'prompt',?,1,?)`,
+             VALUES ('prompt_script','CONCEPT',99,'prompt',?,1,?)`,
           )
           .run(hash('prompt'), NOW);
         database

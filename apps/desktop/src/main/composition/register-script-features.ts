@@ -12,7 +12,7 @@ import type {
   ScriptUnitOfWorkPort,
   ScriptWorkspaceQueryPort,
 } from '@jingxu/application';
-import type { JobSummaryDto } from '@jingxu/contracts';
+import type { AppResultDto, JobSummaryDto } from '@jingxu/contracts';
 
 import {
   registerScriptIpc,
@@ -124,6 +124,34 @@ export const createScriptFeatureRegistration = ({
   trustedUrl,
 }: RegisterScriptFeaturesOptions): ScriptFeatureRegistration => {
   let registered = false;
+  let activeService: ScriptIpcService | null = null;
+  const blocked = (): Promise<AppResultDto<never>> =>
+    Promise.resolve({
+      error: {
+        code: 'STARTUP_WRITE_BLOCKED',
+        fieldErrors: null,
+        message: '应用尚未进入可写状态。',
+        retryable: true,
+        traceId: 'trace_startup_gate',
+        userAction: '请先处理启动故障后重试。',
+      },
+      ok: false,
+    });
+  const facade: ScriptIpcService = {
+    confirmVersion: (input, traceId) => activeService?.confirmVersion(input, traceId) ?? blocked(),
+    getWorkspace: (input, traceId) => activeService?.getWorkspace(input, traceId) ?? blocked(),
+    initializeOriginal: (input, traceId) =>
+      activeService?.initializeOriginal(input, traceId) ?? blocked(),
+    restoreVersion: (input, traceId) => activeService?.restoreVersion(input, traceId) ?? blocked(),
+    saveDraft: (input, traceId) => activeService?.saveDraft(input, traceId) ?? blocked(),
+  };
+  registerScriptIpc(
+    ipcRegistrar,
+    facade,
+    { isWriteReady: () => persistenceRuntime.startupService.getStatus().writeEnabled },
+    trustedUrl,
+    ...(newTraceId === undefined ? [] : [{ newTraceId }]),
+  );
   return {
     ensureRegistered: () => {
       if (registered || !persistenceRuntime.startupService.getStatus().writeEnabled) return false;
@@ -140,14 +168,7 @@ export const createScriptFeatureRegistration = ({
         registry === null
       )
         return false;
-      const service = createService({ jobs, projects, registry, unitOfWork, workspaceQuery });
-      registerScriptIpc(
-        ipcRegistrar,
-        service,
-        { isWriteReady: () => persistenceRuntime.startupService.getStatus().writeEnabled },
-        trustedUrl,
-        ...(newTraceId === undefined ? [] : [{ newTraceId }]),
-      );
+      activeService = createService({ jobs, projects, registry, unitOfWork, workspaceQuery });
       registered = true;
       return true;
     },

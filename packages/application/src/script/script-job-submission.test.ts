@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ScriptStageJob } from '../ports/persistence/job/index';
 import type { ScriptJobRepositories } from '../ports/script/index';
-import { createScriptJobSubmission } from './script-job-submission';
+import { createScriptJobSubmission, resolvePrimaryInputVersionId } from './script-job-submission';
 
 const FAILED_JOB = {
   cancelRequestedAt: null,
@@ -16,8 +17,18 @@ const FAILED_JOB = {
   inputVersionSetHash: 'old-hash',
   inputVersionsJson: JSON.stringify({
     references: [
-      { id: 'source-0001', kind: 'SOURCE_INPUT', sha256: 'a'.repeat(64) },
-      { id: 'format-0001', kind: 'FORMAT_PROFILE' },
+      {
+        objectId: 'source-0001',
+        objectType: 'SOURCE_INPUT',
+        sha256: 'a'.repeat(64),
+        versionId: 'source-0001',
+      },
+      {
+        objectId: 'format-0001',
+        objectType: 'FORMAT_PROFILE',
+        sha256: 'b'.repeat(64),
+        versionId: 'format-0001',
+      },
     ],
   }),
   leaseExpiresAt: null,
@@ -78,6 +89,39 @@ const createSubmission = (
   });
 
 describe('ScriptJobSubmission', () => {
+  it.each([
+    ['CONCEPT', 'SOURCE_INPUT', 'source-0001'],
+    ['STORY_BIBLE', 'SCRIPT_VERSION', 'concept-0001'],
+    ['EPISODE_OUTLINE', 'STORY_BIBLE_VERSION', 'bible-0001'],
+    ['BEAT_SHEET', 'SCRIPT_VERSION', 'outline-0001'],
+    ['SCENE_SCRIPT', 'SCRIPT_VERSION', 'beat-0001'],
+  ] as const)(
+    '条件—%s FAILED Job 使用当前冻结引用—重试主输入映射为 %s',
+    (stage, objectType, versionId) => {
+      const job = {
+        ...FAILED_JOB,
+        inputVersionsJson: JSON.stringify({
+          references: [
+            { objectId: versionId, objectType, sha256: 'a'.repeat(64), versionId },
+            ...(stage === 'EPISODE_OUTLINE'
+              ? [
+                  {
+                    objectId: 'concept-0001',
+                    objectType: 'SCRIPT_VERSION',
+                    sha256: 'b'.repeat(64),
+                    versionId: 'concept-0001',
+                  },
+                ]
+              : []),
+          ],
+        }),
+        stage,
+      } as ScriptStageJob;
+
+      expect(resolvePrimaryInputVersionId(job)).toBe(versionId);
+    },
+  );
+
   it('条件—CONCEPT 前置匹配—同事务冻结输入并写 QUEUED，提交后 kick', async () => {
     const { insert, repositories } = baseRepositories();
     const kick = vi.fn();

@@ -301,7 +301,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
     if (prechecked !== null) return prechecked;
 
     // 目录准备在事务外完成（Design §5）；projectId 先派生以供目录与事务共用
-    const projectId = deps.idGenerator.newId();
+    const projectId = deps.idGenerator.newId('project');
     let handle: ProjectDirectoryHandle;
     try {
       handle = await deps.directory.prepare(projectId);
@@ -326,7 +326,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
           });
         }
 
-        const formatProfileId = deps.idGenerator.newId();
+        const formatProfileId = deps.idGenerator.newId('format_profile');
         const nowIso = new Date(deps.clock.now()).toISOString();
         const project: Project = {
           id: projectId,
@@ -532,7 +532,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
         let resultProfile = current;
         if (profileChanged) {
           const maxVersionNo = await repositories.formatProfiles.findMaxVersionNo(projectId);
-          const newProfileId = deps.idGenerator.newId();
+          const newProfileId = deps.idGenerator.newId('format_profile');
           resultProfile = {
             id: newProfileId,
             projectId,

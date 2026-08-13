@@ -1,8 +1,10 @@
 import type {
+  CompiledSchemaRegistry,
   JobRepositoryPort,
   JobUnitOfWorkPort,
   ProviderProfileRepositoryPort,
   ProviderUnitOfWorkPort,
+  ScriptUnitOfWorkPort,
 } from '@jingxu/application';
 import { PROVIDER_IPC_CHANNELS } from '@jingxu/contracts';
 import { describe, expect, it, vi } from 'vitest';
@@ -37,6 +39,8 @@ interface Harness {
       providerProfileRepository: ProviderProfileRepositoryPort | null;
       jobRepository: JobRepositoryPort | null;
       jobUnitOfWork: JobUnitOfWorkPort | null;
+      registry: CompiledSchemaRegistry | null;
+      scriptUnitOfWork: ScriptUnitOfWorkPort | null;
     } | null,
   ) => void;
   readonly registration: ReturnType<typeof createJobProviderFeatureRegistration>;
@@ -59,6 +63,8 @@ const createHarness = (): Harness => {
     providerProfileRepository: ProviderProfileRepositoryPort | null;
     jobRepository: JobRepositoryPort | null;
     jobUnitOfWork: JobUnitOfWorkPort | null;
+    registry: CompiledSchemaRegistry | null;
+    scriptUnitOfWork: ScriptUnitOfWorkPort | null;
   } | null = null;
 
   // 恢复扫描通过 jobUnitOfWork.run 读取待恢复证据；#5 表为空 → 两个 finder 返回空数组。
@@ -75,6 +81,8 @@ const createHarness = (): Harness => {
     getJobUnitOfWork: () => units?.jobUnitOfWork ?? null,
     getProviderProfileRepository: () => units?.providerProfileRepository ?? null,
     getProviderUnitOfWork: () => units?.providerUnitOfWork ?? null,
+    getSchemaRegistry: () => units?.registry ?? null,
+    getScriptUnitOfWork: () => units?.scriptUnitOfWork ?? null,
     startupService: { getStatus: () => ({ writeEnabled: ready }) },
   } as unknown as DesktopPersistenceRuntime;
 
@@ -109,6 +117,17 @@ const configuredUnits = () => ({
     listByStatuses: vi.fn(),
   } as unknown as JobRepositoryPort,
   jobUnitOfWork: null,
+  registry: {
+    schemaIds: [],
+    validate: () => ({ issues: [], schemaId: 'script', valid: true }),
+  } as CompiledSchemaRegistry,
+  scriptUnitOfWork: {
+    run: (work: (repositories: never) => Promise<unknown>) =>
+      work({
+        invocations: { listRecoveryEvidence: vi.fn(() => Promise.resolve([])) },
+        jobs: { listByStatuses: vi.fn(() => Promise.resolve([])) },
+      } as never),
+  } as unknown as ScriptUnitOfWorkPort,
   providerProfileRepository: {
     delete: vi.fn(),
     findById: vi.fn(() => Promise.resolve(null)),
@@ -142,6 +161,8 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
       jobUnitOfWork: null,
       providerProfileRepository: null,
       providerUnitOfWork: null,
+      registry: null,
+      scriptUnitOfWork: null,
     });
 
     expect(h.registration.ensureRegistered()).toBe(false);

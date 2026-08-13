@@ -40,6 +40,7 @@ let persistenceRuntime: DesktopPersistenceRuntime | null = null;
 let projectFeatureRegistration: ProjectFeatureRegistration | null = null;
 let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null;
 let scriptFeatureRegistration: ScriptFeatureRegistration | null = null;
+let shutdownStarted = false;
 
 const createSafeStorageFacade = (): SafeStorageFacade => ({
   decryptString: (encrypted) => safeStorage.decryptString(Buffer.from(encrypted)),
@@ -63,8 +64,15 @@ const singleInstanceLockAcquired = app.requestSingleInstanceLock();
 
 const getTrustedUrl = (): string => devServerUrl ?? PRODUCTION_URL;
 
+/**
+ * Electron 43.x 在 `electron <dir>` 开发/e2e 启动时可能把 `app.isPackaged` 报成 true（即便此时
+ * `process.defaultApp === true`）。以 `process.defaultApp === true` 作为可信开发态信号：仅当真正
+ * 打包（defaultApp 非 true）且 isPackaged 为 true 时，才解析到 resourcesPath 下的资源目录。
+ */
+const resolveIsPackaged = (): boolean => app.isPackaged && !process.defaultApp;
+
 const getMigrationDirectory = (): string =>
-  app.isPackaged
+  resolveIsPackaged()
     ? path.join(process.resourcesPath, 'migrations')
     : path.resolve(
         app.getAppPath(),
@@ -126,7 +134,7 @@ if (!singleInstanceLockAcquired) {
           migrationDirectory: getMigrationDirectory(),
           schemaResourceDirectory: deriveSchemaResourceDirectory({
             appPath: app.getAppPath(),
-            isPackaged: app.isPackaged,
+            isPackaged: resolveIsPackaged(),
             resourcesPath: process.resourcesPath,
           }),
         }),
@@ -167,6 +175,7 @@ if (!singleInstanceLockAcquired) {
           persistenceRuntime,
           safeStorage: createSafeStorageFacade(),
           trustedUrl: getTrustedUrl(),
+          useE2eMock: process.env.JINGXU_E2E === '1',
         });
         scriptFeatureRegistration = createScriptFeatureRegistration({
           createService: createProductionScriptService,
@@ -196,7 +205,15 @@ if (!singleInstanceLockAcquired) {
     }
   });
 
-  app.on('before-quit', () => {
+  app.on('before-quit', (event) => {
+    if (!shutdownStarted && jobProviderFeatureRegistration !== null) {
+      event.preventDefault();
+      shutdownStarted = true;
+      void jobProviderFeatureRegistration.stop().finally(() => {
+        app.quit();
+      });
+      return;
+    }
     projectFeatureRegistration = null;
     jobProviderFeatureRegistration = null;
     scriptFeatureRegistration = null;

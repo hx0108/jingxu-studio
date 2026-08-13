@@ -89,10 +89,10 @@ export const createOriginalInitializationService = (
           return;
         }
         const at = dependencies.now();
-        const sourceInputId = dependencies.newId();
-        const consentId = dependencies.newId();
-        const episodeId = dependencies.newId();
-        const auditId = dependencies.newId();
+        const sourceInputId = `source_${dependencies.newId()}`;
+        const consentId = `consent_${dependencies.newId()}`;
+        const episodeId = `episode_${dependencies.newId()}`;
+        const auditId = `audit_${dependencies.newId()}`;
         const source: SourceInput = {
           charCount,
           content: command.creativeText,

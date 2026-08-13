@@ -129,7 +129,22 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
     for (;;) {
       const invocationId = dependencies.createInvocationId(++invocationSequence);
       const at = dependencies.now();
-      const request = await dependencies.buildRequest(job, invocationId, repair);
+      let request: TextGenerationRequest;
+      try {
+        request = await dependencies.buildRequest(job, invocationId, repair);
+      } catch (error) {
+        const errorCode =
+          error instanceof Error && error.message === 'STALE_INPUT'
+            ? 'STALE_INPUT'
+            : 'JOB_REQUEST_BUILD_FAILED';
+        return failJob(
+          job.id,
+          'RUNNING',
+          errorCode,
+          currentTransportAttempts,
+          structureRepairAttempts,
+        );
+      }
       const invocation: ModelInvocation = {
         attemptKind: currentKind,
         currency: null,

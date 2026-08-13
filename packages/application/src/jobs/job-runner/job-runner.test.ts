@@ -81,6 +81,7 @@ const createHarness = (
     commitFails?: boolean;
     finalInvalid?: boolean;
     preCommitStale?: boolean;
+    requestBuildError?: 'STALE_INPUT' | 'OTHER';
   }>,
 ) => {
   const events: string[] = [];
@@ -254,6 +255,9 @@ const createHarness = (
         : {}),
     }),
     buildRequest: (job, invocationId, repair) => {
+      if (options?.requestBuildError !== undefined) {
+        throw new Error(options.requestBuildError === 'STALE_INPUT' ? 'STALE_INPUT' : 'secret');
+      }
       if (repair !== undefined) events.push(`repair-input:${repair.rawText}`);
       return {
         candidateSchemaId: 'candidate/1',
@@ -288,6 +292,23 @@ const createHarness = (
 };
 
 describe('JobRunner', () => {
+  it.each([
+    ['STALE_INPUT', 'STALE_INPUT'],
+    ['OTHER', 'JOB_REQUEST_BUILD_FAILED'],
+  ] as const)(
+    '请求快照构建失败 %s—Provider前终态化为 %s 且零Invocation',
+    async (requestBuildError, expectedCode) => {
+      const h = createHarness([], { requestBuildError });
+
+      const result = await h.runner.run(h.store.job.id);
+
+      expect(result).toEqual({ errorCode: expectedCode, status: 'FAILED' });
+      expect(h.store.invocations).toHaveLength(0);
+      expect(h.events).not.toContain('generate');
+      expect(h.store.job.errorCode).toBe(expectedCode);
+    },
+  );
+
   it('竞争领取—仅一个 runner 胜出—Provider 只调用一次', async () => {
     const harness = createHarness([result()]);
     const generate = vi.spyOn(harness.textModel, 'generate');

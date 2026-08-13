@@ -11,6 +11,7 @@ export {
 } from './script-version-service';
 export {
   createScriptJobSubmission,
+  ScriptJobSubmissionError,
   type ScriptJobSubmissionDependencies,
   type ScriptJobSubmissionPort,
 } from './script-job-submission';
@@ -40,3 +41,8 @@ export {
   type ScriptService,
   type ScriptServiceDependencies,
 } from './script-service';
+export {
+  createScriptGenerationRuntime,
+  type ScriptGenerationRuntime,
+  type ScriptGenerationRuntimeDependencies,
+} from './script-generation-runtime';

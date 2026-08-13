@@ -242,7 +242,7 @@ const createMatrixHarness = ({
     commitHandler: {
       commit: (_repositories, value) => {
         events.push('commit-handler');
-        if (commitStale) throw new Error('JOB_STALE_INPUT');
+        if (commitStale) throw new Error('STALE_INPUT');
         store.versions.push(value);
         return Promise.resolve();
       },
@@ -385,11 +385,12 @@ describe('AC-V1-04 Provider 全矩阵 — 真实 MockTextModelAdapter × createJ
       steps: [{ kind: 'success', rawText: '{"data":{"title":"candidate"}}' }],
       commitStale: true,
     });
-    // #5 仅证明 JobRunner 在 commit handler 拒绝时的回滚保证；真实 STALE_INPUT 哈希复检与
-    // 终态化由 #6 业务 commit handler 接入（Design §6、design.md「JobCommitHandler」）。
-    await expect(h.runner.run('job_1')).rejects.toThrow('JOB_STALE_INPUT');
+    await expect(h.runner.run('job_1')).resolves.toEqual({
+      errorCode: 'STALE_INPUT',
+      status: 'FAILED',
+    });
     expect(h.store.versions).toHaveLength(0);
-    expect(h.store.job.status).toBe('VALIDATING');
+    expect(h.store.job).toMatchObject({ errorCode: 'STALE_INPUT', status: 'FAILED' });
     expect(h.events).toContain('tx:rollback');
     assertInputPreserved(h.store);
   });

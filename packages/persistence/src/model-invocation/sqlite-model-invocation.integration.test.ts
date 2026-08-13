@@ -29,7 +29,7 @@ const withDatabase = async <T>(
         .prepare(
           `INSERT INTO prompt_templates (id,stage,version,template_text,sha256,active,created_at) VALUES (?,?,?,?,?,?,?)`,
         )
-        .run('prompt1', 'CONCEPT', 1, 't', 'sha', 1, NOW);
+        .run('prompt1', 'CONCEPT', 99, 't', 'sha', 1, NOW);
       database
         .prepare(
           `INSERT INTO provider_profiles (id,provider,region,base_url,workspace_id,model_id,model_snapshot_date,config_json,credential_ref,enabled) VALUES (?,?,?,?,?,?,?,?,?,?)`,

@@ -44,7 +44,7 @@ const seedReferences = (database: SqliteDatabase): void => {
       `INSERT INTO prompt_templates
        (id,stage,version,template_text,sha256,active,created_at) VALUES (?,?,?,?,?,?,?)`,
     )
-    .run('prompt1', 'CONCEPT', 1, 'template', 'sha', 1, START);
+    .run('prompt1', 'CONCEPT', 99, 'template', 'sha', 1, START);
   database
     .prepare(
       `INSERT INTO provider_profiles

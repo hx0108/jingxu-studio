@@ -23,6 +23,6 @@ export const createDesktopProjectService = ({
     clock: { now: Date.now },
     directory: createProjectDirectoryAdapter({ managedRoot }),
     hasher: createStableHasher((input) => createHash('sha256').update(input).digest('hex')),
-    idGenerator: { newId: randomUUID },
+    idGenerator: { newId: (kind = 'project') => `${kind}_${randomUUID()}` },
     unitOfWork,
   });

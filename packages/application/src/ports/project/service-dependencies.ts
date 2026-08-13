@@ -24,8 +24,8 @@ export interface Clock {
  * SQL 与空白。用于系统派生的 projectId/formatProfileId；调用方无法伪造 ID（Design §2）。
  */
 export interface IdGenerator {
-  /** 生成一个新的系统标识符。 */
-  newId(): string;
+  /** 生成一个新的系统标识符；生产实现用实体类型生成机器契约要求的前缀。 */
+  newId(kind?: 'format_profile' | 'project'): string;
 }
 
 /**

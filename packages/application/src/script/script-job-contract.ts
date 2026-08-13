@@ -46,7 +46,10 @@ export const buildScriptCandidateContract = (
 
 /** Writes the generated DRAFT and current pointer inside JobRunner's final transaction. */
 export const createScriptCommitHandler = (
-  dependencies: ScriptJobContractDependencies,
+  dependencies: Pick<
+    ScriptJobContractDependencies,
+    'hashDocument' | 'newId' | 'now' | 'revalidateFrozenInput'
+  >,
 ): JobCommitHandler<ScriptJobRepositories> => ({
   commit: async (repositories, value, job) => {
     if (!(await dependencies.revalidateFrozenInput(repositories, job))) {

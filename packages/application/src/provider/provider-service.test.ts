@@ -112,7 +112,11 @@ describe('ProviderService', () => {
   });
 
   it('连接测试—只调用绑定实例 validateCredential—不执行生成任务', async () => {
-    const stored: ProviderProfile = { ...profile, credentialRef: 'opaque-ref' };
+    const stored: ProviderProfile = {
+      ...profile,
+      config: { ...profile.config, lastValidatedAt: '2026-08-11T00:00:00Z' },
+      credentialRef: 'opaque-ref',
+    };
     const generate = vi.fn<TextModelPort['generate']>();
     const validateCredential = vi.fn(() => Promise.resolve({ ok: true as const }));
     const model: TextModelPort = {
@@ -158,7 +162,12 @@ describe('ProviderService', () => {
 
     expect(saved?.enabled).toBe(false);
     expect(saved?.workspaceId).toBe('workspace-2');
-    expect(view).toMatchObject({ enabled: false, versionId: 'provider-1' });
+    expect(saved?.config.lastValidatedAt).toBeNull();
+    expect(view).toMatchObject({
+      enabled: false,
+      lastValidatedAt: null,
+      versionId: 'provider-1',
+    });
   });
 
   it('saveProfile—行不存在则拒绝（凭据先于配置）', async () => {

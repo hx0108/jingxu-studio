@@ -215,14 +215,14 @@ describe('0001_initial.sql', () => {
           `INSERT INTO prompt_templates (id, stage, version, template_text, sha256, active, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run('prompt_1', 'CONCEPT', 1, 'template', 'sha_prompt', 1, NOW);
+        .run('prompt_1', 'CONCEPT', 99, 'template', 'sha_prompt', 1, NOW);
       expect(() =>
         database
           .prepare(
             `INSERT INTO prompt_templates (id, stage, version, template_text, sha256, active, created_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)`,
           )
-          .run('prompt_2', 'CONCEPT', 1, 'other', 'sha_other', 1, NOW),
+          .run('prompt_2', 'CONCEPT', 99, 'other', 'sha_other', 1, NOW),
       ).toThrow();
       expect(() =>
         database
@@ -323,7 +323,7 @@ describe('0001_initial.sql', () => {
           `INSERT INTO prompt_templates (id, stage, version, template_text, sha256, active, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run('prompt_1', 'CONCEPT', 1, 'template', 'sha_prompt', 1, NOW);
+        .run('prompt_1', 'CONCEPT', 99, 'template', 'sha_prompt', 1, NOW);
       expect(() =>
         database
           .prepare(

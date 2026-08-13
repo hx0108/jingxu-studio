@@ -42,6 +42,8 @@ const STAGED_SCRIPT_STAGES = new Set<string>([
 const isStagedScriptStage = (value: string): value is StagedScriptStage =>
   STAGED_SCRIPT_STAGES.has(value);
 
+const parseJson = (value: string): unknown => JSON.parse(value) as unknown;
+
 const requireSupported: (
   value: Readonly<{ operationType: string; stage: string }>,
 ) => asserts value is Readonly<{ operationType: 'GENERATE'; stage: StagedScriptStage }> = (
@@ -52,43 +54,43 @@ const requireSupported: (
   }
 };
 
-const primaryInputVersionId = (job: ScriptStageJob): string => {
+export const resolvePrimaryInputVersionId = (job: ScriptStageJob): string => {
   let parsed: unknown;
   try {
-    const value: unknown = JSON.parse(job.inputVersionsJson);
-    parsed = value;
+    parsed = parseJson(job.inputVersionsJson);
   } catch {
     throw new ScriptJobSubmissionError('JOB_VERSION_CONFLICT');
   }
   if (typeof parsed !== 'object' || parsed === null || !('references' in parsed)) {
     throw new ScriptJobSubmissionError('JOB_VERSION_CONFLICT');
   }
-  const references = (parsed as Readonly<{ references?: unknown }>).references;
+  const { references } = parsed as Readonly<{ references?: unknown }>;
   if (!Array.isArray(references)) throw new ScriptJobSubmissionError('JOB_VERSION_CONFLICT');
-  const primary = references.find((candidate: unknown) => {
+  const candidates = references as unknown[];
+  const primary: unknown = candidates.find((candidate: unknown) => {
     if (typeof candidate !== 'object' || candidate === null) return false;
-    const reference = candidate as Readonly<{ kind?: unknown; stage?: unknown }>;
+    const reference = candidate as Readonly<{ objectType?: unknown }>;
     switch (job.stage) {
       case 'CONCEPT':
-        return reference.kind === 'SOURCE_INPUT';
+        return reference.objectType === 'SOURCE_INPUT';
       case 'STORY_BIBLE':
-        return reference.kind === 'STAGE_VERSION' && reference.stage === 'CONCEPT';
+        return reference.objectType === 'SCRIPT_VERSION';
       case 'EPISODE_OUTLINE':
-        return reference.kind === 'STAGE_VERSION' && reference.stage === 'STORY_BIBLE';
+        return reference.objectType === 'STORY_BIBLE_VERSION';
       case 'BEAT_SHEET':
-        return reference.kind === 'STAGE_VERSION' && reference.stage === 'EPISODE_OUTLINE';
+        return reference.objectType === 'SCRIPT_VERSION';
       case 'SCENE_SCRIPT':
-        return reference.kind === 'STAGE_VERSION' && reference.stage === 'BEAT_SHEET';
+        return reference.objectType === 'SCRIPT_VERSION';
       default:
         return false;
     }
   });
-  const id =
-    typeof primary === 'object' && primary !== null && 'id' in primary
-      ? (primary as Readonly<{ id?: unknown }>).id
+  const versionId =
+    typeof primary === 'object' && primary !== null && 'versionId' in primary
+      ? (primary as Readonly<{ versionId?: unknown }>).versionId
       : null;
-  if (typeof id !== 'string') throw new ScriptJobSubmissionError('JOB_VERSION_CONFLICT');
-  return id;
+  if (typeof versionId !== 'string') throw new ScriptJobSubmissionError('JOB_VERSION_CONFLICT');
+  return versionId;
 };
 
 /** Freezes current prerequisites and inserts QUEUED in the same short transaction. */
@@ -169,7 +171,7 @@ export const createScriptJobSubmission = (
           repositories,
           {
             episodeId: failed.episodeId,
-            expectedInputVersionId: primaryInputVersionId(failed),
+            expectedInputVersionId: resolvePrimaryInputVersionId(failed),
             projectId: failed.projectId,
             stage,
           },

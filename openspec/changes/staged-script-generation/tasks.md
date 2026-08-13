@@ -43,11 +43,11 @@
 
 ## 5. 主线集成、E2E 与交付
 
-- [ ] 5.1 汇合 A/B/C 后统一修改公开 index、workspace references/package、PersistenceRuntime Script getter 和 Main Composition Root；READY 前保持 STARTUP_WRITE_BLOCKED，依赖不全时不激活半成品服务。（Desktop Modified Requirement）
-- [ ] 5.2 用真实 ScriptService/Submission/Runner/Scheduler/Recovery 替换 `UNAVAILABLE_*` seam；覆盖幂等注册、启动恢复顺序、Provider 调用事务外、关闭生命周期与无 pending Job。（JobRunner/Desktop Modified Requirements）
-- [ ] 5.3 E2E 使用 Mock 完成原创初始化→五阶段逐一生成DRAFT→确认READY→全文编辑→历史恢复→上游重新确认触发下游STALE_INPUT；同时覆盖失败保留、刷新Job继续、取消、dirty三选项和只读故障写门。
-- [ ] 5.4 E2E/Integration 覆盖 401、429、5xx、120秒注入超时、非法JSON、一次结构修复失败、提交前STALE_INPUT、取消迟到响应、完整响应恢复和未知结果不重发；不使用真实网络或凭据。
-- [ ] 5.5 clean Windows x64 package 并运行 packaged smoke：0001–0003、五 Prompt/hash、四公开 Schema且零第五公开Schema、冻结 script/job/provider 白名单、五阶段 Mock 闭环、零明文Key/原文普通日志、零真实用户目录访问。
-- [ ] 5.6 同步 README、TECH 实现快照、SQLite/Prompt/测试文档：准确登记已实现的 AI 原创五阶段闭环，继续列明授权改编、局部改写/锁、分镜、导入导出、评测及真实用户验收未完成。
-- [ ] 5.7 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test:collection`、Unit、Contract、Integration、E2E、`pnpm package:win`，记录通过/失败数量、跳过项及真实 Qwen 人工检查未执行状态。
-- [ ] 5.8 运行 `openspec validate staged-script-generation --strict`，建立全部 Requirement/Scenario→代码/Fixture/测试映射，定向证明四根 Schema 与 0001/0002 字节未变、无延期/V2/V3 泄漏；Verify 无阻断后才 Sync/Archive。
+- [x] 5.1 汇合 A/B/C 后统一修改公开 index、workspace references/package、PersistenceRuntime Script getter 和 Main Composition Root；READY 前保持 STARTUP_WRITE_BLOCKED，依赖不全时不激活半成品服务。（Desktop Modified Requirement）
+- [x] 5.2 用真实 ScriptService/Submission/Runner/Scheduler/Recovery 替换 `UNAVAILABLE_*` seam；覆盖幂等注册、启动恢复顺序、Provider 调用事务外、关闭生命周期与无 pending Job。（JobRunner/Desktop Modified Requirements）
+- [x] 5.3 E2E 使用 Mock 完成原创初始化→五阶段逐一生成DRAFT→确认READY→全文编辑→历史恢复→上游重新确认触发下游STALE_INPUT；同时覆盖失败保留、刷新Job继续、取消、dirty三选项和只读故障写门。
+- [x] 5.4 E2E/Integration 覆盖 401、429、5xx、120秒注入超时、非法JSON、一次结构修复失败、提交前STALE_INPUT、取消迟到响应、完整响应恢复和未知结果不重发；不使用真实网络或凭据。
+- [x] 5.5 clean Windows x64 package 并运行 packaged smoke：0001–0003、五 Prompt/hash、四公开 Schema且零第五公开Schema、冻结 script/job/provider 白名单、五阶段 Mock 闭环、零明文Key/原文普通日志、零真实用户目录访问。
+- [x] 5.6 同步 README、TECH 实现快照、SQLite/Prompt/测试文档：准确登记已实现的 AI 原创五阶段闭环，继续列明授权改编、局部改写/锁、分镜、导入导出、评测及真实用户验收未完成。
+- [x] 5.7 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test:collection`、Unit、Contract、Integration、E2E、`pnpm package:win`，记录通过/失败数量、跳过项及真实 Qwen 人工检查未执行状态。
+- [x] 5.8 运行 `openspec validate staged-script-generation --strict`，建立全部 Requirement/Scenario→代码/Fixture/测试映射，定向证明四根 Schema 与 0001/0002 字节未变、无延期/V2/V3 泄漏；Verify 无阻断后才 Sync/Archive。

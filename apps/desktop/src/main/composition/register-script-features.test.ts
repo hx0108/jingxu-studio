@@ -68,6 +68,6 @@ describe('createScriptFeatureRegistration', () => {
     const harness = createHarness(ready, available);
     expect(harness.registration.ensureRegistered()).toBe(false);
     expect(harness.createService).not.toHaveBeenCalled();
-    expect(harness.channels).toEqual([]);
+    expect(harness.channels.sort()).toEqual(Object.values(SCRIPT_IPC_CHANNELS).sort());
   });
 });

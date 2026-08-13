@@ -49,7 +49,15 @@ export class ProviderService {
     enabled: boolean,
   ): Promise<ProviderProfileView> {
     const profile = await this.#requireProfile(profileId);
-    const next: ProviderProfile = { ...profile, enabled, workspaceId };
+    const next: ProviderProfile = {
+      ...profile,
+      config:
+        workspaceId === profile.workspaceId
+          ? profile.config
+          : { ...profile.config, lastValidatedAt: null },
+      enabled,
+      workspaceId,
+    };
     await this.#dependencies.unitOfWork.run(async ({ profiles }) => {
       await profiles.save(next);
     });

@@ -39,7 +39,7 @@ const seedReferences = (database: SqliteDatabase): void => {
       `INSERT INTO prompt_templates
     (id,stage,version,template_text,sha256,active,created_at) VALUES (?,?,?,?,?,?,?)`,
     )
-    .run('prompt1', 'CONCEPT', 1, 't', 'sha', 1, NOW);
+    .run('prompt1', 'CONCEPT', 99, 't', 'sha', 1, NOW);
 };
 
 const job = (id: string, idempotencyKey = id): ScriptStageJob => ({

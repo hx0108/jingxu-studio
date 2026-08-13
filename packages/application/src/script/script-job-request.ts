@@ -1,7 +1,6 @@
 import type { TextGenerationRequest } from '../ports/text-model/index';
 import type { ScriptStageJob } from '../ports/persistence/job/index';
 import type { JobStructureRepairRequest } from '../jobs/index';
-import type { StagedScriptStage } from '../ports/script/index';
 
 export interface ScriptPromptSnapshot {
   readonly candidateSchemaId: string;
@@ -42,7 +41,7 @@ export const createScriptJobRequestBuilder =
               }),
             }),
       promptTemplateVersion: prompt.promptTemplateId,
-      stage: job.stage as StagedScriptStage,
+      stage: job.stage,
       systemPrompt: prompt.systemPrompt,
       userPayload: prompt.userPayload,
     };

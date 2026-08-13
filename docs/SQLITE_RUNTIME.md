@@ -22,7 +22,9 @@
 
 `sqlite-migration-runtime` Change 建立了 SQLite 运行时、migration、备份、自检和恢复。后续 `project-format-profile-management` 已在该运行时上实现 Project/FormatProfile Repository、ProjectUnitOfWork 和 ProjectService，但没有改变启动写入门、备份或恢复的安全语义。
 
-后续 `schema-registry-version-locks` 已在同一 SQLite 运行时上实现离线 Schema Registry 启动门和 manifest 成功证据。当前仍未实现 SourceInput、Consent、EpisodeValidator、JobRunner、Provider、剧本或分镜业务用例；DDL 中存在相应表不代表这些能力可调用或已通过验收。
+后续 `schema-registry-version-locks` 已在同一 SQLite 运行时上实现离线 Schema Registry 启动门和 manifest 成功证据。Active Change `staged-script-generation` 已在同一共享事务协调器上接入 SourceInput、Consent、Episode、剧本版本、StageHead、依赖、审计、Job/Invocation 和 Provider 持久化；EpisodeValidator、分镜、导入导出和评测仍未实现。代码存在不等于本 Change 已通过最终 clean package 或真实用户验收。
+
+`0003_script_version_receipts.sql` 只修补项目级 Script versionNo 唯一性和 Script 命令回执枚举，不改写 `0001/0002`。升级仍使用在线备份、连续 checksum 和单事务 migration；打包验收脚本必须从 v1 样本库验证 `0001→0002→0003` 的实际应用集合。
 
 ## 启动写入门
 

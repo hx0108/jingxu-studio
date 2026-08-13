@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前没有 Active Change；已完成的增量规范保存在 `openspec/changes/archive/`。下一阶段在建立并审查新的 Active Change 后，继续接入分阶段剧本生成与结构化分镜业务。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前 Active Change 为 `staged-script-generation`。该 Change 正在接入 AI 原创初始化、五阶段剧本版本链、JobRunner 生产接线、Provider 设置和剧本工作区；尚未完成最终全量门禁、Windows clean packaged smoke、真实 Qwen 连通性或真实用户验收。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 
@@ -96,6 +96,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - `MockTextModelAdapter` 提供可重复的失败矩阵；`QwenTextModelAdapter` 锁定受控配置、JSON Mode 和错误归一化。当前生产入口只开放低成本凭据连通性检查，尚未接入真实五阶段剧本生成。
 - API Key 由 Electron `safeStorage` 加密并独立保存，SQLite 只记录不透明凭据引用和验证元数据；Renderer 不接收完整 Key、Authorization 或原始 Provider 错误。
 - Main/Preload 已提供逐方法的 `job`、`provider` 和 `events` IPC 白名单；未注入阶段提交器时，Job 写入口返回稳定不可用，不创建假版本或空壳任务。
+- `staged-script-generation` 当前代码已实现 SourceInput/Consent/Episode 初始化、五阶段 ScriptService、不可变 DRAFT/READY/STALE_INPUT 版本链、版本历史与恢复、五份 `*/v1` Prompt、Script Job 提交/校验/恢复，以及 `script` 五方法白名单和剧本工作区。上述事实仍须以本 Change 最终 Verify 和 clean packaged smoke 复核后才能作为归档基线。
 
 ## 最近验证证据
 
@@ -110,11 +111,9 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 ## 当前尚未实现
 
-- SourceInput 文本输入和 Consent 授权记录业务用例
-- 五阶段 ScriptService、阶段提交/恢复接入，以及真实剧本生成链路
-- Episode、StoryBible、分镜生成与编辑、锁、导入导出和评测业务用例
+- EpisodeValidator、结构化分镜生成与编辑、锁、导入导出和评测业务用例
 - EpisodeValidator 集合规则，以及剧本/分镜业务调用方对已发布 Registry 的接入
-- 面向最终用户的 Provider 设置页面和真实 Qwen 阶段生成验收
+- 真实 Qwen 阶段生成连通性、真实用户使用和发布验收
 - 图片、视频、TTS、口型、成片和其他 V2/V3 能力
 - AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 当前仅具备可重复的 Mock 自动化证据，不能据此声称 AI 原创链路或 V1 发布验收已经完成
 

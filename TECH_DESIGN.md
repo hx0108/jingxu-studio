@@ -160,6 +160,8 @@ flowchart LR
 
 当前测试证据分布为：Domain/Application Unit、Project 与 Runtime DTO/IPC/Preload Contract、SQLite Repository/UnitOfWork/Migration/Composition Integration、Renderer Unit、Electron Project/Schema 故障 E2E，以及 Windows x64 Schema/Project packaged smoke。OpenSpec Verify 和 AC-V1-01 至 AC-V1-06 仍必须以各自 Change 的最终门禁结果为准，不能用当前基础切片替代。
 
+`staged-script-generation` Active Change 当前已在代码层接入 SourceInput/Consent/Episode、五阶段不可变版本链、五份 `*/v1` Prompt、Script JobRunner/恢复、`script` IPC 与剧本工作区；这些仍是待最终 Verify 的开发事实。clean Windows x64 packaged smoke、真实 Qwen 连通性、真实用户试用和 AC-V1-01 完整链路尚未完成。
+
 ---
 
 ## 4. 推荐技术栈与工程结构

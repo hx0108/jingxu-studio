@@ -1,3 +1,4 @@
+import { ScriptJobSubmissionError } from '@jingxu/application';
 import type { JobRepositoryPort, JobRunner, ScriptStageJob } from '@jingxu/application';
 import type {
   AppErrorDto,
@@ -60,6 +61,20 @@ const err = <T>(
   ok: false,
 });
 
+const submissionError = <T>(error: unknown, traceId: string): AppResultDto<T> => {
+  if (error instanceof ScriptJobSubmissionError) {
+    const retryable = error.code === 'STALE_INPUT';
+    return err(
+      error.code,
+      traceId,
+      '任务输入或阶段前置条件已变化。',
+      retryable,
+      retryable ? '请刷新剧本工作区后重新提交。' : null,
+    );
+  }
+  return err('JOB_SUBMISSION_UNAVAILABLE', traceId, '任务暂不可创建，请稍后重试。', true, null);
+};
+
 /** Application 用例表面：Job 生命周期读路径与取消；创建/重试经 submission seam。 */
 export class JobService {
   readonly #dependencies: JobServiceDependencies;
@@ -85,8 +100,8 @@ export class JobService {
     try {
       const job = await this.#dependencies.submission.submit(input, traceId);
       return ok(toSummary(job));
-    } catch {
-      return err('JOB_SUBMISSION_UNAVAILABLE', traceId, '任务暂不可创建，请稍后重试。', true, null);
+    } catch (error) {
+      return submissionError(error, traceId);
     }
   }
 
@@ -161,8 +176,8 @@ export class JobService {
     try {
       const requeued = await this.#dependencies.submission.requeue(jobId, traceId);
       return ok(toSummary(requeued));
-    } catch {
-      return err('JOB_SUBMISSION_UNAVAILABLE', traceId, '任务暂不可重试，请稍后重试。', true, null);
+    } catch (error) {
+      return submissionError(error, traceId);
     }
   }
 }
