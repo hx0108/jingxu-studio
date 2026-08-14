@@ -42,6 +42,7 @@ describe('0003_script_version_receipts.sql', () => {
           { version: 4 },
           { version: 5 },
           { version: 6 },
+          { version: 7 },
         ]);
         expect(
           database
@@ -159,7 +160,7 @@ describe('0003_script_version_receipts.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 6 });
+        ).toEqual({ version: 7 });
       } finally {
         database.close();
       }

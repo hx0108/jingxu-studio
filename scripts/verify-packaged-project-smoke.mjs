@@ -117,8 +117,15 @@ const migrationOne = await readFile(path.join(migrationRoot, '0001_initial.sql')
 const migrationTwo = await readFile(path.join(migrationRoot, '0002_project_command_receipts.sql'));
 const migrationThree = await readFile(path.join(migrationRoot, '0003_script_version_receipts.sql'));
 const migrationFour = await readFile(path.join(migrationRoot, '0004_prompt_templates_v2.sql'));
-const migrationFive = await readFile(path.join(migrationRoot, '0005_prompt_templates_story_bible_v3.sql'));
-const migrationSix = await readFile(path.join(migrationRoot, '0006_model_invocations_profile_ref.sql'));
+const migrationFive = await readFile(
+  path.join(migrationRoot, '0005_prompt_templates_story_bible_v3.sql'),
+);
+const migrationSix = await readFile(
+  path.join(migrationRoot, '0006_model_invocations_profile_ref.sql'),
+);
+const migrationSeven = await readFile(
+  path.join(migrationRoot, '0007_snapshot_tables_profile_ref.sql'),
+);
 if (!migrationOne.includes(Buffer.from('CREATE TABLE projects'))) {
   throw new Error('PACKAGED_MIGRATION_0001_INVALID');
 }
@@ -145,10 +152,19 @@ if (
 }
 if (
   !migrationSix.includes(Buffer.from('DROP TABLE model_invocations')) ||
-  !migrationSix.includes(Buffer.from('ALTER TABLE model_invocations_v2 RENAME TO model_invocations')) ||
+  !migrationSix.includes(
+    Buffer.from('ALTER TABLE model_invocations_v2 RENAME TO model_invocations'),
+  ) ||
   migrationSix.includes(Buffer.from('REFERENCES provider_profiles'))
 ) {
   throw new Error('PACKAGED_MIGRATION_0006_INVALID');
+}
+if (
+  !migrationSeven.includes(Buffer.from('DROP TABLE provider_capability_snapshots')) ||
+  !migrationSeven.includes(Buffer.from('DROP TABLE model_price_snapshots')) ||
+  migrationSeven.includes(Buffer.from('REFERENCES provider_profiles'))
+) {
+  throw new Error('PACKAGED_MIGRATION_0007_INVALID');
 }
 const packagedMain = await readFile(path.join(resourcesRoot, 'app.asar'));
 for (const lock of promptLocks) {
@@ -402,6 +418,7 @@ try {
       { version: 4, name: '0004_prompt_templates_v2.sql' },
       { version: 5, name: '0005_prompt_templates_story_bible_v3.sql' },
       { version: 6, name: '0006_model_invocations_profile_ref.sql' },
+      { version: 7, name: '0007_snapshot_tables_profile_ref.sql' },
     ])
   ) {
     throw new Error(`PACKAGED_MIGRATION_SET_INVALID:${JSON.stringify(applied)}`);
@@ -494,7 +511,7 @@ try {
         scriptWorkspaceError: jobProviderSurface.scriptWorkspace.error.code,
         providerConfigured: jobProviderSurface.provider.data.configured,
       },
-      migrationVersions: [1, 2, 3, 4, 5, 6],
+      migrationVersions: [1, 2, 3, 4, 5, 6, 7],
       mockClosureEntryObserved: true,
       nativeAddonCount: nativeAddons.length,
       projectLifecycle: ['create', 'update', 'delete', 'restart', 'restore'],

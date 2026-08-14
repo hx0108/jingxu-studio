@@ -166,6 +166,7 @@ describe('0001_initial.sql', () => {
         { version: 4 },
         { version: 5 },
         { version: 6 },
+        { version: 7 },
       ]);
     });
   });
@@ -198,6 +199,25 @@ describe('0001_initial.sql', () => {
             1,
           ),
       ).toThrow();
+      // 0007 起快照表为审计引用：provider_profile_id 仅保留文本，允许悬空
+      // （同 model_invocations，避免删除凭据被历史快照阻塞）。
+      database
+        .prepare(
+          `INSERT INTO provider_capability_snapshots
+           (id, provider_profile_id, snapshot_version, valid_from, expires_at,
+            capabilities_json, source_url, sha256)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          'capability_1',
+          'missing_provider',
+          'v1',
+          NOW,
+          '2027-01-01T00:00:00.000Z',
+          '{}',
+          'https://example.invalid',
+          'a'.repeat(64),
+        );
       expect(() =>
         database
           .prepare(
@@ -207,12 +227,12 @@ describe('0001_initial.sql', () => {
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
-            'capability_1',
+            'capability_2',
             'missing_provider',
             'v1',
             NOW,
             '2027-01-01T00:00:00.000Z',
-            '{}',
+            '{',
             'https://example.invalid',
             'a'.repeat(64),
           ),
