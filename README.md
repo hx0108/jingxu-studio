@@ -2,7 +2,7 @@
 
 镜序 Studio 是面向个人 AI 漫剧创作者的本地优先质量工作台，当前开发目标为 V1“AI 剧本与结构化分镜”。项目尝试把模型生成转化为可编辑、可锁定、可恢复、可追溯的阶段化工作流，而不是直接承诺生成图片、视频或成片。
 
-截至 2026-08-13，仓库已具备可运行的 Windows x64 Electron/React 工程、SQLite 启动与恢复运行时、Project/FormatProfile 管理、离线 Schema Registry，以及 JobRunner、文本模型 Adapter、凭据安全和类型化 IPC 基础。项目仍处于开发验证阶段，尚未上线、完成真实用户试用或通过 PRD v1.4 全量验收。
+截至 2026-08-15，仓库已具备可运行的 Windows x64 Electron/React 工程、SQLite 启动与恢复运行时、Project/FormatProfile 管理、离线 Schema Registry，以及 JobRunner、文本模型 Adapter、凭据安全和类型化 IPC 基础；真实 Qwen 五阶段生成链路已于 2026-08-14 通过开发者环境全流程联调。项目仍处于开发验证阶段，尚未上线、完成真实用户试用或通过 PRD v1.4 全量验收。
 
 ## 支持环境
 
@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前 Active Change 为 `staged-script-generation`。该 Change 已在代码层完成 AI 原创初始化、五阶段剧本版本链、JobRunner 生产接线、Provider 设置和剧本工作区，并通过最终全量门禁与 Windows x64 clean packaged smoke（离线 Mock）；真实 Qwen 凭据连通性与真实用户验收仍待人工核验，合并后归档。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+最近归档的 Change 为 `staged-script-generation`（2026-08-15）。该 Change 在代码层完成 AI 原创初始化、五阶段剧本版本链、JobRunner 生产接线、Provider 设置和剧本工作区，并通过最终全量门禁与 Windows x64 clean packaged smoke（离线 Mock）；真实 Qwen 凭据连通性与五阶段生成已于 2026-08-14 通过开发者环境全流程联调，真实用户验收仍待人工核验。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 
@@ -93,12 +93,21 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - 四份 PRD-owned Schema 使用固定 `$id`、Draft、语义版本和 SHA-256 离线编译；启动时在短事务精确替换 `schema_registry_manifest`，提交成功后才发布完整 Registry。
 - Forge 产物固定包含 `resources/schemas/v1` 四文件；Schema 故障只允许重试，不开放 Project 写服务，也不提供路径或通用 IPC。
 - Application 层已定义 `TextModelPort`、`CredentialPort` 和确定性 `JobRunner`，覆盖任务领取、调用证据、受限重试、结构修复、取消、迟到响应、崩溃恢复和并发门；Provider 调用发生在事务外，业务提交保持短事务边界。
-- `MockTextModelAdapter` 提供可重复的失败矩阵；`QwenTextModelAdapter` 锁定受控配置、JSON Mode 和错误归一化。生产入口已接入真实五阶段剧本生成（ScriptJobSubmission/Runner/Scheduler/Recovery），五阶段闭环经离线 Mock 验证；真实 Qwen 凭据连通性仍未联调。
+- `MockTextModelAdapter` 提供可重复的失败矩阵；`QwenTextModelAdapter` 锁定受控配置、JSON Mode 和错误归一化。生产入口已接入真实五阶段剧本生成（ScriptJobSubmission/Runner/Scheduler/Recovery），五阶段闭环经离线 Mock 验证；真实 Qwen 凭据连通性与五阶段生成已于 2026-08-14 通过全流程联调。
 - API Key 由 Electron `safeStorage` 加密并独立保存，SQLite 只记录不透明凭据引用和验证元数据；Renderer 不接收完整 Key、Authorization 或原始 Provider 错误。
 - Main/Preload 已提供逐方法的 `script`、`job`、`provider` 和 `events` IPC 白名单；`staged-script-generation` 已注入阶段提交器，`job.create` 开放真实剧本生成，不再返回 `JOB_SUBMISSION_UNAVAILABLE`，也不创建假版本或空壳任务。
-- `staged-script-generation` 已实现 SourceInput/Consent/Episode 初始化、五阶段 ScriptService、不可变 DRAFT/READY/STALE_INPUT 版本链、版本历史与恢复、五份 `*/v1` Prompt、Script Job 提交/校验/恢复，以及 `script` 五方法白名单和剧本工作区；已通过 `openspec validate --strict`、全量门禁与 clean packaged smoke（离线 Mock）。待真实 Qwen 联调与合并后归档。
+- `staged-script-generation` 已实现 SourceInput/Consent/Episode 初始化、五阶段 ScriptService、不可变 DRAFT/READY/STALE_INPUT 版本链、版本历史与恢复、五阶段 Prompt（v2/story_bible v3）、Script Job 提交/校验/恢复，以及 `script` 五方法白名单和剧本工作区；已通过 `openspec validate --strict`、全量门禁与 clean packaged smoke（离线 Mock），后续经真实 Qwen 全流程联调于 2026-08-15 归档。
 
 ## 最近验证证据
+
+2026-08-15 `staged-script-generation` 收尾记录（真实 Qwen 联调 + 缺陷修复 + 归档）：
+
+- 真实 Qwen 五阶段生成于 2026-08-14 通过全流程联调：CONCEPT→STORY_BIBLE→EPISODE_OUTLINE→BEAT_SHEET→SCENE_SCRIPT 全部 SUCCEEDED，单次 INITIAL 零修复通过；联调发现的 `model_invocations` 外键删除阻塞经迁移 0006 与 `deleteCredential` 顺序修复后，生产库完成凭据清理并写入审计证据。
+- 联调暴露的四项 UX 缺陷已修：STRUCTURE_REPAIR 修复上下文进入 messages（修复重试不再原样重发）、error_json 字段级明细（bounded details，截断 10 条）、testCredential 透传 `MODEL_*` 稳定失败码、凭据变更时 `lastValidatedAt` 归零；迁移 0007 解除两快照表 `provider_profiles` 外键，迁移 head=7。
+- Format、ESLint、TypeScript 门禁零错误；Unit 493、Contract 83、Integration 159 全部通过；main/renderer/preload 产物重建。
+- `openspec archive staged-script-generation` 完成（specs +7 能力）。
+- 生产数据库 0007 已通过真实启动路径应用并留证：启动全阶段通过至 `READY/writeEnabled=true`，schema_migrations 记录 1–7 且 checksum 与源文件一致，`foreign_key_check` 零违例、`integrity_check` ok，业务表行数不变，升级前自动生成「Schema v6」在线备份。
+- 真实用户使用、AC-V1-01 至 AC-V1-06 验收仍待人工核验。
 
 2026-08-13 `staged-script-generation` Change 记录（离线 Mock，未含真实 Qwen 联调）：
 
@@ -121,8 +130,8 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 - EpisodeValidator、结构化分镜生成与编辑、锁、导入导出和评测业务用例
 - EpisodeValidator 集合规则，以及剧本/分镜业务调用方对已发布 Registry 的接入
-- 真实 Qwen 阶段生成连通性、真实用户使用和发布验收
+- 真实用户使用和发布验收（真实 Qwen 阶段生成连通性已于 2026-08-14 通过开发者环境全流程联调）
 - 图片、视频、TTS、口型、成片和其他 V2/V3 能力
-- AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 当前仅具备可重复的 Mock 自动化证据，不能据此声称 AI 原创链路或 V1 发布验收已经完成
+- AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 目前具备可重复的 Mock 自动化证据与一次真实 Qwen 开发者环境全流程运行，仍不能据此声称真实用户使用或 V1 发布验收已经完成
 
 这些能力将分别进入后续 OpenSpec Change。`0001_initial.sql` 中存在对应表结构不等于业务方法、页面、Schema 校验或验收链路已经实现。
