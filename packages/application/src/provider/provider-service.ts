@@ -71,6 +71,8 @@ export class ProviderService {
     const credential = await this.#dependencies.credentials.saveCredential(plaintext);
     const next: ProviderProfile = {
       ...base,
+      // 新 Key 尚未通过校验；沿用旧行的 lastValidatedAt 会伪造"已校验"态。
+      config: { ...base.config, lastValidatedAt: null },
       credentialLast4: credential.last4,
       credentialRef: credential.id,
     };
@@ -96,6 +98,16 @@ export class ProviderService {
         await profiles.save({
           ...profile,
           config: { ...profile.config, lastValidatedAt: this.#dependencies.clock() },
+        });
+      });
+      return result;
+    }
+    if (result.errorCode === 'MODEL_CREDENTIAL_INVALID') {
+      // 凭据级失败：旧校验时间对新 Key 不成立，立即失效，避免"显示已校验但调用必败"。
+      await this.#dependencies.unitOfWork.run(async ({ profiles }) => {
+        await profiles.save({
+          ...profile,
+          config: { ...profile.config, lastValidatedAt: null },
         });
       });
     }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ProviderProfileView, ProviderService } from '@jingxu/application';
+import type { ModelErrorCode, ProviderProfileView, ProviderService } from '@jingxu/application';
 import {
   appResultSchema,
   EVENTS_IPC_CHANNELS,
@@ -32,6 +32,12 @@ import type { JobProviderBoundaryService } from './job-provider-gate';
 
 interface MutationInput {
   readonly requestId: string;
+}
+
+interface CredentialTestFailureCopy {
+  readonly message: string;
+  readonly retryable: boolean;
+  readonly userAction: string | null;
 }
 
 interface InFlightEntry {
@@ -130,6 +136,65 @@ const mapProviderError = (
   }
   return err<ProviderProfileDto>(fallback, traceId, 'Provider 操作失败，请重试。', true, null);
 };
+
+/**
+ * 凭据测试失败码 → 用户可见文案的确定性映射（Renderer 只按 code 分支展示）。
+ * code 与 message 均为固定枚举文案，不含 Provider 原始错误或实例值。
+ */
+const CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFailureCopy>> =
+  Object.freeze({
+    MODEL_CANCELLED: { message: '请求已取消。', retryable: false, userAction: null },
+    MODEL_CONTENT_REJECTED: {
+      message: '请求内容被 Provider 安全策略拒绝。',
+      retryable: false,
+      userAction: '请调整输入内容后重试。',
+    },
+    MODEL_CONTEXT_LIMIT: {
+      message: '上下文长度超出模型限制。',
+      retryable: false,
+      userAction: '请减少输入长度后重试。',
+    },
+    MODEL_CREDENTIAL_INVALID: {
+      message: 'API Key 校验未通过，Provider 拒绝了该凭据。',
+      retryable: false,
+      userAction: '请重新粘贴 API Key 并保存后再试。',
+    },
+    MODEL_INPUT_TOO_LARGE: {
+      message: '请求体超出 Provider 大小限制。',
+      retryable: false,
+      userAction: '请减少输入长度后重试。',
+    },
+    MODEL_INVALID_RESPONSE: {
+      message: 'Provider 返回内容无法解析。',
+      retryable: true,
+      userAction: '请重试。',
+    },
+    MODEL_NETWORK_ERROR: {
+      message: '网络不可用或无法连接 Provider。',
+      retryable: true,
+      userAction: '请检查网络连接（含代理设置）后重试。',
+    },
+    MODEL_PROVIDER_ERROR: {
+      message: 'Provider 服务端错误。',
+      retryable: true,
+      userAction: '请稍后重试；若持续失败请查看 Provider 状态页。',
+    },
+    MODEL_RATE_LIMITED: {
+      message: 'Provider 限流，请稍后再试。',
+      retryable: true,
+      userAction: '请等待片刻后重试。',
+    },
+    MODEL_TIMEOUT: {
+      message: '请求超时。',
+      retryable: true,
+      userAction: '请重试；网络不佳时可稍后再试。',
+    },
+    MODEL_UNKNOWN: {
+      message: 'Provider 调用失败，原因未知。',
+      retryable: true,
+      userAction: null,
+    },
+  });
 
 export interface JobProviderIpcDependencies {
   readonly jobs: JobService;
@@ -280,12 +345,15 @@ export const createJobProviderIpcService = (
         try {
           const check = await dependencies.provider.testCredential(input.profileId);
           if (!check.ok) {
+            // 透传模型端口的稳定失败码；表类型在编译期强制全键覆盖，
+            // 运行时意外由外层 catch 归一化为 PROVIDER_CALL_FAILED。
+            const known = CREDENTIAL_TEST_FAILURES[check.errorCode];
             return err<ProviderProfileDto>(
-              'PROVIDER_CALL_FAILED',
+              check.errorCode,
               traceId,
-              'Provider 连通性检查失败。',
-              true,
-              null,
+              known.message,
+              known.retryable,
+              known.userAction,
             );
           }
           const view = await dependencies.provider.getProfile(input.profileId);

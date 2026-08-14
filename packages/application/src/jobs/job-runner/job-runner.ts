@@ -98,13 +98,16 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
     errorCode: string,
     transportAttempts: number,
     structureRepairAttempts: number,
+    failure?: CandidateContractFailure,
   ): Promise<JobRunnerOutcome> => {
     const at = dependencies.now();
     await dependencies.unitOfWork.run(async ({ jobs }) => {
       requireWrite(
         await jobs.transition({
           errorCode,
-          errorJson: JSON.stringify({ code: errorCode }),
+          // 契约失败携带层与字段级明细；其余失败仅有 code。
+          errorJson:
+            failure === undefined ? JSON.stringify({ code: errorCode }) : JSON.stringify(failure),
           expectedStatus,
           finishedAt: at,
           jobId,
@@ -398,6 +401,7 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
           contractResult.errorCode,
           latest.transportAttempts,
           contractResult.structureRepairAttempts,
+          contractResult.failure,
         );
       } catch (error) {
         if (error instanceof TerminalOutcomeError) return error.outcome;

@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { executeCandidateContract } from './candidate-contract-pipeline';
 
-import type { CandidateContractDependencies } from './candidate-contract-pipeline';
+import type {
+  CandidateContractDependencies,
+  CandidateContractValidation,
+} from './candidate-contract-pipeline';
 
 const valid = Object.freeze({ valid: true as const });
 const invalid = (code: string) => Object.freeze({ code, valid: false as const });
@@ -115,5 +118,37 @@ describe('executeCandidateContract', () => {
 
     expect(result).toMatchObject({ failure: { layer }, status: 'FAILED' });
     expect(commit).not.toHaveBeenCalled();
+  });
+
+  it('校验器返回字段级明细—failure 携带并截断至上限，且随修复请求透传', async () => {
+    const details = Array.from(
+      { length: 12 },
+      (_, index) => `/data/items/${String(index)}:REQUIRED`,
+    );
+    const repair = vi.fn<(rawText: string, failure: unknown) => Promise<string>>(() =>
+      Promise.resolve('{"data":{"title":"repaired"}}'),
+    );
+    const commit = vi.fn((value: unknown) => Promise.resolve(value));
+    const validateCandidate = vi
+      .fn<(value: unknown) => CandidateContractValidation>()
+      .mockReturnValueOnce({ code: 'CANDIDATE_REQUIRED', details, valid: false })
+      .mockReturnValueOnce(valid);
+
+    const firstFailure = await executeCandidateContract('{"data":{}}', {
+      commit,
+      injectSystemFields: (value) => value,
+      repair,
+      validateCandidate,
+      validateCollection: () => valid,
+      validateFinal: () => valid,
+    });
+
+    // 明细截断至 10 条；完整 12 条列表不得进入 error_json/修复上下文。
+    expect(firstFailure).toMatchObject({ status: 'SUCCEEDED', structureRepairAttempts: 1 });
+    expect(repair.mock.calls[0]?.[1]).toEqual({
+      code: 'CANDIDATE_REQUIRED',
+      details: details.slice(0, 10),
+      layer: 'CANDIDATE_SCHEMA',
+    });
   });
 });

@@ -40,7 +40,7 @@ test('真实 Qwen 五阶段全流程探针', async () => {
           creationMode: 'AI_ORIGINAL',
           dialogueRenderMode: 'NARRATION_FIRST',
           genre: '悬疑',
-          name: `真实联调五阶段-${Date.now()}`,
+          name: `真实联调五阶段-${String(Date.now())}`,
           requestId: requestId('project'),
           style: '二维漫剧',
           subtitleSafeArea: { bottom: 12, left: 5, right: 5, top: 5 },
@@ -53,10 +53,13 @@ test('真实 Qwen 五阶段全流程探针', async () => {
           projectId,
           requestId: requestId('initialize'),
         });
-        if (!initialized.ok) return { step: 'script.initializeOriginal', errorCode: initialized.error.code };
+        if (!initialized.ok)
+          return { step: 'script.initializeOriginal', errorCode: initialized.error.code };
         let workspace = initialized.data;
 
-        const profile = await window.jingxu.provider.getProfile({ profileId: 'profile_qwen_primary' });
+        const profile = await window.jingxu.provider.getProfile({
+          profileId: 'profile_qwen_primary',
+        });
         if (!profile.ok) return { step: 'provider.getProfile', errorCode: profile.error.code };
         if (!profile.data.configured) {
           // 顺序陷阱：先保存凭据（创建行），再保存 Workspace；必须 testCredential 写入 lastValidatedAt
@@ -141,7 +144,13 @@ test('真实 Qwen 五阶段全流程探针', async () => {
           }
           const refreshed = await window.jingxu.script.getWorkspace({ projectId });
           if (!refreshed.ok) {
-            stageResults.push({ stage, finalStatus, errorCode, jobId, error: refreshed.error.code });
+            stageResults.push({
+              stage,
+              finalStatus,
+              errorCode,
+              jobId,
+              error: refreshed.error.code,
+            });
             break;
           }
           workspace = refreshed.data;

@@ -102,10 +102,7 @@ const materialForReference = async (
       }
       case 'EPISODE': {
         const episode = await repositories.episodes.findById(reference.objectId);
-        if (
-          episode?.projectId !== projectId ||
-          episode.id !== reference.versionId
-        )
+        if (episode?.projectId !== projectId || episode.id !== reference.versionId)
           throw new Error('STALE_INPUT');
         const hash = sha256Payload({
           currentVersionId: episode.currentVersionId,
@@ -123,27 +120,25 @@ const materialForReference = async (
       }
       case 'SCRIPT_VERSION': {
         const version = await repositories.scriptVersions.findById(reference.versionId);
-        if (
-          version?.projectId !== projectId ||
-          version.documentSha256 !== reference.sha256
-        )
+        if (version?.projectId !== projectId || version.documentSha256 !== reference.sha256)
           throw new Error('STALE_INPUT');
         return JSON.parse(version.document) as unknown;
       }
       case 'STORY_BIBLE_VERSION': {
         const version = await repositories.storyBibleVersions.findById(reference.versionId);
-        if (
-          version?.projectId !== projectId ||
-          version.documentSha256 !== reference.sha256
-        )
+        if (version?.projectId !== projectId || version.documentSha256 !== reference.sha256)
           throw new Error('STALE_INPUT');
         return JSON.parse(version.document) as unknown;
       }
     }
   });
 
-const validationResult = (valid: boolean, code: string): CandidateContractValidation =>
-  valid ? { valid: true } : { code, valid: false };
+const validationResult = (
+  valid: boolean,
+  code: string,
+  details?: readonly string[],
+): CandidateContractValidation =>
+  valid ? { valid: true } : { code, ...(details ? { details } : {}), valid: false };
 
 export interface CreateDesktopScriptGenerationRuntimeOptions {
   readonly clock: () => string;
@@ -210,6 +205,10 @@ export const createDesktopScriptGenerationRuntime = ({
       return validationResult(
         result.valid,
         result.issues[0]?.messageCode ?? 'SCRIPT_SCHEMA_INVALID',
+        // 结构元数据（instancePath + messageCode），不含模型输出实例值，可安全落 error_json。
+        result.valid
+          ? undefined
+          : result.issues.map((issue) => `${issue.instancePath}:${issue.messageCode}`),
       );
     },
   });

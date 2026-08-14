@@ -144,6 +144,81 @@ describe('ProviderService', () => {
     expect(generate).not.toHaveBeenCalled();
   });
 
+  it('更换凭据—旧校验时间对新 Key 无效—lastValidatedAt 归零', async () => {
+    const stored: ProviderProfile = {
+      ...profile,
+      config: { ...profile.config, lastValidatedAt: '2026-08-11T00:00:00Z' },
+      credentialLast4: '1111',
+      credentialRef: 'old-ref',
+    };
+    let saved: ProviderProfile | undefined;
+    const credentials: CredentialPort = {
+      ...unusedCredentialMethods(),
+      isAvailable: () => true,
+      saveCredential: vi.fn(() =>
+        Promise.resolve({
+          createdAt: 'now',
+          id: 'new-ref',
+          kind: 'API_KEY' as const,
+          last4: '7890',
+        }),
+      ),
+    };
+    const service = createService(
+      credentials,
+      createProfiles(
+        () => stored,
+        (next) => {
+          saved = next;
+        },
+      ),
+    );
+
+    await service.saveCredential('provider-1', 'fake-value-7890');
+
+    expect(saved?.credentialRef).toBe('new-ref');
+    expect(saved?.config.lastValidatedAt).toBeNull();
+  });
+
+  it('凭据级测试失败—MODEL_CREDENTIAL_INVALID—立即失效旧校验时间', async () => {
+    const stored: ProviderProfile = {
+      ...profile,
+      config: { ...profile.config, lastValidatedAt: '2026-08-11T00:00:00Z' },
+      credentialRef: 'opaque-ref',
+    };
+    let saved: ProviderProfile | undefined;
+    const model: TextModelPort = {
+      generate: vi.fn(),
+      normalizeError: vi.fn(),
+      validateCredential: vi.fn<TextModelPort['validateCredential']>(() =>
+        Promise.resolve({
+          detail: 'invalid api key',
+          errorCode: 'MODEL_CREDENTIAL_INVALID',
+          ok: false,
+        }),
+      ),
+    };
+    const service = createService(
+      {
+        ...unusedCredentialMethods(),
+        isAvailable: () => true,
+        saveCredential: vi.fn(() => Promise.reject(new Error('unused'))),
+      },
+      createProfiles(
+        () => stored,
+        (next) => {
+          saved = next;
+        },
+      ),
+      model,
+    );
+
+    const result = await service.testCredential('provider-1');
+
+    expect(result).toMatchObject({ errorCode: 'MODEL_CREDENTIAL_INVALID', ok: false });
+    expect(saved?.config.lastValidatedAt).toBeNull();
+  });
+
   it('saveProfile—更新已存在行的启用状态与工作区', async () => {
     const stored: ProviderProfile = { ...profile, credentialRef: 'opaque-ref' };
     let saved: ProviderProfile | undefined;

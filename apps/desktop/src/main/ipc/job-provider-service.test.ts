@@ -1,4 +1,4 @@
-import type { ProviderProfileView } from '@jingxu/application';
+import type { CredentialCheck, ProviderProfileView } from '@jingxu/application';
 import {
   EVENTS_IPC_CHANNELS,
   JOB_IPC_CHANNELS,
@@ -113,7 +113,7 @@ const createHarness = () => {
   const getProfile = vi.fn(() => Promise.resolve(configuredView));
   const saveProfile = vi.fn(() => Promise.resolve(configuredView));
   const saveCredential = vi.fn(() => Promise.resolve(configuredView));
-  const testCredential = vi.fn(() => Promise.resolve({ ok: true }));
+  const testCredential = vi.fn((): Promise<CredentialCheck> => Promise.resolve({ ok: true }));
   const deleteCredential = vi.fn(() => Promise.resolve(defaultView));
 
   const jobs = {
@@ -239,9 +239,37 @@ describe('createJobProviderIpcService — 边界 Host', () => {
     expect((result as { data: ProviderProfileDto }).data.last4).toBeNull();
   });
 
-  it('testCredential 连通性失败—check.ok=false—归一化为 PROVIDER_CALL_FAILED', async () => {
+  it('testCredential 凭据被拒—MODEL_CREDENTIAL_INVALID—透传稳定 code 与引导文案', async () => {
     const h = createHarness();
-    h.testCredential.mockResolvedValueOnce({ ok: false });
+    h.testCredential.mockResolvedValueOnce({
+      detail: 'invalid api key',
+      errorCode: 'MODEL_CREDENTIAL_INVALID' as const,
+      ok: false,
+    });
+
+    const result = (await h.service.invoke(
+      PROVIDER_IPC_CHANNELS.testCredential,
+      providerMutationInput,
+    )) as {
+      ok: false;
+      error: { code: string; message: string; traceId: string; userAction: string | null };
+    };
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('MODEL_CREDENTIAL_INVALID');
+    expect(result.error.userAction).toContain('API Key');
+    // Provider 原始 detail 不得回显。
+    expect(result.error.message).not.toContain('invalid api key');
+    expect(result.error.traceId).toBe(TRACE_ID);
+  });
+
+  it('testCredential 返回未知失败码—查表未命中—回落 PROVIDER_CALL_FAILED', async () => {
+    const h = createHarness();
+    h.testCredential.mockResolvedValueOnce({
+      detail: null,
+      errorCode: 'MODEL_UNFORESEEN' as never,
+      ok: false,
+    });
 
     const result = (await h.service.invoke(
       PROVIDER_IPC_CHANNELS.testCredential,

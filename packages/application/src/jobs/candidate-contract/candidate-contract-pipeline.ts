@@ -7,12 +7,17 @@ export type CandidateContractLayer =
   | 'PRE_COMMIT';
 
 export type CandidateContractValidation =
-  Readonly<{ valid: true }> | Readonly<{ code: string; valid: false }>;
+  Readonly<{ valid: true }> | Readonly<{ code: string; details?: readonly string[]; valid: false }>;
 
 export interface CandidateContractFailure {
   readonly code: string;
+  /** 字段级失败明细（如 JSON Schema instancePath:messageCode）；仅结构元数据，不含模型输出实例值。 */
+  readonly details?: readonly string[];
   readonly layer: CandidateContractLayer;
 }
+
+/** 明细上限：防止全量字段失败时 error_json 被长列表淹没。 */
+const MAX_FAILURE_DETAILS = 10;
 
 export interface CandidateContractDependencies<TResult = unknown> {
   readonly commit: (value: unknown) => Promise<TResult>;
@@ -38,8 +43,16 @@ export type CandidateContractResult<TResult> =
       structureRepairAttempts: 0 | 1;
     }>;
 
-const failure = (layer: CandidateContractLayer, code: string): CandidateContractFailure =>
-  Object.freeze({ code, layer });
+const failure = (
+  layer: CandidateContractLayer,
+  code: string,
+  details?: readonly string[],
+): CandidateContractFailure =>
+  Object.freeze(
+    details === undefined || details.length === 0
+      ? { code, layer }
+      : { code, details: Object.freeze(details.slice(0, MAX_FAILURE_DETAILS)), layer },
+  );
 
 const parseCandidate = (
   rawText: string,
@@ -60,7 +73,7 @@ const validate = (
   value: unknown,
 ): CandidateContractFailure | null => {
   const result = validator(value);
-  return result.valid ? null : failure(layer, result.code);
+  return result.valid ? null : failure(layer, result.code, result.details);
 };
 
 const evaluateAttempt = (
