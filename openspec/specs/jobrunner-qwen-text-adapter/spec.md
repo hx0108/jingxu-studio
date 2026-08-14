@@ -194,11 +194,11 @@ API Key MUST 经 Electron `safeStorage` 加密保存；`safeStorage` 不可用�
 
 ### Requirement: Job/Provider IPC 必须服从启动写门与幂等
 
-`job create/get/list/cancel/retry`、`provider getProfile/saveProfile/saveCredential/testCredential/deleteCredential` 与 `events.subscribeJobUpdates` SHALL 经 Preload 逐方法白名单暴露。所有 Command MUST 携带 `requestId`，修改类命令 MUST 携带 `expectedVersionId`；同一 `(project_id, idempotency_key)` MUST 去重为同一 Job。非 `READY` 状态下，写命令 MUST 返回既有 `STARTUP_WRITE_BLOCKED` 且不构造 JobRunner/Provider 写路径。本 Change 不实现具体 ScriptStage 提交器；在 `staged-script-generation` 注入阶段提交与恢复重校验 seam 前，READY 状态的 Job 写命令 MUST 返回稳定 `JOB_SUBMISSION_UNAVAILABLE` 或 `JOB_NOT_CANCELLABLE`，MUST NOT 创建空壳 Job 或伪造成功。
+`job create/get/list/cancel/retry`、`provider getProfile/saveProfile/saveCredential/testCredential/deleteCredential` 与 `events.subscribeJobUpdates` SHALL 经 Preload 逐方法白名单暴露。所有 Command MUST 携带 `requestId`，修改类命令 MUST 携带 `expectedVersionId`；同一 `(project_id, idempotency_key)` MUST 去重为同一 Job。非 `READY` 状态下，写命令 MUST 返回既有 `STARTUP_WRITE_BLOCKED` 且不构造 JobRunner/Provider 写路径。READY 后，AI 原创五阶段的 `job.create/retry/cancel` MUST 委托真实阶段 submission/runner；创建命令 SHALL 携带 episodeId、stage、`operationType=GENERATE`、expectedInputVersionId、idempotencyKey 与 requestId，完整 input version set 必须由 Main 从当前 READY 阶段头推导并冻结。延期的授权改编、AI 优化、局部改写和 SHOT_CONTRACT 操作 MUST 返回稳定不支持错误，不得创建空壳 Job 或伪造成功。
 
 #### Scenario: 幂等键去重重复提交
 
-- **GIVEN** `staged-script-generation` 已注入具体阶段提交器，且同一项目以相同 `idempotency_key` 重复提交 `job.create`
+- **GIVEN** 同一项目以相同 `idempotency_key`、阶段和冻结输入重复提交 `job.create`
 - **WHEN** JobService 处理后续请求
 - **THEN** 系统 SHALL 返回同一 `job_id`，MUST NOT 创建重复 Job
 
@@ -209,12 +209,19 @@ API Key MUST 经 Electron `safeStorage` 加密保存；`safeStorage` 不可用�
 - **THEN** 系统 MUST 返回稳定 `STARTUP_WRITE_BLOCKED`
 - **THEN** 系统 MUST NOT 构造 JobRunner 领取或 Provider 写入
 
+#### Scenario: 五阶段生成委托真实 JobRunner
+
+- **GIVEN** 应用已 READY、Provider 已配置且目标阶段 READY 前置条件满足
+- **WHEN** Renderer 以匹配的 expectedInputVersionId 调用 `job.create`
+- **THEN** 系统 SHALL 冻结服务端推导的完整输入集合并创建可被生产 JobRunner 领取的 QUEUED Job
+- **THEN** Job 成功 SHALL 只产生一个通过正式 Schema 的 DRAFT 业务版本
+
 #### Scenario: 未接入阶段提交器时安全降级
 
-- **GIVEN** 应用已进入 `READY`，但具体阶段提交与恢复重校验 seam 尚未由 `staged-script-generation` 注入
-- **WHEN** Renderer 调用 `job.create`、`job.retry` 或 `job.cancel`
-- **THEN** 系统 MUST 返回稳定 `JOB_SUBMISSION_UNAVAILABLE` 或 `JOB_NOT_CANCELLABLE`
-- **THEN** 系统 MUST NOT 创建空壳 Job、调用 Provider 或伪造成功
+- **GIVEN** AI 原创五阶段已接入生产提交器，但 Renderer 请求仍未接入提交器的授权改编、AI 优化、局部改写或 SHOT_CONTRACT 生成
+- **WHEN** Job Host 处理该请求
+- **THEN** 系统 MUST 返回稳定不支持错误
+- **THEN** 系统 MUST NOT 创建 Job、调用 Provider 或写业务版本
 
 ### Requirement: Job 基线必须以 Mock 全矩阵作为 AC-V1-04 证据
 
@@ -240,3 +247,4 @@ API Key MUST 经 Electron `safeStorage` 加密保存；`safeStorage` 不可用�
 - **WHEN** 执行 Verify、Sync 与 Archive
 - **THEN** 系统 SHALL 以注入式 Adapter 测试验证连通性请求形态、错误归一化和零密钥泄漏
 - **THEN** 真实 `testCredential` SHALL 记录为发布前人工检查，MUST NOT 注入假凭据或阻断离线归档
+
