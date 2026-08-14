@@ -505,7 +505,7 @@ Shot 初始候选先以 DRAFT 运行单对象、引用和可生产性检查。�
 | 部署范围 | 中国内地地域调用 |
 | 模型 ID | `qwen3.7-plus-2026-05-26`，禁止使用会漂移的无日期别名作为验收基线 |
 | 接口 | OpenAI 兼容 Chat Completions |
-| Base URL | `https://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1` |
+| Base URL | `https://dashscope.aliyuncs.com/compatible-mode/v1`（公共兼容端点；业务空间专属端点需账号单独开通，V1 不依赖） |
 | 输出方式 | 非思考模式 + `response_format={"type":"json_object"}`；Prompt 明确包含 JSON 要求 |
 | 上下文 | 官方快照上下文 1,000,000 Token；应用侧组装后输入硬上限 64,000 Token |
 | 输出 | JSON Mode 下不主动设置 `max_tokens`，避免截断 JSON；返回后由 Schema 限制业务内容 |
@@ -517,18 +517,20 @@ Shot 初始候选先以 DRAFT 运行单对象、引用和可生产性检查。�
 
 ### 6.3 Prompt 版本
 
-每个阶段使用独立 Prompt 模板：
+每个阶段使用独立 Prompt 模板，模板版本按阶段独立演进（只升版发生过校验失败的阶段）：
 
 ```text
-concept/v1
-story-bible/v1
-episode-outline/v1
-beat-sheet/v1
-scene-script/v1
+concept/v2
+story_bible/v3
+episode_outline/v2
+beat_sheet/v2
+scene_script/v2
 shot-contract/v1
 structure-repair/v1
 producibility-explanation/v1
 ```
+
+版本沿革：v1 未列出各阶段 `data` 必填字段，真实模型按自由结构产出会被 `additionalProperties:false` 的最终校验拒绝；v2 在模板中逐字段写明"恰好包含"契约；story_bible/v3 进一步显式声明 characters/scenes/props 为键值对对象（v2 的"容器"措辞被模型理解为数组）。历史模板行保留在 `prompt_templates` 作任务回执追溯，仅停用不改写。
 
 Prompt 必须：
 
@@ -1245,7 +1247,7 @@ session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) 
 - IPC 每个频道只有一个显式 preload 方法；请求和响应都做 DTO Schema 校验，不能暴露通用 `send/on/invoke`。
 - 导入由 Main 打开 Open Dialog 并直接读取所选文件；导出由 Main 打开 Save Dialog。Renderer 只拿不透明 operation token，不提交任意本地路径。
 - 所有路径先 `resolve`/规范化并检查目标范围、扩展名、符号链接和文件类型；项目内部路径必须保持在该项目目录内。
-- 百炼北京 Host 由 `workspace_id` 派生并校验为 `^[A-Za-z0-9-]+\.cn-beijing\.maas\.aliyuncs\.com$`，端口固定 443，协议固定 HTTPS，路径固定兼容接口；UI 不允许输入任意 Base URL。
+- 百炼兼容端点固定为公共 Host `dashscope.aliyuncs.com`（业务空间专属端点需账号单独开通，V1 不依赖），端口固定 443，协议固定 HTTPS，路径固定兼容接口；`workspace_id` 仅作配置元数据并校验 `^[A-Za-z0-9-]+$`，不参与 Host 派生；UI 不允许输入任意 Base URL。
 - Provider HTTP 客户端禁止自动跨 Host 重定向；DNS/连接失败按 Provider 网络错误处理，不回退访问 localhost、私网 IP 或用户提供 URL。
 
 ### 13.2 API Key
