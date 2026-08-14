@@ -27,24 +27,24 @@ const fixedTime = '2026-08-10T00:00:00.000Z';
 const promptLocks = [
   [
     'BEAT_SHEET',
-    'beat_sheet/v1',
-    '594bce5ce803fb79853c6bed5f37b77f73f77e60c2de83036d3211bcd61b343c',
+    'beat_sheet/v2',
+    'e217c790cc13f3d74e6e194f11d21a7b5c91aa5213c1ab0b7c7e29cd8f763fc5',
   ],
-  ['CONCEPT', 'concept/v1', 'a364971fc7c12ccb44df846d4d974cf87c3e4f1049702f4c83dc9c14038a401b'],
+  ['CONCEPT', 'concept/v2', '73f219dd57859a83d50f2c6195c0444e30c9ab52e866f35318546f199b23b80c'],
   [
     'EPISODE_OUTLINE',
-    'episode_outline/v1',
-    '0e9dca98a083fd02d1199d94279f4ed93bc0b8e2b7d50387eb38a678619f51d0',
+    'episode_outline/v2',
+    '349359c99f45e095176b8d1602626559ea92fa3bd9241e67961bbb84fa33988c',
   ],
   [
     'SCENE_SCRIPT',
-    'scene_script/v1',
-    '406786e8c58fb7b3b25989f0f8059694ad3b270c50ad52e19708a560b3d7c12b',
+    'scene_script/v2',
+    'a2361b4a4be835f7603f4e93924eba5bf0f48c2960e84059e4a32385544509e8',
   ],
   [
     'STORY_BIBLE',
-    'story_bible/v1',
-    '85ee27d4132cb4a09fa09d741b7609eb4d935efec8ae27fe3b3bae6f87d1cc12',
+    'story_bible/v3',
+    'c7877df6efc50bca60db4e76713e3fe2312532581dd3caf4efe8516bc8c94674',
   ],
 ].map(([stage, promptTemplateId, hash]) => ({
   candidateSchemaId: `https://jingxu.studio/schemas/internal/ModelScriptStageCandidate.${stage}.v1.schema.json`,
@@ -116,6 +116,9 @@ await access(executablePath);
 const migrationOne = await readFile(path.join(migrationRoot, '0001_initial.sql'));
 const migrationTwo = await readFile(path.join(migrationRoot, '0002_project_command_receipts.sql'));
 const migrationThree = await readFile(path.join(migrationRoot, '0003_script_version_receipts.sql'));
+const migrationFour = await readFile(path.join(migrationRoot, '0004_prompt_templates_v2.sql'));
+const migrationFive = await readFile(path.join(migrationRoot, '0005_prompt_templates_story_bible_v3.sql'));
+const migrationSix = await readFile(path.join(migrationRoot, '0006_model_invocations_profile_ref.sql'));
 if (!migrationOne.includes(Buffer.from('CREATE TABLE projects'))) {
   throw new Error('PACKAGED_MIGRATION_0001_INVALID');
 }
@@ -127,6 +130,25 @@ if (
   !migrationThree.includes(Buffer.from('INITIALIZE_ORIGINAL'))
 ) {
   throw new Error('PACKAGED_MIGRATION_0003_INVALID');
+}
+if (
+  !migrationFour.includes(Buffer.from('concept/v2')) ||
+  !migrationFour.includes(Buffer.from('UPDATE prompt_templates SET active = 0 WHERE version = 1'))
+) {
+  throw new Error('PACKAGED_MIGRATION_0004_INVALID');
+}
+if (
+  !migrationFive.includes(Buffer.from('story_bible/v3')) ||
+  !migrationFive.includes(Buffer.from("active = 0 WHERE id = 'story_bible/v2'"))
+) {
+  throw new Error('PACKAGED_MIGRATION_0005_INVALID');
+}
+if (
+  !migrationSix.includes(Buffer.from('DROP TABLE model_invocations')) ||
+  !migrationSix.includes(Buffer.from('ALTER TABLE model_invocations_v2 RENAME TO model_invocations')) ||
+  migrationSix.includes(Buffer.from('REFERENCES provider_profiles'))
+) {
+  throw new Error('PACKAGED_MIGRATION_0006_INVALID');
 }
 const packagedMain = await readFile(path.join(resourcesRoot, 'app.asar'));
 for (const lock of promptLocks) {
@@ -377,6 +399,9 @@ try {
       { version: 1, name: '0001_initial.sql' },
       { version: 2, name: '0002_project_command_receipts.sql' },
       { version: 3, name: '0003_script_version_receipts.sql' },
+      { version: 4, name: '0004_prompt_templates_v2.sql' },
+      { version: 5, name: '0005_prompt_templates_story_bible_v3.sql' },
+      { version: 6, name: '0006_model_invocations_profile_ref.sql' },
     ])
   ) {
     throw new Error(`PACKAGED_MIGRATION_SET_INVALID:${JSON.stringify(applied)}`);
@@ -469,7 +494,7 @@ try {
         scriptWorkspaceError: jobProviderSurface.scriptWorkspace.error.code,
         providerConfigured: jobProviderSurface.provider.data.configured,
       },
-      migrationVersions: [1, 2, 3],
+      migrationVersions: [1, 2, 3, 4, 5, 6],
       mockClosureEntryObserved: true,
       nativeAddonCount: nativeAddons.length,
       projectLifecycle: ['create', 'update', 'delete', 'restart', 'restore'],

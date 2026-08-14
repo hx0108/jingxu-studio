@@ -135,6 +135,9 @@ describe('0002 migration 资源集合', () => {
       { name: '0001_initial.sql', version: 1 },
       { name: '0002_project_command_receipts.sql', version: 2 },
       { name: '0003_script_version_receipts.sql', version: 3 },
+      { name: '0004_prompt_templates_v2.sql', version: 4 },
+      { name: '0005_prompt_templates_story_bible_v3.sql', version: 5 },
+      { name: '0006_model_invocations_profile_ref.sql', version: 6 },
     ]);
     expect(migrations[0]?.sha256).toBe(FROZEN_0001_SHA256);
     expect(migrations[1]?.sha256).toMatch(/^[a-f0-9]{64}$/u);
@@ -145,15 +148,25 @@ describe('0002 migration 资源集合', () => {
         '0001_initial.sql',
         '0002_project_command_receipts.sql',
         '0003_script_version_receipts.sql',
+        '0004_prompt_templates_v2.sql',
+        '0005_prompt_templates_story_bible_v3.sql',
+        '0006_model_invocations_profile_ref.sql',
       ]),
     );
   });
 
-  it('空库—应用完整集合—终态版本 2 且 command_receipts 登记对象存在', async () => {
+  it('空库—应用完整集合—终态版本 6 且 command_receipts 登记对象存在', async () => {
     await withMigratedDatabase((database) => {
       expect(
         database.prepare('SELECT version FROM schema_migrations ORDER BY version').all(),
-      ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+      ).toEqual([
+        { version: 1 },
+        { version: 2 },
+        { version: 3 },
+        { version: 4 },
+        { version: 5 },
+        { version: 6 },
+      ]);
       const objects = database
         .prepare(
           "SELECT name FROM sqlite_master WHERE name IN ('command_receipts','ix_command_receipts_project')",
@@ -183,7 +196,7 @@ describe('0002 migration 资源集合', () => {
         .all();
       expect(after).toEqual(before);
       expect(database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get()).toEqual({
-        count: 3,
+        count: 6,
       });
       database.close();
     });
@@ -382,7 +395,7 @@ describe('0002 受管理升级、备份与回滚', () => {
         .prepare(
           'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
         )
-        .run(4, '0004_future.sql', 'b'.repeat(64), NOW);
+        .run(7, '0007_future.sql', 'b'.repeat(64), NOW);
 
       const before = database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get();
       expect(() => inspectMigrationPlan(database, migrations)).toThrow('DATABASE_VERSION_TOO_NEW');

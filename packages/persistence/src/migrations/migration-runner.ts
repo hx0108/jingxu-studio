@@ -71,6 +71,10 @@ export const applyMigrations = (
   if (plan.pending.length === 0) return plan;
 
   try {
+    // SQLite 官方表重建流程（如 0006）要求迁移期间关闭外键执行：
+    // PRAGMA foreign_keys 在事务内是 no-op，必须在 BEGIN 之前设置。
+    // 迁移提交后以 foreign_key_check 复检，违例按迁移失败处理（启动阻断）。
+    database.exec('PRAGMA foreign_keys = OFF');
     runImmediateTransaction(database, () => {
       for (const migration of plan.pending) {
         database.exec(migration.sql);
@@ -81,8 +85,19 @@ export const applyMigrations = (
           .run(migration.version, migration.name, migration.sha256, clock());
       }
     });
+    const violations = database.prepare('PRAGMA foreign_key_check').all();
+    if (violations.length > 0) {
+      throw new PersistenceRuntimeError('MIGRATION_APPLY_FAILED');
+    }
   } catch {
     throw new PersistenceRuntimeError('MIGRATION_APPLY_FAILED');
+  } finally {
+    try {
+      // 失败路径也恢复外键执行；此处异常不应掩盖原始迁移错误。
+      database.exec('PRAGMA foreign_keys = ON');
+    } catch {
+      // 连接已不可用时由上层启动流程报告。
+    }
   }
 
   return { currentVersion: migrations.length, pending: [] };

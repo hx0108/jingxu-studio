@@ -102,15 +102,17 @@ export class ProviderService {
     return result;
   }
 
-  /** 删除密文与整行并写审计；返回未配置默认视图。 */
+  /** 删除密文与整行并写审计；返回未配置默认视图。
+   *  先事务删行写审计、后删密文文件：事务失败（回滚）不会留下
+   * "已配置但密文缺失"的悬挂态；文件删除失败只留下无害孤儿密文。 */
   public async deleteCredential(profileId: string): Promise<ProviderProfileView> {
     const profile = await this.#requireProfile(profileId);
     if (profile.credentialRef !== null) {
-      await this.#dependencies.credentials.deleteCredential(profile.credentialRef);
       await this.#dependencies.unitOfWork.run(async ({ audit, profiles }) => {
         await profiles.delete(profileId);
         await audit.recordCredentialDeleted(profileId, this.#dependencies.clock());
       });
+      await this.#dependencies.credentials.deleteCredential(profile.credentialRef);
     }
     return toView(this.#defaultProfile(profileId));
   }

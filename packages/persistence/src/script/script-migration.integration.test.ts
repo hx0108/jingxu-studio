@@ -35,7 +35,14 @@ describe('0003_script_version_receipts.sql', () => {
 
         expect(
           database.prepare('SELECT version FROM schema_migrations ORDER BY version').all(),
-        ).toEqual([{ version: 1 }, { version: 2 }, { version: 3 }]);
+        ).toEqual([
+          { version: 1 },
+          { version: 2 },
+          { version: 3 },
+          { version: 4 },
+          { version: 5 },
+          { version: 6 },
+        ]);
         expect(
           database
             .prepare("SELECT name FROM sqlite_master WHERE type='index' AND name=?")
@@ -83,7 +90,7 @@ describe('0003_script_version_receipts.sql', () => {
     });
   });
 
-  it('v2 升级库—迁移到 v3—旧 Project 回执逐字段保持且索引恢复', async () => {
+  it('v2 升级库—迁移到最新—旧 Project 回执逐字段保持且索引恢复', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const migrations = await loadMigrationSet(MIGRATIONS);
       const database = new SqliteTestDatabase(path.join(root, 'upgrade.sqlite'));
@@ -127,7 +134,7 @@ describe('0003_script_version_receipts.sql', () => {
     });
   });
 
-  it('v2 受管理库—升级到 v3—先生成可验证的 schema v2 在线备份', async () => {
+  it('v2 受管理库—升级到最新—先生成可验证的 schema v2 在线备份', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const migrations = await loadMigrationSet(MIGRATIONS);
       const paths = createManagedPaths(path.join(root, 'managed'));
@@ -152,7 +159,7 @@ describe('0003_script_version_receipts.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 3 });
+        ).toEqual({ version: 6 });
       } finally {
         database.close();
       }

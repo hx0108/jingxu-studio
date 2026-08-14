@@ -70,7 +70,7 @@ describe('ProviderService', () => {
     expect(stored.credentialRef).toBe('opaque-ref');
   });
 
-  it('删除凭据—同步删密文与整行—同一 UnitOfWork 写审计', async () => {
+  it('删除凭据—先事务删行后删密文—避免悬挂已配置态', async () => {
     const stored: ProviderProfile = {
       ...profile,
       credentialLast4: '7890',
@@ -107,6 +107,10 @@ describe('ProviderService', () => {
 
     expect(deleteCredential).toHaveBeenCalledWith('opaque-ref');
     expect(deleteRow).toHaveBeenCalledWith('provider-1');
+    // 顺序是策略：行删除失败回滚时密文文件必须仍在；反序会留下"已配置但密文缺失"。
+    expect(deleteRow.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteCredential.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
     expect(recordCredentialDeleted).toHaveBeenCalledWith('provider-1', '2026-08-12T00:00:00Z');
     expect(view.configured).toBe(false);
   });
