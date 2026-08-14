@@ -12,9 +12,10 @@ export const QWEN_INPUT_TOKEN_LIMIT = 64_000;
 export const QWEN_INVOCATION_TIMEOUT_MS = 120_000;
 const WORKSPACE_ID = /^[A-Za-z0-9-]+$/u;
 
+/** 百炼公共兼容端点（业务空间专属端点需账号单独开通，V1 不依赖）；workspaceId 仅做配置合法性校验。 */
 export const deriveQwenBaseUrl = (workspaceId: string): string => {
   if (!WORKSPACE_ID.test(workspaceId)) throw new Error('MODEL_CONFIGURATION_INVALID');
-  return `https://${workspaceId}.cn-beijing.maas.aliyuncs.com/compatible-mode/v1`;
+  return 'https://dashscope.aliyuncs.com/compatible-mode/v1';
 };
 
 interface QwenResponse {
@@ -85,7 +86,7 @@ export class QwenTextModelAdapter implements TextModelPort {
           parameters: {},
           promptTemplateVersion: 'credential-check/v1',
           stage: 'CONCEPT',
-          systemPrompt: 'Return only {"ok":true}.',
+          systemPrompt: 'Return only the json object {"ok":true}.',
           userPayload: { check: true },
         },
         new AbortController().signal,

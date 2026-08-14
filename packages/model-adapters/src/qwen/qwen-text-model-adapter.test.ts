@@ -24,7 +24,7 @@ const response = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status });
 
 describe('QwenTextModelAdapter', () => {
-  it('固定配置—生成—使用日期模型、非思考 JSON Mode 与派生 Host', async () => {
+  it('固定配置—生成—使用日期模型、非思考 JSON Mode 与公共端点 Host', async () => {
     const calls: { init: RequestInit | undefined; url: string }[] = [];
     const fetch: typeof globalThis.fetch = (input, init) => {
       calls.push({ init, url: input instanceof Request ? input.url : input.toString() });
@@ -49,9 +49,7 @@ describe('QwenTextModelAdapter', () => {
       rawText: '{"ok":true}',
     });
     const { init, url } = calls[0] ?? { init: undefined, url: '' };
-    expect(url).toBe(
-      'https://workspace-123.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions',
-    );
+    expect(url).toBe('https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions');
     const body = JSON.parse(typeof init?.body === 'string' ? init.body : '') as Record<
       string,
       unknown
