@@ -10,6 +10,16 @@ export {
   type ScriptVersionServiceDependencies,
 } from './script-version-service';
 export {
+  createStoryboardVersionService,
+  invalidateStoryboardHead,
+  type StoryboardConfirmInput,
+  type StoryboardInvalidationInput,
+  type StoryboardRestoreInput,
+  type StoryboardVersionService,
+  type StoryboardVersionServiceDependencies,
+  type StoryboardVersionSummary,
+} from './storyboard-version-service';
+export {
   createScriptJobSubmission,
   ScriptJobSubmissionError,
   type ScriptJobSubmissionDependencies,

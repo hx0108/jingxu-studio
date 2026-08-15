@@ -33,6 +33,7 @@ interface RepositoryOptions {
   readonly conceptStatus?: ScriptVersion['status'];
   readonly episodeState?: 'ACTIVE' | 'DELETED' | 'MISSING' | 'OTHER_PROJECT';
   readonly missing?: 'SOURCE' | 'FORMAT' | StagedScriptStage;
+  readonly sceneStatus?: ScriptVersion['status'];
   readonly wrongProjectStage?: StagedScriptStage;
 }
 
@@ -70,7 +71,7 @@ const repositories = (options: RepositoryOptions = {}): ScriptJobRepositories =>
       version(
         'SCENE_SCRIPT',
         'scene-0001',
-        'READY',
+        options.sceneStatus,
         options.wrongProjectStage === 'SCENE_SCRIPT' ? 'project-other' : undefined,
       ),
     ],
@@ -241,6 +242,21 @@ describe('freezeScriptJobInput', () => {
       ).rejects.toMatchObject({ code: 'SCRIPT_STAGE_NOT_READY' });
     },
   );
+
+  it('条件—SHOT_CONTRACT 主前置 SCENE_SCRIPT 为 STALE_INPUT—阻断生成分镜 Job', async () => {
+    await expect(
+      freezeScriptJobInput(
+        repositories({ sceneStatus: 'STALE_INPUT' }),
+        {
+          episodeId: 'episode-0001',
+          expectedInputVersionId: 'scene-0001',
+          projectId: 'project-0001',
+          stage: 'SHOT_CONTRACT',
+        },
+        () => 'f'.repeat(64),
+      ),
+    ).rejects.toMatchObject({ code: 'SCRIPT_STAGE_NOT_READY' });
+  });
 
   it.each(['MISSING', 'DELETED', 'OTHER_PROJECT'] as const)(
     '条件—集级阶段 Episode 为 %s—阻断创建 Job',

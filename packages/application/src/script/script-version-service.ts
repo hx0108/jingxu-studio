@@ -20,6 +20,7 @@ import type {
 } from '../ports/script/index';
 import { isProjectStage, listInvalidatedStages } from './script-dependency-graph';
 import { scriptFailure, scriptPersistenceFailure } from './script-service-error';
+import { invalidateStoryboardHead } from './storyboard-version-service';
 
 type Version = ScriptVersion | StoryBibleVersion;
 
@@ -262,6 +263,22 @@ export const createScriptVersionService = (
                   );
             for (const downstreamHead of downstreamHeads) {
               const downstreamEpisodeId = downstreamHead.episodeId;
+              if (downstreamStage === 'SHOT_CONTRACT') {
+                // D4 失效：分镜整集只插一行 STALE_INPUT episode_version（快照沿用）。
+                if (downstreamEpisodeId === null) throw new Error('SCRIPT_VERSION_NOT_FOUND');
+                await invalidateStoryboardHead(
+                  repositories,
+                  dependencies,
+                  {
+                    episodeId: downstreamEpisodeId,
+                    projectId: input.projectId,
+                    upstreamStage: input.stage,
+                    upstreamVersionId: next.id,
+                  },
+                  traceId,
+                );
+                continue;
+              }
               const downstream = await readVersion(
                 repositories,
                 downstreamStage,
