@@ -197,7 +197,7 @@ describe('ScriptJobSubmission', () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  it('条件—运行时伪造延期 operation 或 SHOT_CONTRACT—进入 UoW 前拒绝且零 Job', async () => {
+  it('条件—运行时伪造延期 operation（任意阶段）—进入 UoW 前拒绝且零 Job', async () => {
     const { insert, repositories } = baseRepositories();
     let runCalled = false;
     const run = async <T>(work: (value: ScriptJobRepositories) => Promise<T>): Promise<T> => {
@@ -219,6 +219,40 @@ describe('ScriptJobSubmission', () => {
       code: 'SCRIPT_STAGE_UNSUPPORTED',
     });
     expect(runCalled).toBe(false);
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('条件—SHOT_CONTRACT GENERATE（§5.1 放行）—通过阶段门进入 UoW，不再按阶段拒绝', async () => {
+    const { insert, repositories } = baseRepositories();
+    let runCalled = false;
+    const run = async <T>(work: (value: ScriptJobRepositories) => Promise<T>): Promise<T> => {
+      runCalled = true;
+      return work(repositories);
+    };
+    const submission = createSubmission(repositories, { run });
+
+    // 该极简 fake 未提供分镜前置链仓储，失败发生在冻结阶段而非阶段门；
+    // 本用例只断言：阶段门放行（进入 UoW）且失败码不再是 SCRIPT_STAGE_UNSUPPORTED。
+    let caught: unknown;
+    await submission
+      .submit(
+        {
+          episodeId: 'episode-0001',
+          expectedInputVersionId: 'scene-0001',
+          idempotencyKey: 'idem-shot-1',
+          operationType: 'GENERATE',
+          projectId: 'project-0001',
+          requestId: 'request-0002',
+          stage: 'SHOT_CONTRACT',
+        },
+        'trace-0002',
+      )
+      .catch((error: unknown) => {
+        caught = error;
+      });
+    expect(caught).not.toBeUndefined();
+    expect(caught).not.toMatchObject({ code: 'SCRIPT_STAGE_UNSUPPORTED' });
+    expect(runCalled).toBe(true);
     expect(insert).not.toHaveBeenCalled();
   });
 });

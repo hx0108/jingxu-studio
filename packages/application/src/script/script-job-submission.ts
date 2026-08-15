@@ -1,7 +1,7 @@
-import type { JobCreateInputDto } from '@jingxu/contracts';
+import type { JobCreateInputDto, ScriptStage } from '@jingxu/contracts';
 
 import type { ScriptStageJob } from '../ports/persistence/job/index';
-import type { ScriptUnitOfWorkPort, StagedScriptStage } from '../ports/script/index';
+import type { ScriptUnitOfWorkPort } from '../ports/script/index';
 import { freezeScriptJobInput, ScriptPrerequisiteError } from './script-input-freezer';
 
 export interface ScriptJobSubmissionDependencies {
@@ -31,24 +31,25 @@ export class ScriptJobSubmissionError extends Error {
   }
 }
 
+// job.create 放行的阶段与 contracts jobCreateInputSchema 枚举一致（SHOT_CONTRACT
+// 为集级阶段，episodeId 必填由 DTO superRefine 保证；operation 仍限 GENERATE）。
 const STAGED_SCRIPT_STAGES = new Set<string>([
   'CONCEPT',
   'STORY_BIBLE',
   'EPISODE_OUTLINE',
   'BEAT_SHEET',
   'SCENE_SCRIPT',
+  'SHOT_CONTRACT',
 ]);
 
-const isStagedScriptStage = (value: string): value is StagedScriptStage =>
+const isStagedScriptStage = (value: string): value is ScriptStage =>
   STAGED_SCRIPT_STAGES.has(value);
 
 const parseJson = (value: string): unknown => JSON.parse(value) as unknown;
 
 const requireSupported: (
   value: Readonly<{ operationType: string; stage: string }>,
-) => asserts value is Readonly<{ operationType: 'GENERATE'; stage: StagedScriptStage }> = (
-  value,
-) => {
+) => asserts value is Readonly<{ operationType: 'GENERATE'; stage: ScriptStage }> = (value) => {
   if (value.operationType !== 'GENERATE' || !isStagedScriptStage(value.stage)) {
     throw new ScriptJobSubmissionError('SCRIPT_STAGE_UNSUPPORTED');
   }

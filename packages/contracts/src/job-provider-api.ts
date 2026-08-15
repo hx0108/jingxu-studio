@@ -34,7 +34,14 @@ export const jobCreateInputSchema = z
     operationType: z.literal('GENERATE'),
     projectId: projectIdSchema,
     requestId: requestIdSchema,
-    stage: z.enum(['CONCEPT', 'STORY_BIBLE', 'EPISODE_OUTLINE', 'BEAT_SHEET', 'SCENE_SCRIPT']),
+    stage: z.enum([
+      'CONCEPT',
+      'STORY_BIBLE',
+      'EPISODE_OUTLINE',
+      'BEAT_SHEET',
+      'SCENE_SCRIPT',
+      'SHOT_CONTRACT',
+    ]),
   })
   .strict()
   .superRefine((value, context) => {

@@ -81,7 +81,7 @@ describe('Job Provider Events IPC Contract', () => {
     ).toBe(false);
   });
 
-  it('Job create—项目级与集级 episode 规则—仅接受五阶段 GENERATE', () => {
+  it('Job create—项目级与集级 episode 规则—接受六阶段 GENERATE（含 SHOT_CONTRACT 集级）', () => {
     const input = {
       episodeId: null,
       expectedInputVersionId: 'source_12345678',
@@ -101,6 +101,15 @@ describe('Job Provider Events IPC Contract', () => {
         episodeId: 'episode_12345678',
         expectedInputVersionId: 'version_12345678',
         stage: 'EPISODE_OUTLINE',
+      }).success,
+    ).toBe(true);
+    // SHOT_CONTRACT 为集级阶段：必须携带 episodeId（D6 放行，operation 仍限 GENERATE）。
+    expect(
+      jobCreateInputSchema.safeParse({
+        ...input,
+        episodeId: 'episode_12345678',
+        expectedInputVersionId: 'version_12345678',
+        stage: 'SHOT_CONTRACT',
       }).success,
     ).toBe(true);
     expect(jobCreateInputSchema.safeParse({ ...input, stage: 'SHOT_CONTRACT' }).success).toBe(
