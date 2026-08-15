@@ -31,8 +31,9 @@
 - [x] 3.1 MockImageModelAdapter：确定性 PNG 字节（种子可断言）+ 失败矩阵（网络/限流/审核拒绝/任务超时/部分候选失败）+ poll 抖动注入
       — 验证：unit 全矩阵；不触网断言
   - 2026-08-16 完成：`MockImageModelAdapter`（model-adapters/src/mock）实现 ImageModelPort 五方法。确定性 8 位灰度 PNG（像素 = (seedHash+7x+13y)&0xff，seedHash 为 invocationId 的 FNV-1a）；IDAT 为手写 stored-deflate zlib 流（本包约定零 node: 导入，CRC32/adler32 手写）；结果 URL `mock-image://<w>x<h>/<seed>` 本地重放字节，重启后无需内存态即可 download。submit 消费声明式步骤序列（SYNC/ASYNC+pendingPolls 抖动+pollFailure/ERROR/TIMEOUT），N 候选 = N 次 submit 天然表达部分候选失败；abort 归一化 MODEL_CANCELLED；非法 URL 归一化 MODEL_RESULT_UNAVAILABLE。unit 8 项全绿（字节稳定性+PNG 结构、SYNC 往返、失败矩阵、ASYNC 抖动、部分失败、取消、URL 非法、全程零 fetch 调用—沿 text mock 的 fetchSpy 模式）；另以 Node zlib inflateSync + 全 chunk CRC 复核独立验证字节合法性（含 >65535 多 stored 块路径）
-- [ ] 3.2 SeedreamImageModelAdapter（火山方舟）：submit/poll/download 三段（容忍同步返回与异步任务两种形态）、错误归一化、凭据经 safeStorage credential_ref（ARK Key）；model id 从 profile 配置读取（0.2 锁定值）
+- [x] 3.2 SeedreamImageModelAdapter（火山方舟）：submit/poll/download 三段（容忍同步返回与异步任务两种形态）、错误归一化、凭据经 safeStorage credential_ref（ARK Key）；model id 从 profile 配置读取（0.2 锁定值）
       — 验证：contract（Port 契约测试）；真实调用仅限联调探针门控
+  - 2026-08-16 完成：`SeedreamImageModelAdapter`（model-adapters/src/volcark）实现 ImageModelPort 五方法。0.2 核对结论为同步形态 → submit 恒返回 SYNC 终态引用（URL+providerRequestId+usage 归一化），poll() 误用归一化 FAILED/MODEL_UNKNOWN 不伪造引用（红线）；构造期校验 modelId ∈ 0.2 锁定四 id 集合否则 MODEL_CONFIGURATION_INVALID。输入前置校验（总像素区间/宽高比/参考图 8 mime·14 张·30MiB，拒则不触网）；参考图手写 base64（零 node: 导入约定）编为 data URI；结果 URL 仅 https 且无 userinfo，下载后魔数嗅探（PNG/JPEG/WebP，不信任 Content-Type）。错误归一化矩阵：401/403→CREDENTIAL_INVALID、429→RATE_LIMITED(可重试)、≥500→PROVIDER_ERROR(可重试)、逐项 data[].error 只传播稳定错误码绝不透传 message（防提示词原文回显）；TimeoutError→MODEL_TIMEOUT、AbortError→MODEL_CANCELLED、SyntaxError→MODEL_INVALID_RESPONSE。validateCredential V1=仅解密加载校验（ARK 无免费探测端点），真实连通性留 7.1 门控。Key 全程经 CredentialPort（safeStorage credential_ref），不入日志/detail/返回值。unit 8 项全绿（含 fetchSpy 断言被拒输入零网络调用、JSON 序列化不含 Key/敏感词回显）；门禁全绿：Unit 589 / Contract 95 / Integration 191 零回归
 
 ## 4. 应用服务与恢复
 
