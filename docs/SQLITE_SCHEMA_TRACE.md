@@ -20,4 +20,6 @@ Schema Registry 切片已实现 `schema_registry_manifest` Row mapper、事务�
 
 `staged-script-generation` 新增不可变 `0003_script_version_receipts.sql`：为 `episode_id IS NULL` 的项目级 Script 版本补唯一索引，并扩展通用 `command_receipts` 的 Script 命令枚举。Script Repository/UoW 已覆盖 SourceInput、Consent、Episode、StoryBible/ScriptVersion、StageHead、Dependency、Audit 与 Receipt；Provider 网络仍在事务外，响应证据、业务版本、指针、依赖、审计与 Job 终态在共享短事务提交。
 
+`shot-first-frame-image-generation`（V2 图片切片）新增 `0009_media_assets_images.sql`：建立 `assets`/`asset_versions`（BEFORE UPDATE 不可变 trigger，沿 0001 版本表模式）、`image_candidates`（世代位 `UNIQUE(shot_id, round_no, index_in_round)`、partial unique index 强制每镜头至多一个当前选择、SUCCEEDED 必须携带文件四元组与调用证据引用的 CHECK 不变式）与 `media_generation_tasks`（phase 单字段状态机含终态、`UNIQUE(project_id, idempotency_key)` 幂等）；图片字节不落库，只存 sha256/尺寸/内容寻址相对路径。同一迁移按 design 0.2 官方核对结论播种 `provider_capability_snapshots` 行 `volcark-seedream-image/v1`（canonical capabilities_json 1381 字节，sha256 与 design.md 多处锁一致，model id 引自火山方舟官方文档）。迁移证据位于 `media-migration.integration.test.ts`（空库 head 9、快照 sha256 复算、v8 升级保留、受管理备份、约束矩阵）。
+
 其余 DDL 仍只是后续 Change 的存储基线：Episode 集合校验、分镜、导入导出和评测业务方法尚未实现。表存在、`integrity_check` 通过或 Registry 已发布都不能替代对应业务验收；AC-V1-01 尚未完成。

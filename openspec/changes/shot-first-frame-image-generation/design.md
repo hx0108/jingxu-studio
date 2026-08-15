@@ -113,8 +113,10 @@ image_candidates(id, project_id, shot_id, shot_version_id, round_no, index_in_ro
                  model_id, provider_task_id, invocation_evidence_ref, selected_at, selected_by_context)
 media_generation_tasks(id, project_id, shot_id, shot_version_id, idempotency_key,
                        provider_task_id, phase SUBMITTED|POLLING|DOWNLOADING|COMPLETED|FAILED|CANCELLED,
-                       input_hash, candidate_count, status, error_code, created_at, updated_at)
+                       generation_input_hash, candidate_count, error_code, created_at, updated_at)
 ```
+
+落地修正（2.1 实施时按此调整，已写入 0009）：`media_generation_tasks` 的 phase 单字段即状态机含终态，不再设冗余 `status` 列；哈希列统一命名 `generation_input_hash`（与候选表一致）。约束不变式由 CHECK 承载：候选 SUCCEEDED 必须携带完整文件四元组与调用证据引用，`error_code` 只允许 FAILED，`UNIQUE(project_id, idempotency_key)` 幂等；每镜头至多一个当前选择由 partial unique index `ux_image_candidate_selected` 强制。另按 0.2 结论在 0009 内播种 `provider_capability_snapshots` 行（`volcark-seedream-image/v1`，canonical JSON + sha256 多处锁）。
 
 ### 生成输入快照与哈希
 

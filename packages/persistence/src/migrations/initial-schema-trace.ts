@@ -1,6 +1,8 @@
 export const INITIAL_SCHEMA_TABLES = [
   'analytics_events',
   'app_settings',
+  'asset_versions',
+  'assets',
   'audit_events',
   'command_receipts',
   'consent_records',
@@ -13,8 +15,10 @@ export const INITIAL_SCHEMA_TABLES = [
   'export_records',
   'finding_overrides',
   'format_profiles',
+  'image_candidates',
   'import_records',
   'lock_records',
+  'media_generation_tasks',
   'model_invocations',
   'model_price_snapshots',
   'producibility_findings',
@@ -37,17 +41,22 @@ export const INITIAL_SCHEMA_TABLES = [
 ] as const;
 
 export const INITIAL_SCHEMA_INDEXES = [
+  'ix_asset_versions_asset',
   'ix_audit_project_time',
   'ix_command_receipts_project',
   'ix_dependency_downstream',
   'ix_dependency_upstream',
   'ix_evaluation_sample_type',
   'ix_export_episode_time',
+  'ix_image_candidates_generation',
+  'ix_image_candidates_shot',
   'ix_job_status_created',
+  'ix_media_tasks_project_phase',
   'ix_script_project_stage',
   'ix_shot_episode_lifecycle',
   'ix_shot_version_sequence',
   'ix_story_bible_project_version',
+  'ux_image_candidate_selected',
   'ux_episode_version_sequence',
   'ux_episode_version_shot_version',
   'ux_format_profile_current',
@@ -59,6 +68,7 @@ export const INITIAL_SCHEMA_INDEXES = [
 ] as const;
 
 export const INITIAL_SCHEMA_TRIGGERS = [
+  'trg_asset_versions_immutable',
   'trg_episode_versions_immutable',
   'trg_script_versions_immutable',
   'trg_shot_contract_versions_immutable',
