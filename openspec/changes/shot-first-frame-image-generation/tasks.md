@@ -3,8 +3,9 @@
 ## 0. 立项核对与选型证据（Apply 前置）
 
 - [x] 0.1 产品负责人确认开放决策点（design.md D6：候选数 N=4、提案先行立即 Apply、Provider=字节火山方舟 Seedream、上传 ≤20MB PNG/JPEG/WebP、候选全保留），2026-08-16 拍板并记入 design.md D6
-- [ ] 0.2 火山方舟官方文档核对豆包 Seedream 文生图与图生图两条 API 的 model id（doubao-seedream 系列，具体版本以官方为准）、参数、限制与同步/异步语义，写入 `provider_capability_snapshots` 静态快照草稿（source_url + sha256）
+- [x] 0.2 火山方舟官方文档核对豆包 Seedream 文生图与图生图两条 API 的 model id（doubao-seedream 系列，具体版本以官方为准）、参数、限制与同步/异步语义，写入 `provider_capability_snapshots` 静态快照草稿（source_url + sha256）
       — 验证：快照行可被启动路径读取，model id 无伪造（引用官方 URL）
+  - 2026-08-16 完成：两份官方页面 webReader 直接抓取（API 参考 `docs/82379/1541523` + 模型列表 `docs/82379/1330310`，非搜索摘要）；锁定 `doubao-seedream-5-0-lite-260128`（官方表格备选 `doubao-seedream-5-0-260128`/`-4-5-251128`/`-4-0-250828`，均 500 IPM）；同步语义证实（该 API 无图片任务轮询接口）；无 `n` 参数 → D6-1 修正为 4 次独立请求；canonical capabilities_json（1381 字节）定稿于 design.md 0.2 小节，sha256=`801333f3…e3269`。快照行种子归 2.1（0009 迁移 INSERT），启动路径读取在 3.2/4.1 接线——「可被启动路径读取」的完整验证随 2.1/3.2 集成测试闭环
 
 ## 1. 公共契约（contracts）
 

@@ -61,7 +61,33 @@ PRD §10.4 限定 V2 仅接入一家图片 Provider。产品负责人于 2026-08
 
 **Port 必须同时容忍同步与异步 Provider API**：方舟图片接口可能同步返回结果（b64/URL），而未来视频任务必为异步。因此 `submit()` 的返回统一为「终态结果引用 或 providerTaskId」两种形态之一；同步 API 下 poll 恒即时 SUCCEEDED。三段原语与重启恢复语义对两种形态一致，`provider_task_id` 持久化逻辑不因 Provider 同步/异步而分叉。
 
-**model id 不在本提案中伪造**：Apply 期任务 0.2 经火山方舟官方文档核对图片生成（含文生图/图生图）当前推荐的 model id（doubao-seedream 系列，具体版本号以官方文档为准）、参数、限制与同步/异步语义后锁死，写入 `provider_capability_snapshots` 静态快照（沿 V1 模式，source_url + sha256）。
+**model id 不在本提案中伪造**：Apply 期任务 0.2 经火山方舟官方文档核对图片生成（含文生图/图生图）当前推荐的 model id（doubao-seedream 系列，具体版本号以官方文档为准）、参数、限制与同步/异步语义后锁死，写入 `provider_capability_snapshots` 静态快照（沿 V1 模式，source_url + sha256）。核对结论见下节。
+
+### 0.2 官方核对结论（2026-08-16，Apply 期锁定）
+
+依据两份官方页面（webReader 直接抓取，非搜索摘要）：
+
+- 图片生成 API 参考：<https://www.volcengine.com/docs/82379/1541523>（endpoint、参数、限制、响应结构、同步语义）
+- 模型列表·图片生成能力表（页面标注更新 2026-05-29）：<https://www.volcengine.com/docs/82379/1330310>（确切可调用 model id 与限流）
+
+**锁定 `model_id = doubao-seedream-5-0-lite-260128`**。模型列表图片生成推荐表共三行：`doubao-seedream-5-0-260128`（括注「同时支持：doubao-seedream-5-0-lite-260128」）、`doubao-seedream-4-5-251128`、`doubao-seedream-4-0-250828`，限流均 500 IPM（非刚性保障）。选 lite 入口的理由：1541523 即 Seedream 5.0 lite 的 API 参考，本切片全部核对参数以其为准；候选轮成本敏感；其余三个 id 如实登记为备选，不新增任何未见于官方表格的 id。
+
+核对确认的设计要点：
+
+1. **同步语义证实**：`POST {base_url}/api/v3/images/generations` 直接返回终态结果（该 API 无图片任务轮询接口；`stream` 仅控制增量输出，不产生任务 id）——D2 的「submit() 返回终态结果引用、同步形态下 poll() 恒即时 SUCCEEDED」设计被官方语义证实。同步形态下 `provider_task_id` 退化为逐候选的调用证据引用（`invocation_evidence_ref` → `model_invocations`）；「有 taskId 恢复 poll」分支保留给未来异步 Provider（视频）。
+2. **无 `n` 批量参数**：N=4 经 4 次独立请求实现（D6-1 已按此修正），每次请求各记一条 `model_invocations`；一轮仍聚合为一个 `media_generation_tasks` 行（`candidate_count=4`）。组图（`sequential_image_generation=auto`，max_images ≤15）产出**内容关联**图组而非独立候选，本切片禁用，留作未来 SAME_SCENE_CUT/整集连续帧选项。
+3. **`response_format=url` + 即时下载**：结果 URL 24h 内有效，与三段原语及重启恢复兼容（下载段可独立重试）；`b64_json` 不用（大响应体）。
+4. **`watermark` 默认 true 保留**（右下角「AI生成」标识）——对齐《人工智能生成合成内容标识办法》的来源标识要求，溯源另由 DB 证据承担；应用不传 `watermark=false`。
+5. **`guidance_scale` 与 `seed` 不被 5.0-lite/4.5/4.0 支持**，不发送；`tools`（联网检索 web_search）关闭；`optimize_prompt_options` 不传（standard 默认）。
+6. **usage 口径**：`generated_images`（仅成功且计费的张数）与 `output_tokens = floor(Σ(w×h)/256)`、`total_tokens = output_tokens` → 落 `provider_reported_usage`；组图部分失败（`data[].error` 逐项）在本切片不出现（每请求单图）。
+7. **参考图入参**：URL 或 `data:image/<fmt>;base64,`；≤14 张、单张 ≤30MB、宽高比 [1/16,16]、边 >14px、总像素 ≤36M——应用层仍按 D6-4 收紧为上传 ≤20MB PNG/JPEG/WebP。
+8. **size 语义**：默认 `2048x2048`；显式 WxH 总像素 ∈ [3 686 400, 16 777 216]、宽高比 [1/16,16]。FormatProfile 画幅映射 1:1→2048x2048、16:9→2560x1440、9:16→1440x2560、4:3→2304x1728、3:4→1728x2304 均合法（9:16 恰为总像素下界）。
+
+`provider_capability_snapshots` 静态快照草稿——canonical JSON（UTF-8 无 BOM、紧凑分隔、键序即下文，1381 字节），**sha256 = `801333f3ac43d6b3795b99d07875d0a492955048b21799a5aee3e197adfe3269`**。行种子（`valid_from='2026-08-16'`、`expires_at='9999-12-31'` 静态不过期、`source_url` 取 1541523）归任务 2.1 的 0009 迁移 INSERT，启动路径读取接线归任务 3.2/4.1——沿 0008 模板「迁移种子 + sha256 多处锁死」模式，测试复算哈希：
+
+```text
+{"provider":"volcark-seedream","capability":"IMAGE_GENERATION","model_id":"doubao-seedream-5-0-lite-260128","model_id_alternates":["doubao-seedream-5-0-260128","doubao-seedream-4-5-251128","doubao-seedream-4-0-250828"],"endpoint":{"method":"POST","path":"/api/v3/images/generations","base_url_cn_beijing":"https://ark.cn-beijing.volces.com","auth":"Bearer ARK_API_KEY"},"semantics":{"mode":"SYNCHRONOUS","stream":false,"notes":"POST 直接返回终态结果，无图片任务轮询 API；Port submit 返回终态结果引用，poll 恒 SUCCEEDED，download 经结果 URL（24h 有效）"},"request":{"prompt_recommended_max":"300 汉字 / 600 英文词","image_param":{"max_count":14,"max_bytes_each":31457280,"formats":["jpeg","png","webp","bmp","tiff","gif","heic","heif"],"aspect_ratio_range":[0.0625,16],"min_side_px":14,"max_total_pixels":36000000},"size":{"default":"2048x2048","total_pixels_range":[3686400,16777216],"aspect_ratio_range":[0.0625,16]},"unsupported_params":["n","seed","guidance_scale"],"client_defaults":{"response_format":"url","watermark":true,"sequential_image_generation":"disabled","tools":[]}},"response":{"result_url_validity_hours":24,"usage_fields":["generated_images","output_tokens","total_tokens"],"output_tokens_formula":"floor(sum(width*height)/256)","partial_failure":"data[].error 可逐项失败"},"rate_limit":{"max_images_per_minute":500}}
+```
 
 ### 凭据与 Profile：新增独立 profile 行
 
@@ -121,7 +147,7 @@ API Key 仅 safeStorage；不可用阻断保存不降级明文；SQLite 只存 c
 
 ## D6 决策记录（产品负责人 2026-08-16 拍板）
 
-1. **每轮候选数 N = 4**（单任务批量返回 4 图，一轮一任务）。
+1. **每轮候选数 N = 4**。0.2 官方核对修正：方舟 `images/generations` 无 `n` 批量参数、组图为内容关联图组不作独立候选——N=4 经 4 次独立同步请求实现（每次各记一条 `model_invocations`），一轮聚合为一个 `media_generation_tasks` 行（`candidate_count=4`）。
 2. **先行推进**：认可「提案先行、立即 Apply」；AC-V1-01~06 与 3 名用户试用未完成的事实如实登记（README 与任务 7.3），不因本提案隐式放宽 PRD §10.1.1。
 3. **图片 Provider = 字节·火山方舟 豆包 Seedream**（用户指定「字节 Seedance」；Seedance 为视频模型，图片切片用同家族 Seedream，Seedance 留作视频切片天然首选）。
 4. **资产参考图上传上限**：单图 ≤ 20MB，PNG/JPEG/WebP。
