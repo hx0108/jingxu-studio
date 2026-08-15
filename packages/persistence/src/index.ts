@@ -6,6 +6,8 @@ export * from './migrations/migration-loader';
 export * from './migrations/migration-runner';
 export * from './job/sqlite-job-unit-of-work';
 export * from './media/content-addressed-store';
+export * from './media/sqlite-media-repository';
+export * from './media/sqlite-media-unit-of-work';
 export * from './project/sqlite-project-unit-of-work';
 export * from './provider/sqlite-provider-unit-of-work';
 export * from './recovery/recovery-manager';

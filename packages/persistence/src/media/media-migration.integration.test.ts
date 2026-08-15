@@ -331,11 +331,17 @@ describe('0009_media_assets_images.sql', () => {
       try {
         seedShotGraph(database);
         insertAsset(database, 'asset_a');
-        expect(() => { insertAsset(database, 'asset_dup'); }).toThrow(); // UNIQUE(project,type,ref)
+        expect(() => {
+          insertAsset(database, 'asset_dup');
+        }).toThrow(); // UNIQUE(project,type,ref)
         insertAsset(database, 'asset_b', 'SCENE', 'scene_1');
-        expect(() => { insertAsset(database, 'asset_c', 'SCENE', 'scene_1'); }).toThrow();
+        expect(() => {
+          insertAsset(database, 'asset_c', 'SCENE', 'scene_1');
+        }).toThrow();
         insertAssetVersion(database, 'assetv_1', 'asset_a', 1);
-        expect(() => { insertAssetVersion(database, 'assetv_2', 'asset_a', 1); }).toThrow(); // UNIQUE(asset,version)
+        expect(() => {
+          insertAssetVersion(database, 'assetv_2', 'asset_a', 1);
+        }).toThrow(); // UNIQUE(asset,version)
         expect(() =>
           database
             .prepare("UPDATE asset_versions SET byte_size = 4096 WHERE id = 'assetv_1'")
@@ -353,17 +359,17 @@ describe('0009_media_assets_images.sql', () => {
       try {
         seedShotGraph(database);
         // SUCCEEDED 必须携带完整文件四元组。
-        expect(() =>
-          { insertCandidate(database, 'candidate_bad_success', { fileSha256: null }); },
-        ).toThrow();
+        expect(() => {
+          insertCandidate(database, 'candidate_bad_success', { fileSha256: null });
+        }).toThrow();
         // error_code 只允许出现在 FAILED。
-        expect(() =>
-          { insertCandidate(database, 'candidate_bad_code', { errorCode: 'MODEL_TIMEOUT' }); },
-        ).toThrow();
+        expect(() => {
+          insertCandidate(database, 'candidate_bad_code', { errorCode: 'MODEL_TIMEOUT' });
+        }).toThrow();
         // 终态候选必须携带调用证据引用。
-        expect(() =>
-          { insertCandidate(database, 'candidate_bad_evidence', { invocationEvidenceRef: null }); },
-        ).toThrow();
+        expect(() => {
+          insertCandidate(database, 'candidate_bad_evidence', { invocationEvidenceRef: null });
+        }).toThrow();
         // FAILED 合法形态：error_code + 证据 + 无文件。
         insertCandidate(database, 'candidate_failed', {
           errorCode: 'MODEL_CONTENT_REJECTED',
@@ -378,15 +384,17 @@ describe('0009_media_assets_images.sql', () => {
           status: 'PENDING',
         });
         // 世代位唯一。
-        expect(() => { insertCandidate(database, 'candidate_dup_slot'); }).toThrow();
+        expect(() => {
+          insertCandidate(database, 'candidate_dup_slot');
+        }).toThrow();
         // 每镜头至多一个当前选择；切换 = 清旧再设新（2.3 事务语义）。
         insertCandidate(database, 'candidate_selected_2', { indexInRound: 2, selected: true });
-        expect(() =>
-          { insertCandidate(database, 'candidate_selected_3', {
+        expect(() => {
+          insertCandidate(database, 'candidate_selected_3', {
             indexInRound: 3,
             selected: true,
-          }); },
-        ).toThrow();
+          });
+        }).toThrow();
         database
           .prepare(
             "UPDATE image_candidates SET selected_at = NULL, selected_by_context = NULL WHERE id = 'candidate_selected_2'",
@@ -427,9 +435,15 @@ describe('0009_media_assets_images.sql', () => {
             .run(id, key, phase, 'd'.repeat(64), candidateCount, NOW, NOW);
         };
         insertTask('task_1', 'SUBMITTED', 4, 'idem_media_1');
-        expect(() => { insertTask('task_bad_phase', 'RUNNING', 4, 'idem_media_2'); }).toThrow();
-        expect(() => { insertTask('task_bad_count', 'POLLING', 0, 'idem_media_3'); }).toThrow();
-        expect(() => { insertTask('task_dup_key', 'POLLING', 4, 'idem_media_1'); }).toThrow();
+        expect(() => {
+          insertTask('task_bad_phase', 'RUNNING', 4, 'idem_media_2');
+        }).toThrow();
+        expect(() => {
+          insertTask('task_bad_count', 'POLLING', 0, 'idem_media_3');
+        }).toThrow();
+        expect(() => {
+          insertTask('task_dup_key', 'POLLING', 4, 'idem_media_1');
+        }).toThrow();
         insertTask('task_2', 'COMPLETED', 4, 'idem_media_2');
       } finally {
         database.close();
