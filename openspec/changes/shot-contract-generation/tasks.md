@@ -39,7 +39,7 @@
 - [x] 5.2 `script.getWorkspace` 响应扩展 storyboard 节（episode_version 元数据 + 镜头摘要列表 + 状态 + 时长汇总）
 - [x] 5.3 `script.confirmVersion`/`restoreVersion` 分镜路径接线（复用回执命令）
 - [x] 5.4 Renderer 分镜工作区：镜头卡片列表、详情面板、生成/确认按钮、STALE/READY 徽标、时长汇总条、集合校验错误明细展示（脱敏）
-- [ ] 5.5 Contract 测试：storyboard DTO 形状、错误码映射完整性
+- [x] 5.5 Contract 测试：storyboard DTO 形状、错误码映射完整性
 
 ## 6. E2E 与 Verify
 
