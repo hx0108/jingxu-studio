@@ -181,9 +181,16 @@ export const injectShotSystemFields = (
         ...pickedDialogue,
         audio_required: flags.audioRequired,
         dialogue_mode_source: 'PROJECT_DEFAULT',
-        // Schema allOf 强制 NARRATION_FIRST 且有台词时 speaker 恒为 narrator；模型给错必被
-        // 正式校验拒绝且不可修复，故由系统直接推导，不信任模型该字段。
-        speaker_id: renderMode === 'NARRATION_FIRST' && spoken ? 'narrator' : dialogue.speaker_id,
+        // Schema allOf 强制：NARRATION_FIRST 且有台词时 speaker 恒为 narrator；无台词
+        // （spoken_text 为空）时 speaker_id 恒为 null、estimated_speech_duration_sec 恒为 0。
+        // 这些精确值由系统直接推导，不信任模型该字段（真实联调曾因模型给非空值被
+        // FINAL 层以 SCHEMA_VALIDATION_CONST/TYPE 拒绝）。
+        speaker_id: spoken
+          ? renderMode === 'NARRATION_FIRST'
+            ? 'narrator'
+            : dialogue.speaker_id
+          : null,
+        estimated_speech_duration_sec: spoken ? dialogue.estimated_speech_duration_sec : 0,
         lip_sync_required: flags.lipSyncRequired,
         override_reason: null,
       },

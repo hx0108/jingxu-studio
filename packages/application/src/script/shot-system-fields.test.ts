@@ -160,6 +160,30 @@ describe('injectShotSystemFields', () => {
     expect(dialogue?.speaker_id).toBe('narrator');
   });
 
+  it('条件—无台词（spoken_text 为空）—speaker_id 恒 null、时长恒 0，模型非空值被丢弃', () => {
+    // 真实 Qwen 联调缺陷回归钉：无台词镜头模型给出非空 speaker/时长，被 FINAL 层
+    // SCHEMA_VALIDATION_CONST/TYPE 拒绝（设计上属系统派生精确值，不应信任模型）。
+    const spokenContent = creativeShot().content as Record<string, unknown>;
+    const shot = creativeShot({
+      content: { ...spokenContent, spoken_text: '' },
+      dialogue: {
+        dialogue_render_mode: 'NARRATION_FIRST',
+        estimated_speech_duration_sec: 3,
+        speaker_id: 'narrator',
+      },
+    });
+
+    const documents = injectShotSystemFields({ data: { shots: [shot] } }, context);
+    const dialogue = documents[0]?.dialogue as Record<string, unknown> | undefined;
+
+    expect(dialogue).toMatchObject({
+      audio_required: false,
+      estimated_speech_duration_sec: 0,
+      lip_sync_required: false,
+      speaker_id: null,
+    });
+  });
+
   it('条件—工厂产生真实唯一 id（非 index 决定）—每镜头恰好调用一次且 previous_shot_id 引用真实 shot_id', () => {
     let shotIdCalls = 0;
     const uniqueIds = new Map<number, string>();

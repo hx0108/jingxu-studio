@@ -24,16 +24,22 @@ const environment = (): Record<string, string> =>
   );
 
 test('真实 Qwen 五阶段全流程探针', async () => {
-  test.setTimeout(480_000);
+  test.setTimeout(600_000);
   test.skip(!keyFile || !workspaceId, '需要 JINGXU_REAL_KEY_FILE 与 JINGXU_REAL_WORKSPACE_ID');
   const apiKey = (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
 
   let application: ElectronApplication | undefined;
   try {
-    application = await electron.launch({ args: [desktopRoot], env: { ...environment() } });
+    // --no-proxy-server：主进程 fetch 走 Chromium 网络栈并读系统代理；本机系统代理
+    // （127.0.0.1:7897）间歇不可用会导致 MODEL_NETWORK_ERROR。探针直连取证，
+    // 该行为已作为环境发现记入 README。
+    application = await electron.launch({
+      args: [desktopRoot, '--no-proxy-server'],
+      env: { ...environment() },
+    });
     const page = await application.firstWindow();
     const result = await page.evaluate(
-      async ({ apiKey, orderedStages, workspaceId }) => {
+      async ({ apiKey, orderedStages, refreshCredential, workspaceId }) => {
         const requestId = (prefix: string): string => `${prefix}_${crypto.randomUUID()}`;
         const created = await window.jingxu.project.create({
           aspectRatio: '9:16',
@@ -61,7 +67,8 @@ test('真实 Qwen 五阶段全流程探针', async () => {
           profileId: 'profile_qwen_primary',
         });
         if (!profile.ok) return { step: 'provider.getProfile', errorCode: profile.error.code };
-        if (!profile.data.configured) {
+        // JINGXU_REAL_REFRESH_CREDENTIAL=1 时强制覆盖生产库里已持久化的旧凭据（Key 轮换后重联调）。
+        if (!profile.data.configured || refreshCredential) {
           // 顺序陷阱：先保存凭据（创建行），再保存 Workspace；必须 testCredential 写入 lastValidatedAt
           const savedCredential = await window.jingxu.provider.saveCredential({
             apiKey,
@@ -180,9 +187,88 @@ test('真实 Qwen 五阶段全流程探针', async () => {
           if (!afterConfirm.ok) break;
           workspace = afterConfirm.data;
         }
+
+        // SHOT_CONTRACT 腿（shot-contract-generation §6.5）：SCENE_SCRIPT READY 后生成整集分镜并确认。
+        const sceneReadyId = readyIds.SCENE_SCRIPT;
+        if (sceneReadyId !== undefined) {
+          const queuedShot = await window.jingxu.job.create({
+            episodeId: workspace.episode.id,
+            expectedInputVersionId: sceneReadyId,
+            idempotencyKey: requestId('idem-shot-contract'),
+            operationType: 'GENERATE',
+            projectId,
+            requestId: requestId('job-shot-contract'),
+            stage: 'SHOT_CONTRACT',
+          });
+          if (!queuedShot.ok) {
+            stageResults.push({ stage: 'SHOT_CONTRACT', errorCode: queuedShot.error.code });
+          } else {
+            let shotStatus = 'TIMEOUT_POLL';
+            let shotError: string | undefined;
+            for (let attempt = 0; attempt < 400; attempt += 1) {
+              const status = await window.jingxu.job.get({ jobId: queuedShot.data.id });
+              if (!status.ok) {
+                shotStatus = `job.get:${status.error.code}`;
+                break;
+              }
+              if (status.data.status === 'FAILED' || status.data.status === 'CANCELLED') {
+                shotStatus = status.data.status;
+                shotError = status.data.errorCode ?? undefined;
+                break;
+              }
+              if (status.data.status === 'SUCCEEDED') {
+                shotStatus = status.data.status;
+                break;
+              }
+              await new Promise((resolve) => setTimeout(resolve, 1000));
+            }
+            const shotWorkspace = await window.jingxu.script.getWorkspace({ projectId });
+            const storyboard = shotWorkspace.ok ? shotWorkspace.data.storyboard : null;
+            stageResults.push({
+              stage: 'SHOT_CONTRACT',
+              draftStatus: storyboard?.current?.status ?? null,
+              errorCode: shotError,
+              finalStatus: shotStatus,
+              shotCount: storyboard?.shots.length ?? null,
+              totalDurationSec: storyboard?.totalDurationSec ?? null,
+            });
+            if (shotStatus === 'SUCCEEDED' && storyboard?.current?.status === 'DRAFT') {
+              const confirmedShot = await window.jingxu.script.confirmVersion({
+                episodeId: workspace.episode.id,
+                expectedVersionId: storyboard.current.id,
+                projectId,
+                requestId: requestId('confirm-shot-contract'),
+                stage: 'SHOT_CONTRACT',
+                versionId: storyboard.current.id,
+              });
+              if (!confirmedShot.ok) {
+                stageResults.push({
+                  stage: 'SHOT_CONTRACT',
+                  error: `confirm:${confirmedShot.error.code}`,
+                });
+              } else {
+                const afterShot = await window.jingxu.script.getWorkspace({ projectId });
+                stageResults.push({
+                  stage: 'SHOT_CONTRACT',
+                  readyStatus: afterShot.ok
+                    ? (afterShot.data.storyboard.current?.status ?? null)
+                    : null,
+                  readyShotSetHash: afterShot.ok
+                    ? (afterShot.data.storyboard.current?.shotSetHash ?? null)
+                    : null,
+                });
+              }
+            }
+          }
+        }
         return { projectId, stageResults };
       },
-      { apiKey, orderedStages: stages, workspaceId },
+      {
+        apiKey,
+        orderedStages: stages,
+        refreshCredential: process.env.JINGXU_REAL_REFRESH_CREDENTIAL === '1',
+        workspaceId,
+      },
     );
     console.log(`REAL_QWEN_PROBE_RESULT ${JSON.stringify(result)}`);
   } finally {

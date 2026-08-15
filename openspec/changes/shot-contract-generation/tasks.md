@@ -47,6 +47,6 @@
 - [x] 6.2 全量门禁：format:check / lint / typecheck / test:collection / test / test:contract / test:integration / test:e2e
 - [x] 6.3 `pnpm build` 三产物 + `pnpm package:win`（重打包，替换只含迁移 0001–0003 的旧产物）
 - [x] 6.4 Windows x64 clean packaged smoke（含迁移 0008；验证新产物对 v7 生产库可正常启动）
-- [ ] 6.5 真实 Qwen 联调：五阶段 READY 后生成 SHOT_CONTRACT，记录证据
+- [x] 6.5 真实 Qwen 联调：五阶段 READY 后生成 SHOT_CONTRACT，记录证据（2026-08-16 全绿：五阶段 + SHOT_CONTRACT 全 SUCCEEDED，9 镜头 / Σ61s ∈ [30,180]，确认 READY `shot_set_hash=383bda6f…`；联调发现无台词镜头 speaker/时长未按 allOf 派生的缺陷，已修 + 回归钉）
 - [ ] 6.6 README 同步：已实现/未实现边界、验证证据；生产库 0008 应用留证（沿 0007 惯例）
 - [ ] 6.7 `openspec validate --strict` + Sync + Archive
