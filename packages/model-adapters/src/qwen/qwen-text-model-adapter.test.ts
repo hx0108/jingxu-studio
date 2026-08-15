@@ -160,4 +160,26 @@ describe('QwenTextModelAdapter', () => {
       rawText: '{',
     });
   });
+
+  it('finish_reason=length 超长截断—截断文本原样返回—由候选契约拒绝并走一次修复（shot-contract-generation §4.3）', async () => {
+    // SHOT_CONTRACT 单次生成整集 token 量大；截断的镜头数组 JSON 必然解析失败，
+    // 适配器不做截断特判（无结构性变更），统一走 JSON_PARSE → 结构修复一次 → 仍失败 FAILED。
+    const truncated = '{"data":{"shots":[{"narrative_purpose":"开场","target_dur';
+    const adapter = new QwenTextModelAdapter({
+      credentialId: 'credential-1',
+      credentialPort,
+      fetch: vi.fn(() =>
+        Promise.resolve(
+          response(200, {
+            choices: [{ finish_reason: 'length', message: { content: truncated } }],
+          }),
+        ),
+      ),
+      workspaceId: 'workspace-123',
+    });
+    await expect(adapter.generate(request, new AbortController().signal)).resolves.toMatchObject({
+      finishReason: 'length',
+      rawText: truncated,
+    });
+  });
 });
