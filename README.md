@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前 Active Change 为 `shot-contract-generation`（结构化分镜生成，提案审查中，尚未进入 Apply）。最近归档的 Change 为 `staged-script-generation`（2026-08-15）。该 Change 在代码层完成 AI 原创初始化、五阶段剧本版本链、JobRunner 生产接线、Provider 设置和剧本工作区，并通过最终全量门禁与 Windows x64 clean packaged smoke（离线 Mock）；真实 Qwen 凭据连通性与五阶段生成已于 2026-08-14 通过开发者环境全流程联调，真实用户验收仍待人工核验。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前 Active Change 为 `shot-first-frame-image-generation`（V2 图片切片第一步：逐镜头首帧候选生成、资产版本与参考图、人工选择；产品负责人已拍板提案先行，Provider 选火山方舟豆包 Seedream）。最近归档的 Change 为 `shot-contract-generation` 与 `backup-sidecar-hygiene`（2026-08-16）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 

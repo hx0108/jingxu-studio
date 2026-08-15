@@ -11,7 +11,7 @@
 - 每镜头每轮生成 N 张候选（默认 4），全部保留、不覆盖旧结果（PRD §10.6）；用户比较后人工选择一张为当前首帧，可切换，历史选择可追溯（PRD §10.5）。
 - 生成输入哈希锁定「镜头版本内容 + 绑定资产版本 + 模型与参数」；ShotContract 确认新 READY 或资产升版后，既有候选与选择标记 STALE_INPUT 并列出受影响镜头，不自动批量重生成（PRD §10.5）。
 - 新增媒体异步任务：`ImageModelPort` 采用 submit/poll/download 三段原语，`provider_task_id` 在轮询前持久化；应用重启后按持久化证据恢复轮询、不自动重发未知请求（沿用 jobrunner 崩溃恢复语义）；支持幂等 ID、取消与超时（PRD §10.6）。
-- 适配器选型：`MockImageModelAdapter`（离线失败矩阵）+ DashScope 通义万相 Adapter（V2 仅接入一家图片 Provider，PRD §10.4）；凭据沿用 safeStorage + 独立 provider profile 行模式，具体 model id 在 Apply 期经官方文档核对后锁死并写入静态能力快照。
+- 适配器选型：`MockImageModelAdapter`（离线失败矩阵）+ 火山方舟豆包 Seedream Adapter（产品负责人 2026-08-16 指定字节家族；Seedance 为视频模型，图片切片用 Seedream，V2 仅接入一家图片 Provider，PRD §10.4）；凭据沿用 safeStorage + 独立 provider profile 行模式（方舟 ARK Key 为第二份独立密文），具体 model id 在 Apply 期经官方文档核对后锁死并写入静态能力快照。
 - 图片字节存于 `projects/<projectId>/` 受管理目录（内容寻址 sha256 文件名，天然不覆盖）；SQLite 只存哈希、尺寸、格式与相对路径；Renderer 经受限 `jingxu://media` 通道取图，CSP 收紧 `img-src`，不暴露文件系统路径。
 - 调用证据记录 `provider_reported_usage`（图片数）；`estimated_cost` 维持 UNKNOWN，价格表与成本对账属后续 Change（PRD §10.8 仅登记边界）。
 - 明确不实现：视频、尾帧提取与 CONTINUOUS_ACTION 尾帧复用（视频切片）、TTS/口型、时间线与合成、动态 ProviderCapabilityRegistry（沿用静态快照，PRD §10.4 动态化后续）、资产参考图的生成路径、批量重生成、ShotContract `asset_version_ids` 回写（本切片绑定记录在候选输入快照上，不改写已确认分镜）。
@@ -28,7 +28,7 @@
 
 ## Impact
 
-- **产品/验收**：覆盖 PRD v1.4 §10.2（文生图/参考图生图两条机制）、§10.3（仅首帧部分）、§10.5（资产版本、候选、人工选择、受影响镜头列举）、§10.6（图片异步任务切片）的可宣称范围；不宣称任何视频、口型或成片能力。V2 进入条件（§10.1.1）中「一家图片 Provider 候选选型与官方核对」由本 Change 任务 0.x 补齐；AC-V1-01~06 与 3 名用户试用尚未完成的事实如实登记，不因本提案隐式放宽，是否先行推进由产品负责人在本提案审查时决策。
+- **产品/验收**：覆盖 PRD v1.4 §10.2（文生图/参考图生图两条机制）、§10.3（仅首帧部分）、§10.5（资产版本、候选、人工选择、受影响镜头列举）、§10.6（图片异步任务切片）的可宣称范围；不宣称任何视频、口型或成片能力。V2 进入条件（§10.1.1）中「一家图片 Provider 候选选型与官方核对」由本 Change 任务 0.x 补齐；产品负责人已于 2026-08-16 拍板「提案先行、立即 Apply」，AC-V1-01~06 与 3 名用户试用未完成的事实如实登记，不因本提案隐式放宽。
 - **Schema**：六份 PRD-owned Schema 字节不变；ShotContract 1.1.0 作为只读输入被消费；新增 ModelImageRequest/Candidate 等 TECH-internal 契约。
 - **数据库**：新增 `0009_media_assets_images.sql`（assets、asset_versions、image_candidates、media_generation_tasks 及索引），迁移 head 8→9；不改写 0001–0008；回执命令复用，command_receipts 不变。
 - **IPC/兼容性**：新增方法级 `image` 白名单（生成、候选列表、选择、资产列表、上传参考图、任务状态）与 `jingxu://media` 协议；CSP `img-src` 收紧为该通道；开发期 strict DTO 变更同步 Main、Preload、Renderer、Contract 与 E2E。

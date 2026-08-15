@@ -6,15 +6,15 @@
 
 ### 纳入（本 Change 交付）
 
-| 能力 | 依据 |
-|---|---|
-| 逐镜头首帧候选生成（文生图） | PRD §10.2 场景切换/独立首帧路径；§10.5 首帧候选生成 |
-| 参考图生图（已上传参考图时） | PRD §10.2 服装道具/角色身份首选机制 |
-| 候选多保留、人工比较与选择、可切换 | PRD §10.5/§10.6 |
-| CHARACTER/SCENE 资产建档与不可变 AssetVersion（参考图仅上传） | PRD §10.5 |
-| 生成输入快照哈希 + STALE_INPUT 传播 + 受影响镜头列举，不自动重生成 | PRD §10.5 |
-| 图片异步任务：幂等、取消、超时、重启恢复 | PRD §10.6 |
-| provider_reported_usage（图片数）记入调用证据 | PRD §10.8 |
+| 能力                                                               | 依据                                                |
+| ------------------------------------------------------------------ | --------------------------------------------------- |
+| 逐镜头首帧候选生成（文生图）                                       | PRD §10.2 场景切换/独立首帧路径；§10.5 首帧候选生成 |
+| 参考图生图（已上传参考图时）                                       | PRD §10.2 服装道具/角色身份首选机制                 |
+| 候选多保留、人工比较与选择、可切换                                 | PRD §10.5/§10.6                                     |
+| CHARACTER/SCENE 资产建档与不可变 AssetVersion（参考图仅上传）      | PRD §10.5                                           |
+| 生成输入快照哈希 + STALE_INPUT 传播 + 受影响镜头列举，不自动重生成 | PRD §10.5                                           |
+| 图片异步任务：幂等、取消、超时、重启恢复                           | PRD §10.6                                           |
+| provider_reported_usage（图片数）记入调用证据                      | PRD §10.8                                           |
 
 ### 不纳入（后续独立切片）
 
@@ -36,7 +36,7 @@
 
 `TextModelPort.generate()` 是单次阻塞请求；图片生成不可沿用，原因有二：
 
-1. DashScope 图片任务是异步任务 API（创建任务 → 轮询 → 取结果 URL → 下载字节），单次调用服务端耗时数十秒。
+1. 图片 Provider 普遍采用异步任务 API 或数十秒级服务端耗时（创建任务 → 轮询 → 取结果 URL → 下载字节），且未来视频任务必为异步。
 2. PRD §10.6 要求「应用重启后继续查询未完成任务」——阻塞式调用无法跨进程重启存活，必须把 Provider 任务句柄持久化后由应用层驱动轮询。
 
 ```ts
@@ -51,20 +51,21 @@ interface ImageModelPort {
 
 状态机（提交→轮询→下载→落盘→落库）由确定性调度代码驱动，Adapter 只做单段 HTTP 与归一化——与 CLAUDE.md「路由、重试、状态码处理属于确定性代码」一致，与既有 jobrunner「崩溃恢复按持久化证据确定终态、不自动重发未知请求」语义对齐。
 
-### Provider 选型：DashScope 通义万相
+### Provider 选型：火山方舟 豆包 Seedream（字节家族）
 
-PRD §10.4 限定 V2 仅接入一家图片 Provider。选 DashScope 通义万相（wanx 文生图系列）：
+PRD §10.4 限定 V2 仅接入一家图片 Provider。产品负责人于 2026-08-16 指定「字节」家族；经核对：**Seedance 是字节视频生成模型，图片生成模型为 Seedream 系列（豆包·图像生成）**，两者同属火山方舟。本切片选 Seedream：
 
-- 与 Qwen 文本同平台、同凭据体系（同一 DashScope API Key），safeStorage/profile/测试 IPC 全部复用既有模式；
-- `https://dashscope.aliyuncs.com` 网络路径已在真实联调中验证（含系统代理行为已知）；
-- 原生异步任务 API 与上述三段原语一一对应；
-- 支持文生图与参考图（图编辑/参考生图）两类机制，覆盖 PRD §10.2 两条路径。
+- 火山方舟图片 API 覆盖文生图与图生图（含组图/分辨率参数），满足 PRD §10.2 两条机制；官方定价透明（如文生图按张计价），利于后续成本切片；
+- Seedance（视频）与本切片的 Seedream 同平台同凭据体系——视频切片接入时凭据与网络路径可直接复用；
+- 与 Qwen 文本分属两个 Provider 平台：图片能力自此引入第二家 Provider 凭据，但 safeStorage/profile/归一化的既有模式不变，正好验证凭据体系的多 Provider 扩展性。
 
-**model id 不在本提案中伪造**：Apply 期任务 0.x 经官方文档核对文生图与参考图两条 API 的具体 model id、参数与限制后锁死，写入 `provider_capability_snapshots` 静态快照（沿 V1 模式）。
+**Port 必须同时容忍同步与异步 Provider API**：方舟图片接口可能同步返回结果（b64/URL），而未来视频任务必为异步。因此 `submit()` 的返回统一为「终态结果引用 或 providerTaskId」两种形态之一；同步 API 下 poll 恒即时 SUCCEEDED。三段原语与重启恢复语义对两种形态一致，`provider_task_id` 持久化逻辑不因 Provider 同步/异步而分叉。
+
+**model id 不在本提案中伪造**：Apply 期任务 0.2 经火山方舟官方文档核对图片生成（含文生图/图生图）当前推荐的 model id（doubao-seedream 系列，具体版本号以官方文档为准）、参数、限制与同步/异步语义后锁死，写入 `provider_capability_snapshots` 静态快照（沿 V1 模式，source_url + sha256）。
 
 ### 凭据与 Profile：新增独立 profile 行
 
-新增 `profile_image_primary`（provider=dashscope-wanx），持独立 `credential_ref`（同一 DashScope Key 值另存一份密文）。理由：图片与文本的 `validateCredential` 语义、模型配置与能力快照各自独立演进，PRD §10.4 的能力注册粒度就是 provider/model；重复一份密文成本可忽略，换来能力边界清晰。Renderer 仍只见 configured 状态与末 4 位。
+新增 `profile_image_primary`（provider=volcark-seedream，base_url 指向方舟），持独立 `credential_ref`（方舟 ARK API Key，独立于 DashScope Key 的第二份密文）。理由：不同 Provider 的 `validateCredential` 语义、模型配置与能力快照各自独立演进，PRD §10.4 的能力注册粒度就是 provider/model；两 Key 分存也让「删除图片凭据不影响文本生成」成为事实。Renderer 仍只见 configured 状态与末 4 位。方舟 Key 同样遵守全部既有红线（safeStorage、不入 SQLite 明文/日志/诊断包）。
 
 ### Mock 矩阵
 
@@ -118,10 +119,10 @@ media_generation_tasks(id, project_id, shot_id, shot_version_id, idempotency_key
 
 API Key 仅 safeStorage；不可用阻断保存不降级明文；SQLite 只存 credential_ref；Key 不入 .env 示例/日志/埋点/诊断包/截图/导出包；UI 只显 configured + 末 4 位；Renderer 不接收 Authorization、原始 Provider 错误或文件系统堆栈；删除凭据同步删密文并写审计。新增红线：**图片字节不进入 SQLite、日志或诊断包；prompt 与 Provider 响应原文按文本阶段同等脱敏规则处理**。
 
-## D6 开放决策点（需产品负责人在提案审查时拍板）
+## D6 决策记录（产品负责人 2026-08-16 拍板）
 
-1. **每轮候选数 N**：默认 4（单 Provider 任务批量返回 4 图，一次任务产一轮）。可改 2/4。
-2. **先行推进 vs 严格等 V1 验收**：PRD §10.1.1 的 V2 进入条件（AC-V1-01~06 + 3 用户试用）未满足；本提案按「提案先行、Apply 待立项」处理，需明确认可。
-3. **图片 Provider**：推荐 DashScope 通义万相（理由见 D2）；若已有其他候选（如即梦/豆包图片）需在此提出。
-4. **资产参考图上传大小/格式上限**：建议单图 ≤ 20MB，PNG/JPEG/WebP。
-5. **候选保留策略**：本切片不清理（全保留）；空间治理独立 Change——确认接受短期内 `projects/` 增长。
+1. **每轮候选数 N = 4**（单任务批量返回 4 图，一轮一任务）。
+2. **先行推进**：认可「提案先行、立即 Apply」；AC-V1-01~06 与 3 名用户试用未完成的事实如实登记（README 与任务 7.3），不因本提案隐式放宽 PRD §10.1.1。
+3. **图片 Provider = 字节·火山方舟 豆包 Seedream**（用户指定「字节 Seedance」；Seedance 为视频模型，图片切片用同家族 Seedream，Seedance 留作视频切片天然首选）。
+4. **资产参考图上传上限**：单图 ≤ 20MB，PNG/JPEG/WebP。
+5. **候选与参考图全保留**：空间治理（保留/清理）留待独立 Change——本切片首次确定增长模型（4 候选/镜头/轮 + 参考图版本链），届时有据可依。
