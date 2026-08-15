@@ -106,6 +106,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - 修复：备份校验以 readOnly 连接打开 WAL 备份产生 `-shm`/`-wal` sidecar 且 close 时无法自清理——`createOnlineBackup` 的 `.tmp` 校验 sidecar 随 rename 成为永久孤儿，每次启动的全量备份校验反复触碰最终备份 sidecar 并永久残留（开发机 2 天积累 8 组）。`verifyBackupDatabase` close 后 best-effort 清理 `-shm`/`-wal`/`.tmp-shm`/`.tmp-wal` 四类后缀；启动校验逐份触达备份 → 存量残留下次启动自愈，无需清扫迁移。
 - 回归钉：WAL 源库备份创建 + 预置两类存量残留 → `listVerifiedBackups` 校验后 `backups` 目录恰好只余 `.sqlite` 与 `.manifest.json`（backup-manager integration 7/7）。
 - Format、ESLint、TypeScript 门禁零错误；Unit 568、Contract 86、Integration 169 全部通过；Playwright Electron E2E 8 通过 + 1 按门控跳过。
+- `openspec validate backup-sidecar-hygiene --strict` 通过后归档为 `2026-08-16-backup-sidecar-hygiene`（sqlite-migration-runtime 1 条修改：备份验证不残留 sidecar）。
 - 备份保留策略、诊断包与项目资产目录治理仍搁置（待产品决策的独立 Change）。
 
 2026-08-16 `shot-contract-generation` 收尾记录（第六阶段 SHOT_CONTRACT + 真实 Qwen 联调）：

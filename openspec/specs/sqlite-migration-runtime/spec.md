@@ -3,9 +3,7 @@
 ## Purpose
 
 为镜序 Studio V1 提供可重现、可升级、失败可回滚且只允许 Main 进程访问的本地 SQLite 事实源，并通过启动门、在线备份和受控恢复保护用户数据及后续业务运行。
-
 ## Requirements
-
 ### Requirement: 本地数据库连接必须满足固定安全基线
 
 系统 MUST 在 Main 进程中持有唯一写连接，并在允许任何业务写入前验证外键、WAL、FULL synchronous 和 5000 毫秒 busy timeout 均已生效；Renderer MUST NOT 获得数据库路径、连接、Statement 或任意 SQL 执行能力。
@@ -96,7 +94,7 @@
 
 ### Requirement: 已有数据库升级前必须生成一致备份
 
-系统 MUST 在修改具有已应用 migration 的数据库前创建 SQLite 在线一致备份，并 SHALL 先验证备份可打开且其 schema version 与升级前源库一致；备份失败时不得开始升级。
+系统 MUST 在修改具有已应用 migration 的数据库前创建 SQLite 在线一致备份，并 SHALL 先验证备份可打开且其 schema version 与升级前源库一致；备份验证 MUST NOT 在受管理的 `backups` 目录留下 SQLite sidecar 文件（`-shm`/`-wal`，含临时 `.tmp` 变体）——每份备份 SHALL 恰好由 `.sqlite` 与 `.manifest.json` 两个文件构成。sidecar 清理为 best-effort，清理失败 MUST NOT 改变备份创建/校验的既有错误语义。备份失败时不得开始升级。
 
 #### Scenario: 旧版本数据库升级前备份成功
 
@@ -117,6 +115,13 @@
 - **GIVEN** 数据库为本次启动新建且不存在任何用户数据或已应用 migration
 - **WHEN** 系统应用首个 migration
 - **THEN** 系统 SHALL 允许直接初始化而不创建无内容备份
+
+#### Scenario: 备份校验不残留 sidecar 文件
+
+- **GIVEN** 备份创建流程对临时路径校验、或任一已存在备份被 readOnly 打开校验（含启动时的全量校验）
+- **WHEN** 校验连接关闭
+- **THEN** 系统 SHALL best-effort 移除该次打开产生或遗留的 `-shm`/`-wal` sidecar
+- **THEN** `backups` 目录每份备份 SHALL 只余 `.sqlite` 与 `.manifest.json`
 
 ### Requirement: Migration 失败必须原子回滚
 
@@ -198,3 +203,4 @@
 - **GIVEN** 系统已产生升级备份或恢复诊断副本
 - **WHEN** 应用完成启动、退出或再次恢复
 - **THEN** 本 Change MUST NOT 自动删除或覆盖这些文件
+
