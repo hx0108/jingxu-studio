@@ -1,6 +1,9 @@
 export type {
   ConsentRecord,
+  DialogueRenderMode,
   Episode,
+  EpisodeVersion,
+  EpisodeVersionShot,
   ScriptAuditEntry,
   ScriptCommandName,
   ScriptCommandReceipt,
@@ -13,6 +16,10 @@ export type {
   ScriptVersionStatus,
   ScriptVersionSummary,
   ScriptWorkspaceSnapshot,
+  Shot,
+  ShotContractVersion,
+  ShotLifecycleStatus,
+  ShotLineageResolutionStatus,
   SourceInput,
   StageHead,
   StageVersionType,
@@ -22,15 +29,19 @@ export type {
 export type {
   ConsentRepositoryPort,
   EpisodeRepositoryPort,
+  EpisodeVersionRepositoryPort,
   ScriptAuditRepositoryPort,
   ScriptCommandReceiptRepositoryPort,
   ScriptDependencyRepositoryPort,
   ScriptFormatProfileRepositoryPort,
   ScriptRepositories,
   ScriptVersionRepositoryPort,
+  ShotContractVersionRepositoryPort,
+  ShotRepositoryPort,
   SourceInputRepositoryPort,
   StageHeadRepositoryPort,
   StoryBibleVersionRepositoryPort,
+  StoryboardRepositories,
 } from './script-repositories';
 export type { ScriptJobRepositories, ScriptUnitOfWorkPort } from './script-unit-of-work-port';
 export type { ScriptWorkspaceQueryPort } from './script-workspace-query-port';

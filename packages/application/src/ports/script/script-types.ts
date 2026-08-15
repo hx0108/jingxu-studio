@@ -156,3 +156,62 @@ export interface ScriptVersionDocument {
   readonly document: string;
   readonly documentSha256: string;
 }
+
+// ---- SHOT_CONTRACT 分镜（shot-contract-generation）----
+
+export type ShotLifecycleStatus = 'ACTIVE' | 'SUPERSEDED' | 'DELETED';
+export type ShotLineageResolutionStatus = 'ROOT' | 'LOCAL_VERIFIED' | 'EXTERNAL_UNRESOLVED';
+export type DialogueRenderMode =
+  'NARRATION_FIRST' | 'WEAK_LIP_SYNC' | 'PRECISE_LIP_SYNC' | 'SUBTITLE_ONLY';
+
+/** SHOT_CONTRACT 阶段的产物单位：整集分镜版本（0001 episode_versions 行）。 */
+export interface EpisodeVersion {
+  readonly id: string;
+  readonly episodeId: string;
+  readonly versionNo: number;
+  readonly parentId: string | null;
+  readonly storyBibleVersionId: string;
+  readonly formatProfileId: string;
+  readonly targetDurationSec: number;
+  readonly shotSetHash: string;
+  readonly status: ScriptVersionStatus;
+  readonly createdAt: string;
+}
+
+/** 镜头实体；生命周期行无不可变触发器，currentVersionId 由确认事务受控推进。 */
+export interface Shot {
+  readonly id: string;
+  readonly episodeId: string;
+  readonly lifecycleStatus: ShotLifecycleStatus;
+  readonly currentVersionId: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly deletedAt: string | null;
+}
+
+/** 不可变镜头契约版本（0001 shot_contract_versions 行；document 为 ShotContract 1.1.0）。 */
+export interface ShotContractVersion {
+  readonly id: string;
+  readonly shotId: string;
+  readonly versionNo: number;
+  readonly parentId: string | null;
+  readonly externalParentVersionId: string | null;
+  readonly lineageResolutionStatus: ShotLineageResolutionStatus;
+  readonly sequence: number;
+  readonly versionStatus: ScriptVersionStatus;
+  readonly formatProfileId: string;
+  readonly targetDurationSec: number;
+  readonly dialogueRenderMode: DialogueRenderMode;
+  readonly document: string;
+  readonly documentSha256: string;
+  readonly sourceInvocationId: string | null;
+  readonly createdAt: string;
+}
+
+/** episode_version 与镜头版本的集合快照关联（0001 episode_version_shots 行）。 */
+export interface EpisodeVersionShot {
+  readonly episodeVersionId: string;
+  readonly shotId: string;
+  readonly shotVersionId: string;
+  readonly sequence: number;
+}

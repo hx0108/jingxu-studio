@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import type { JobRepositoryPort, ModelInvocationRepositoryPort } from '../persistence/job';
 import type {
+  EpisodeVersion,
   ScriptJobRepositories,
   ScriptUnitOfWorkPort,
   ScriptWorkspaceQueryPort,
+  Shot,
+  ShotContractVersion,
   SourceInput,
+  StoryboardRepositories,
 } from './index';
 
 const sourceInput = {
@@ -68,5 +72,70 @@ describe('Script Application Ports', () => {
 
     expect(await query.getWorkspace('project-0001')).toBeNull();
     expect(await query.getVersionDocument('project-0001', 'version-0001')).toBeNull();
+  });
+
+  it('条件—组合分镜仓储—整集快照与镜头版本可同一事务读写', async () => {
+    const episodeVersion: EpisodeVersion = {
+      createdAt: '2026-08-15T00:00:00.000Z',
+      episodeId: 'episode-0001',
+      formatProfileId: 'format-0001',
+      id: 'episode-version-0001',
+      parentId: null,
+      shotSetHash: 'b'.repeat(64),
+      status: 'DRAFT',
+      storyBibleVersionId: 'story-bible-0001',
+      targetDurationSec: 60,
+      versionNo: 1,
+    };
+    const recorded: {
+      episodeVersions: EpisodeVersion[];
+      pointerUpdates: number;
+      shotVersions: ShotContractVersion[];
+      shots: Shot[];
+    } = { episodeVersions: [], pointerUpdates: 0, shotVersions: [], shots: [] };
+    const repositories: StoryboardRepositories = {
+      episodeVersions: {
+        findById: (id) => Promise.resolve(id === episodeVersion.id ? episodeVersion : null),
+        findMaxVersionNo: () => Promise.resolve(episodeVersion.versionNo),
+        insert: (version) => {
+          recorded.episodeVersions.push(version);
+          return Promise.resolve();
+        },
+        insertShotLinks: () => Promise.resolve(),
+        listHistory: () => Promise.resolve([episodeVersion]),
+        listShotLinks: () => Promise.resolve([]),
+      },
+      shotContractVersions: {
+        findById: () => Promise.resolve(null),
+        insertMany: (versions) => {
+          recorded.shotVersions.push(...versions);
+          return Promise.resolve();
+        },
+      },
+      shots: {
+        insertMany: (shots) => {
+          recorded.shots.push(...shots);
+          return Promise.resolve();
+        },
+        updateCurrentVersionIds: (entries) => {
+          recorded.pointerUpdates += entries.length;
+          return Promise.resolve();
+        },
+      },
+    };
+
+    await repositories.episodeVersions.insert(episodeVersion);
+    await repositories.shotContractVersions.insertMany([]);
+    await repositories.shots.updateCurrentVersionIds([]);
+
+    expect(recorded).toEqual({
+      episodeVersions: [episodeVersion],
+      pointerUpdates: 0,
+      shotVersions: [],
+      shots: [],
+    });
+    expect(await repositories.episodeVersions.findById('episode-version-0001')).toEqual(
+      episodeVersion,
+    );
   });
 });

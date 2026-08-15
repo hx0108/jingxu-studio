@@ -1,10 +1,14 @@
 import type {
   ConsentRecord,
   Episode,
+  EpisodeVersion,
+  EpisodeVersionShot,
   ScriptAuditEntry,
   ScriptCommandReceipt,
   ScriptDependency,
   ScriptVersion,
+  Shot,
+  ShotContractVersion,
   StageHead,
   StagedScriptStage,
   StoryBibleVersion,
@@ -98,4 +102,43 @@ export interface ScriptRepositories {
   readonly audit: ScriptAuditRepositoryPort;
   readonly receipts: ScriptCommandReceiptRepositoryPort;
   readonly formatProfiles: ScriptFormatProfileRepositoryPort;
+}
+
+// ---- SHOT_CONTRACT 分镜仓储（shot-contract-generation）----
+
+export interface EpisodeVersionRepositoryPort {
+  findById(id: string): Promise<EpisodeVersion | null>;
+  findMaxVersionNo(episodeId: string): Promise<number>;
+  listHistory(
+    episodeId: string,
+    beforeVersionNo: number | null,
+    limit: number,
+  ): Promise<readonly EpisodeVersion[]>;
+  insert(version: EpisodeVersion): Promise<void>;
+  /** 读取整集快照的镜头关联（按 sequence 升序）。 */
+  listShotLinks(episodeVersionId: string): Promise<readonly EpisodeVersionShot[]>;
+  insertShotLinks(links: readonly EpisodeVersionShot[]): Promise<void>;
+}
+
+export interface ShotRepositoryPort {
+  insertMany(shots: readonly Shot[]): Promise<void>;
+  /** 确认 READY 后在同一事务推进镜头当前指针；仅此字段允许更新。 */
+  updateCurrentVersionIds(
+    entries: readonly Readonly<{ shotId: string; currentVersionId: string }>[],
+  ): Promise<void>;
+}
+
+export interface ShotContractVersionRepositoryPort {
+  findById(id: string): Promise<ShotContractVersion | null>;
+  insertMany(versions: readonly ShotContractVersion[]): Promise<void>;
+}
+
+/**
+ * 分镜聚合仓储。独立于 ScriptRepositories 声明；Persistence 实现与 UoW 聚合
+ * 在接线 Change 步骤中将两者合并暴露给 SHOT_CONTRACT 提交事务。
+ */
+export interface StoryboardRepositories {
+  readonly episodeVersions: EpisodeVersionRepositoryPort;
+  readonly shots: ShotRepositoryPort;
+  readonly shotContractVersions: ShotContractVersionRepositoryPort;
 }

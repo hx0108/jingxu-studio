@@ -4,7 +4,7 @@
 
 ## 1. 契约与 Application Port（B 线前置）
 
-- [x] 1.1 定义 `ModelShotSetCandidate` TECH-internal 契约：信封 + 逐镜头创意键存在性（沿五阶段手写校验约定，键缺失进可修复的 CANDIDATE_SCHEMA 层，details 定位 `shots[i].group.key`；取值/枚举/跨字段仍归注入后的 ShotContract 1.0.0 正式校验）
+- [x] 1.1 定义 `ModelShotSetCandidate` TECH-internal 契约：信封 + 逐镜头创意键存在性（沿五阶段手写校验约定，键缺失进可修复的 CANDIDATE_SCHEMA 层，details 定位 `shots[i].group.key`；取值/枚举/跨字段仍归注入后的 ShotContract 1.1.0 正式校验）
 - [ ] 1.2 定义分镜 Application 仓储 Port：episode_versions / shots / shot_contract_versions / episode_version_shots 的插入、按阶段头读取、findMaxVersionNo 类查询
 - [ ] 1.3 系统字段注入器：标识/版本/溯源/上下文注入 + `audio_required`/`lip_sync_required` 按 `(spoken_text, dialogue_render_mode)` 推导表 + 常量字段（budget UNKNOWN、locked_paths 空、asset_version_ids 空）
 - [ ] 1.4 集合校验器：sequence 连续唯一、previous_shot_id 集合内回指、character/speaker/scene ID 源自冻结 STORY_BIBLE、Σ duration ∈ [30,180]；输出有界明细
