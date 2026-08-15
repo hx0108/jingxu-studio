@@ -5,9 +5,11 @@ import type {
   JobSummaryDto,
   ScriptVersionDto,
   ScriptWorkspaceDto,
+  StoryboardVersionSummaryDto,
 } from '@jingxu/contracts';
 
 import { OriginalInput } from './OriginalInput';
+import { StoryboardPanel } from './StoryboardPanel';
 import { ProviderSettings } from './ProviderSettings';
 import { DirtyLeaveDialog } from '../project/DirtyLeaveDialog';
 import {
@@ -167,6 +169,20 @@ export const ScriptWorkspaceView = ({
     return null;
   }, [selectedStage, workspace]);
 
+  // SHOT_CONTRACT 主输入：最近的 SCENE_SCRIPT READY 版本（§3.1 冻结 STORY_BIBLE/EPISODE_OUTLINE/SCENE_SCRIPT）。
+  const sceneScriptCurrent =
+    workspace?.stages.find((item) => item.stage === 'SCENE_SCRIPT')?.current ?? null;
+  const storyboardGenerateHint =
+    workspace === null
+      ? '剧本工作区尚未加载。'
+      : !providerReady
+        ? 'Provider 尚未就绪，完成设置与验证后可生成分镜。'
+        : sceneScriptCurrent?.status !== 'READY'
+          ? '前置阶段尚未确认 READY：需先确认场景剧本。'
+          : job !== null && !isTerminalJob(job)
+            ? '已有任务运行中，完成后可生成分镜。'
+            : null;
+
   const performVersionCommand = async (
     operation: 'confirm' | 'restore',
     version: ScriptVersionDto,
@@ -189,6 +205,33 @@ export const ScriptWorkspaceView = ({
     if (!result.ok) setError(result.error);
     else {
       updateDirty(false);
+      await refresh();
+      onCommitted?.();
+    }
+    setPending(false);
+  };
+
+  // SHOT_CONTRACT 集级命令（D6）：整集确认/恢复，无手写草稿编辑。
+  const performStoryboardCommand = async (
+    operation: 'confirm' | 'restore',
+    version: StoryboardVersionSummaryDto,
+  ): Promise<void> => {
+    const currentStoryboard = workspace?.storyboard.current ?? null;
+    if (currentStoryboard === null || workspace === null || pending) return;
+    setPending(true);
+    setError(null);
+    const result = await getScriptClient()[
+      operation === 'confirm' ? 'confirmVersion' : 'restoreVersion'
+    ]({
+      episodeId: workspace.episode.id,
+      expectedVersionId: currentStoryboard.id,
+      projectId,
+      requestId: createScriptRequestId(`storyboard-${operation}`),
+      stage: 'SHOT_CONTRACT',
+      versionId: version.id,
+    });
+    if (!result.ok) setError(result.error);
+    else {
       await refresh();
       onCommitted?.();
     }
@@ -448,13 +491,44 @@ export const ScriptWorkspaceView = ({
           )}
         </section>
       </section>
-      <section className="script-card">
-        <h2>分镜工作台</h2>
-        <button aria-describedby="storyboard-reason" disabled type="button">
-          进入分镜
-        </button>
-        <p id="storyboard-reason">分镜生成与编辑将在后续 Change 实现。</p>
-      </section>
+      <StoryboardPanel
+        episodeTargetDurationSec={workspace.episode.targetDurationSec}
+        generateHint={storyboardGenerateHint}
+        job={job}
+        onConfirm={() => {
+          if (globalThis.confirm('确认当前整集分镜为 READY？')) {
+            const currentStoryboard = workspace.storyboard.current;
+            if (currentStoryboard !== null) {
+              void performStoryboardCommand('confirm', currentStoryboard);
+            }
+          }
+        }}
+        onGenerate={() => {
+          if (sceneScriptCurrent?.status !== 'READY') return;
+          setError(null);
+          void getJobClient()
+            .create({
+              episodeId: workspace.episode.id,
+              expectedInputVersionId: sceneScriptCurrent.id,
+              idempotencyKey: createScriptRequestId('storyboard-job-idempotency'),
+              operationType: 'GENERATE',
+              projectId,
+              requestId: createScriptRequestId('storyboard-job-create'),
+              stage: 'SHOT_CONTRACT',
+            })
+            .then((result) => {
+              if (result.ok) setJob(result.data);
+              else setError(result.error);
+            });
+        }}
+        onRestore={(version) => {
+          if (globalThis.confirm(`基于 v${String(version.versionNo)} 创建新的 DRAFT 整集？`)) {
+            void performStoryboardCommand('restore', version);
+          }
+        }}
+        pending={pending}
+        storyboard={workspace.storyboard}
+      />
       <DirtyLeaveDialog
         onCancel={() => {
           setPendingStage(null);

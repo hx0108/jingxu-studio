@@ -4,11 +4,11 @@
 
 五阶段链路（CONCEPT→SCENE_SCRIPT）已归档。`SHOT_CONTRACT` 在代码中是显式保留位，共三处 `SCRIPT_STAGE_UNSUPPORTED` 抛点与本 Change 一一对应：
 
-| 位置 | 现状 | 本 Change |
-| --- | --- | --- |
-| `script-input-freezer.ts:77-79` | SHOT_CONTRACT 不在允许阶段列表 | 冻结分镜上游输入 |
-| `script-job-request.ts:26` | 直接抛错 | 构造 SHOT_CONTRACT 请求 |
-| `script-job-contract.ts:64` | commit 直接抛错 | 写入分镜版本集合 |
+| 位置                            | 现状                           | 本 Change               |
+| ------------------------------- | ------------------------------ | ----------------------- |
+| `script-input-freezer.ts:77-79` | SHOT_CONTRACT 不在允许阶段列表 | 冻结分镜上游输入        |
+| `script-job-request.ts:26`      | 直接抛错                       | 构造 SHOT_CONTRACT 请求 |
+| `script-job-contract.ts:64`     | commit 直接抛错                | 写入分镜版本集合        |
 
 `buildScriptCandidateContract` 的 `validateCollection` 目前是 `() => ({ valid: true })` 占位桩——本 Change 使 COLLECTION 层首次承载真实校验。
 
@@ -79,6 +79,8 @@ COLLECTION 在 FINAL 之前执行：以上均为跨镜头集合不变量（集�
 ## 8. D8 Renderer 分镜工作区
 
 工作区新增分镜区（SCENE_SCRIPT 之后）：镜头卡片列表（sequence、时长、景别/机位/运机摘要、spoken_text、continuity_mode、STALE/READY 徽标）+ 单镜头详情面板（全字段分组展示）+ 整集时长汇总条 + 生成/确认按钮。只读展示，无编辑入口；错误文案走既有 `ERROR_COPY`（`MODEL_*` 码已全量映射）。
+
+实施注记（§5.4，随 §5.2 冻结契约收窄）：镜头卡片与详情面板基于 §5.2 定案的 8 字段摘要 DTO（sequence/shotId/narrativePurpose/shotSize/cameraMotion/dialogueRenderMode/targetDurationSec/versionId），workspace 响应不携带整份镜头文档，故 spoken_text/continuity_mode 不在卡片摘要中，详情面板展示全部摘要字段（台词以 dialogue_render_mode 呈现）。集合校验错误经稳定 errorCode 展示脱敏文案：`JobSummaryDto` 只携带 errorCode，字段级明细仅存 main 侧 `error_json`，永不进入 Renderer。
 
 ## 9. D9 实施分线
 

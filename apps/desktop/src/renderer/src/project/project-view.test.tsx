@@ -155,7 +155,7 @@ describe('ProjectDetailView — §8.5 详情与后续入口', () => {
     expect(html).toContain('进入剧本工作区');
     expect(html).toContain('分镜工作台');
     expect((html.match(/disabled=""/g) ?? []).length).toBe(1);
-    expect(html).toContain('将在后续 Change 实现');
+    expect(html).toContain('分镜能力在剧本工作区内提供');
   });
 });
 

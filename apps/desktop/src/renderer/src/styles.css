@@ -281,6 +281,65 @@ textarea {
   min-width: 0;
 }
 
+.shot-card-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.shot-card {
+  display: grid;
+  grid-template-columns: 3.5em 1fr auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: left;
+}
+
+.shot-detail {
+  display: grid;
+  gap: 8px;
+}
+
+.shot-detail dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.shot-detail dl div {
+  display: grid;
+  grid-template-columns: 8em minmax(0, 1fr);
+  gap: 8px;
+}
+
+.shot-detail dt {
+  color: #9fb0d6;
+}
+
+.duration-summary {
+  display: grid;
+  gap: 6px;
+}
+
+.duration-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgb(150 168 220 / 16%);
+  overflow: hidden;
+}
+
+.duration-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: #8de7ae;
+}
+
+.duration-over {
+  background: #ff8f82;
+}
+
 .status-badge {
   padding: 6px 10px;
   border: 1px solid #52617f;

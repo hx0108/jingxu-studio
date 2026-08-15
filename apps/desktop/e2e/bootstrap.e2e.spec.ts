@@ -96,7 +96,7 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
     await expect(page.getByText('16:9')).toBeVisible();
     await expect(page.getByRole('button', { name: '进入剧本工作区' })).toBeEnabled();
     await expect(page.getByRole('button', { name: '分镜工作台' })).toBeDisabled();
-    await expect(page.getByText(/将在后续 Change 实现/u)).toHaveCount(1);
+    await expect(page.getByText(/分镜能力在剧本工作区内提供/u)).toHaveCount(1);
 
     const surface = await page.evaluate(async () => {
       const api: unknown = Reflect.get(globalThis, 'jingxu');

@@ -69,7 +69,7 @@ export const ProjectDetailView = ({
       <button aria-describedby="storyboard-disabled-reason" disabled type="button">
         分镜工作台
       </button>
-      <p id="storyboard-disabled-reason">分镜能力将在后续 Change 实现，当前不会伪造数据。</p>
+      <p id="storyboard-disabled-reason">分镜能力在剧本工作区内提供：请先进入剧本工作区。</p>
     </div>
     <section aria-labelledby="profile-title">
       <h3 id="profile-title">FormatProfile 版本链</h3>
