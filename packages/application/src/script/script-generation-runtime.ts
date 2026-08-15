@@ -21,7 +21,8 @@ import {
 export interface ScriptGenerationRuntimeDependencies {
   readonly createInvocationId: (sequence: number) => string;
   readonly createLeaseToken: () => string;
-  readonly finalSchemaId: string;
+  /** 五阶段为 ScriptStageOutput；SHOT_CONTRACT 为逐镜头 ShotContract（组合根映射）。 */
+  readonly finalSchemaId: (stage: ScriptStageJob['stage']) => string;
   readonly hashPayload: (value: Readonly<Record<string, unknown>>) => string;
   readonly hashText: (value: string) => string;
   readonly loadPromptSnapshot: (job: ScriptStageJob) => Promise<ScriptPromptSnapshot>;

@@ -50,7 +50,7 @@ const createRuntime = (recoveryGate?: Promise<void>) => {
   const runtime = createScriptGenerationRuntime({
     createInvocationId: (sequence) => `invocation-${String(sequence)}`,
     createLeaseToken: () => 'lease-0001',
-    finalSchemaId: 'script-stage-output/1.0.0',
+    finalSchemaId: () => 'script-stage-output/1.0.0',
     hashPayload: () => 'p'.repeat(64),
     hashText: () => 't'.repeat(64),
     loadPromptSnapshot: () =>

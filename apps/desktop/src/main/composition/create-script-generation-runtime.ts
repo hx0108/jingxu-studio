@@ -10,7 +10,7 @@ import {
   type TextModelPort,
 } from '@jingxu/application';
 import { buildScriptPrompt, SCRIPT_PROMPT_MANIFEST } from '@jingxu/prompts';
-import { validateModelScriptStageCandidate } from '@jingxu/validation';
+import { validateModelScriptStageCandidate, V1_SCHEMA_IDS } from '@jingxu/validation';
 
 const SCRIPT_STAGE_OUTPUT_SCHEMA_ID = 'https://jingxu.studio/schemas/script-stage-output/1.0.0';
 export const PRIMARY_QWEN_PROFILE_ID = 'profile_qwen_primary';
@@ -157,7 +157,8 @@ export const createDesktopScriptGenerationRuntime = ({
   createScriptGenerationRuntime({
     createInvocationId: () => randomUUID(),
     createLeaseToken: randomUUID,
-    finalSchemaId: SCRIPT_STAGE_OUTPUT_SCHEMA_ID,
+    finalSchemaId: (stage) =>
+      stage === 'SHOT_CONTRACT' ? V1_SCHEMA_IDS.shotContract : SCRIPT_STAGE_OUTPUT_SCHEMA_ID,
     hashPayload: sha256Payload,
     hashText: sha256Text,
     loadPromptSnapshot: async (job) => {

@@ -21,7 +21,7 @@ describe('Script job request builder', () => {
       }),
     );
     const build = createScriptJobRequestBuilder({
-      finalSchemaId: 'script-stage-output/1.0.0',
+      finalSchemaId: () => 'script-stage-output/1.0.0',
       loadPromptSnapshot,
       parameters: { temperature: 0.2 },
     });
@@ -37,7 +37,7 @@ describe('Script job request builder', () => {
 
   it('条件—Prompt 版本与 Job 冻结值漂移—Provider 调用前返回 STALE_INPUT', async () => {
     const build = createScriptJobRequestBuilder({
-      finalSchemaId: 'script-stage-output/1.0.0',
+      finalSchemaId: () => 'script-stage-output/1.0.0',
       loadPromptSnapshot: () =>
         Promise.resolve({
           candidateSchemaId: 'candidate/concept/v2',
@@ -53,7 +53,7 @@ describe('Script job request builder', () => {
 
   it('条件—STRUCTURE_REPAIR 重试—userPayload 携带修复上下文而非原样重发', async () => {
     const build = createScriptJobRequestBuilder({
-      finalSchemaId: 'script-stage-output/1.0.0',
+      finalSchemaId: () => 'script-stage-output/1.0.0',
       loadPromptSnapshot: () =>
         Promise.resolve({
           candidateSchemaId: 'candidate/concept/v1',

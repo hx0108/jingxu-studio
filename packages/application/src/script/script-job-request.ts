@@ -10,7 +10,8 @@ export interface ScriptPromptSnapshot {
 }
 
 export interface ScriptJobRequestDependencies {
-  readonly finalSchemaId: string;
+  /** 五阶段为 ScriptStageOutput；SHOT_CONTRACT 为逐镜头 ShotContract（组合根映射）。 */
+  readonly finalSchemaId: (stage: ScriptStageJob['stage']) => string;
   readonly loadPromptSnapshot: (job: ScriptStageJob) => Promise<ScriptPromptSnapshot>;
   readonly parameters: Readonly<Record<string, unknown>>;
 }
@@ -23,12 +24,11 @@ export const createScriptJobRequestBuilder =
     invocationId: string,
     repair?: JobStructureRepairRequest,
   ): Promise<TextGenerationRequest> => {
-    if (job.stage === 'SHOT_CONTRACT') throw new Error('SCRIPT_STAGE_UNSUPPORTED');
     const prompt = await dependencies.loadPromptSnapshot(job);
     if (prompt.promptTemplateId !== job.promptTemplateId) throw new Error('STALE_INPUT');
     return {
       candidateSchemaId: prompt.candidateSchemaId,
-      finalSchemaId: dependencies.finalSchemaId,
+      finalSchemaId: dependencies.finalSchemaId(job.stage),
       invocationId,
       parameters:
         repair === undefined
