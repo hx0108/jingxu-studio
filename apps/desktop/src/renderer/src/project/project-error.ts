@@ -55,6 +55,9 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   SCRIPT_VERSION_CONFLICT: ['剧本版本已变化', '刷新最新版本，再重新应用修改。'],
   SCRIPT_SCHEMA_INVALID: ['剧本结构校验失败', '根据字段错误修正内容后重试。'],
   SCRIPT_STAGE_UNSUPPORTED: ['当前阶段暂不支持', '使用已开放的五阶段剧本流程。'],
+  MEDIA_STORYBOARD_NOT_READY: ['分镜尚未确认', '先在分镜阶段确认 READY 后再生成首帧。'],
+  MEDIA_SHOT_NOT_IN_READY_SET: ['镜头不在当前分镜集合中', '刷新分镜工作区后重试。'],
+  MEDIA_PERSISTENCE_FAILED: ['媒体数据暂时无法保存', '请稍后重试。'],
 };
 
 /** 只按稳定 code 映射文案，绝不展示来自基础设施的 message。 */

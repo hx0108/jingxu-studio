@@ -8,5 +8,7 @@ export type {
   MediaCandidateStatus,
   MediaRepository,
   MediaStaleAffectedShot,
+  MediaTaskPhase,
+  MediaTaskRecord,
   MediaUnitOfWorkPort,
 } from './media-repository';

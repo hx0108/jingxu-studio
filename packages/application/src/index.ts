@@ -10,6 +10,7 @@ export type * from './ports/media/index';
 export type * from './ports/persistence/job/index';
 export { assertJobTransition, JobInvariantError } from './ports/persistence/job/index';
 export type * from './ports/project/index';
+export * from './media/index';
 export type * from './ports/schema-registry/index';
 export type * from './ports/script/index';
 export type * from './ports/text-model/index';

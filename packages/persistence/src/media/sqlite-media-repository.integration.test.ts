@@ -488,6 +488,148 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       }
     });
   });
+
+  it('findCurrentAssetVersion—按业务键取最新版本—无资产或无版本返回 null', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await setup(root, 'media_repo_current_version.sqlite');
+      try {
+        const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
+        await expect(
+          unitOfWork.run((media) =>
+            media.findCurrentAssetVersion('project_media', 'SCENE', 'scene_1'),
+          ),
+        ).resolves.toBeNull();
+        await unitOfWork.run(async (media) => {
+          await media.createAsset({
+            assetType: 'SCENE',
+            bibleRefId: 'scene_1',
+            displayName: '雨巷',
+            id: 'asset_scene',
+            projectId: 'project_media',
+          });
+          // 建了资产但从未上传参考图 → null。
+        });
+        await expect(
+          unitOfWork.run((media) =>
+            media.findCurrentAssetVersion('project_media', 'SCENE', 'scene_1'),
+          ),
+        ).resolves.toBeNull();
+        await unitOfWork.run(async (media) => {
+          await media.appendAssetVersion({
+            assetId: 'asset_scene',
+            byteSize: 100,
+            fileSha256: 'b'.repeat(64),
+            id: 'version_b1',
+            mimeType: 'image/png',
+          });
+          await media.appendAssetVersion({
+            assetId: 'asset_scene',
+            byteSize: 200,
+            fileSha256: 'c'.repeat(64),
+            id: 'version_b2',
+            mimeType: 'image/png',
+          });
+        });
+        await expect(
+          unitOfWork.run((media) =>
+            media.findCurrentAssetVersion('project_media', 'SCENE', 'scene_1'),
+          ),
+        ).resolves.toMatchObject({ id: 'version_b2', parentVersionId: 'version_b1', versionNo: 2 });
+      } finally {
+        database.close();
+      }
+    });
+  });
+
+  it('媒体任务状态机—建档/幂等键冲突—相位转移守卫矩阵—未终态扫描', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await setup(root, 'media_repo_task_fsm.sqlite');
+      try {
+        const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
+        const insertTask = (id: string, idempotencyKey: string) =>
+          unitOfWork.run((media) =>
+            media.insertTask({
+              candidateCount: 4,
+              generationInputHash: hash64('gen_1'),
+              id,
+              idempotencyKey,
+              projectId: 'project_media',
+              shotId: 'shot_media',
+              shotVersionId: 'shotv_media',
+            }),
+          );
+        const task = await insertTask('task_1', 'req_1');
+        expect(task).toMatchObject({
+          candidateCount: 4,
+          errorCode: null,
+          generationInputHash: hash64('gen_1'),
+          id: 'task_1',
+          idempotencyKey: 'req_1',
+          phase: 'SUBMITTED',
+          providerTaskId: null,
+        });
+        // 幂等键冲突（并发重放兜底）。
+        await expect(insertTask('task_2', 'req_1')).rejects.toThrow(
+          'MEDIA_TASK_IDEMPOTENCY_CONFLICT',
+        );
+        // 幂等读侧。
+        await expect(
+          unitOfWork.run((media) => media.findTaskByIdempotencyKey('project_media', 'req_1')),
+        ).resolves.toMatchObject({ id: 'task_1' });
+        await expect(
+          unitOfWork.run((media) => media.findTaskById('project_media', 'task_1')),
+        ).resolves.toMatchObject({ id: 'task_1' });
+        await expect(
+          unitOfWork.run((media) => media.findTaskById('project_media', 'task_missing')),
+        ).resolves.toBeNull();
+
+        // SUBMITTED→POLLING 首次 poll 前持久化 provider_task_id（spec 不变式）。
+        await expect(
+          unitOfWork.run((media) => media.markTaskPolling('task_1', 'provider_t1')),
+        ).resolves.toMatchObject({ phase: 'POLLING', providerTaskId: 'provider_t1' });
+        // 重复 markTaskPolling（同参数）幂等安全。
+        await expect(
+          unitOfWork.run((media) => media.markTaskPolling('task_1', 'provider_t1')),
+        ).resolves.toMatchObject({ phase: 'POLLING' });
+        // POLLING→DOWNLOADING；终态后一切转移被拒。
+        await expect(
+          unitOfWork.run((media) => media.markTaskDownloading('task_1')),
+        ).resolves.toMatchObject({ phase: 'DOWNLOADING' });
+        await expect(
+          unitOfWork.run((media) => media.markTaskPolling('task_1', 'provider_t2')),
+        ).rejects.toThrow('MEDIA_TASK_ALREADY_TERMINAL');
+        await expect(
+          unitOfWork.run((media) => media.completeTask('task_1')),
+        ).resolves.toMatchObject({ phase: 'COMPLETED' });
+        await expect(
+          unitOfWork.run((media) => media.completeTask('task_1')),
+        ).resolves.toMatchObject({ phase: 'COMPLETED' });
+        await expect(unitOfWork.run((media) => media.cancelTask('task_1'))).rejects.toThrow(
+          'MEDIA_TASK_ALREADY_TERMINAL',
+        );
+        // 完成后未终态扫描不再包含该任务。
+        await expect(
+          unitOfWork.run((media) => media.listUnfinishedTasks('project_media')),
+        ).resolves.toEqual([]);
+
+        // 第二个任务：非终态取消 + 失败路径错误码。
+        await insertTask('task_3', 'req_3');
+        await expect(unitOfWork.run((media) => media.cancelTask('task_3'))).resolves.toMatchObject({
+          phase: 'CANCELLED',
+        });
+        await insertTask('task_4', 'req_4');
+        await expect(
+          unitOfWork.run((media) => media.failTask('task_4', 'MODEL_RATE_LIMITED')),
+        ).resolves.toMatchObject({ errorCode: 'MODEL_RATE_LIMITED', phase: 'FAILED' });
+        // 不存在任务 id 的稳定错误。
+        await expect(unitOfWork.run((media) => media.completeTask('task_missing'))).rejects.toThrow(
+          'MEDIA_TASK_NOT_FOUND',
+        );
+      } finally {
+        database.close();
+      }
+    });
+  });
 });
 
 const seedSucceededCandidate = async (

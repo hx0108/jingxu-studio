@@ -37,7 +37,8 @@
 
 ## 4. 应用服务与恢复
 
-- [ ] 4.1 MediaGenerationService：输入快照与哈希、Prompt 组装（镜头创意字段 + STORY_BIBLE 描述 + FormatProfile；SAME_SCENE_CUT 机位规则）、幂等键、任务状态机
+- [x] 4.1 MediaGenerationService：输入快照与哈希、Prompt 组装（镜头创意字段 + STORY_BIBLE 描述 + FormatProfile；SAME_SCENE_CUT 机位规则）、幂等键、任务状态机
+  - 2026-08-16 完成：Port 扩展（MediaRepository +15 方法：findCurrentAssetVersion 绑定解析缺资产→null 不阻断、任务 CRUD/相位转移 findTaskByIdempotencyKey/insertTask/markTaskPolling 持久化 provider_task_id/markTaskDownloading/complete/fail/cancel 幂等终态守卫/listUnfinishedTasks 调度扫描序）；`media-generation-prompt.ts` 纯函数（extractShotCreativeFields ShotContract 1.1.0 创意字段挑选、resolveImageSize 画幅→显式 WxH 五映射、buildFirstFramePrompt 确定性组装主描述优先 image_prompt 回退 action/emotion + 场景/人物/机位/首帧要求 + SAME_SCENE_CUT 同资产新机位规则行 + 避免项、computeGenerationInputHash 绑定列表排序后哈希键序对齐契约 schema）；`media-generation-service.ts`（generateCandidates 前置校验链 workspace→storyboard READY→镜头∈当前集合，unitOfWork 内幂等查询→冻结输入解析（尺寸按镜头版本自带 formatProfileId 确认期冻结）→insertTask SUBMITTED→N PENDING 候选；idempotency_key=requestId 重放返回原任务、同 requestId 换镜头 REQUEST_ID_REUSED；propagateStaleForShotVersion 透传、propagateStaleForAssetChange 按受绑定镜头重算当前世代哈希旧世代标 STALE_INPUT）。新 AppError 码 MEDIA_STORYBOARD_NOT_READY/MEDIA_SHOT_NOT_IN_READY_SET/MEDIA_PERSISTENCE_FAILED（Renderer ERROR_COPY 同步穷尽）。SQLite 任务方法（相位守卫 UPDATE WHERE phase IN 活跃集 + 转移后复核幂等重放安全、insertTask 冲突归一化 MEDIA_TASK_IDEMPOTENCY_CONFLICT）。测试：prompt unit 5 + service unit 6（内存版仓储 fake：happy path 哈希独立复算/重放/前置错误零写入/REQUEST_ID_REUSED/资产升版 STALE 精确命中受绑定镜头旧世代不误伤相邻世代与未绑定镜头）+ persistence 集成 +2（findCurrentAssetVersion 生命周期、任务状态机全矩阵含幂等与终态拒绝）
 - [ ] 4.2 调度与恢复：同项目媒体任务串行；启动扫描未终态任务（有 taskId 恢复 poll / 无 taskId 标记失败待人工）；取消与超时
       — 验证：integration（重启恢复、不自动重发、取消/迟到下载不落库）
 

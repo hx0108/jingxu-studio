@@ -70,6 +70,25 @@ export interface MediaStaleAffectedShot {
   readonly shotId: string;
 }
 
+/** media_generation_tasks 的 phase 单字段状态机（design D3；含三个终态）。 */
+export type MediaTaskPhase =
+  'SUBMITTED' | 'POLLING' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
+
+export interface MediaTaskRecord {
+  readonly candidateCount: number;
+  readonly createdAt: string;
+  readonly errorCode: string | null;
+  readonly generationInputHash: string;
+  readonly id: string;
+  readonly idempotencyKey: string;
+  readonly phase: MediaTaskPhase;
+  readonly projectId: string;
+  readonly providerTaskId: string | null;
+  readonly shotId: string;
+  readonly shotVersionId: string;
+  readonly updatedAt: string;
+}
+
 export interface MediaRepository {
   /** 按 (projectId, assetType, bibleRefId) 业务键查资产；不存在返回 null。 */
   findAssetByIdentity(
@@ -104,6 +123,16 @@ export interface MediaRepository {
 
   /** 列出项目全部资产及其版本链（版本升序）。 */
   listAssets(projectId: string): Promise<readonly MediaAssetWithVersions[]>;
+
+  /**
+   * 绑定解析：按业务键取资产当前（最新）参考图版本。
+   * 资产不存在或从未上传参考图返回 null（调用方跳过该项，不阻断生成）。
+   */
+  findCurrentAssetVersion(
+    projectId: string,
+    assetType: MediaAssetType,
+    bibleRefId: string,
+  ): Promise<MediaAssetVersionRecord | null>;
 
   /**
    * 批量预落库一轮 PENDING 候选：round_no 取该镜头 max+1，index_in_round 为 0..count-1。
@@ -159,6 +188,49 @@ export interface MediaRepository {
   markCandidatesStaleByGenerationInputHash(
     generationInputHash: string,
   ): Promise<readonly MediaStaleAffectedShot[]>;
+
+  /**
+   * 幂等重放查询：UNIQUE(project_id, idempotency_key) 的读侧入口
+   * （idempotency_key = IPC requestId；新 requestId 同输入 = 新一轮候选）。
+   */
+  findTaskByIdempotencyKey(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<MediaTaskRecord | null>;
+
+  findTaskById(projectId: string, taskId: string): Promise<MediaTaskRecord | null>;
+
+  /** 建任务行（phase=SUBMITTED，provider_task_id 为 null）；幂等键冲突抛稳定错误。 */
+  insertTask(input: {
+    readonly candidateCount: number;
+    readonly generationInputHash: string;
+    readonly id: string;
+    readonly idempotencyKey: string;
+    readonly projectId: string;
+    readonly shotId: string;
+    readonly shotVersionId: string;
+  }): Promise<MediaTaskRecord>;
+
+  /**
+   * SUBMITTED→POLLING，同时持久化 provider_task_id（spec：首次 poll 前必须持久化）。
+   * 已处于目标相位且 taskId 一致时幂等返回；否则抛 MEDIA_TASK_ALREADY_TERMINAL。
+   */
+  markTaskPolling(taskId: string, providerTaskId: string): Promise<MediaTaskRecord>;
+
+  /** SUBMITTED|POLLING→DOWNLOADING（同步 Provider 从 SUBMITTED 直达）。 */
+  markTaskDownloading(taskId: string): Promise<MediaTaskRecord>;
+
+  /** 任一非终态→COMPLETED；终态后调用抛 MEDIA_TASK_ALREADY_TERMINAL。 */
+  completeTask(taskId: string): Promise<MediaTaskRecord>;
+
+  /** 任一非终态→FAILED 并记录稳定错误码。 */
+  failTask(taskId: string, errorCode: string): Promise<MediaTaskRecord>;
+
+  /** 任一非终态→CANCELLED。 */
+  cancelTask(taskId: string): Promise<MediaTaskRecord>;
+
+  /** 调度与恢复扫描（4.2）：非终态任务按创建序返回。 */
+  listUnfinishedTasks(projectId: string): Promise<readonly MediaTaskRecord[]>;
 }
 
 /** 媒体读写事务边界：单一 `BEGIN IMMEDIATE`，work 抛出即回滚（沿 ProjectUnitOfWorkPort 语义）。 */

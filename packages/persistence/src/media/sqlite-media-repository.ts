@@ -6,6 +6,8 @@ import type {
   MediaCandidateRecord,
   MediaRepository,
   MediaStaleAffectedShot,
+  MediaTaskPhase,
+  MediaTaskRecord,
 } from '@jingxu/application';
 
 import type { SqliteDatabase, SqliteOutputValue } from '../runtime/sqlite-database';
@@ -92,6 +94,24 @@ const mapCandidateRow = (row: Row): MediaCandidateRecord => ({
 
 /** STALE 传播的目标状态集合：终态 STALE_INPUT 之外的全部可传播状态。 */
 const STALEABLE_STATUSES = "('PENDING', 'SUCCEEDED', 'FAILED')";
+
+/** 任务相位状态机的非终态集合（终态行拒绝一切转移）。 */
+const ACTIVE_TASK_PHASES = "('SUBMITTED', 'POLLING', 'DOWNLOADING')";
+
+const mapTaskRow = (row: Row): MediaTaskRecord => ({
+  candidateCount: requiredNumber(row, 'candidate_count'),
+  createdAt: requiredString(row, 'created_at'),
+  errorCode: nullableString(row, 'error_code'),
+  generationInputHash: requiredString(row, 'generation_input_hash'),
+  id: requiredString(row, 'id'),
+  idempotencyKey: requiredString(row, 'idempotency_key'),
+  phase: requiredString(row, 'phase') as MediaTaskPhase,
+  projectId: requiredString(row, 'project_id'),
+  providerTaskId: nullableString(row, 'provider_task_id'),
+  shotId: requiredString(row, 'shot_id'),
+  shotVersionId: requiredString(row, 'shot_version_id'),
+  updatedAt: requiredString(row, 'updated_at'),
+});
 
 /**
  * 媒体资产与候选的 SQLite 实现（design D3）。
@@ -253,6 +273,26 @@ export class SqliteMediaRepository implements MediaRepository {
         }
       }
       return [...byAsset.values()].map(({ asset, versions }) => ({ asset, versions }));
+    });
+  }
+
+  public findCurrentAssetVersion(
+    projectId: string,
+    assetType: MediaAssetType,
+    bibleRefId: string,
+  ): Promise<MediaAssetVersionRecord | null> {
+    return syncToPromise(() => {
+      const row = this.database
+        .prepare(
+          `SELECT v.id AS version_id, v.asset_id, v.version_no, v.parent_id, v.description,
+                  v.file_sha256, v.byte_size, v.mime_type, v.width, v.height,
+                  v.created_at AS version_created_at
+           FROM asset_versions v JOIN assets a ON a.id = v.asset_id
+           WHERE a.project_id = ? AND a.asset_type = ? AND a.bible_ref_id = ?
+           ORDER BY v.version_no DESC LIMIT 1`,
+        )
+        .get(projectId, assetType, bibleRefId);
+      return row === undefined ? null : mapAssetVersionRow(row);
     });
   }
 
@@ -454,6 +494,160 @@ export class SqliteMediaRepository implements MediaRepository {
       }
       return affected;
     });
+  }
+
+  public findTaskByIdempotencyKey(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<MediaTaskRecord | null> {
+    return syncToPromise(() => {
+      const row = this.selectTaskWhere(
+        'WHERE project_id = ? AND idempotency_key = ?',
+        projectId,
+        idempotencyKey,
+      );
+      return row === undefined ? null : mapTaskRow(row);
+    });
+  }
+
+  public findTaskById(projectId: string, taskId: string): Promise<MediaTaskRecord | null> {
+    return syncToPromise(() => {
+      const row = this.selectTaskWhere('WHERE project_id = ? AND id = ?', projectId, taskId);
+      return row === undefined ? null : mapTaskRow(row);
+    });
+  }
+
+  public insertTask(input: {
+    candidateCount: number;
+    generationInputHash: string;
+    id: string;
+    idempotencyKey: string;
+    projectId: string;
+    shotId: string;
+    shotVersionId: string;
+  }): Promise<MediaTaskRecord> {
+    return syncToPromise(() => {
+      const now = this.clock();
+      try {
+        this.database
+          .prepare(
+            `INSERT INTO media_generation_tasks
+             (id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
+              phase, generation_input_hash, candidate_count, error_code, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, NULL, 'SUBMITTED', ?, ?, NULL, ?, ?)`,
+          )
+          .run(
+            input.id,
+            input.projectId,
+            input.shotId,
+            input.shotVersionId,
+            input.idempotencyKey,
+            input.generationInputHash,
+            input.candidateCount,
+            now,
+            now,
+          );
+      } catch {
+        // UNIQUE(project_id, idempotency_key) 兜底并发重放（service 先查再插）。
+        throw new PersistenceRuntimeError('MEDIA_TASK_IDEMPOTENCY_CONFLICT');
+      }
+      return mapTaskRow(this.requireTaskRow(input.id));
+    });
+  }
+
+  public markTaskPolling(taskId: string, providerTaskId: string): Promise<MediaTaskRecord> {
+    return syncToPromise(() => {
+      this.database
+        .prepare(
+          `UPDATE media_generation_tasks
+           SET phase = 'POLLING', provider_task_id = ?, updated_at = ?
+           WHERE id = ? AND phase = 'SUBMITTED'`,
+        )
+        .run(providerTaskId, this.clock(), taskId);
+      return this.requireTaskPhase(taskId, 'POLLING');
+    });
+  }
+
+  public markTaskDownloading(taskId: string): Promise<MediaTaskRecord> {
+    return syncToPromise(() => {
+      this.database
+        .prepare(
+          `UPDATE media_generation_tasks
+           SET phase = 'DOWNLOADING', updated_at = ?
+           WHERE id = ? AND phase IN ('SUBMITTED', 'POLLING')`,
+        )
+        .run(this.clock(), taskId);
+      return this.requireTaskPhase(taskId, 'DOWNLOADING');
+    });
+  }
+
+  public completeTask(taskId: string): Promise<MediaTaskRecord> {
+    return syncToPromise(() => this.transitionTerminal(taskId, 'COMPLETED', null));
+  }
+
+  public failTask(taskId: string, errorCode: string): Promise<MediaTaskRecord> {
+    return syncToPromise(() => this.transitionTerminal(taskId, 'FAILED', errorCode));
+  }
+
+  public cancelTask(taskId: string): Promise<MediaTaskRecord> {
+    return syncToPromise(() => this.transitionTerminal(taskId, 'CANCELLED', null));
+  }
+
+  public listUnfinishedTasks(projectId: string): Promise<readonly MediaTaskRecord[]> {
+    return syncToPromise(() =>
+      this.database
+        .prepare(
+          `SELECT id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
+                  phase, generation_input_hash, candidate_count, error_code, created_at, updated_at
+           FROM media_generation_tasks
+           WHERE project_id = ? AND phase IN ${ACTIVE_TASK_PHASES}
+           ORDER BY created_at, id`,
+        )
+        .all(projectId)
+        .map(mapTaskRow),
+    );
+  }
+
+  private transitionTerminal(
+    taskId: string,
+    phase: 'COMPLETED' | 'FAILED' | 'CANCELLED',
+    errorCode: string | null,
+  ): MediaTaskRecord {
+    this.database
+      .prepare(
+        `UPDATE media_generation_tasks
+         SET phase = ?, error_code = ?, updated_at = ?
+         WHERE id = ? AND phase IN ${ACTIVE_TASK_PHASES}`,
+      )
+      .run(phase, errorCode, this.clock(), taskId);
+    return this.requireTaskPhase(taskId, phase);
+  }
+
+  private selectTaskWhere(whereClause: string, ...params: readonly string[]): Row | undefined {
+    return this.database
+      .prepare(
+        `SELECT id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
+                phase, generation_input_hash, candidate_count, error_code, created_at, updated_at
+         FROM media_generation_tasks ${whereClause}`,
+      )
+      .get(...params);
+  }
+
+  private requireTaskRow(taskId: string): Row {
+    const row = this.selectTaskWhere('WHERE id = ?', taskId);
+    if (row === undefined) {
+      throw new PersistenceRuntimeError('MEDIA_TASK_NOT_FOUND');
+    }
+    return row;
+  }
+
+  /** 转移后复核：到达目标相位即成功（幂等重放安全），否则该行已处于不可转移相位。 */
+  private requireTaskPhase(taskId: string, phase: MediaTaskPhase): MediaTaskRecord {
+    const task = mapTaskRow(this.requireTaskRow(taskId));
+    if (task.phase !== phase) {
+      throw new PersistenceRuntimeError('MEDIA_TASK_ALREADY_TERMINAL');
+    }
+    return task;
   }
 
   private requireCandidate(candidateId: string, errorCode: string): MediaCandidateRecord {
