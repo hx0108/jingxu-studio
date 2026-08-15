@@ -83,6 +83,59 @@ const candidateData = (
           },
         ],
       };
+    case 'SHOT_CONTRACT':
+      // 与 E2E 链上游对齐：STORY_BIBLE 的 char_lead/scene_train、EPISODE_OUTLINE 的
+      // 90s（6 镜 × 15s，每镜 1..20 由 ShotContract 1.1.0 定界）。
+      return {
+        shots: [
+          '开场：车厢全景，无人回应',
+          '林夜攥紧怀表起身，动作连贯',
+          '空镜：窗外流动的夜色',
+          '林夜质问列车长',
+          '连续动作：林夜追向车尾',
+          '结尾钩子：怀表传出声音',
+        ].map((purpose, index) => ({
+          acceptance: { must_include: ['午夜列车车厢'], must_not_include: [] },
+          cinematography: {
+            camera_angle: 'EYE_LEVEL',
+            camera_motion: index % 2 === 0 ? 'STATIC' : 'DOLLY',
+            composition: '中景，主体居左',
+            focus: '人物面部清晰',
+            frontal_face: true,
+            mouth_visible: index % 3 !== 2,
+            shot_size: index % 3 === 2 ? 'LONG' : 'MEDIUM',
+          },
+          content: {
+            action: `镜 ${String(index + 1)}：${purpose}`,
+            character_ids: index % 3 === 2 ? [] : ['char_lead'],
+            emotion: index === 5 ? '震惊' : '警惕',
+            prop_ids: [],
+            scene_id: 'scene_train',
+            spoken_text: index % 3 === 2 ? '' : '这趟列车，到底要开去哪里？',
+          },
+          continuity: {
+            continuity_mode: index === 1 || index === 4 ? 'CONTINUOUS_ACTION' : 'SCENE_CHANGE',
+            first_frame_requirement: `${purpose}起帧`,
+            last_frame_requirement: `${purpose}止帧`,
+            // 模型无法预知系统注入的兄弟镜头 id；输出 null，由注入器按 sequence 派生。
+            previous_shot_id: null,
+          },
+          dialogue: {
+            dialogue_render_mode: 'NARRATION_FIRST',
+            estimated_speech_duration_sec: index % 3 === 2 ? 0 : 3,
+            // Schema 分支：无台词镜头 speaker 必须为 null。
+            speaker_id: index % 3 === 2 ? null : 'narrator',
+          },
+          generation_constraints: {
+            capability_requirements: [{ capability: 'FIRST_FRAME', required: true }],
+            image_prompt: '夜行列车车厢，冷色调，中景',
+            negative_constraints: ['文字水印'],
+            video_prompt: '镜头缓慢推近，人物轻微呼吸起伏',
+          },
+          narrative_purpose: purpose,
+          target_duration_sec: 15,
+        })),
+      };
     default:
       throw new Error('SCRIPT_STAGE_UNSUPPORTED');
   }

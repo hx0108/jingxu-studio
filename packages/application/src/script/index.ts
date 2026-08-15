@@ -32,6 +32,12 @@ export {
 } from './script-input-freezer';
 export { isProjectStage, listInvalidatedStages } from './script-dependency-graph';
 export {
+  extractShotCollectionBibleKeys,
+  validateShotSetCollection,
+  type ShotCollectionStoryBibleIds,
+} from './shot-collection-validator';
+export { injectShotSystemFields } from './shot-system-fields';
+export {
   buildScriptCandidateContract,
   createScriptCommitHandler,
   type ScriptJobContractDependencies,

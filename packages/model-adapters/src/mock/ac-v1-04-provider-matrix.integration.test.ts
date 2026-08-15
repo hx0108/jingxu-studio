@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createJobRunner } from '@jingxu/application';
+import {
+  createJobRunner,
+  injectShotSystemFields,
+  validateShotSetCollection,
+} from '@jingxu/application';
 
 import type {
   JobRepositories,
@@ -29,7 +33,7 @@ import {
 const NOW = '2026-08-12T00:00:00.000Z';
 const valid = Object.freeze({ valid: true as const });
 
-const queuedJob = (): ScriptStageJob => ({
+const queuedJob = (stage: ScriptStageJob['stage'] = 'CONCEPT'): ScriptStageJob => ({
   cancelRequestedAt: null,
   createdAt: NOW,
   deadlineAt: null,
@@ -49,7 +53,7 @@ const queuedJob = (): ScriptStageJob => ({
   promptTemplateId: 'prompt_1',
   queuedAt: NOW,
   selectionJson: null,
-  stage: 'CONCEPT',
+  stage,
   startedAt: null,
   status: 'QUEUED',
   structureRepairAttempts: 0,
@@ -65,8 +69,12 @@ interface Store {
 }
 
 interface MatrixHarnessOptions {
-  readonly steps: readonly MockTextModelStep[];
   readonly commitStale?: boolean;
+  /** shot-set：SHOT_CONTRACT 分镜契约（真实注入 + 真实集合校验；候选层为结构性检查）。 */
+  readonly contractKind?: 'shot-set';
+  /** 五阶段默认 CONCEPT；SHOT_CONTRACT 矩阵用 stage: 'SHOT_CONTRACT'。 */
+  readonly stage?: ScriptStageJob['stage'];
+  readonly steps: readonly MockTextModelStep[];
   readonly wait?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
 }
 
@@ -79,10 +87,12 @@ interface MatrixHarness {
 const createMatrixHarness = ({
   steps,
   commitStale = false,
+  contractKind,
+  stage = 'CONCEPT',
   wait,
 }: MatrixHarnessOptions): MatrixHarness => {
   const events: string[] = [];
-  const store: Store = { invocations: [], job: queuedJob(), versions: [] };
+  const store: Store = { invocations: [], job: queuedJob(stage), versions: [] };
   let sequence = 0;
 
   const jobs: JobRepositoryPort = {
@@ -213,19 +223,57 @@ const createMatrixHarness = ({
   });
 
   const runner = createJobRunner({
-    buildContract: (_job, invocationId) => ({
-      injectSystemFields: (candidate) => ({
-        ...(candidate as object),
-        source_invocation_id: invocationId,
-        version_id: 'fresh_id',
-      }),
-      validateCandidate: (candidate) =>
-        typeof candidate === 'object' && candidate !== null && 'data' in candidate
-          ? valid
-          : { code: 'CANDIDATE_INVALID', valid: false },
-      validateCollection: () => valid,
-      validateFinal: () => valid,
-    }),
+    buildContract: (_job, invocationId) =>
+      Promise.resolve(
+        contractKind === 'shot-set'
+          ? {
+              injectSystemFields: (candidate: unknown) =>
+                injectShotSystemFields(candidate, {
+                  formatProfileId: 'format_1',
+                  invocationId,
+                  newShotId: (index) => `shot_${String(index + 1)}`,
+                  newVersionId: (index) => `scv_${String(index + 1)}_v1`,
+                }),
+              validateCandidate: (candidate: unknown) => {
+                const data =
+                  typeof candidate === 'object' && candidate !== null
+                    ? (candidate as Readonly<{ data?: unknown }>).data
+                    : null;
+                const shots =
+                  typeof data === 'object' && data !== null
+                    ? (data as Readonly<{ shots?: unknown }>).shots
+                    : null;
+                return Array.isArray(shots) &&
+                  shots.length > 0 &&
+                  shots.every((shot) => typeof shot === 'object' && shot !== null)
+                  ? valid
+                  : { code: 'CANDIDATE_INVALID', valid: false };
+              },
+              validateCollection: (value: unknown) => {
+                const result = validateShotSetCollection(value, {
+                  characterIds: ['char_lead'],
+                  sceneIds: ['scene_train'],
+                });
+                return result.valid
+                  ? valid
+                  : { code: result.code, details: result.details, valid: false };
+              },
+              validateFinal: () => valid,
+            }
+          : {
+              injectSystemFields: (candidate: unknown) => ({
+                ...(candidate as object),
+                source_invocation_id: invocationId,
+                version_id: 'fresh_id',
+              }),
+              validateCandidate: (candidate: unknown) =>
+                typeof candidate === 'object' && candidate !== null && 'data' in candidate
+                  ? valid
+                  : { code: 'CANDIDATE_INVALID', valid: false },
+              validateCollection: () => valid,
+              validateFinal: () => valid,
+            },
+      ),
     buildRequest: (job, invocationId, repair) => {
       if (repair !== undefined) events.push(`repair-input:${repair.rawText}`);
       return {
@@ -427,5 +475,109 @@ describe('AC-V1-04 Provider 全矩阵 — 真实 MockTextModelAdapter × createJ
     // 终态不回退：CANCELLED 后再 run 不重新领取。
     await expect(h.runner.run('job_1')).resolves.toEqual({ status: 'NOT_CLAIMED' });
     expect(h.store.job.status).toBe('CANCELLED');
+  });
+});
+
+/** SHOT_CONTRACT 矩阵载荷：与 E2E 链上游对齐的镜头创意（char_lead / scene_train）。 */
+const matrixShot = (targetDurationSec: number): Record<string, unknown> => ({
+  acceptance: { must_include: ['夜行列车车厢'], must_not_include: [] },
+  cinematography: {
+    camera_angle: 'EYE_LEVEL',
+    camera_motion: 'STATIC',
+    composition: '中景，主体居左',
+    focus: '人物面部清晰',
+    frontal_face: true,
+    mouth_visible: true,
+    shot_size: 'MEDIUM',
+  },
+  content: {
+    action: '主角在车厢内回望',
+    character_ids: ['char_lead'],
+    emotion: '警惕',
+    prop_ids: [],
+    scene_id: 'scene_train',
+    spoken_text: '这趟列车要开往哪里？',
+  },
+  continuity: {
+    continuity_mode: 'SCENE_CHANGE',
+    first_frame_requirement: '车厢全景',
+    last_frame_requirement: '人物回望',
+  },
+  dialogue: {
+    dialogue_render_mode: 'NARRATION_FIRST',
+    estimated_speech_duration_sec: 2,
+    speaker_id: 'narrator',
+  },
+  generation_constraints: {
+    capability_requirements: [{ capability: 'FIRST_FRAME', required: true }],
+    image_prompt: '夜行列车车厢，冷色调，中景',
+    negative_constraints: ['文字水印'],
+    video_prompt: '镜头静止，人物轻微呼吸起伏',
+  },
+  narrative_purpose: '推进悬念',
+  target_duration_sec: targetDurationSec,
+});
+
+const shotSetRawText = (shots: readonly Record<string, unknown>[]): string =>
+  JSON.stringify({ data: { shots: [...shots] } });
+
+describe('AC-V1-04 Provider 矩阵 — SHOT_CONTRACT 分镜载荷（shot-contract-generation §4.2）', () => {
+  it('集合级失败样本 — 候选结构合法但 Σ时长越界 → COLLECTION 层终态 FAILED，零版本且不可修复', async () => {
+    // 10 镜 × 20s = 200s > 180s 上限；每镜 20s 仍在 ShotContract 1.1.0 的 1..20 内。
+    const h = createMatrixHarness({
+      contractKind: 'shot-set',
+      stage: 'SHOT_CONTRACT',
+      steps: [
+        {
+          kind: 'success',
+          rawText: shotSetRawText(Array.from({ length: 10 }, () => matrixShot(20))),
+        },
+      ],
+    });
+
+    await expect(h.runner.run('job_1')).resolves.toEqual({
+      errorCode: 'CONTRACT_VALIDATION_FAILED',
+      status: 'FAILED',
+    });
+    // 集合层失败不属于可修复层（D3）：无 STRUCTURE_REPAIR Invocation，零版本。
+    expect(h.store.invocations).toHaveLength(1);
+    expect(h.store.invocations[0]).toMatchObject({ attemptKind: 'INITIAL' });
+    expect(h.store.job.structureRepairAttempts).toBe(0);
+    expect(h.store.versions).toHaveLength(0);
+    // error_json 携带集合层错误码与层标识，供 Renderer 展示有界明细。
+    const failure = JSON.parse(String(h.store.job.errorJson)) as {
+      code?: unknown;
+      layer?: unknown;
+    };
+    expect(failure).toMatchObject({ code: 'SHOT_SET_DURATION_OUT_OF_RANGE', layer: 'COLLECTION' });
+    assertInputPreserved(h.store);
+  });
+
+  it('非法 JSON → 结构修复（数组信封载荷）→ SUCCEEDED，整集写入来源于修复 Invocation', async () => {
+    const h = createMatrixHarness({
+      contractKind: 'shot-set',
+      stage: 'SHOT_CONTRACT',
+      steps: [
+        { kind: 'invalid-json', rawText: '{' },
+        { kind: 'success', rawText: shotSetRawText([matrixShot(20), matrixShot(20)]) },
+      ],
+    });
+
+    await expect(h.runner.run('job_1')).resolves.toEqual({ status: 'SUCCEEDED' });
+    expect(h.store.invocations.map((item) => item.attemptKind)).toEqual([
+      'INITIAL',
+      'STRUCTURE_REPAIR',
+    ]);
+    expect(h.store.versions).toHaveLength(1);
+    // 不信任首次响应：注入产物的 provenance 指向修复 Invocation。
+    const committed = h.store.versions[0] as readonly {
+      provenance: { source_invocation_id: string };
+    }[];
+    expect(committed).toHaveLength(2);
+    expect(committed.map((shot) => shot.provenance.source_invocation_id)).toEqual([
+      'invocation_2',
+      'invocation_2',
+    ]);
+    assertInputPreserved(h.store);
   });
 });

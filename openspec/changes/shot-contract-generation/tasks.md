@@ -30,7 +30,7 @@
 ## 4. Prompt 与适配器（B 线）
 
 - [x] 4.1 SHOT_CONTRACT v1 模板：字段契约、枚举、ID 来源约束、注入提示（与 2.2 sha256 一致）；packages/prompts manifest 同步（SHOT_CONTRACT 的 candidateSchemaId 特判为 ModelShotSetCandidate/v1，与 @jingxu/validation 常量及 smoke 锁三处对齐）
-- [ ] 4.2 MockTextModelAdapter：SHOT_CONTRACT 可重复输出 + 失败矩阵扩展（含集合级失败样本）
+- [x] 4.2 MockTextModelAdapter：SHOT_CONTRACT 可重复输出 + 失败矩阵扩展（含集合级失败样本）
 - [ ] 4.3 Qwen 适配器：无结构性变更，仅确认 JSON Mode 与超长输出截断行为
 
 ## 5. IPC 与 Renderer（C 线）
