@@ -25,16 +25,28 @@ export const stagedScriptStageSchema = z.enum([
   'BEAT_SHEET',
   'SCENE_SCRIPT',
 ]);
+/**
+ * 确认/恢复命令接受六阶段：SHOT_CONTRACT 走分镜路径（D4 语义，D6 零新增命令）；
+ * saveDraft 与阶段文档仍限五阶段——分镜集合只能由生成/确认/恢复产生，无手写草稿。
+ */
+export const scriptVersionCommandStageSchema = z.enum([
+  'CONCEPT',
+  'STORY_BIBLE',
+  'EPISODE_OUTLINE',
+  'BEAT_SHEET',
+  'SCENE_SCRIPT',
+  'SHOT_CONTRACT',
+]);
 export const scriptVersionStatusSchema = z.enum(['DRAFT', 'READY', 'STALE_INPUT']);
 export const scriptVersionSourceSchema = z.enum(['AI', 'USER', 'IMPORT', 'SYSTEM_INVALIDATION']);
 
 const episodeIdSchema = idSchema;
 const versionIdSchema = idSchema;
-const isProjectStage = (stage: z.infer<typeof stagedScriptStageSchema>): boolean =>
+const isProjectStage = (stage: z.infer<typeof scriptVersionCommandStageSchema>): boolean =>
   stage === 'CONCEPT' || stage === 'STORY_BIBLE';
 const addEpisodeScopeIssue = (
   episodeId: string | null,
-  stage: z.infer<typeof stagedScriptStageSchema>,
+  stage: z.infer<typeof scriptVersionCommandStageSchema>,
   context: z.core.$RefinementCtx,
 ): void => {
   if (
@@ -64,7 +76,7 @@ const scriptVersionCommandSchema = z
     expectedVersionId: versionIdSchema,
     projectId: projectIdSchema,
     requestId: requestIdSchema,
-    stage: stagedScriptStageSchema,
+    stage: scriptVersionCommandStageSchema,
     versionId: versionIdSchema,
   })
   .strict()
@@ -167,6 +179,11 @@ export const storyboardVersionSummarySchema = z
     versionNo: z.number().int().positive(),
   })
   .strict();
+/** 确认/恢复的联合响应：五阶段返回版本文档，SHOT_CONTRACT 返回整集摘要。 */
+export const scriptMutationResultSchema = z.union([
+  scriptVersionSchema,
+  storyboardVersionSummarySchema,
+]);
 export const storyboardWorkspaceSchema = z
   .object({
     current: storyboardVersionSummarySchema.nullable(),
@@ -307,13 +324,18 @@ export type ScriptVersionDto = z.infer<typeof scriptVersionSchema>;
 export type StoryboardWorkspaceDto = z.infer<typeof storyboardWorkspaceSchema>;
 export type StoryboardShotSummaryDto = z.infer<typeof storyboardShotSummarySchema>;
 export type StoryboardVersionSummaryDto = z.infer<typeof storyboardVersionSummarySchema>;
+export type ScriptMutationResultDto = z.infer<typeof scriptMutationResultSchema>;
 
 export interface ScriptApi {
   initializeOriginal(input: InitializeOriginalInputDto): Promise<AppResultDto<ScriptWorkspaceDto>>;
   getWorkspace(input: GetScriptWorkspaceInputDto): Promise<AppResultDto<ScriptWorkspaceDto>>;
   saveDraft(input: SaveScriptDraftInputDto): Promise<AppResultDto<ScriptVersionDto>>;
-  confirmVersion(input: ConfirmScriptVersionInputDto): Promise<AppResultDto<ScriptVersionDto>>;
-  restoreVersion(input: RestoreScriptVersionInputDto): Promise<AppResultDto<ScriptVersionDto>>;
+  confirmVersion(
+    input: ConfirmScriptVersionInputDto,
+  ): Promise<AppResultDto<ScriptMutationResultDto>>;
+  restoreVersion(
+    input: RestoreScriptVersionInputDto,
+  ): Promise<AppResultDto<ScriptMutationResultDto>>;
 }
 
 export const SCRIPT_IPC_CHANNELS = {

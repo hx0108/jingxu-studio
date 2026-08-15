@@ -6,6 +6,7 @@ import type {
   JobSummaryDto,
   RestoreScriptVersionInputDto,
   SaveScriptDraftInputDto,
+  ScriptMutationResultDto,
   ScriptVersionDto,
   ScriptWorkspaceDto,
   StoryboardShotSummaryDto,
@@ -24,9 +25,11 @@ import type {
 import type { OriginalInitializationService } from './original-initialization-service';
 import { scriptFailure, scriptPersistenceFailure } from './script-service-error';
 import type { ScriptVersionService } from './script-version-service';
+import type { StoryboardVersionService } from './storyboard-version-service';
 
 export interface ScriptServiceDependencies {
   readonly initialization: OriginalInitializationService;
+  readonly storyboard: StoryboardVersionService;
   readonly versions: ScriptVersionService;
   readonly workspaceQuery: ScriptWorkspaceQueryPort;
   readonly findCurrentJob: (projectId: string) => Promise<JobSummaryDto | null>;
@@ -48,11 +51,11 @@ export interface ScriptService {
   confirmVersion(
     input: ConfirmScriptVersionInputDto,
     traceId: string,
-  ): Promise<AppResultDto<ScriptVersionDto>>;
+  ): Promise<AppResultDto<ScriptMutationResultDto>>;
   restoreVersion(
     input: RestoreScriptVersionInputDto,
     traceId: string,
-  ): Promise<AppResultDto<ScriptVersionDto>>;
+  ): Promise<AppResultDto<ScriptMutationResultDto>>;
 }
 
 const stageToDto = async (
@@ -203,6 +206,19 @@ const toWorkspaceDto = async (
   };
 };
 
+/** SHOT_CONTRACT 命令入参：episodeId 由 DTO superRefine 保证非空（集级阶段）。 */
+const storyboardCommand = (
+  input: ConfirmScriptVersionInputDto,
+): Parameters<StoryboardVersionService['confirmStoryboard']>[0] => {
+  if (input.episodeId === null) throw new Error('EPISODE_SCOPE_INVALID');
+  return {
+    episodeId: input.episodeId,
+    expectedVersionId: input.expectedVersionId,
+    projectId: input.projectId,
+    requestId: input.requestId,
+  };
+};
+
 export const createScriptService = (dependencies: ScriptServiceDependencies): ScriptService => {
   const getWorkspace: ScriptService['getWorkspace'] = async (input, traceId) => {
     try {
@@ -221,14 +237,24 @@ export const createScriptService = (dependencies: ScriptServiceDependencies): Sc
     }
   };
   return {
-    confirmVersion: (input, traceId) => dependencies.versions.confirmVersion(input, traceId),
+    // D6：以 stage 区分命令路径——SHOT_CONTRACT 走分镜服务（D4），其余走五阶段版本服务。
+    confirmVersion: (input, traceId) =>
+      input.stage === 'SHOT_CONTRACT'
+        ? dependencies.storyboard.confirmStoryboard(storyboardCommand(input), traceId)
+        : dependencies.versions.confirmVersion({ ...input, stage: input.stage }, traceId),
     getWorkspace,
     initializeOriginal: async (input, traceId) => {
       const initialized = await dependencies.initialization.initialize(input, traceId);
       if (!initialized.ok) return initialized;
       return getWorkspace({ projectId: input.projectId }, traceId);
     },
-    restoreVersion: (input, traceId) => dependencies.versions.restoreVersion(input, traceId),
+    restoreVersion: (input, traceId) =>
+      input.stage === 'SHOT_CONTRACT'
+        ? dependencies.storyboard.restoreStoryboard(
+            { ...storyboardCommand(input), versionId: input.versionId },
+            traceId,
+          )
+        : dependencies.versions.restoreVersion({ ...input, stage: input.stage }, traceId),
     saveDraft: (input, traceId) => dependencies.versions.saveDraft(input, traceId),
   };
 };

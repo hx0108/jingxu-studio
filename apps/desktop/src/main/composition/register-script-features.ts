@@ -4,6 +4,7 @@ import {
   createOriginalInitializationService,
   createScriptService,
   createScriptVersionService,
+  createStoryboardVersionService,
 } from '@jingxu/application';
 import type {
   CompiledSchemaRegistry,
@@ -101,12 +102,20 @@ export const createProductionScriptService = (handles: ScriptRuntimeHandles): Sc
     validateDocument: (document) =>
       handles.registry.validate(SCRIPT_STAGE_OUTPUT_SCHEMA_ID, document).valid,
   });
+  const storyboard = createStoryboardVersionService({
+    hashPayload,
+    hashText,
+    newId: randomUUID,
+    now,
+    unitOfWork: handles.unitOfWork,
+  });
   return createScriptService({
     findCurrentJob: async (projectId) => {
       const jobs = await handles.jobs.listByStatuses(ACTIVE_JOB_STATUSES, 100);
       return toJobSummary(jobs.find((job) => job.projectId === projectId) ?? null);
     },
     initialization,
+    storyboard,
     versions,
     workspaceQuery: handles.workspaceQuery,
   });

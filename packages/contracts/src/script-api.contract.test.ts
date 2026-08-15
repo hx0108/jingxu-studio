@@ -85,6 +85,26 @@ describe('Script IPC Contract', () => {
     ).toBe(false);
   });
 
+  it('确认/恢复命令—SHOT_CONTRACT 集级（§5.3 D6）—接受并复用回执命令；saveDraft 仍拒绝', () => {
+    const command = {
+      episodeId,
+      expectedVersionId: versionId,
+      projectId,
+      requestId: 'request-123',
+      stage: 'SHOT_CONTRACT',
+      versionId,
+    };
+    expect(confirmScriptVersionInputSchema.safeParse(command).success).toBe(true);
+    expect(restoreScriptVersionInputSchema.safeParse(command).success).toBe(true);
+    // 集级阶段必须携带 episodeId；未知字段 strict 拒绝。
+    expect(confirmScriptVersionInputSchema.safeParse({ ...command, episodeId: null }).success).toBe(
+      false,
+    );
+    expect(
+      restoreScriptVersionInputSchema.safeParse({ ...command, shotId: 'forged' }).success,
+    ).toBe(false);
+  });
+
   it('Workspace 输出—嵌套对象项目归属不一致—拒绝跨项目数据', () => {
     const workspace = {
       currentJob: null,

@@ -8,6 +8,7 @@ import {
   restoreScriptVersionInputSchema,
   saveScriptDraftInputSchema,
   SCRIPT_IPC_CHANNELS,
+  scriptMutationResultSchema,
   scriptVersionSchema,
   scriptWorkspaceSchema,
 } from '@jingxu/contracts';
@@ -18,6 +19,7 @@ import type {
   InitializeOriginalInputDto,
   RestoreScriptVersionInputDto,
   SaveScriptDraftInputDto,
+  ScriptMutationResultDto,
   ScriptVersionDto,
   ScriptWorkspaceDto,
 } from '@jingxu/contracts';
@@ -51,11 +53,11 @@ export interface ScriptIpcService {
   readonly confirmVersion: (
     input: ConfirmScriptVersionInputDto,
     traceId: string,
-  ) => Promise<AppResultDto<ScriptVersionDto>>;
+  ) => Promise<AppResultDto<ScriptMutationResultDto>>;
   readonly restoreVersion: (
     input: RestoreScriptVersionInputDto,
     traceId: string,
-  ) => Promise<AppResultDto<ScriptVersionDto>>;
+  ) => Promise<AppResultDto<ScriptMutationResultDto>>;
 }
 
 export interface ScriptStartupWriteGate {
@@ -142,6 +144,8 @@ export const registerScriptIpc = (
   const coordinator = new ScriptRequestCoordinator();
   const workspaceResult = appResultSchema(scriptWorkspaceSchema);
   const versionResult = appResultSchema(scriptVersionSchema);
+  // 确认/恢复按 stage 分派：五阶段返回版本文档，SHOT_CONTRACT 返回整集摘要（D6）。
+  const mutationResult = appResultSchema(scriptMutationResultSchema);
 
   registrar.handle(SCRIPT_IPC_CHANNELS.getWorkspace, (event, ...arguments_) => {
     assertTrustedIpcSender(event, trustedUrl);
@@ -190,13 +194,13 @@ export const registerScriptIpc = (
   registerCommand(
     SCRIPT_IPC_CHANNELS.confirmVersion,
     confirmScriptVersionInputSchema,
-    versionResult,
+    mutationResult,
     (input, traceId) => service.confirmVersion(input, traceId),
   );
   registerCommand(
     SCRIPT_IPC_CHANNELS.restoreVersion,
     restoreScriptVersionInputSchema,
-    versionResult,
+    mutationResult,
     (input, traceId) => service.restoreVersion(input, traceId),
   );
 };

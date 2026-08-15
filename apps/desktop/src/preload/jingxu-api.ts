@@ -29,6 +29,7 @@ import {
   initializeOriginalInputSchema,
   restoreScriptVersionInputSchema,
   saveScriptDraftInputSchema,
+  scriptMutationResultSchema,
   scriptVersionSchema,
   scriptWorkspaceSchema,
   startupStatusSchema,
@@ -202,14 +203,14 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
           await invoke(SCRIPT_IPC_CHANNELS.saveDraft, saveScriptDraftInputSchema.parse(input)),
         ),
       confirmVersion: async (input: ConfirmScriptVersionInputDto) =>
-        appResultSchema(scriptVersionSchema).parse(
+        appResultSchema(scriptMutationResultSchema).parse(
           await invoke(
             SCRIPT_IPC_CHANNELS.confirmVersion,
             confirmScriptVersionInputSchema.parse(input),
           ),
         ),
       restoreVersion: async (input: RestoreScriptVersionInputDto) =>
-        appResultSchema(scriptVersionSchema).parse(
+        appResultSchema(scriptMutationResultSchema).parse(
           await invoke(
             SCRIPT_IPC_CHANNELS.restoreVersion,
             restoreScriptVersionInputSchema.parse(input),

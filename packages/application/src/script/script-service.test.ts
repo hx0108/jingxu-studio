@@ -99,13 +99,16 @@ const createHarness = (storyboard: StoryboardWorkspace) => {
     getVersionDocument: () => Promise.resolve(null),
     getWorkspace: () => Promise.resolve(createSnapshot(storyboard)),
   };
+  const storyboardService = { confirmStoryboard: vi.fn(), restoreStoryboard: vi.fn() };
+  const versions = { confirmVersion: vi.fn(), restoreVersion: vi.fn(), saveDraft: vi.fn() };
   const service = createScriptService({
     findCurrentJob: () => Promise.resolve(null),
     initialization: { initialize: vi.fn() },
-    versions: { confirmVersion: vi.fn(), restoreVersion: vi.fn(), saveDraft: vi.fn() },
+    storyboard: storyboardService,
+    versions,
     workspaceQuery,
   });
-  return { service };
+  return { service, storyboardService, versions };
 };
 
 describe('ScriptService getWorkspace storyboard 节（shot-contract-generation §5.2）', () => {
@@ -183,5 +186,89 @@ describe('ScriptService getWorkspace storyboard 节（shot-contract-generation �
 
     expect(result).toMatchObject({ error: { code: 'PROJECT_PERSISTENCE_FAILED' }, ok: false });
     expect(JSON.stringify(result)).not.toContain('未闭合');
+  });
+
+  it.each(['confirmVersion', 'restoreVersion'] as const)(
+    '条件—%s 收到 SHOT_CONTRACT（§5.3 D6 分派）—转发分镜服务且带 versionId，五阶段版本服务零调用',
+    async (method) => {
+      const { service, storyboardService, versions } = createHarness({
+        current: null,
+        currentShots: [],
+        history: [],
+        historyTruncated: false,
+      });
+      const summary = {
+        createdAt: '2026-08-14T00:00:00.000Z',
+        episodeId: 'episode-0001',
+        formatProfileId: 'format-0001',
+        id: 'ev-000002',
+        parentId: 'ev-000001',
+        shotCount: 6,
+        shotSetHash: 'd'.repeat(64),
+        status: 'READY',
+        storyBibleVersionId: 'bible-0001',
+        targetDurationSec: 90,
+        versionNo: 2,
+      };
+      storyboardService.confirmStoryboard.mockResolvedValue({ data: summary, ok: true });
+      storyboardService.restoreStoryboard.mockResolvedValue({ data: summary, ok: true });
+
+      const result = await service[method](
+        {
+          episodeId: 'episode-0001',
+          expectedVersionId: 'ev-000001',
+          projectId: 'project-0001',
+          requestId: 'request-0001',
+          stage: 'SHOT_CONTRACT',
+          versionId: 'ev-000001',
+        },
+        'trace-0001',
+      );
+
+      expect(result).toEqual({ data: summary, ok: true });
+      const called =
+        method === 'confirmVersion'
+          ? storyboardService.confirmStoryboard
+          : storyboardService.restoreStoryboard;
+      expect(called).toHaveBeenCalledOnce();
+      // 确认不带 versionId（以阶段头为准）；恢复携带历史 episode_version id（D4）。
+      expect(called).toHaveBeenCalledWith(
+        {
+          episodeId: 'episode-0001',
+          expectedVersionId: 'ev-000001',
+          projectId: 'project-0001',
+          requestId: 'request-0001',
+          ...(method === 'restoreVersion' ? { versionId: 'ev-000001' } : {}),
+        },
+        'trace-0001',
+      );
+      expect(versions.confirmVersion).not.toHaveBeenCalled();
+      expect(versions.restoreVersion).not.toHaveBeenCalled();
+    },
+  );
+
+  it('条件—confirmVersion 收到五阶段命令—仍转发五阶段版本服务，分镜服务零调用', async () => {
+    const { service, storyboardService, versions } = createHarness({
+      current: null,
+      currentShots: [],
+      history: [],
+      historyTruncated: false,
+    });
+    versions.confirmVersion.mockResolvedValue({ data: null, ok: false });
+
+    await service.confirmVersion(
+      {
+        episodeId: 'episode-0001',
+        expectedVersionId: 'beat-0001',
+        projectId: 'project-0001',
+        requestId: 'request-0002',
+        stage: 'SCENE_SCRIPT',
+        versionId: 'beat-0001',
+      },
+      'trace-0002',
+    );
+
+    expect(versions.confirmVersion).toHaveBeenCalledOnce();
+    expect(storyboardService.confirmStoryboard).not.toHaveBeenCalled();
   });
 });

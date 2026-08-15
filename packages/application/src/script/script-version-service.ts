@@ -24,6 +24,15 @@ import { invalidateStoryboardHead } from './storyboard-version-service';
 
 type Version = ScriptVersion | StoryBibleVersion;
 
+// 五阶段命令输入：SHOT_CONTRACT 由 StoryboardVersionService 承接（D4/D6），
+// 本服务不再接受该阶段（DTO 层已放行六阶段，此处静态收窄）。
+type StagedConfirmInput = Omit<ConfirmScriptVersionInputDto, 'stage'> & {
+  readonly stage: Exclude<ConfirmScriptVersionInputDto['stage'], 'SHOT_CONTRACT'>;
+};
+type StagedRestoreInput = Omit<RestoreScriptVersionInputDto, 'stage'> & {
+  readonly stage: Exclude<RestoreScriptVersionInputDto['stage'], 'SHOT_CONTRACT'>;
+};
+
 export interface ScriptVersionServiceDependencies {
   readonly unitOfWork: ScriptUnitOfWorkPort;
   readonly newId: () => string;
@@ -38,11 +47,11 @@ export interface ScriptVersionService {
     traceId: string,
   ): Promise<AppResultDto<ScriptVersionDto>>;
   confirmVersion(
-    input: ConfirmScriptVersionInputDto,
+    input: StagedConfirmInput,
     traceId: string,
   ): Promise<AppResultDto<ScriptVersionDto>>;
   restoreVersion(
-    input: RestoreScriptVersionInputDto,
+    input: StagedRestoreInput,
     traceId: string,
   ): Promise<AppResultDto<ScriptVersionDto>>;
 }
@@ -161,7 +170,7 @@ export const createScriptVersionService = (
   dependencies: ScriptVersionServiceDependencies,
 ): ScriptVersionService => {
   const mutate = async (
-    input: SaveScriptDraftInputDto | ConfirmScriptVersionInputDto,
+    input: SaveScriptDraftInputDto | StagedConfirmInput,
     operation: 'SAVE' | 'CONFIRM' | 'RESTORE',
     traceId: string,
   ): Promise<AppResultDto<ScriptVersionDto>> => {
