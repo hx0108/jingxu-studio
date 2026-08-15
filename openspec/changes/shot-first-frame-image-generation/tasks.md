@@ -19,8 +19,9 @@
 - [x] 2.1 迁移 `0009_media_assets_images.sql`：assets、asset_versions（不可变 trigger）、image_candidates、media_generation_tasks 及索引；head 8→9
       — 验证：迁移集成测试（含 v8 库升级路径 + 备份）；initial-schema-trace 更新
   - 2026-08-16 完成：四表 + 四索引 + partial unique `ux_image_candidate_selected`（每镜头至多一个当前选择）+ `trg_asset_versions_immutable`；CHECK 不变式（SUCCEEDED 必须文件四元组+调用证据、error_code 仅 FAILED、世代位唯一、phase 枚举、candidate_count 1–16、UNIQUE(project_id, idempotency_key)）；同迁移播种 `provider_capability_snapshots` 行 `volcark-seedream-image/v1`（SQL 内嵌 JSON 复算 sha256=801333f3…e3269 与 design 0.2 锁定值逐字节一致，集成测试断言 model id 无伪造）。`media-migration.integration.test.ts` 7 项（空库 head 9 / 快照 sha256 复算 / v8 升级保留 / 受管理备份 schemaVersion 8 / 资产·候选·任务三组约束矩阵）。同步更新 initial-schema-trace、既有四个迁移测试的 head 断言（8→9）、runtime 备份基线（currentVersion 9）、docs/SQLITE_SCHEMA_TRACE.md；design.md D3 修正（phase 单字段无冗余 status 列、input_hash→generation_input_hash）。全仓 tsc/eslint/prettier 通过，Unit 573 / Contract 95 / Integration 176 零回归
-- [ ] 2.2 内容寻址存储读写器：临时文件→哈希校验→原子 rename；projects 根防逃逸断言
+- [x] 2.2 内容寻址存储读写器：临时文件→哈希校验→原子 rename；projects 根防逃逸断言
       — 验证：unit/integration（含校验失败清理、符号链接拒绝）
+  - 2026-08-16 完成：`createContentAddressedStore`（persistence src/media）落 `<root>/projects/<projectId>/{images|assets}/<sha前2>/<sha256>.<ext>`（TECH_DESIGN §8.1 布局）；写入 = 内存哈希→.tmp 落盘+fsync→复算校验→rename，失败清理 .tmp 且保留稳定错误码；同字节去重前先校验现存文件未损坏（防篡改静默通过）；`read`/`resolvePathWithinProjects` 以白名单正则（字符集排除 `..`）+ lstat 拒 symlink + realpath 逃逸 containment 三层防线。集成测试 7 项：回环/去重/损坏注入清理（writeFileImpl 注入模式）/mime 与 projectId 矩阵/非法路径矩阵/符号链接终节点+中间目录逃逸（本机 symlink 权限可用，真实执行非跳过）/磁盘篡改 CHECKSUM_MISMATCH。tsc/eslint/prettier 通过，media 目录 14 项全绿
 - [ ] 2.3 资产与候选事务：资产建档/升版、候选批量落库、选择指针原子切换、STALE_INPUT 传播与受影响镜头查询
       — 验证：integration（含部分失败回滚、不可变约束拒绝改写）
 
