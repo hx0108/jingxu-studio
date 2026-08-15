@@ -149,6 +149,8 @@ export interface ScriptWorkspaceSnapshot {
   readonly sourceInput: SourceInput | null;
   readonly episode: Episode | null;
   readonly stages: readonly ScriptStageWorkspace[];
+  /** SHOT_CONTRACT 读模型；无分镜时 current 为 null 且集合为空。 */
+  readonly storyboard: StoryboardWorkspace;
 }
 
 export interface ScriptVersionDocument {
@@ -215,4 +217,26 @@ export interface EpisodeVersionShot {
   readonly shotId: string;
   readonly shotVersionId: string;
   readonly sequence: number;
+}
+
+/** 工作区镜头摘要所需的最小快照：sequence 关联 + 不可变镜头契约版本行。 */
+export interface StoryboardShotSnapshot {
+  readonly sequence: number;
+  readonly shotId: string;
+  readonly version: ShotContractVersion;
+}
+
+/** 历史整集条目：版本行 + 集合镜头数（恢复入口与摘要展示用）。 */
+export interface StoryboardHistoryEntry {
+  readonly version: EpisodeVersion;
+  readonly shotCount: number;
+}
+
+/** SHOT_CONTRACT 工作区读模型（shot-contract-generation §5.2）；文档解析在 Service 层。 */
+export interface StoryboardWorkspace {
+  readonly current: EpisodeVersion | null;
+  /** 当前集合镜头，按 sequence 升序；current 为 null 时为空数组。 */
+  readonly currentShots: readonly StoryboardShotSnapshot[];
+  readonly history: readonly StoryboardHistoryEntry[];
+  readonly historyTruncated: boolean;
 }

@@ -4,12 +4,16 @@ import type {
   ScriptWorkspaceQueryPort,
   ScriptWorkspaceSnapshot,
   StagedScriptStage,
+  StoryboardShotSnapshot,
+  StoryboardWorkspace,
 } from '@jingxu/application';
 
 import type { SqliteDatabase } from '../runtime/sqlite-database';
 import {
   SqliteEpisodeRepository,
+  SqliteEpisodeVersionRepository,
   SqliteScriptVersionRepository,
+  SqliteShotContractVersionRepository,
   SqliteSourceInputRepository,
   SqliteStageHeadRepository,
   SqliteStoryBibleVersionRepository,
@@ -30,6 +34,8 @@ export class SqliteScriptWorkspaceQuery implements ScriptWorkspaceQueryPort {
   private readonly bibles: SqliteStoryBibleVersionRepository;
   private readonly scripts: SqliteScriptVersionRepository;
   private readonly heads: SqliteStageHeadRepository;
+  private readonly episodeVersions: SqliteEpisodeVersionRepository;
+  private readonly shotContractVersions: SqliteShotContractVersionRepository;
 
   public constructor(database: SqliteDatabase) {
     this.sources = new SqliteSourceInputRepository(database);
@@ -37,6 +43,8 @@ export class SqliteScriptWorkspaceQuery implements ScriptWorkspaceQueryPort {
     this.bibles = new SqliteStoryBibleVersionRepository(database);
     this.scripts = new SqliteScriptVersionRepository(database);
     this.heads = new SqliteStageHeadRepository(database);
+    this.episodeVersions = new SqliteEpisodeVersionRepository(database);
+    this.shotContractVersions = new SqliteShotContractVersionRepository(database);
   }
 
   public async getWorkspace(projectId: string): Promise<ScriptWorkspaceSnapshot | null> {
@@ -76,7 +84,48 @@ export class SqliteScriptWorkspaceQuery implements ScriptWorkspaceQueryPort {
         stage,
       });
     }
-    return { episode, projectId, sourceInput, stages };
+    return {
+      episode,
+      projectId,
+      sourceInput,
+      stages,
+      storyboard: await this.getStoryboard(projectId, episode),
+    };
+  }
+
+  /** SHOT_CONTRACT 读模型：阶段头 → 当前整集 + 当前集合镜头（sequence 升序）+ 有界历史。 */
+  private async getStoryboard(
+    projectId: string,
+    episode: Awaited<ReturnType<SqliteEpisodeRepository['findActiveByProjectId']>>,
+  ): Promise<StoryboardWorkspace> {
+    if (episode === null) {
+      return { current: null, currentShots: [], history: [], historyTruncated: false };
+    }
+    const [head, versions] = await Promise.all([
+      this.heads.find(projectId, episode.id, 'SHOT_CONTRACT'),
+      this.episodeVersions.listHistory(episode.id, null, HISTORY_LIMIT + 1),
+    ]);
+    let current = null;
+    let currentShots: StoryboardShotSnapshot[] = [];
+    if (head !== null) {
+      const headVersion = await this.episodeVersions.findById(head.currentVersionId);
+      if (headVersion === null) throw new Error('EPISODE_VERSION_NOT_FOUND');
+      current = headVersion;
+      const links = await this.episodeVersions.listShotLinks(headVersion.id);
+      currentShots = [];
+      for (const link of links) {
+        const version = await this.shotContractVersions.findById(link.shotVersionId);
+        if (version === null) throw new Error('SHOT_CONTRACT_VERSION_NOT_FOUND');
+        currentShots.push({ sequence: link.sequence, shotId: link.shotId, version });
+      }
+    }
+    const history = await Promise.all(
+      versions.slice(0, HISTORY_LIMIT).map(async (version) => ({
+        shotCount: (await this.episodeVersions.listShotLinks(version.id)).length,
+        version,
+      })),
+    );
+    return { current, currentShots, history, historyTruncated: versions.length > HISTORY_LIMIT };
   }
 
   public async getVersionDocument(

@@ -1,3 +1,5 @@
+import type { ScriptStage } from '@jingxu/contracts';
+
 import type {
   ConsentRecord,
   ConsentRepositoryPort,
@@ -22,7 +24,6 @@ import type {
   SourceInputRepositoryPort,
   StageHead,
   StageHeadRepositoryPort,
-  StagedScriptStage,
   StoryBibleVersion,
   StoryBibleVersionRepositoryPort,
 } from '@jingxu/application';
@@ -319,7 +320,7 @@ export class SqliteStageHeadRepository implements StageHeadRepositoryPort {
   public find(
     projectId: string,
     episodeId: string | null,
-    stage: StagedScriptStage,
+    stage: ScriptStage,
   ): Promise<StageHead | null> {
     return syncToPromise(() =>
       get(

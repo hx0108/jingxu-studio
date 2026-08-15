@@ -131,6 +131,87 @@ export const scriptStageWorkspaceSchema = z
     stage: stagedScriptStageSchema,
   })
   .strict();
+
+// ---- SHOT_CONTRACT storyboard 节（shot-contract-generation §5.2，D6）----
+
+export const storyboardShotSummarySchema = z
+  .object({
+    cameraMotion: z.enum(['STATIC', 'PAN', 'TILT', 'DOLLY', 'ZOOM', 'TRACK', 'HANDHELD', 'OTHER']),
+    dialogueRenderMode: z.enum([
+      'NARRATION_FIRST',
+      'WEAK_LIP_SYNC',
+      'PRECISE_LIP_SYNC',
+      'SUBTITLE_ONLY',
+    ]),
+    narrativePurpose: z.string().min(1).max(500),
+    sequence: z.number().int().positive(),
+    shotId: idSchema,
+    shotSize: z.enum(['EXTREME_LONG', 'LONG', 'FULL', 'MEDIUM', 'CLOSE_UP', 'EXTREME_CLOSE_UP']),
+    targetDurationSec: z.number().min(1).max(20),
+    versionId: idSchema,
+  })
+  .strict();
+/** 与 application StoryboardVersionSummary 同形；§5.3 确认/恢复响应复用。 */
+export const storyboardVersionSummarySchema = z
+  .object({
+    createdAt: isoDateTimeSchema,
+    episodeId: episodeIdSchema,
+    formatProfileId: idSchema,
+    id: versionIdSchema,
+    parentId: versionIdSchema.nullable(),
+    shotCount: z.number().int().nonnegative(),
+    shotSetHash: hashSchema,
+    status: scriptVersionStatusSchema,
+    storyBibleVersionId: idSchema,
+    targetDurationSec: z.number().int().min(30).max(180),
+    versionNo: z.number().int().positive(),
+  })
+  .strict();
+export const storyboardWorkspaceSchema = z
+  .object({
+    current: storyboardVersionSummarySchema.nullable(),
+    history: z.array(storyboardVersionSummarySchema).max(50),
+    shots: z.array(storyboardShotSummarySchema).max(180),
+    totalDurationSec: z.number().min(0),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    for (let index = 1; index < value.shots.length; index += 1) {
+      const shot = value.shots[index];
+      const previous = value.shots[index - 1];
+      if (shot === undefined || previous === undefined) continue;
+      if (shot.sequence <= previous.sequence) {
+        context.addIssue({
+          code: 'custom',
+          message: '镜头 sequence 必须严格递增。',
+          path: ['shots', index, 'sequence'],
+        });
+      }
+    }
+    if (
+      value.shots.reduce((sum, shot) => sum + shot.targetDurationSec, 0) !== value.totalDurationSec
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: '时长汇总与镜头时长之和不一致。',
+        path: ['totalDurationSec'],
+      });
+    }
+    if (value.current === null && value.shots.length > 0) {
+      context.addIssue({
+        code: 'custom',
+        message: '无当前分镜版本时不应携带镜头列表。',
+        path: ['shots'],
+      });
+    }
+    if (value.current !== null && value.current.shotCount !== value.shots.length) {
+      context.addIssue({
+        code: 'custom',
+        message: '当前版本镜头数与列表长度不一致。',
+        path: ['current', 'shotCount'],
+      });
+    }
+  });
 export const scriptWorkspaceSchema = z
   .object({
     currentJob: jobSummarySchema.nullable(),
@@ -161,6 +242,8 @@ export const scriptWorkspaceSchema = z
         projectId: projectIdSchema,
       })
       .strict(),
+    /** SHOT_CONTRACT 整集分镜读模型；无分镜时 current 为 null 且 shots 为空。 */
+    storyboard: storyboardWorkspaceSchema,
     stages: z.array(scriptStageWorkspaceSchema).max(5),
   })
   .strict()
@@ -178,6 +261,25 @@ export const scriptWorkspaceSchema = z
         message: 'Job 项目归属不一致。',
         path: ['currentJob', 'projectId'],
       });
+    }
+    if (
+      value.storyboard.current !== null &&
+      value.storyboard.current.episodeId !== value.episode.id
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: '分镜版本与工作区 Episode 不一致。',
+        path: ['storyboard', 'current'],
+      });
+    }
+    for (const [index, version] of value.storyboard.history.entries()) {
+      if (version.episodeId !== value.episode.id) {
+        context.addIssue({
+          code: 'custom',
+          message: '分镜历史版本与工作区 Episode 不一致。',
+          path: ['storyboard', 'history', index],
+        });
+      }
     }
     for (const [index, stage] of value.stages.entries()) {
       for (const version of [
@@ -202,6 +304,9 @@ export type ConfirmScriptVersionInputDto = z.infer<typeof confirmScriptVersionIn
 export type RestoreScriptVersionInputDto = z.infer<typeof restoreScriptVersionInputSchema>;
 export type ScriptWorkspaceDto = z.infer<typeof scriptWorkspaceSchema>;
 export type ScriptVersionDto = z.infer<typeof scriptVersionSchema>;
+export type StoryboardWorkspaceDto = z.infer<typeof storyboardWorkspaceSchema>;
+export type StoryboardShotSummaryDto = z.infer<typeof storyboardShotSummarySchema>;
+export type StoryboardVersionSummaryDto = z.infer<typeof storyboardVersionSummarySchema>;
 
 export interface ScriptApi {
   initializeOriginal(input: InitializeOriginalInputDto): Promise<AppResultDto<ScriptWorkspaceDto>>;

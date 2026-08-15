@@ -46,6 +46,7 @@ const workspace: ScriptWorkspaceDto = {
     id: 'source_12345678',
     projectId: 'project_12345678',
   },
+  storyboard: { current: null, history: [], shots: [], totalDurationSec: 0 },
   stages: [
     { current: version, history: [version], prerequisiteReady: true, stage: 'CONCEPT' as const },
   ],

@@ -8,12 +8,18 @@ import type {
   SaveScriptDraftInputDto,
   ScriptVersionDto,
   ScriptWorkspaceDto,
+  StoryboardShotSummaryDto,
+  StoryboardVersionSummaryDto,
+  StoryboardWorkspaceDto,
 } from '@jingxu/contracts';
 
 import type {
+  EpisodeVersion,
   ScriptStageWorkspace,
   ScriptWorkspaceQueryPort,
   ScriptWorkspaceSnapshot,
+  StoryboardShotSnapshot,
+  StoryboardWorkspace,
 } from '../ports/script/index';
 import type { OriginalInitializationService } from './original-initialization-service';
 import { scriptFailure, scriptPersistenceFailure } from './script-service-error';
@@ -92,6 +98,61 @@ const stageToDto = async (
   };
 };
 
+const storyboardVersionToDto = (
+  version: EpisodeVersion,
+  shotCount: number,
+): StoryboardVersionSummaryDto => ({
+  createdAt: version.createdAt,
+  episodeId: version.episodeId,
+  formatProfileId: version.formatProfileId,
+  id: version.id,
+  parentId: version.parentId,
+  shotCount,
+  shotSetHash: version.shotSetHash,
+  status: version.status,
+  storyBibleVersionId: version.storyBibleVersionId,
+  targetDurationSec: version.targetDurationSec,
+  versionNo: version.versionNo,
+});
+
+// 镜头文档在提交时已通过 ShotContract 1.1.0 FINAL 校验；此处仅做摘要字段提取。
+const shotSummaryToDto = ({
+  sequence,
+  shotId,
+  version,
+}: StoryboardShotSnapshot): StoryboardShotSummaryDto => {
+  const document = JSON.parse(version.document) as Readonly<{
+    cinematography?: Readonly<{ camera_motion?: unknown; shot_size?: unknown }>;
+    narrative_purpose?: unknown;
+  }>;
+  return {
+    cameraMotion: document.cinematography
+      ?.camera_motion as StoryboardShotSummaryDto['cameraMotion'],
+    dialogueRenderMode: version.dialogueRenderMode,
+    narrativePurpose: document.narrative_purpose as string,
+    sequence,
+    shotId,
+    shotSize: document.cinematography?.shot_size as StoryboardShotSummaryDto['shotSize'],
+    targetDurationSec: version.targetDurationSec,
+    versionId: version.id,
+  };
+};
+
+const storyboardToDto = (storyboard: StoryboardWorkspace): StoryboardWorkspaceDto => ({
+  current:
+    storyboard.current === null
+      ? null
+      : storyboardVersionToDto(storyboard.current, storyboard.currentShots.length),
+  history: storyboard.history.map((entry) =>
+    storyboardVersionToDto(entry.version, entry.shotCount),
+  ),
+  shots: storyboard.currentShots.map(shotSummaryToDto),
+  totalDurationSec: storyboard.currentShots.reduce(
+    (sum, shot) => sum + shot.version.targetDurationSec,
+    0,
+  ),
+});
+
 const toWorkspaceDto = async (
   snapshot: ScriptWorkspaceSnapshot,
   findCurrentJob: ScriptServiceDependencies['findCurrentJob'],
@@ -137,6 +198,7 @@ const toWorkspaceDto = async (
       id: snapshot.sourceInput.id,
       projectId: snapshot.sourceInput.projectId,
     },
+    storyboard: storyboardToDto(snapshot.storyboard),
     stages,
   };
 };

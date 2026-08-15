@@ -103,6 +103,7 @@ describe('Script IPC Contract', () => {
         id: 'source_12345678',
         projectId,
       },
+      storyboard: { current: null, history: [], shots: [], totalDurationSec: 0 },
       stages: [],
     };
     expect(scriptWorkspaceSchema.safeParse(workspace).success).toBe(true);
@@ -110,6 +111,37 @@ describe('Script IPC Contract', () => {
       scriptWorkspaceSchema.safeParse({
         ...workspace,
         episode: { ...workspace.episode, projectId: 'project_other_1234' },
+      }).success,
+    ).toBe(false);
+    // storyboard 节（§5.2）：同 Episode 整集摘要通过，跨 Episode 分镜版本拒绝。
+    const storyboardVersion = {
+      createdAt: '2026-08-13T00:00:00.000Z',
+      episodeId,
+      formatProfileId: 'format_12345678',
+      id: versionId,
+      parentId: null,
+      shotCount: 0,
+      shotSetHash: 'b'.repeat(64),
+      status: 'DRAFT',
+      storyBibleVersionId: 'version_12345678',
+      targetDurationSec: 90,
+      versionNo: 1,
+    };
+    expect(
+      scriptWorkspaceSchema.safeParse({
+        ...workspace,
+        storyboard: { current: storyboardVersion, history: [], shots: [], totalDurationSec: 0 },
+      }).success,
+    ).toBe(true);
+    expect(
+      scriptWorkspaceSchema.safeParse({
+        ...workspace,
+        storyboard: {
+          current: { ...storyboardVersion, episodeId: 'episode_other_1234567' },
+          history: [],
+          shots: [],
+          totalDurationSec: 0,
+        },
       }).success,
     ).toBe(false);
   });
