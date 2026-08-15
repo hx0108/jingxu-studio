@@ -184,6 +184,11 @@ const CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFa
       retryable: true,
       userAction: '请等待片刻后重试。',
     },
+    MODEL_RESULT_UNAVAILABLE: {
+      message: '生成结果已失效，无法下载。',
+      retryable: false,
+      userAction: '请重新生成候选。',
+    },
     MODEL_TIMEOUT: {
       message: '请求超时。',
       retryable: true,

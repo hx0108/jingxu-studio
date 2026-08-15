@@ -18,6 +18,8 @@ export type ModelErrorCode =
   | 'MODEL_CONTEXT_LIMIT'
   | 'MODEL_INPUT_TOO_LARGE'
   | 'MODEL_CANCELLED'
+  /** 图片切片新增（design 0.2）：结果 URL 失效/不可得——下载段不可重试，需重新生成。 */
+  | 'MODEL_RESULT_UNAVAILABLE'
   | 'MODEL_UNKNOWN';
 
 /**

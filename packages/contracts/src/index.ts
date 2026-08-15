@@ -119,6 +119,7 @@ export const RUNTIME_IPC_CHANNELS = {
 } as const;
 
 export * from './app-result';
+export * from './image-api';
 export * from './job-provider-api';
 export * from './project-api';
 export * from './project-command';

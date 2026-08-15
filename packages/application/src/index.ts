@@ -5,6 +5,7 @@ export type {
   PersistenceRuntimePort,
 } from './ports/persistence/persistence-runtime-port';
 export type * from './ports/credential/index';
+export type * from './ports/image-model/index';
 export type * from './ports/persistence/job/index';
 export { assertJobTransition, JobInvariantError } from './ports/persistence/job/index';
 export type * from './ports/project/index';

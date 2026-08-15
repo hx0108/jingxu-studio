@@ -9,9 +9,10 @@
 
 ## 1. 公共契约（contracts）
 
-- [ ] 1.1 定义 ImageModelPort 类型（submit/poll/download、ImageGenerationRequest、ImageTaskSubmission/Status、ImageResultRef/ImageDownload）与 NormalizedModelError 图片错误码扩展
-- [ ] 1.2 定义媒体任务与候选 DTO（MediaTaskView、ImageCandidateView、AssetView/AssetVersionView、生成输入哈希输入集）
+- [x] 1.1 定义 ImageModelPort 类型（submit/poll/download、ImageGenerationRequest、ImageTaskSubmission/Status、ImageResultRef/ImageDownload）与 NormalizedModelError 图片错误码扩展
+- [x] 1.2 定义媒体任务与候选 DTO（MediaTaskView、ImageCandidateView、AssetView/AssetVersionView、生成输入哈希输入集）
       — 验证：contract 测试通过；Renderer/Main/Preload 共享类型单一来源
+  - 2026-08-16 完成：application ports/image-model（Port + 类型 + 类型测试 5 项）；contracts image-api（zod schema + ImageApi 六方法 + IMAGE_IPC_CHANNELS + mediaUrl 限 jingxu://media/ 前缀，contract 9 项）；ModelErrorCode 新增 MODEL_RESULT_UNAVAILABLE（AppError 枚举、Main 凭据文案表、Renderer ERROR_COPY 三处同步穷尽）；全仓 tsc 通过，Unit 573 / Contract 95 零回归
 
 ## 2. 持久化（A 线）
 

@@ -43,6 +43,7 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   MODEL_CONTEXT_LIMIT: ['上下文长度超出模型限制', '减少输入长度后重试。'],
   MODEL_INPUT_TOO_LARGE: ['请求体超出 Provider 大小限制', '减少输入长度后重试。'],
   MODEL_CANCELLED: ['请求已取消', '需要时请重新发起。'],
+  MODEL_RESULT_UNAVAILABLE: ['生成结果已失效，无法下载', '请重新生成候选。'],
   MODEL_UNKNOWN: ['Provider 调用失败，原因未知', '请重试；若持续失败请检查 Provider 配置。'],
   STALE_INPUT: ['剧本输入版本已变化', '刷新剧本工作区后重新操作。'],
   SCRIPT_INPUT_LENGTH_INVALID: ['原创输入长度不符合要求', '请输入 20–2,000 个字符。'],
