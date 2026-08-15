@@ -99,6 +99,10 @@ export const injectShotSystemFields = (
   if (!Array.isArray(shots) || shots.length === 0) {
     throw new Error('SHOT_CANDIDATE_SHOTS_INVALID');
   }
+  // previous_shot_id 由系统派生（CONTINUOUS_ACTION → sequence-1 的 shot_id）：
+  // 模型无法得知系统注入的兄弟镜头 id，其输出值一律丢弃。首镜头派生为 null，
+  // 由集合校验层以有界明细报「CONTINUOUS_ACTION 需要前置镜头」。
+  const shotIds = shots.map((_, index) => context.newShotId(index));
 
   return shots.map((shot, index) => {
     if (typeof shot !== 'object' || shot === null || Array.isArray(shot)) {
@@ -107,6 +111,7 @@ export const injectShotSystemFields = (
     const fields = shot as Readonly<Record<string, unknown>>;
     for (const key of [
       'narrative_purpose',
+      'target_duration_sec',
       'cinematography',
       'content',
       'dialogue',
@@ -116,7 +121,8 @@ export const injectShotSystemFields = (
     ]) {
       if (
         typeof fields[key] !== 'object' &&
-        !(key === 'narrative_purpose' && typeof fields[key] === 'string')
+        !(key === 'narrative_purpose' && typeof fields[key] === 'string') &&
+        !(key === 'target_duration_sec' && typeof fields[key] === 'number')
       ) {
         throw new Error('SHOT_CANDIDATE_CREATIVE_FIELD_INVALID');
       }
@@ -143,7 +149,6 @@ export const injectShotSystemFields = (
     ]);
     const continuity = pick(fields.continuity as Readonly<Record<string, unknown>>, [
       'continuity_mode',
-      'previous_shot_id',
       'first_frame_requirement',
       'last_frame_requirement',
     ]);
@@ -162,7 +167,14 @@ export const injectShotSystemFields = (
       acceptance: { ...acceptance, human_review_required: true },
       cinematography,
       content: pickedContent,
-      continuity: { ...continuity, asset_version_ids: [] },
+      continuity: {
+        ...continuity,
+        asset_version_ids: [],
+        previous_shot_id:
+          continuity.continuity_mode === 'CONTINUOUS_ACTION' && index > 0
+            ? (shotIds[index - 1] ?? null)
+            : null,
+      },
       contract_version: 1,
       dialogue: {
         ...pickedDialogue,
@@ -197,6 +209,8 @@ export const injectShotSystemFields = (
       schema_version: '1.1.0',
       sequence: index + 1,
       shot_id: context.newShotId(index),
+      // 每镜头节奏属创意决策，模型提供数值；1–20 的取值边界由 FINAL 层 schema 定界。
+      target_duration_sec: fields.target_duration_sec,
       status: 'DRAFT',
       version_id: context.newVersionId(index),
     };

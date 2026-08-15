@@ -35,6 +35,7 @@ const creativeShot = (): Record<string, unknown> => ({
     video_prompt: '人物撑伞缓行，镜头静止',
   },
   narrative_purpose: '建立雨夜氛围与主角状态',
+  target_duration_sec: 12,
 });
 
 export const VALID_MODEL_SHOT_SET_CANDIDATE_FIXTURES: Readonly<Record<string, unknown>> = {
@@ -80,6 +81,17 @@ export const INVALID_MODEL_SHOT_SET_CANDIDATE_FIXTURES: Readonly<Record<string, 
         (() => {
           const shot = creativeShot();
           delete (shot.cinematography as Record<string, unknown>).shot_size;
+          return shot;
+        })(),
+      ],
+    },
+  },
+  缺少时长字段: {
+    data: {
+      shots: [
+        (() => {
+          const shot = creativeShot();
+          delete shot.target_duration_sec;
           return shot;
         })(),
       ],

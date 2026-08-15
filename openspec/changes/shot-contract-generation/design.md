@@ -28,14 +28,14 @@
 
 ## 2. D2 候选契约与系统字段注入
 
-模型只返回 `{"data":{"shots":[...]}}`，每个元素**恰好包含创意字段**：`narrative_purpose`、`cinematography`（7 字段）、`content`（6 字段）、`dialogue.dialogue_render_mode`、`dialogue.speaker_id`、`dialogue.estimated_speech_duration_sec`、`continuity.continuity_mode`、`continuity.previous_shot_id`、`continuity.first_frame_requirement`、`continuity.last_frame_requirement`、`generation_constraints.capability_requirements`、`image_prompt`、`video_prompt`、`negative_constraints`、`acceptance.must_include`、`acceptance.must_not_include`。
+模型只返回 `{"data":{"shots":[...]}}`，每个元素**恰好包含创意字段**：`narrative_purpose`、`target_duration_sec`（每镜头节奏属创意决策，1–20 的边界由 FINAL 层 schema 定界）、`cinematography`（7 字段）、`content`（6 字段）、`dialogue.dialogue_render_mode`、`dialogue.speaker_id`、`dialogue.estimated_speech_duration_sec`、`continuity.continuity_mode`、`continuity.first_frame_requirement`、`continuity.last_frame_requirement`（**不含 `continuity.previous_shot_id`**——模型无法得知系统注入的兄弟镜头 id，其输出值一律丢弃，由系统派生）、`generation_constraints.capability_requirements`、`image_prompt`、`video_prompt`、`negative_constraints`、`acceptance.must_include`、`acceptance.must_not_include`。
 
-`CANDIDATE_SCHEMA` 层用 TECH-internal 的 `ModelShotSetCandidate`（zod）校验上述形状；`SYSTEM_FIELDS` 层逐镜头注入：
+`CANDIDATE_SCHEMA` 层用 TECH-internal 的 `ModelShotSetCandidate`（手写键存在性校验，沿五阶段约定——validation 包无 zod 依赖）校验上述形状；`SYSTEM_FIELDS` 层逐镜头注入：
 
 - 标识与版本：`schema_version='1.1.0'`、`shot_id`（`shot_` + 新 id）、`version_id`（`scv_..._v1`）、`contract_version=1`、`parent_version_id=null`、`derived_from_shot_ids=[]`、`sequence`（按数组下标 +1）、`status='DRAFT'`；
 - 溯源：`provenance={source_type:'AI_GENERATED', source_invocation_id, last_edit_source:'AI'}`；
 - 上下文：`format_profile_id`（冻结值）；
-- 派生常量：`dialogue.dialogue_mode_source='PROJECT_DEFAULT'`、`override_reason=null`（V1 无项目级口型默认值可偏离）、`audio_required`/`lip_sync_required` 由 `(spoken_text, dialogue_render_mode)` 确定性推导（schema allOf 已规定精确值，系统推导保证一次通过，不让模型猜）、`continuity.asset_version_ids=[]`、`generation_constraints.budget_estimate=UNKNOWN 变体`（min/max/price_version 均 null）、`acceptance.human_review_required=true`、`locked_paths=[]`。
+- 派生常量：`dialogue.dialogue_mode_source='PROJECT_DEFAULT'`、`override_reason=null`（V1 无项目级口型默认值可偏离）、`audio_required`/`lip_sync_required` 由 `(spoken_text, dialogue_render_mode)` 确定性推导（schema allOf 已规定精确值，系统推导保证一次通过，不让模型猜）、`continuity.asset_version_ids=[]`、`continuity.previous_shot_id` 系统派生（`CONTINUOUS_ACTION` 且非首镜头 → `sequence-1` 镜头的 `shot_id`，否则 null；首镜头 `CONTINUOUS_ACTION` 派生 null，由集合校验层先行拦下）、`generation_constraints.budget_estimate=UNKNOWN 变体`（min/max/price_version 均 null）、`acceptance.human_review_required=true`、`locked_paths=[]`。
 
 `FINAL_SCHEMA` 层用已发布 Registry 的 **ShotContract 1.1.0** 逐镜头校验（含 11 条 allOf）。修复通道不变：JSON_PARSE/CANDIDATE_SCHEMA 失败可触发一次 STRUCTURE_REPAIR，修复上下文（previousFailure 含集合级 details）经 userPayload 包装注入。
 
@@ -44,10 +44,12 @@
 `COLLECTION` 层对整个 episode 集合校验，失败码带 bounded details（沿既有 10 条截断）：
 
 - `sequence` 恰为 1..N 无缺口无重复；
-- `previous_shot_id` 非空时必须引用集合内 `sequence` 更小的镜头；`CONTINUOUS_ACTION` 必须非空（schema 已保证，集合层复核）；
+- `previous_shot_id` 非空时必须引用集合内 `sequence` 更小的镜头；`CONTINUOUS_ACTION` 的 `previous_shot_id` 必须非空——首镜头 `CONTINUOUS_ACTION` 被系统派生为 null，在本层拦下并给出可修复明细（若落入 FINAL 层只能报难懂的 `/continuity/previous_shot_id must be string`）；
 - `character_ids` ⊆ 冻结 STORY_BIBLE 的 `char_*` 键；`speaker_id` 的 `narrator`/`char_*` 同源校验；
 - `scene_id` ⊆ 冻结 STORY_BIBLE 的 `scene_*` 键；
 - `Σ target_duration_sec` ∈ [30, 180]（与 `episode_versions` CHECK 对齐，提前到 commit 前失败）。
+
+COLLECTION 在 FINAL 之前执行：以上均为跨镜头集合不变量（集合成员、集合内引用、ID 源、Σ 时长），FINAL 的逐镜头 schema 看不到集合；先跑集合层可给出有界、可进修复上下文的明细，再跑 FINAL 定界逐镜头取值（枚举、1–20 时长、allOf 等）。
 
 `PRE_COMMIT` 层复用既有 `revalidateFrozenInput`（READY 上游仍为冻结版本，否则 `STALE_INPUT`）。
 

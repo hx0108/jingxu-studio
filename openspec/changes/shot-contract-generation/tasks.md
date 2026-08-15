@@ -5,10 +5,10 @@
 ## 1. 契约与 Application Port（B 线前置）
 
 - [x] 1.1 定义 `ModelShotSetCandidate` TECH-internal 契约：信封 + 逐镜头创意键存在性（沿五阶段手写校验约定，键缺失进可修复的 CANDIDATE_SCHEMA 层，details 定位 `shots[i].group.key`；取值/枚举/跨字段仍归注入后的 ShotContract 1.1.0 正式校验）
-- [ ] 1.2 定义分镜 Application 仓储 Port：episode_versions / shots / shot_contract_versions / episode_version_shots 的插入、按阶段头读取、findMaxVersionNo 类查询
-- [x] 1.3 系统字段注入器：标识/版本/溯源/上下文注入 + `audio_required`/`lip_sync_required` 按 `(spoken_text, dialogue_render_mode)` 推导表 + 常量字段（budget UNKNOWN、locked_paths 空、asset_version_ids 空）；创意键显式挑选（模型多余键/伪造系统字段丢弃），NARRATION_FIRST+有台词时 speaker_id 系统推导为 narrator（Schema 强制精确值，不信任模型）
-- [ ] 1.4 集合校验器：sequence 连续唯一、previous_shot_id 集合内回指、character/speaker/scene ID 源自冻结 STORY_BIBLE、Σ duration ∈ [30,180]；输出有界明细
-- [ ] 1.5 Unit：注入器推导表全分支、集合校验器负/正例、shot_set_hash 确定性
+- [x] 1.2 定义分镜 Application 仓储 Port：episode_versions / shots / shot_contract_versions / episode_version_shots 的插入、按阶段头读取、findMaxVersionNo 类查询（独立 `StoryboardRepositories` 接口、只增不改 `ScriptRepositories`，避免破坏全部单测 fake；§2.1 再并入 ScriptUnitOfWork）
+- [x] 1.3 系统字段注入器：标识/版本/溯源/上下文注入 + `audio_required`/`lip_sync_required` 按 `(spoken_text, dialogue_render_mode)` 推导表 + 常量字段（budget UNKNOWN、locked_paths 空、asset_version_ids 空）；创意键显式挑选（模型多余键/伪造系统字段丢弃），NARRATION_FIRST+有台词时 speaker_id 系统推导为 narrator（Schema 强制精确值，不信任模型）；`target_duration_sec` 属创意字段由模型提供（1–20 由 FINAL 定界）、`previous_shot_id` 系统派生（CONTINUOUS_ACTION→sequence-1，模型值丢弃）
+- [x] 1.4 集合校验器：sequence 连续唯一、previous_shot_id 集合内回指、character/speaker/scene ID 源自冻结 STORY_BIBLE、Σ duration ∈ [30,180]；输出有界明细（稳定码 SHOT_SET_{SEQUENCE,PREVIOUS_SHOT,CHARACTER,SCENE,DURATION}_*；COLLECTION 在 FINAL 之前执行，首镜头 CONTINUOUS_ACTION 在此层以可修复明细拦下，design.md D3 已记）
+- [ ] 1.5 Unit：注入器推导表全分支、集合校验器负/正例、shot_set_hash 确定性（前两项已随 §1.3/§1.4 落地；shot_set_hash 确定性随 §2.1 哈希实现一并测）
 
 ## 2. Persistence（A 线）
 

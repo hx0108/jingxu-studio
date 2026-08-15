@@ -41,6 +41,7 @@ const creativeShot = (
     video_prompt: '人物缓行',
   },
   narrative_purpose: '建立氛围',
+  target_duration_sec: 12,
   ...overrides,
 });
 
@@ -99,6 +100,7 @@ describe('injectShotSystemFields', () => {
       sequence: 1,
       shot_id: 'shot_gen_1',
       status: 'DRAFT',
+      target_duration_sec: 12,
       version_id: 'scv_gen_1_v1',
     });
     expect(documents[1]).toMatchObject({ sequence: 2, shot_id: 'shot_gen_2' });
@@ -139,8 +141,9 @@ describe('injectShotSystemFields', () => {
       context,
     );
 
+    // 多余键整体丢弃（显式挑键），系统字段以注入值为准。
+    expect(documents[0]).not.toHaveProperty('junk_field');
     expect(documents[0]).toMatchObject({
-      junk_field: undefined,
       schema_version: '1.1.0',
       shot_id: 'shot_gen_1',
       status: 'DRAFT',
@@ -157,6 +160,35 @@ describe('injectShotSystemFields', () => {
     expect(dialogue?.speaker_id).toBe('narrator');
   });
 
+  it('条件—previous_shot_id 系统派生—CONTINUOUS_ACTION 指向 sequence-1，模型输出值丢弃', () => {
+    const first = creativeShot({
+      continuity: {
+        continuity_mode: 'CONTINUOUS_ACTION',
+        first_frame_requirement: '',
+        last_frame_requirement: '',
+        previous_shot_id: 'shot_forged_by_model',
+      },
+    });
+    const second = creativeShot({
+      continuity: {
+        continuity_mode: 'CONTINUOUS_ACTION',
+        first_frame_requirement: '',
+        last_frame_requirement: '',
+        previous_shot_id: 'shot_forged',
+      },
+    });
+
+    const documents = injectShotSystemFields({ data: { shots: [first, second] } }, context);
+
+    // 首镜头无前置：派生 null（集合校验层负责报 CONTINUOUS_ACTION 需要前置镜头）。
+    expect(
+      (documents[0]?.continuity as Record<string, unknown> | undefined)?.previous_shot_id,
+    ).toBeNull();
+    expect(
+      (documents[1]?.continuity as Record<string, unknown> | undefined)?.previous_shot_id,
+    ).toBe('shot_gen_1');
+  });
+
   it('条件—候选结构非法—防御性抛稳定错误', () => {
     expect(() => injectShotSystemFields('x', context)).toThrow('SHOT_CANDIDATE_NOT_OBJECT');
     expect(() => injectShotSystemFields({ data: { shots: [] } }, context)).toThrow(
@@ -168,6 +200,12 @@ describe('injectShotSystemFields', () => {
     expect(() =>
       injectShotSystemFields(
         { data: { shots: [creativeShot({ cinematography: undefined })] } },
+        context,
+      ),
+    ).toThrow('SHOT_CANDIDATE_CREATIVE_FIELD_INVALID');
+    expect(() =>
+      injectShotSystemFields(
+        { data: { shots: [creativeShot({ target_duration_sec: '长' })] } },
         context,
       ),
     ).toThrow('SHOT_CANDIDATE_CREATIVE_FIELD_INVALID');

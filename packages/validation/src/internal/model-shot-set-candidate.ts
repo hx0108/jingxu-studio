@@ -14,9 +14,10 @@ export interface ShotCandidateValidationResult {
   readonly details?: readonly string[];
 }
 
-/** 模型必须提供的镜头顶层创意键（分组对象 + 一个平铺字段）。 */
+/** 模型必须提供的镜头顶层创意键（分组对象 + 两个平铺字段；时长取值 1–20 由 FINAL 层 schema 定界）。 */
 const SHOT_CREATIVE_KEYS = [
   'narrative_purpose',
+  'target_duration_sec',
   'cinematography',
   'content',
   'dialogue',
@@ -38,12 +39,7 @@ const SHOT_CREATIVE_GROUP_KEYS: Readonly<Record<string, readonly string[]>> = {
     'mouth_visible',
   ],
   content: ['character_ids', 'scene_id', 'prop_ids', 'action', 'emotion', 'spoken_text'],
-  continuity: [
-    'continuity_mode',
-    'previous_shot_id',
-    'first_frame_requirement',
-    'last_frame_requirement',
-  ],
+  continuity: ['continuity_mode', 'first_frame_requirement', 'last_frame_requirement'],
   dialogue: ['dialogue_render_mode', 'speaker_id', 'estimated_speech_duration_sec'],
   generation_constraints: [
     'capability_requirements',
