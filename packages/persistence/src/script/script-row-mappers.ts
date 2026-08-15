@@ -1,9 +1,13 @@
 import type {
   ConsentRecord,
   Episode,
+  EpisodeVersion,
+  EpisodeVersionShot,
   ScriptCommandReceipt,
   ScriptDependency,
   ScriptVersion,
+  Shot,
+  ShotContractVersion,
   StageHead,
   StoryBibleVersion,
   SourceInput,
@@ -129,6 +133,56 @@ export const mapStageHead = (row: ScriptRow): StageHead => ({
   currentVersionType: text(row, 'current_version_type') as StageHead['currentVersionType'],
   currentVersionId: text(row, 'current_version_id'),
   updatedAt: text(row, 'updated_at'),
+});
+export const mapEpisodeVersion = (row: ScriptRow): EpisodeVersion => ({
+  id: text(row, 'id'),
+  episodeId: text(row, 'episode_id'),
+  versionNo: number(row, 'version_no'),
+  parentId: nullableText(row, 'parent_id'),
+  storyBibleVersionId: text(row, 'story_bible_version_id'),
+  formatProfileId: text(row, 'format_profile_id'),
+  targetDurationSec: number(row, 'target_duration_sec'),
+  shotSetHash: text(row, 'shot_set_hash'),
+  status: text(row, 'status') as EpisodeVersion['status'],
+  createdAt: text(row, 'created_at'),
+});
+export const mapShot = (row: ScriptRow): Shot => ({
+  id: text(row, 'id'),
+  episodeId: text(row, 'episode_id'),
+  lifecycleStatus: text(row, 'lifecycle_status') as Shot['lifecycleStatus'],
+  currentVersionId: nullableText(row, 'current_version_id'),
+  createdAt: text(row, 'created_at'),
+  updatedAt: text(row, 'updated_at'),
+  deletedAt: nullableText(row, 'deleted_at'),
+});
+export const mapShotContractVersion = (row: ScriptRow): ShotContractVersion => ({
+  id: text(row, 'id'),
+  shotId: text(row, 'shot_id'),
+  versionNo: number(row, 'version_no'),
+  parentId: nullableText(row, 'parent_id'),
+  externalParentVersionId: nullableText(row, 'external_parent_version_id'),
+  lineageResolutionStatus: text(
+    row,
+    'lineage_resolution_status',
+  ) as ShotContractVersion['lineageResolutionStatus'],
+  sequence: number(row, 'sequence'),
+  versionStatus: text(row, 'version_status') as ShotContractVersion['versionStatus'],
+  formatProfileId: text(row, 'format_profile_id'),
+  targetDurationSec: number(row, 'target_duration_sec'),
+  dialogueRenderMode: text(
+    row,
+    'dialogue_render_mode',
+  ) as ShotContractVersion['dialogueRenderMode'],
+  document: text(row, 'document_json'),
+  documentSha256: text(row, 'document_sha256'),
+  sourceInvocationId: nullableText(row, 'source_invocation_id'),
+  createdAt: text(row, 'created_at'),
+});
+export const mapEpisodeVersionShot = (row: ScriptRow): EpisodeVersionShot => ({
+  episodeVersionId: text(row, 'episode_version_id'),
+  shotId: text(row, 'shot_id'),
+  shotVersionId: text(row, 'shot_version_id'),
+  sequence: number(row, 'sequence'),
 });
 export const mapDependency = (row: ScriptRow): ScriptDependency => ({
   id: text(row, 'id'),

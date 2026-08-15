@@ -1,8 +1,9 @@
 import type { JobRepositories } from '../persistence/job';
-import type { ScriptRepositories } from './script-repositories';
+import type { ScriptRepositories, StoryboardRepositories } from './script-repositories';
 
 /** Script business repositories and Job evidence share one short transaction. */
-export interface ScriptJobRepositories extends JobRepositories, ScriptRepositories {}
+export interface ScriptJobRepositories
+  extends JobRepositories, ScriptRepositories, StoryboardRepositories {}
 
 /**
  * Runs one short transaction for Script state and Job terminal evidence.

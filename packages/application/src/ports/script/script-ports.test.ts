@@ -43,8 +43,11 @@ describe('Script Application Ports', () => {
       },
       consents: {} as ScriptJobRepositories['consents'],
       episodes: {} as ScriptJobRepositories['episodes'],
+      episodeVersions: {} as ScriptJobRepositories['episodeVersions'],
       storyBibleVersions: {} as ScriptJobRepositories['storyBibleVersions'],
       scriptVersions: {} as ScriptJobRepositories['scriptVersions'],
+      shotContractVersions: {} as ScriptJobRepositories['shotContractVersions'],
+      shots: {} as ScriptJobRepositories['shots'],
       stageHeads: {} as ScriptJobRepositories['stageHeads'],
       dependencies: {} as ScriptJobRepositories['dependencies'],
       audit: {} as ScriptJobRepositories['audit'],
@@ -113,6 +116,7 @@ describe('Script Application Ports', () => {
         },
       },
       shots: {
+        findById: () => Promise.resolve(null),
         insertMany: (shots) => {
           recorded.shots.push(...shots);
           return Promise.resolve();

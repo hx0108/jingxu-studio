@@ -12,10 +12,10 @@
 
 ## 2. Persistence（A 线）
 
-- [ ] 2.1 SQLite 分镜仓储实现 + ScriptUnitOfWork 扩展（单事务内四表写入 + 阶段头 + 依赖 + 审计）
+- [x] 2.1 SQLite 分镜仓储实现 + ScriptUnitOfWork 扩展（`SqliteEpisodeVersionRepository`/`SqliteShotRepository`/`SqliteShotContractVersionRepository` 并入 UoW；`ScriptJobRepositories` 扩展 `StoryboardRepositories`，shots 端口补 `findById`、`updateCurrentVersionIds` 带 `updatedAt`；四表单事务写入集成测试 5/5 绿，含列绑定 CHECK / UNIQUE / 不可变触发器 / 指针推进）
 - [ ] 2.2 迁移 `0008_prompt_templates_shot_contract.sql`：插入 shot_contract/v1（active=1，sha256 与 packages/prompts manifest 一致）
 - [ ] 2.3 版本硬编码同步：4 个测试文件 + `scripts/verify-packaged-project-smoke.mjs`（head 7→8，future-version 测试改 `.run(9, '0009_future.sql')`）
-- [ ] 2.4 Integration：真库写入满足 document_json 列绑定 CHECK、`UNIQUE(shot_id,version_no)`、不可变触发器（UPDATE 必须 ABORT）、迁移幂等
+- [ ] 2.4 Integration：真库写入满足 document_json 列绑定 CHECK、`UNIQUE(shot_id,version_no)`、不可变触发器（UPDATE 必须 ABORT）、迁移幂等（前三项已随 §2.1 落地：`sqlite-storyboard-repositories.integration.test.ts` 5 用例；迁移幂等随 0008 补）
 
 ## 3. Application 服务（B 线）
 

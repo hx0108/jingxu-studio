@@ -3,6 +3,9 @@ import type {
   ConsentRepositoryPort,
   Episode,
   EpisodeRepositoryPort,
+  EpisodeVersion,
+  EpisodeVersionRepositoryPort,
+  EpisodeVersionShot,
   ScriptAuditEntry,
   ScriptAuditRepositoryPort,
   ScriptCommandReceipt,
@@ -11,6 +14,10 @@ import type {
   ScriptDependencyRepositoryPort,
   ScriptVersion,
   ScriptVersionRepositoryPort,
+  Shot,
+  ShotContractVersion,
+  ShotContractVersionRepositoryPort,
+  ShotRepositoryPort,
   SourceInput,
   SourceInputRepositoryPort,
   StageHead,
@@ -27,8 +34,12 @@ import {
   mapConsent,
   mapDependency,
   mapEpisode,
+  mapEpisodeVersion,
+  mapEpisodeVersionShot,
   mapReceipt,
   mapScriptVersion,
+  mapShot,
+  mapShotContractVersion,
   mapSourceInput,
   mapStageHead,
   mapStoryBibleVersion,
@@ -457,6 +468,165 @@ export class SqliteScriptCommandReceiptRepository implements ScriptCommandReceip
           JSON.stringify(v.resultRef),
           v.traceId,
           v.committedAt,
+        );
+    });
+  }
+}
+export class SqliteEpisodeVersionRepository implements EpisodeVersionRepositoryPort {
+  public constructor(private readonly db: SqliteDatabase) {}
+  public findById(id: string): Promise<EpisodeVersion | null> {
+    return syncToPromise(() =>
+      get(
+        this.db,
+        'SELECT id, episode_id, version_no, parent_id, story_bible_version_id, format_profile_id, target_duration_sec, shot_set_hash, status, created_at FROM episode_versions WHERE id=?',
+        [id],
+        mapEpisodeVersion,
+      ),
+    );
+  }
+  public findMaxVersionNo(episodeId: string): Promise<number> {
+    return syncToPromise(
+      () =>
+        (
+          this.db
+            .prepare(
+              'SELECT COALESCE(MAX(version_no),0) AS value FROM episode_versions WHERE episode_id=?',
+            )
+            .get(episodeId) as { value: number }
+        ).value,
+    );
+  }
+  public listHistory(
+    episodeId: string,
+    before: number | null,
+    limit: number,
+  ): Promise<readonly EpisodeVersion[]> {
+    return syncToPromise(() =>
+      (
+        this.db
+          .prepare(
+            'SELECT id, episode_id, version_no, parent_id, story_bible_version_id, format_profile_id, target_duration_sec, shot_set_hash, status, created_at FROM episode_versions WHERE episode_id=? AND (? IS NULL OR version_no < ?) ORDER BY version_no DESC LIMIT ?',
+          )
+          .all(episodeId, before, before, limit) as ScriptRow[]
+      ).map(mapEpisodeVersion),
+    );
+  }
+  public insert(v: EpisodeVersion): Promise<void> {
+    return syncToPromise(() => {
+      this.db
+        .prepare(
+          'INSERT INTO episode_versions (id, episode_id, version_no, parent_id, story_bible_version_id, format_profile_id, target_duration_sec, shot_set_hash, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          v.id,
+          v.episodeId,
+          v.versionNo,
+          v.parentId,
+          v.storyBibleVersionId,
+          v.formatProfileId,
+          v.targetDurationSec,
+          v.shotSetHash,
+          v.status,
+          v.createdAt,
+        );
+    });
+  }
+  public listShotLinks(episodeVersionId: string): Promise<readonly EpisodeVersionShot[]> {
+    return syncToPromise(() =>
+      (
+        this.db
+          .prepare(
+            'SELECT episode_version_id, shot_id, shot_version_id, sequence FROM episode_version_shots WHERE episode_version_id=? ORDER BY sequence, shot_id',
+          )
+          .all(episodeVersionId) as ScriptRow[]
+      ).map(mapEpisodeVersionShot),
+    );
+  }
+  public insertShotLinks(links: readonly EpisodeVersionShot[]): Promise<void> {
+    return syncToPromise(() => {
+      const statement = this.db.prepare(
+        'INSERT INTO episode_version_shots (episode_version_id, shot_id, shot_version_id, sequence) VALUES (?, ?, ?, ?)',
+      );
+      for (const link of links)
+        statement.run(link.episodeVersionId, link.shotId, link.shotVersionId, link.sequence);
+    });
+  }
+}
+export class SqliteShotRepository implements ShotRepositoryPort {
+  public constructor(private readonly db: SqliteDatabase) {}
+  public findById(id: string): Promise<Shot | null> {
+    return syncToPromise(() =>
+      get(
+        this.db,
+        'SELECT id, episode_id, lifecycle_status, current_version_id, created_at, updated_at, deleted_at FROM shots WHERE id=?',
+        [id],
+        mapShot,
+      ),
+    );
+  }
+  public insertMany(values: readonly Shot[]): Promise<void> {
+    return syncToPromise(() => {
+      const statement = this.db.prepare(
+        'INSERT INTO shots (id, episode_id, lifecycle_status, current_version_id, created_at, updated_at, deleted_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      );
+      for (const v of values)
+        statement.run(
+          v.id,
+          v.episodeId,
+          v.lifecycleStatus,
+          v.currentVersionId,
+          v.createdAt,
+          v.updatedAt,
+          v.deletedAt,
+        );
+    });
+  }
+  public updateCurrentVersionIds(
+    entries: readonly Readonly<{ shotId: string; currentVersionId: string; updatedAt: string }>[],
+  ): Promise<void> {
+    return syncToPromise(() => {
+      const statement = this.db.prepare(
+        'UPDATE shots SET current_version_id=?, updated_at=? WHERE id=?',
+      );
+      for (const entry of entries)
+        statement.run(entry.currentVersionId, entry.updatedAt, entry.shotId);
+    });
+  }
+}
+export class SqliteShotContractVersionRepository implements ShotContractVersionRepositoryPort {
+  public constructor(private readonly db: SqliteDatabase) {}
+  public findById(id: string): Promise<ShotContractVersion | null> {
+    return syncToPromise(() =>
+      get(
+        this.db,
+        'SELECT id, shot_id, version_no, parent_id, external_parent_version_id, lineage_resolution_status, sequence, version_status, format_profile_id, target_duration_sec, dialogue_render_mode, document_json, document_sha256, source_invocation_id, created_at FROM shot_contract_versions WHERE id=?',
+        [id],
+        mapShotContractVersion,
+      ),
+    );
+  }
+  public insertMany(values: readonly ShotContractVersion[]): Promise<void> {
+    return syncToPromise(() => {
+      const statement = this.db.prepare(
+        'INSERT INTO shot_contract_versions (id, shot_id, version_no, parent_id, external_parent_version_id, lineage_resolution_status, sequence, version_status, format_profile_id, target_duration_sec, dialogue_render_mode, document_json, document_sha256, source_invocation_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      );
+      for (const v of values)
+        statement.run(
+          v.id,
+          v.shotId,
+          v.versionNo,
+          v.parentId,
+          v.externalParentVersionId,
+          v.lineageResolutionStatus,
+          v.sequence,
+          v.versionStatus,
+          v.formatProfileId,
+          v.targetDurationSec,
+          v.dialogueRenderMode,
+          v.document,
+          v.documentSha256,
+          v.sourceInvocationId,
+          v.createdAt,
         );
     });
   }

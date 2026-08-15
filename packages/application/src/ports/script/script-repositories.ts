@@ -121,10 +121,11 @@ export interface EpisodeVersionRepositoryPort {
 }
 
 export interface ShotRepositoryPort {
+  findById(id: string): Promise<Shot | null>;
   insertMany(shots: readonly Shot[]): Promise<void>;
-  /** 确认 READY 后在同一事务推进镜头当前指针；仅此字段允许更新。 */
+  /** 确认 READY 后在同一事务推进镜头当前指针；仅此字段允许更新（updated_at 随之推进）。 */
   updateCurrentVersionIds(
-    entries: readonly Readonly<{ shotId: string; currentVersionId: string }>[],
+    entries: readonly Readonly<{ shotId: string; currentVersionId: string; updatedAt: string }>[],
   ): Promise<void>;
 }
 
