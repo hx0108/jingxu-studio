@@ -184,15 +184,9 @@ if (
 ) {
   throw new Error('PACKAGED_MIGRATION_0008_INVALID');
 }
-const packagedMain = await readFile(path.join(resourcesRoot, 'app.asar'));
-for (const lock of promptLocks) {
-  if (!packagedMain.includes(Buffer.from(lock.promptTemplateId))) {
-    throw new Error(`PACKAGED_PROMPT_TEMPLATE_MISSING:${lock.stage}`);
-  }
-  if (!packagedMain.includes(Buffer.from(lock.candidateSchemaId))) {
-    throw new Error(`PACKAGED_PROMPT_SCHEMA_ID_MISSING:${lock.stage}`);
-  }
-}
+// prompt 锁改为首启后对 prompt_templates 表的运行时校验（见 afterFirstRun 证据段）：
+// 模板 ID 与 candidateSchemaId 在 bundle 中均为运行时拼接（script-prompts.ts 模板字符串），
+// app.asar 字节扫描不可满足；直接核对种子行的 sha256(template_text) 更强且六阶段一致。
 const schemaEntries = await readdir(schemaRoot, { withFileTypes: true });
 if (
   schemaEntries.some((entry) => !entry.isFile() || entry.isSymbolicLink()) ||
@@ -411,6 +405,11 @@ try {
   const applied = afterFirstRun
     .prepare('SELECT version, name FROM schema_migrations ORDER BY version')
     .all();
+  const promptTemplates = afterFirstRun
+    .prepare(
+      'SELECT id, stage, active, template_text FROM prompt_templates WHERE active = 1 ORDER BY id ASC',
+    )
+    .all();
   const evidence = {
     auditCount: afterFirstRun.prepare('SELECT COUNT(*) AS total FROM audit_events').get().total,
     formatProfileCount: afterFirstRun.prepare('SELECT COUNT(*) AS total FROM format_profiles').get()
@@ -476,6 +475,34 @@ try {
     });
   if (!manifestMatches) {
     throw new Error(`PACKAGED_SCHEMA_MANIFEST_INVALID:${JSON.stringify(evidence.schemaManifest)}`);
+  }
+  // 打包产物首启后种子模板与 promptLocks 逐行对账：active=1 且 sha256(template_text) 一致。
+  const expectedTemplates = [...promptLocks]
+    .sort((left, right) =>
+      left.promptTemplateId < right.promptTemplateId
+        ? -1
+        : left.promptTemplateId > right.promptTemplateId
+          ? 1
+          : 0,
+    )
+    .map((lock) => ({ active: 1, id: lock.promptTemplateId, stage: lock.stage }));
+  const templateMatches =
+    promptTemplates.length === expectedTemplates.length &&
+    promptTemplates.every((row, index) => {
+      const expected = expectedTemplates[index];
+      return (
+        expected !== undefined &&
+        row.id === expected.id &&
+        row.stage === expected.stage &&
+        row.active === expected.active &&
+        sha256(Buffer.from(`${row.template_text}`, 'utf8')) ===
+          promptLocks.find((lock) => lock.promptTemplateId === row.id)?.sha256
+      );
+    });
+  if (!templateMatches) {
+    throw new Error(
+      `PACKAGED_PROMPT_TEMPLATE_SEED_INVALID:${JSON.stringify(promptTemplates.map((row) => row.id))}`,
+    );
   }
 
   const second = await launch(managedRoot, localAppDataTrap, userDataRoot);

@@ -45,8 +45,8 @@
 
 - [x] 6.1 Electron E2E（Mock）：SCENE_SCRIPT READY → 生成 → DRAFT 集合 → 确认 → READY；上游再确认 → 整集 STALE；恢复历史集合
 - [x] 6.2 全量门禁：format:check / lint / typecheck / test:collection / test / test:contract / test:integration / test:e2e
-- [ ] 6.3 `pnpm build` 三产物 + `pnpm package:win`（重打包，替换只含迁移 0001–0003 的旧产物）
-- [ ] 6.4 Windows x64 clean packaged smoke（含迁移 0008；验证新产物对 v7 生产库可正常启动）
+- [x] 6.3 `pnpm build` 三产物 + `pnpm package:win`（重打包，替换只含迁移 0001–0003 的旧产物）
+- [x] 6.4 Windows x64 clean packaged smoke（含迁移 0008；验证新产物对 v7 生产库可正常启动）
 - [ ] 6.5 真实 Qwen 联调：五阶段 READY 后生成 SHOT_CONTRACT，记录证据
 - [ ] 6.6 README 同步：已实现/未实现边界、验证证据；生产库 0008 应用留证（沿 0007 惯例）
 - [ ] 6.7 `openspec validate --strict` + Sync + Archive
