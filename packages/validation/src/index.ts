@@ -28,3 +28,11 @@ export type {
   ModelScriptCandidateStage,
   ModelScriptStageCandidate,
 } from './internal/model-script-stage-candidate';
+export {
+  MODEL_SHOT_SET_CANDIDATE_SCHEMA_ID,
+  validateModelShotSetCandidate,
+} from './internal/model-shot-set-candidate';
+export type {
+  ModelShotSetCandidate,
+  ShotCandidateValidationResult,
+} from './internal/model-shot-set-candidate';
