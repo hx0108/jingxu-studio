@@ -24,12 +24,13 @@ describe('Script recovery revalidator', () => {
       jobs: { findById: () => Promise.resolve(job), transition },
     } as unknown as ScriptJobRepositories;
     const revalidate = createScriptRecoveryRevalidator({
-      buildContract: async () => ({
-        injectSystemFields: (candidate: unknown) => candidate,
-        validateCandidate: () => ({ valid: true }),
-        validateCollection: () => ({ valid: true }),
-        validateFinal: () => ({ valid: true }),
-      }),
+      buildContract: () =>
+        Promise.resolve({
+          injectSystemFields: (candidate: unknown) => candidate,
+          validateCandidate: () => ({ valid: true }),
+          validateCollection: () => ({ valid: true }),
+          validateFinal: () => ({ valid: true }),
+        }),
       commitHandler: { commit },
       now: () => '2026-08-13T00:00:00.000Z',
       unitOfWork: { run: (work) => work(repositories) },

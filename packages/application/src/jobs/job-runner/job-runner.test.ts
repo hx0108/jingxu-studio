@@ -234,26 +234,27 @@ const createHarness = (
   };
   let sequence = 0;
   const runner = createJobRunner({
-    buildContract: async (_job, invocationId) => ({
-      injectSystemFields: (candidate: unknown) => {
-        events.push(`inject:${invocationId}`);
-        return {
-          ...(candidate as object),
-          source_invocation_id: invocationId,
-          version_id: 'fresh_id',
-        };
-      },
-      validateCandidate: (candidate: unknown) =>
-        typeof candidate === 'object' && candidate !== null && 'data' in candidate
-          ? valid
-          : { code: 'CANDIDATE_INVALID', valid: false },
-      validateCollection: () => valid,
-      validateFinal: () =>
-        options?.finalInvalid === true ? { code: 'FINAL_SCHEMA_INVALID', valid: false } : valid,
-      ...(options?.preCommitStale === true
-        ? { validatePreCommit: () => ({ code: 'STALE_INPUT', valid: false as const }) }
-        : {}),
-    }),
+    buildContract: (_job, invocationId) =>
+      Promise.resolve({
+        injectSystemFields: (candidate: unknown) => {
+          events.push(`inject:${invocationId}`);
+          return {
+            ...(candidate as object),
+            source_invocation_id: invocationId,
+            version_id: 'fresh_id',
+          };
+        },
+        validateCandidate: (candidate: unknown) =>
+          typeof candidate === 'object' && candidate !== null && 'data' in candidate
+            ? valid
+            : { code: 'CANDIDATE_INVALID', valid: false },
+        validateCollection: () => valid,
+        validateFinal: () =>
+          options?.finalInvalid === true ? { code: 'FINAL_SCHEMA_INVALID', valid: false } : valid,
+        ...(options?.preCommitStale === true
+          ? { validatePreCommit: () => ({ code: 'STALE_INPUT', valid: false as const }) }
+          : {}),
+      }),
     buildRequest: (job, invocationId, repair) => {
       if (options?.requestBuildError !== undefined) {
         throw new Error(options.requestBuildError === 'STALE_INPUT' ? 'STALE_INPUT' : 'secret');
