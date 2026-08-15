@@ -108,6 +108,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - 环境发现：GUI 主进程 fetch 走 Chromium 网络栈并读系统代理，本机系统代理（127.0.0.1:7897）间歇不可用时表现为可重试 MODEL_NETWORK_ERROR（错误归一化正确性已端到端验证）；联调探针以 `--no-proxy-server` 直连取证；Key 轮换后以 `JINGXU_REAL_REFRESH_CREDENTIAL=1` 强制覆盖已持久化旧凭据。
 - Windows x64 产物重打包（含注入器修复）后复跑两个 packaged smoke 均通过：clean smoke（迁移 1–8、六条 prompt 锁含 shot_contract/v1、ShotContract 1.1.0 schema 锁、Mock 六阶段闭环、凭据哨兵泄漏扫描、不访问真实用户目录）；v7 升级 smoke（v7 库启动 READY/writeEnabled=true 并迁移至 head 8）。
 - 生产数据库 0008 已通过真实启动路径应用并留证：schema_migrations MAX(version)=8（applied 2026-08-15T15:58Z），active 模板 6 条含 shot_contract/v1。
+- `openspec validate shot-contract-generation --strict` 通过后归档为 `2026-08-16-shot-contract-generation`（新建 shot-contract-generation spec 4 条能力；staged-script-generation 4 改 1 重命名；jobrunner-qwen-text-adapter 1 改）。
 - Format、ESLint、TypeScript 门禁零错误；Unit 568、Contract 86、Integration 168 全部通过；Playwright Electron E2E 8 通过 + 1 按门控跳过（真实 Qwen 探针，需显式环境变量）。
 - 真实用户使用与 AC-V1-01 至 AC-V1-06 验收仍待人工核验。
 

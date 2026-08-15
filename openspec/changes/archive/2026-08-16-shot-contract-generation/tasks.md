@@ -49,4 +49,4 @@
 - [x] 6.4 Windows x64 clean packaged smoke（含迁移 0008；验证新产物对 v7 生产库可正常启动）
 - [x] 6.5 真实 Qwen 联调：五阶段 READY 后生成 SHOT_CONTRACT，记录证据（2026-08-16 全绿：五阶段 + SHOT_CONTRACT 全 SUCCEEDED，9 镜头 / Σ61s ∈ [30,180]，确认 READY `shot_set_hash=383bda6f…`；联调发现无台词镜头 speaker/时长未按 allOf 派生的缺陷，已修 + 回归钉）
 - [x] 6.6 README 同步：已实现/未实现边界、验证证据；生产库 0008 应用留证（沿 0007 惯例；MAX(version)=8 @ 2026-08-15T15:58Z，active 模板 6 条含 shot_contract/v1；重打包后两 smoke 复跑绿）
-- [ ] 6.7 `openspec validate --strict` + Sync + Archive
+- [x] 6.7 `openspec validate --strict` + Sync + Archive（validate 通过后归档，主 specs 同步由 archive 完成）

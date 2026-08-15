@@ -2,8 +2,8 @@
 
 ## RENAMED Requirements
 
-- FROM: `五阶段必须按 READY 上游依赖顺序生成`
-- TO: `生成阶段必须按 READY 上游依赖顺序执行`
+- FROM: `### Requirement: 五阶段必须按 READY 上游依赖顺序生成`
+- TO: `### Requirement: 生成阶段必须按 READY 上游依赖顺序执行`
 
 ## MODIFIED Requirements
 
