@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
+import { SCRIPT_PROMPT_MANIFEST } from '@jingxu/prompts';
 import { describe, expect, it } from 'vitest';
 
 import { listVerifiedBackups, performManagedMigration } from '../backup/backup-manager';
@@ -43,6 +44,7 @@ describe('0003_script_version_receipts.sql', () => {
           { version: 5 },
           { version: 6 },
           { version: 7 },
+          { version: 8 },
         ]);
         expect(
           database
@@ -160,7 +162,7 @@ describe('0003_script_version_receipts.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 7 });
+        ).toEqual({ version: 8 });
       } finally {
         database.close();
       }
@@ -282,6 +284,72 @@ describe('0003_script_version_receipts.sql', () => {
         expect(
           database.prepare("SELECT name FROM sqlite_master WHERE name='command_receipts'").get(),
         ).toEqual({ name: 'command_receipts' });
+      } finally {
+        database.close();
+      }
+    });
+  });
+});
+
+describe('0008_prompt_templates_shot_contract.sql', () => {
+  it('空库—迁移到 head 8—shot_contract/v1 播种且文本与 manifest 逐字一致', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = new SqliteTestDatabase(path.join(root, 'shot_contract_v1.sqlite'));
+      try {
+        database.pragma('foreign_keys = ON');
+        applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
+
+        const row = database
+          .prepare(
+            `SELECT id, stage, version, template_text AS templateText, sha256, active, created_at AS createdAt
+             FROM prompt_templates WHERE id='shot_contract/v1'`,
+          )
+          .get() as {
+          active: number;
+          createdAt: string;
+          id: string;
+          sha256: string;
+          stage: string;
+          templateText: string;
+          version: number;
+        };
+        const manifest = SCRIPT_PROMPT_MANIFEST.find(
+          (entry) => entry.promptTemplateId === 'shot_contract/v1',
+        );
+        expect(manifest).toBeDefined();
+        expect(row).toMatchObject({
+          active: 1,
+          id: 'shot_contract/v1',
+          stage: 'SHOT_CONTRACT',
+          version: 1,
+        });
+        expect(row.sha256, 'sha256 必须与 packages/prompts manifest 一致').toBe(manifest?.sha256);
+        expect(
+          createHash('sha256').update(row.templateText, 'utf8').digest('hex'),
+          'seeded sha256 必须是 template_text 的真实摘要',
+        ).toBe(row.sha256);
+      } finally {
+        database.close();
+      }
+    });
+  });
+
+  it('重放迁移—已应用版本跳过—模板行不重复且幂等', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const migrations = await loadMigrationSet(MIGRATIONS);
+      const database = new SqliteTestDatabase(path.join(root, 'shot_contract_idem.sqlite'));
+      try {
+        database.pragma('foreign_keys = ON');
+        applyMigrations(database, migrations, () => NOW);
+        applyMigrations(database, migrations, () => NOW);
+        expect(
+          database
+            .prepare("SELECT COUNT(*) AS count FROM prompt_templates WHERE id='shot_contract/v1'")
+            .get(),
+        ).toEqual({ count: 1 });
+        expect(
+          database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
+        ).toEqual({ version: 8 });
       } finally {
         database.close();
       }

@@ -137,6 +137,10 @@ importers:
       '@jingxu/domain':
         specifier: workspace:*
         version: link:../domain
+    devDependencies:
+      '@jingxu/prompts':
+        specifier: workspace:*
+        version: link:../prompts
 
   packages/prompts: {}
 

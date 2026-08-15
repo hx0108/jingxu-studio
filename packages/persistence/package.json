@@ -18,5 +18,8 @@
     "@jingxu/application": "workspace:*",
     "@jingxu/contracts": "workspace:*",
     "@jingxu/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "@jingxu/prompts": "workspace:*"
   }
 }

@@ -46,8 +46,17 @@ const promptLocks = [
     'story_bible/v3',
     'c7877df6efc50bca60db4e76713e3fe2312532581dd3caf4efe8516bc8c94674',
   ],
+  [
+    'SHOT_CONTRACT',
+    'shot_contract/v1',
+    '0db82e54ef406dcba43a9a0f59fc5133d6e22e7e0072fc1d157b8d2b3191b935',
+  ],
 ].map(([stage, promptTemplateId, hash]) => ({
-  candidateSchemaId: `https://jingxu.studio/schemas/internal/ModelScriptStageCandidate.${stage}.v1.schema.json`,
+  // SHOT_CONTRACT 用独立候选契约 ModelShotSetCandidate，与 @jingxu/prompts manifest 一致。
+  candidateSchemaId:
+    stage === 'SHOT_CONTRACT'
+      ? 'https://jingxu.studio/schemas/internal/ModelShotSetCandidate/v1'
+      : `https://jingxu.studio/schemas/internal/ModelScriptStageCandidate.${stage}.v1.schema.json`,
   promptTemplateId,
   sha256: hash,
   stage,
@@ -126,6 +135,9 @@ const migrationSix = await readFile(
 const migrationSeven = await readFile(
   path.join(migrationRoot, '0007_snapshot_tables_profile_ref.sql'),
 );
+const migrationEight = await readFile(
+  path.join(migrationRoot, '0008_prompt_templates_shot_contract.sql'),
+);
 if (!migrationOne.includes(Buffer.from('CREATE TABLE projects'))) {
   throw new Error('PACKAGED_MIGRATION_0001_INVALID');
 }
@@ -165,6 +177,12 @@ if (
   migrationSeven.includes(Buffer.from('REFERENCES provider_profiles'))
 ) {
   throw new Error('PACKAGED_MIGRATION_0007_INVALID');
+}
+if (
+  !migrationEight.includes(Buffer.from("('shot_contract/v1', 'SHOT_CONTRACT', 1")) ||
+  !migrationEight.includes(Buffer.from('SHOT_CONTRACT'))
+) {
+  throw new Error('PACKAGED_MIGRATION_0008_INVALID');
 }
 const packagedMain = await readFile(path.join(resourcesRoot, 'app.asar'));
 for (const lock of promptLocks) {
@@ -419,6 +437,7 @@ try {
       { version: 5, name: '0005_prompt_templates_story_bible_v3.sql' },
       { version: 6, name: '0006_model_invocations_profile_ref.sql' },
       { version: 7, name: '0007_snapshot_tables_profile_ref.sql' },
+      { version: 8, name: '0008_prompt_templates_shot_contract.sql' },
     ])
   ) {
     throw new Error(`PACKAGED_MIGRATION_SET_INVALID:${JSON.stringify(applied)}`);
@@ -511,7 +530,7 @@ try {
         scriptWorkspaceError: jobProviderSurface.scriptWorkspace.error.code,
         providerConfigured: jobProviderSurface.provider.data.configured,
       },
-      migrationVersions: [1, 2, 3, 4, 5, 6, 7],
+      migrationVersions: [1, 2, 3, 4, 5, 6, 7, 8],
       mockClosureEntryObserved: true,
       nativeAddonCount: nativeAddons.length,
       projectLifecycle: ['create', 'update', 'delete', 'restart', 'restore'],

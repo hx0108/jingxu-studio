@@ -13,9 +13,9 @@
 ## 2. Persistence（A 线）
 
 - [x] 2.1 SQLite 分镜仓储实现 + ScriptUnitOfWork 扩展（`SqliteEpisodeVersionRepository`/`SqliteShotRepository`/`SqliteShotContractVersionRepository` 并入 UoW；`ScriptJobRepositories` 扩展 `StoryboardRepositories`，shots 端口补 `findById`、`updateCurrentVersionIds` 带 `updatedAt`；四表单事务写入集成测试 5/5 绿，含列绑定 CHECK / UNIQUE / 不可变触发器 / 指针推进）
-- [ ] 2.2 迁移 `0008_prompt_templates_shot_contract.sql`：插入 shot_contract/v1（active=1，sha256 与 packages/prompts manifest 一致）
-- [ ] 2.3 版本硬编码同步：4 个测试文件 + `scripts/verify-packaged-project-smoke.mjs`（head 7→8，future-version 测试改 `.run(9, '0009_future.sql')`）
-- [ ] 2.4 Integration：真库写入满足 document_json 列绑定 CHECK、`UNIQUE(shot_id,version_no)`、不可变触发器（UPDATE 必须 ABORT）、迁移幂等（前三项已随 §2.1 落地：`sqlite-storyboard-repositories.integration.test.ts` 5 用例；迁移幂等随 0008 补）
+- [x] 2.2 迁移 `0008_prompt_templates_shot_contract.sql`：插入 shot_contract/v1（active=1，sha256 与 packages/prompts manifest 一致——script-migration 集成测试双向锁死：种子 sha === manifest sha === sha256(template_text)；幂等：重复应用后仍 count=1、MAX(version)=8）
+- [x] 2.3 版本硬编码同步：4 个测试文件 + `scripts/verify-packaged-project-smoke.mjs`（head 7→8，future-version 测试改 `.run(9, '0009_future.sql')`；smoke 另补 promptLocks SHOT_CONTRACT 条目与 0008 资源校验）
+- [x] 2.4 Integration：真库写入满足 document_json 列绑定 CHECK、`UNIQUE(shot_id,version_no)`、不可变触发器（UPDATE 必须 ABORT）、迁移幂等（前四项均已落地：§2.1 storyboard 5 用例 + §2.2 script-migration 0008 describe 2 用例）
 
 ## 3. Application 服务（B 线）
 
@@ -29,7 +29,7 @@
 
 ## 4. Prompt 与适配器（B 线）
 
-- [ ] 4.1 SHOT_CONTRACT v1 模板：字段契约、枚举、ID 来源约束、注入提示（与 2.2 sha256 一致）；packages/prompts manifest 同步
+- [x] 4.1 SHOT_CONTRACT v1 模板：字段契约、枚举、ID 来源约束、注入提示（与 2.2 sha256 一致）；packages/prompts manifest 同步（SHOT_CONTRACT 的 candidateSchemaId 特判为 ModelShotSetCandidate/v1，与 @jingxu/validation 常量及 smoke 锁三处对齐）
 - [ ] 4.2 MockTextModelAdapter：SHOT_CONTRACT 可重复输出 + 失败矩阵扩展（含集合级失败样本）
 - [ ] 4.3 Qwen 适配器：无结构性变更，仅确认 JSON Mode 与超长输出截断行为
 
