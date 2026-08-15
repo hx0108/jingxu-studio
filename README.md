@@ -97,8 +97,19 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - API Key 由 Electron `safeStorage` 加密并独立保存，SQLite 只记录不透明凭据引用和验证元数据；Renderer 不接收完整 Key、Authorization 或原始 Provider 错误。
 - Main/Preload 已提供逐方法的 `script`、`job`、`provider` 和 `events` IPC 白名单；`staged-script-generation` 已注入阶段提交器，`job.create` 开放真实剧本生成，不再返回 `JOB_SUBMISSION_UNAVAILABLE`，也不创建假版本或空壳任务。
 - `staged-script-generation` 已实现 SourceInput/Consent/Episode 初始化、五阶段 ScriptService、不可变 DRAFT/READY/STALE_INPUT 版本链、版本历史与恢复、五阶段 Prompt（v2/story_bible v3）、Script Job 提交/校验/恢复，以及 `script` 五方法白名单和剧本工作区；已通过 `openspec validate --strict`、全量门禁与 clean packaged smoke（离线 Mock），后续经真实 Qwen 全流程联调于 2026-08-15 归档。
+- `shot-contract-generation` 已实现第六阶段 SHOT_CONTRACT：分镜候选契约（ModelShotSetCandidate 键存在性）→ 系统字段注入（含 dialogue allOf 精确值系统派生：audio/lip_sync/speaker/台词时长，不信任模型）→ 集合校验（sequence 连续、previous_shot_id 集合内回指、character/scene ID 源自冻结 STORY_BIBLE、Σ target_duration_sec ∈ [30,180]）→ Registry ShotContract 1.1.0 FINAL → 整集 DRAFT/READY/STALE_INPUT 版本链、历史集合恢复、storyboard 工作区与确认/恢复路径；迁移 0008 种子 `shot_contract/v1` 模板（sha256 三处锁死）。真实 Qwen 六阶段联调于 2026-08-16 全绿。
 
 ## 最近验证证据
+
+2026-08-16 `shot-contract-generation` 收尾记录（第六阶段 SHOT_CONTRACT + 真实 Qwen 联调）：
+
+- 真实 Qwen 六阶段联调全绿（开发者环境、生产数据根 + 真实 QwenTextModelAdapter）：CONCEPT→STORY_BIBLE→EPISODE_OUTLINE→BEAT_SHEET→SCENE_SCRIPT→SHOT_CONTRACT 全部 SUCCEEDED；SHOT_CONTRACT 生成 9 镜头、Σ target_duration_sec=61 ∈ [30,180]，确认 READY，shot_set_hash=383bda6f4aa228714bb31012d0b70dafbd08dc4ce0bea79b5a8c03f46526ea4e。
+- 联调发现并修复无台词镜头缺陷：模型对 spoken_text 为空镜头输出非空 speaker_id/台词时长，被 FINAL 层 SCHEMA_VALIDATION_CONST/TYPE 拒绝；改为系统按 ShotContract 1.1.0 allOf 条件矩阵派生精确值（无台词→null/0，NARRATION_FIRST+有台词→narrator），附回归钉。
+- 环境发现：GUI 主进程 fetch 走 Chromium 网络栈并读系统代理，本机系统代理（127.0.0.1:7897）间歇不可用时表现为可重试 MODEL_NETWORK_ERROR（错误归一化正确性已端到端验证）；联调探针以 `--no-proxy-server` 直连取证；Key 轮换后以 `JINGXU_REAL_REFRESH_CREDENTIAL=1` 强制覆盖已持久化旧凭据。
+- Windows x64 产物重打包（含注入器修复）后复跑两个 packaged smoke 均通过：clean smoke（迁移 1–8、六条 prompt 锁含 shot_contract/v1、ShotContract 1.1.0 schema 锁、Mock 六阶段闭环、凭据哨兵泄漏扫描、不访问真实用户目录）；v7 升级 smoke（v7 库启动 READY/writeEnabled=true 并迁移至 head 8）。
+- 生产数据库 0008 已通过真实启动路径应用并留证：schema_migrations MAX(version)=8（applied 2026-08-15T15:58Z），active 模板 6 条含 shot_contract/v1。
+- Format、ESLint、TypeScript 门禁零错误；Unit 568、Contract 86、Integration 168 全部通过；Playwright Electron E2E 8 通过 + 1 按门控跳过（真实 Qwen 探针，需显式环境变量）。
+- 真实用户使用与 AC-V1-01 至 AC-V1-06 验收仍待人工核验。
 
 2026-08-15 `staged-script-generation` 收尾记录（真实 Qwen 联调 + 缺陷修复 + 归档）：
 
@@ -128,9 +139,8 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 ## 当前尚未实现
 
-- EpisodeValidator、结构化分镜生成与编辑、锁、导入导出和评测业务用例
-- EpisodeValidator 集合规则，以及剧本/分镜业务调用方对已发布 Registry 的接入
-- 真实用户使用和发布验收（真实 Qwen 阶段生成连通性已于 2026-08-14 通过开发者环境全流程联调）
+- 分镜逐镜头人工编辑与锁定（locked_paths 目前恒为空）、导入导出和评测业务用例
+- 真实用户使用和发布验收（真实 Qwen 阶段生成连通性已于 2026-08-16 通过开发者环境六阶段全流程联调）
 - 图片、视频、TTS、口型、成片和其他 V2/V3 能力
 - AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 目前具备可重复的 Mock 自动化证据与一次真实 Qwen 开发者环境全流程运行，仍不能据此声称真实用户使用或 V1 发布验收已经完成
 
