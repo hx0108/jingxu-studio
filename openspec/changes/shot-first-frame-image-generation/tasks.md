@@ -28,8 +28,9 @@
 
 ## 3. 适配器（B 线）
 
-- [ ] 3.1 MockImageModelAdapter：确定性 PNG 字节（种子可断言）+ 失败矩阵（网络/限流/审核拒绝/任务超时/部分候选失败）+ poll 抖动注入
+- [x] 3.1 MockImageModelAdapter：确定性 PNG 字节（种子可断言）+ 失败矩阵（网络/限流/审核拒绝/任务超时/部分候选失败）+ poll 抖动注入
       — 验证：unit 全矩阵；不触网断言
+  - 2026-08-16 完成：`MockImageModelAdapter`（model-adapters/src/mock）实现 ImageModelPort 五方法。确定性 8 位灰度 PNG（像素 = (seedHash+7x+13y)&0xff，seedHash 为 invocationId 的 FNV-1a）；IDAT 为手写 stored-deflate zlib 流（本包约定零 node: 导入，CRC32/adler32 手写）；结果 URL `mock-image://<w>x<h>/<seed>` 本地重放字节，重启后无需内存态即可 download。submit 消费声明式步骤序列（SYNC/ASYNC+pendingPolls 抖动+pollFailure/ERROR/TIMEOUT），N 候选 = N 次 submit 天然表达部分候选失败；abort 归一化 MODEL_CANCELLED；非法 URL 归一化 MODEL_RESULT_UNAVAILABLE。unit 8 项全绿（字节稳定性+PNG 结构、SYNC 往返、失败矩阵、ASYNC 抖动、部分失败、取消、URL 非法、全程零 fetch 调用—沿 text mock 的 fetchSpy 模式）；另以 Node zlib inflateSync + 全 chunk CRC 复核独立验证字节合法性（含 >65535 多 stored 块路径）
 - [ ] 3.2 SeedreamImageModelAdapter（火山方舟）：submit/poll/download 三段（容忍同步返回与异步任务两种形态）、错误归一化、凭据经 safeStorage credential_ref（ARK Key）；model id 从 profile 配置读取（0.2 锁定值）
       — 验证：contract（Port 契约测试）；真实调用仅限联调探针门控
 

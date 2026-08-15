@@ -1,4 +1,10 @@
 export {
+  MockImageModelAdapter,
+  MockImageModelError,
+  encodeMockPng,
+} from './mock-image-model-adapter';
+export type { MockImageModelAdapterOptions, MockImageSubmitStep } from './mock-image-model-adapter';
+export {
   MockTextModelAdapter,
   MockTextModelError,
   createMockModelError,
