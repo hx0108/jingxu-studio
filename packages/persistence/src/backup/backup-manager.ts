@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { createReadStream, rmSync } from 'node:fs';
 import {
   access,
   lstat,
@@ -133,6 +133,18 @@ const verifyBackupDatabase = (databasePath: string, expectedVersion: number): vo
     }
   } finally {
     backup.close();
+    // readOnly 连接打开 WAL 备份仍会生成 -shm/-wal sidecar，且 close 时无法自清理；
+    // 创建期 .tmp 校验路径的 sidecar 在主文件 rename 后更会成为永久孤儿（含修复前
+    // 的历史遗留）。best-effort 清理（启动全量校验逐份触达 → 存量自愈），失败时
+    // 行为等同清理逻辑不存在，不改变 DATABASE_BACKUP_FAILED / BACKUP_NOT_ALLOWED
+    // 的既有错误语义。
+    for (const suffix of ['-shm', '-wal', '.tmp-shm', '.tmp-wal']) {
+      try {
+        rmSync(`${databasePath}${suffix}`, { force: true });
+      } catch {
+        // sidecar 清理失败不影响校验结论。
+      }
+    }
   }
 };
 

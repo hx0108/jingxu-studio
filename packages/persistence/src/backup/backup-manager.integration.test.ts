@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -218,6 +218,63 @@ describe('SQLite 在线备份与升级', () => {
         expect.arrayContaining([expect.objectContaining({ name: 'title' })]),
       );
       database.close();
+    });
+  });
+
+  it('WAL 源库备份创建与校验—backups 目录只余 sqlite 与 manifest，sidecar 与历史孤儿自愈', async () => {
+    await withSqliteTestContext(async (context) => {
+      const paths = createManagedPaths(path.join(context.root, 'managed'));
+      await createManagedDirectories(paths);
+      const directory = await createMigrationSet(context.root, false);
+      const database = new Database(paths.databasePath);
+      try {
+        // WAL 源库：备份文件头继承 WAL，readOnly 校验打开即产生 -shm/-wal sidecar。
+        database.pragma('journal_mode = WAL');
+        applyMigrations(database, await loadMigrationSet(directory), context.clock);
+        await createMigrationSet(context.root, true);
+
+        const result = await performManagedMigration({
+          backupId: 'backup_walhygiene',
+          clock: context.clock,
+          database,
+          migrations: await loadMigrationSet(directory),
+          paths,
+        });
+        expect(result.backup?.schemaVersion).toBe(1);
+
+        // 模拟修复前的两类残留：最终备份 sidecar + rename 后遗留的 .tmp 孤儿。
+        await writeFile(
+          path.join(paths.backupDirectory, 'backup_walhygiene.sqlite-shm'),
+          '',
+          'utf8',
+        );
+        await writeFile(
+          path.join(paths.backupDirectory, 'backup_walhygiene.sqlite-wal'),
+          '',
+          'utf8',
+        );
+        await writeFile(
+          path.join(paths.backupDirectory, 'backup_walhygiene.sqlite.tmp-shm'),
+          '',
+          'utf8',
+        );
+        await writeFile(
+          path.join(paths.backupDirectory, 'backup_walhygiene.sqlite.tmp-wal'),
+          '',
+          'utf8',
+        );
+
+        // 启动语义：全量校验逐份打开备份 → 触发 sidecar 清理与存量自愈。
+        const backups = await listVerifiedBackups(paths);
+        expect(backups).toHaveLength(1);
+        const entries = await readdir(paths.backupDirectory);
+        expect(entries.sort()).toEqual([
+          'backup_walhygiene.manifest.json',
+          'backup_walhygiene.sqlite',
+        ]);
+      } finally {
+        database.close();
+      }
     });
   });
 });

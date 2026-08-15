@@ -101,6 +101,13 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 ## 最近验证证据
 
+2026-08-16 `backup-sidecar-hygiene` 收尾记录（备份目录 sidecar 卫生修复）：
+
+- 修复：备份校验以 readOnly 连接打开 WAL 备份产生 `-shm`/`-wal` sidecar 且 close 时无法自清理——`createOnlineBackup` 的 `.tmp` 校验 sidecar 随 rename 成为永久孤儿，每次启动的全量备份校验反复触碰最终备份 sidecar 并永久残留（开发机 2 天积累 8 组）。`verifyBackupDatabase` close 后 best-effort 清理 `-shm`/`-wal`/`.tmp-shm`/`.tmp-wal` 四类后缀；启动校验逐份触达备份 → 存量残留下次启动自愈，无需清扫迁移。
+- 回归钉：WAL 源库备份创建 + 预置两类存量残留 → `listVerifiedBackups` 校验后 `backups` 目录恰好只余 `.sqlite` 与 `.manifest.json`（backup-manager integration 7/7）。
+- Format、ESLint、TypeScript 门禁零错误；Unit 568、Contract 86、Integration 169 全部通过；Playwright Electron E2E 8 通过 + 1 按门控跳过。
+- 备份保留策略、诊断包与项目资产目录治理仍搁置（待产品决策的独立 Change）。
+
 2026-08-16 `shot-contract-generation` 收尾记录（第六阶段 SHOT_CONTRACT + 真实 Qwen 联调）：
 
 - 真实 Qwen 六阶段联调全绿（开发者环境、生产数据根 + 真实 QwenTextModelAdapter）：CONCEPT→STORY_BIBLE→EPISODE_OUTLINE→BEAT_SHEET→SCENE_SCRIPT→SHOT_CONTRACT 全部 SUCCEEDED；SHOT_CONTRACT 生成 9 镜头、Σ target_duration_sec=61 ∈ [30,180]，确认 READY，shot_set_hash=383bda6f4aa228714bb31012d0b70dafbd08dc4ce0bea79b5a8c03f46526ea4e。
