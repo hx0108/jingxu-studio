@@ -1,10 +1,12 @@
+import type { ScriptStage } from '@jingxu/contracts';
+
 import type { ScriptJobRepositories, StagedScriptStage } from '../ports/script/index';
 
 export interface FreezeScriptInputCommand {
   readonly episodeId: string | null;
   readonly expectedInputVersionId: string;
   readonly projectId: string;
-  readonly stage: StagedScriptStage;
+  readonly stage: ScriptStage;
 }
 
 export interface FrozenInputReference {
@@ -76,7 +78,8 @@ export const freezeScriptJobInput = async (
   const requiresEpisode =
     command.stage === 'EPISODE_OUTLINE' ||
     command.stage === 'BEAT_SHEET' ||
-    command.stage === 'SCENE_SCRIPT';
+    command.stage === 'SCENE_SCRIPT' ||
+    command.stage === 'SHOT_CONTRACT';
   if (
     source === null ||
     (requiresEpisode && episode === null) ||
@@ -99,7 +102,7 @@ export const freezeScriptJobInput = async (
       ? null
       : await requireReadyStage(repositories, command.projectId, null, 'STORY_BIBLE');
   const outline =
-    command.stage === 'BEAT_SHEET'
+    command.stage === 'BEAT_SHEET' || command.stage === 'SHOT_CONTRACT'
       ? await requireReadyStage(
           repositories,
           command.projectId,
@@ -111,6 +114,10 @@ export const freezeScriptJobInput = async (
     command.stage === 'SCENE_SCRIPT'
       ? await requireReadyStage(repositories, command.projectId, command.episodeId, 'BEAT_SHEET')
       : null;
+  const sceneScript =
+    command.stage === 'SHOT_CONTRACT'
+      ? await requireReadyStage(repositories, command.projectId, command.episodeId, 'SCENE_SCRIPT')
+      : null;
 
   const primaryId =
     command.stage === 'CONCEPT'
@@ -121,7 +128,9 @@ export const freezeScriptJobInput = async (
           ? storyBible?.versionId
           : command.stage === 'BEAT_SHEET'
             ? outline?.versionId
-            : beat?.versionId;
+            : command.stage === 'SHOT_CONTRACT'
+              ? sceneScript?.versionId
+              : beat?.versionId;
   if (primaryId !== command.expectedInputVersionId) {
     throw new ScriptPrerequisiteError('STALE_INPUT');
   }
@@ -173,6 +182,29 @@ export const freezeScriptJobInput = async (
     references.push(outline, storyBible);
   } else if (command.stage === 'SCENE_SCRIPT' && beat !== null && storyBible !== null) {
     references.push(beat, storyBible, {
+      objectId: formatProfile.id,
+      objectType: 'FORMAT_PROFILE',
+      sha256: hashPayload({
+        createdAt: formatProfile.createdAt,
+        objectId: formatProfile.id,
+        objectType: 'FORMAT_PROFILE',
+        parentId: formatProfile.parentId,
+        projectId: formatProfile.projectId,
+        spec: formatProfile.spec,
+        versionId: formatProfile.id,
+        versionNo: formatProfile.versionNo,
+      }),
+      versionId: formatProfile.id,
+    });
+  } else if (
+    command.stage === 'SHOT_CONTRACT' &&
+    sceneScript !== null &&
+    storyBible !== null &&
+    outline !== null
+  ) {
+    // D5：冻结集合 = READY 的 STORY_BIBLE + EPISODE_OUTLINE + SCENE_SCRIPT + 当前 format_profile；
+    // commit 写三条 GENERATED_FROM（FormatProfile 不建边，由 episode_versions FK 守卫覆盖）。
+    references.push(sceneScript, storyBible, outline, {
       objectId: formatProfile.id,
       objectType: 'FORMAT_PROFILE',
       sha256: hashPayload({

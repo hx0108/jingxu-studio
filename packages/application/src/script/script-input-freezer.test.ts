@@ -65,6 +65,15 @@ const repositories = (options: RepositoryOptions = {}): ScriptJobRepositories =>
         options.wrongProjectStage === 'BEAT_SHEET' ? 'project-other' : undefined,
       ),
     ],
+    [
+      'scene-0001',
+      version(
+        'SCENE_SCRIPT',
+        'scene-0001',
+        'READY',
+        options.wrongProjectStage === 'SCENE_SCRIPT' ? 'project-other' : undefined,
+      ),
+    ],
   ]);
   const story: StoryBibleVersion = {
     documentSha256: 'b'.repeat(64),
@@ -108,7 +117,9 @@ const repositories = (options: RepositoryOptions = {}): ScriptJobRepositories =>
               ? 'story-0001'
               : stage === 'EPISODE_OUTLINE'
                 ? 'outline-0001'
-                : 'beat-0001';
+                : stage === 'SCENE_SCRIPT'
+                  ? 'scene-0001'
+                  : 'beat-0001';
         return Promise.resolve({ currentVersionId: id });
       },
     },
@@ -146,6 +157,13 @@ const cases = [
     expected: 'beat-0001',
     objectTypes: ['SCRIPT_VERSION', 'STORY_BIBLE_VERSION', 'FORMAT_PROFILE'],
     stage: 'SCENE_SCRIPT',
+  },
+  {
+    // D5：冻结 SCENE_SCRIPT(主) + STORY_BIBLE + EPISODE_OUTLINE + FORMAT_PROFILE。
+    episodeId: 'episode-0001',
+    expected: 'scene-0001',
+    objectTypes: ['SCRIPT_VERSION', 'STORY_BIBLE_VERSION', 'SCRIPT_VERSION', 'FORMAT_PROFILE'],
+    stage: 'SHOT_CONTRACT',
   },
 ] as const;
 

@@ -70,12 +70,13 @@ export interface ScriptVersion {
   readonly createdAt: string;
 }
 
-export type StageVersionType = 'STORY_BIBLE_VERSION' | 'SCRIPT_VERSION';
+export type StageVersionType = 'STORY_BIBLE_VERSION' | 'SCRIPT_VERSION' | 'EPISODE_VERSION';
 
 export interface StageHead {
   readonly projectId: string;
   readonly episodeId: string | null;
-  readonly stage: StagedScriptStage;
+  /** SHOT_CONTRACT 阶段 head 指向整集分镜版本（EPISODE_VERSION）。 */
+  readonly stage: ScriptStage;
   readonly currentVersionType: StageVersionType;
   readonly currentVersionId: string;
   readonly updatedAt: string;

@@ -81,6 +81,10 @@ export const resolvePrimaryInputVersionId = (job: ScriptStageJob): string => {
         return reference.objectType === 'SCRIPT_VERSION';
       case 'SCENE_SCRIPT':
         return reference.objectType === 'SCRIPT_VERSION';
+      case 'SHOT_CONTRACT':
+        // 冻结引用序为 [SCENE_SCRIPT, STORY_BIBLE, EPISODE_OUTLINE, FORMAT_PROFILE]，
+        // 首个 SCRIPT_VERSION 即主前置（sceneScript）。
+        return reference.objectType === 'SCRIPT_VERSION';
       default:
         return false;
     }
