@@ -9,9 +9,10 @@
 import type { DialogueRenderMode } from '../ports/script';
 
 export interface ShotSystemFieldContext {
-  /** 逐镜头 shot_id 工厂（第 i 个镜头，0 起）。 */
+  /** 逐镜头 shot_id 工厂（第 i 个镜头，0 起；每个镜头恰好调用一次，结果同时用于
+   * shot_id 与 previous_shot_id 派生，避免真实 newId() 下两次调用产生不一致引用）。 */
   readonly newShotId: (index: number) => string;
-  /** 逐镜头 version_id 工厂（第 i 个镜头，0 起）；结果必须满足 scv_*_v1 列绑定 CHECK。 */
+  /** 逐镜头 version_id 工厂（第 i 个镜头，0 起，恰好一次）；结果必须满足 scv_*_v1 列绑定 CHECK。 */
   readonly newVersionId: (index: number) => string;
   readonly formatProfileId: string;
   readonly invocationId: string;
@@ -208,7 +209,7 @@ export const injectShotSystemFields = (
       },
       schema_version: '1.1.0',
       sequence: index + 1,
-      shot_id: context.newShotId(index),
+      shot_id: shotIds[index],
       // 每镜头节奏属创意决策，模型提供数值；1–20 的取值边界由 FINAL 层 schema 定界。
       target_duration_sec: fields.target_duration_sec,
       status: 'DRAFT',

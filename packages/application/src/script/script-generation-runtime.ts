@@ -8,6 +8,10 @@ import type { ModelInvocation, ScriptStageJob } from '../ports/persistence/job/i
 import type { ScriptJobRepositories, ScriptUnitOfWorkPort } from '../ports/script/index';
 import type { TextModelPort } from '../ports/text-model/index';
 import { buildScriptCandidateContract, createScriptCommitHandler } from './script-job-contract';
+import {
+  type ShotCollectionStoryBibleIds,
+  extractShotCollectionBibleKeys,
+} from './shot-collection-validator';
 import { freezeScriptJobInput } from './script-input-freezer';
 import { createScriptJobRequestBuilder, type ScriptPromptSnapshot } from './script-job-request';
 import { createScriptRecoveryRevalidator } from './script-job-recovery';
@@ -58,7 +62,6 @@ const revalidateFrozenInput = async (
   job: ScriptStageJob,
   hashPayload: (value: Readonly<Record<string, unknown>>) => string,
 ): Promise<boolean> => {
-  if (job.stage === 'SHOT_CONTRACT') return false;
   try {
     const current = await freezeScriptJobInput(
       repositories,
@@ -76,6 +79,33 @@ const revalidateFrozenInput = async (
   }
 };
 
+/** 集合校验所需的冻结 STORY_BIBLE ID 集合；读取失败返回 null（→ COLLECTION 层 STALE_INPUT）。 */
+const loadShotCollectionBibleKeys = async (
+  unitOfWork: ScriptUnitOfWorkPort,
+  job: ScriptStageJob,
+): Promise<ShotCollectionStoryBibleIds | null> => {
+  try {
+    const frozen = JSON.parse(job.inputVersionsJson) as Readonly<{
+      references?: readonly Readonly<{
+        objectType?: unknown;
+        versionId?: unknown;
+      }>[];
+    }>;
+    const bibleRef = (frozen.references ?? []).find(
+      ({ objectType }) => objectType === 'STORY_BIBLE_VERSION',
+    );
+    const bibleVersionId = bibleRef?.versionId;
+    if (typeof bibleVersionId !== 'string') return null;
+    const version = await unitOfWork.run(({ storyBibleVersions }) =>
+      storyBibleVersions.findById(bibleVersionId),
+    );
+    if (version === null) return null;
+    return extractShotCollectionBibleKeys(JSON.parse(version.document));
+  } catch {
+    return null;
+  }
+};
+
 /**
  * Owns the complete Script generation lifecycle. Infrastructure only supplies Ports and pure
  * deterministic functions; recovery always finishes before queued work is scheduled.
@@ -83,13 +113,18 @@ const revalidateFrozenInput = async (
 export const createScriptGenerationRuntime = (
   dependencies: ScriptGenerationRuntimeDependencies,
 ): ScriptGenerationRuntime => {
-  const buildContract = (job: ScriptStageJob, invocationId: string) =>
+  const buildContract = async (job: ScriptStageJob, invocationId: string) =>
     buildScriptCandidateContract(job, invocationId, {
+      newId: dependencies.newId,
       validateCandidate: (value) => dependencies.validateCandidate(job, value),
       validateFinal: (value) => dependencies.validateFinal(job, value),
+      ...(job.stage === 'SHOT_CONTRACT'
+        ? { shotCollection: await loadShotCollectionBibleKeys(dependencies.unitOfWork, job) }
+        : {}),
     });
   const commitHandler = createScriptCommitHandler({
     hashDocument: dependencies.hashPayload,
+    hashText: dependencies.hashText,
     newId: dependencies.newId,
     now: dependencies.now,
     revalidateFrozenInput: (repositories, job) =>

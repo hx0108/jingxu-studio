@@ -10,7 +10,11 @@ import {
   type TextModelPort,
 } from '@jingxu/application';
 import { buildScriptPrompt, SCRIPT_PROMPT_MANIFEST } from '@jingxu/prompts';
-import { validateModelScriptStageCandidate, V1_SCHEMA_IDS } from '@jingxu/validation';
+import {
+  validateModelScriptStageCandidate,
+  validateModelShotSetCandidate,
+  V1_SCHEMA_IDS,
+} from '@jingxu/validation';
 
 const SCRIPT_STAGE_OUTPUT_SCHEMA_ID = 'https://jingxu.studio/schemas/script-stage-output/1.0.0';
 export const PRIMARY_QWEN_PROFILE_ID = 'profile_qwen_primary';
@@ -162,7 +166,6 @@ export const createDesktopScriptGenerationRuntime = ({
     hashPayload: sha256Payload,
     hashText: sha256Text,
     loadPromptSnapshot: async (job) => {
-      if (job.stage === 'SHOT_CONTRACT') throw new Error('SCRIPT_STAGE_UNSUPPORTED');
       const references = parseReferences(job);
       const inputs: Record<string, unknown> = {};
       for (const reference of references) {
@@ -197,11 +200,41 @@ export const createDesktopScriptGenerationRuntime = ({
     textModel,
     unitOfWork,
     validateCandidate: (job, value) => {
-      if (job.stage === 'SHOT_CONTRACT') return { code: 'SCRIPT_STAGE_UNSUPPORTED', valid: false };
+      if (job.stage === 'SHOT_CONTRACT') {
+        const result = validateModelShotSetCandidate(value);
+        return validationResult(
+          result.ok,
+          result.errorCode ?? 'CANDIDATE_SCHEMA_INVALID',
+          result.ok ? undefined : result.details,
+        );
+      }
       const result = validateModelScriptStageCandidate(job.stage, value);
       return validationResult(result.ok, result.errorCode ?? 'CANDIDATE_SCHEMA_INVALID');
     },
-    validateFinal: (_job, value) => {
+    validateFinal: (job, value) => {
+      if (job.stage === 'SHOT_CONTRACT') {
+        // 注入产物为逐镜头数组：对每个 ShotContract 1.1.0 文档正式校验，
+        // details 以 shots[i] 前缀定位（仅结构元数据，不含实例值）。
+        if (!Array.isArray(value) || value.length === 0) {
+          return { code: 'SCRIPT_SCHEMA_INVALID', valid: false };
+        }
+        const shotDocuments = value as readonly unknown[];
+        const details: string[] = [];
+        let firstCode: string | null = null;
+        for (const [index, shot] of shotDocuments.entries()) {
+          const result = registry.validate(V1_SCHEMA_IDS.shotContract, shot);
+          if (result.valid) continue;
+          firstCode ??= result.issues[0]?.messageCode ?? 'SCRIPT_SCHEMA_INVALID';
+          for (const issue of result.issues) {
+            details.push(`shots[${String(index)}]${issue.instancePath}:${issue.messageCode}`);
+          }
+        }
+        return validationResult(
+          firstCode === null,
+          firstCode ?? 'SCRIPT_SCHEMA_INVALID',
+          details.length > 0 ? details : undefined,
+        );
+      }
       const result = registry.validate(SCRIPT_STAGE_OUTPUT_SCHEMA_ID, value);
       return validationResult(
         result.valid,

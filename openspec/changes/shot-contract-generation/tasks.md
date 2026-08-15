@@ -19,9 +19,9 @@
 
 ## 3. Application 服务（B 线）
 
-- [ ] 3.1 `script-input-freezer`：SHOT_CONTRACT 放行，冻结 STORY_BIBLE + EPISODE_OUTLINE + SCENE_SCRIPT + format_profile_id
-- [ ] 3.2 `script-job-request`：分镜请求构造（SHOT_CONTRACT 模板 + userPayload 包装，含修复路径）
-- [ ] 3.3 `script-job-contract`：替换 `SCRIPT_STAGE_UNSUPPORTED`——逐镜头 FINAL（Registry ShotContract 1.1.0）+ 真实 COLLECTION + PRE_COMMIT 冻结复检 + commit 写整集集合
+- [x] 3.1 `script-input-freezer`：SHOT_CONTRACT 放行，冻结 STORY_BIBLE + EPISODE_OUTLINE + SCENE_SCRIPT + format_profile_id
+- [x] 3.2 `script-job-request`：分镜请求构造（SHOT_CONTRACT 模板 + userPayload 包装，含修复路径）
+- [x] 3.3 `script-job-contract`：替换 `SCRIPT_STAGE_UNSUPPORTED`——逐镜头 FINAL（Registry ShotContract 1.1.0）+ 真实 COLLECTION + PRE_COMMIT 冻结复检 + commit 写整集集合（含管线 COLLECTION 先于 FINAL 的 D3 顺序与组合根接线；修复 §1.4 注入器 newShotId 双调用致 previous_shot_id 悬空）
 - [ ] 3.4 确认路径：逐镜头 READY 子版本（contract_version+1、LOCAL_VERIFIED）+ READY episode_version + shot_set_hash 重算 + 阶段头
 - [ ] 3.5 失效传播：SHOT_CONTRACT 下游只插一个 STALE_INPUT episode_version（快照沿用），依赖图扩展
 - [ ] 3.6 恢复路径：分镜阶段 restoreVersion 复用既有语义（历史集合 → 新 DRAFT 整集）

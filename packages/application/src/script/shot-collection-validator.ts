@@ -14,6 +14,31 @@ export interface ShotCollectionStoryBibleIds {
   readonly sceneIds: readonly string[];
 }
 
+/**
+ * 从冻结 STORY_BIBLE 版本文档（ScriptStageOutput 信封）提取集合校验所需的
+ * char_/scene_ 键集合；形状不符返回 null（由调用方转为 STALE_INPUT 类失败）。
+ */
+export const extractShotCollectionBibleKeys = (
+  document: unknown,
+): ShotCollectionStoryBibleIds | null => {
+  if (typeof document !== 'object' || document === null) return null;
+  const data = (document as Readonly<{ data?: unknown }>).data;
+  if (typeof data !== 'object' || data === null) return null;
+  const { characters, scenes } = data as Readonly<{ characters?: unknown; scenes?: unknown }>;
+  if (
+    typeof characters !== 'object' ||
+    characters === null ||
+    typeof scenes !== 'object' ||
+    scenes === null
+  ) {
+    return null;
+  }
+  return {
+    characterIds: Object.keys(characters).filter((key) => key.startsWith('char_')),
+    sceneIds: Object.keys(scenes).filter((key) => key.startsWith('scene_')),
+  };
+};
+
 export type ShotCollectionValidation =
   | Readonly<{ valid: true }>
   | Readonly<{

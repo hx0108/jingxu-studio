@@ -7,7 +7,7 @@ export interface ScriptRecoveryDependencies {
   readonly buildContract: (
     job: ScriptStageJob,
     invocationId: string,
-  ) => Omit<CandidateContractDependencies, 'commit' | 'repair'>;
+  ) => Promise<Omit<CandidateContractDependencies, 'commit' | 'repair'>>;
   readonly commitHandler: JobCommitHandler<ScriptJobRepositories>;
   readonly now: () => string;
   readonly unitOfWork: ScriptUnitOfWorkPort;
@@ -18,7 +18,7 @@ export const createScriptRecoveryRevalidator =
   (dependencies: ScriptRecoveryDependencies) =>
   async (job: ScriptStageJob, invocation: ModelInvocation): Promise<void> => {
     if (invocation.rawResponse === null) throw new Error('RECOVERY_RESPONSE_MISSING');
-    const contract = dependencies.buildContract(job, invocation.id);
+    const contract = await dependencies.buildContract(job, invocation.id);
     const result = await executeCandidateContract(
       new TextDecoder().decode(invocation.rawResponse),
       {

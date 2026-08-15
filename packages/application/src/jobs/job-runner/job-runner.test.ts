@@ -234,8 +234,8 @@ const createHarness = (
   };
   let sequence = 0;
   const runner = createJobRunner({
-    buildContract: (_job, invocationId) => ({
-      injectSystemFields: (candidate) => {
+    buildContract: async (_job, invocationId) => ({
+      injectSystemFields: (candidate: unknown) => {
         events.push(`inject:${invocationId}`);
         return {
           ...(candidate as object),
@@ -243,7 +243,7 @@ const createHarness = (
           version_id: 'fresh_id',
         };
       },
-      validateCandidate: (candidate) =>
+      validateCandidate: (candidate: unknown) =>
         typeof candidate === 'object' && candidate !== null && 'data' in candidate
           ? valid
           : { code: 'CANDIDATE_INVALID', valid: false },

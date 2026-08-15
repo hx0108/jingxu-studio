@@ -11,7 +11,7 @@ const valid = Object.freeze({ valid: true as const });
 const invalid = (code: string) => Object.freeze({ code, valid: false as const });
 
 describe('executeCandidateContract', () => {
-  it('固定执行候选 Schema、系统字段注入、正式 Schema、集合校验、提交', async () => {
+  it('固定执行候选 Schema、系统字段注入、集合校验、正式 Schema、提交', async () => {
     const order: string[] = [];
     const dependencies: CandidateContractDependencies = {
       validateCandidate: (value) => {
@@ -40,7 +40,25 @@ describe('executeCandidateContract', () => {
     await expect(
       executeCandidateContract('{"data":{"title":"candidate"}}', dependencies),
     ).resolves.toMatchObject({ status: 'SUCCEEDED', structureRepairAttempts: 0 });
-    expect(order).toEqual(['candidate', 'inject', 'final', 'collection', 'commit']);
+    expect(order).toEqual(['candidate', 'inject', 'collection', 'final', 'commit']);
+  });
+
+  it('集合层先于正式 Schema（D3）—两层同时失败只报集合失败码', async () => {
+    const validateFinal = vi.fn(() => invalid('FINAL_INVALID'));
+    const result = await executeCandidateContract('{"data":{}}', {
+      commit: vi.fn(),
+      injectSystemFields: (value) => value,
+      validateCandidate: () => valid,
+      validateCollection: () => invalid('SHOT_SET_DURATION_OUT_OF_RANGE'),
+      validateFinal,
+    });
+
+    // 集合级不变量给出可修复的有界明细；正式 Schema 在集合失败时不应被触发。
+    expect(result).toMatchObject({
+      failure: { code: 'SHOT_SET_DURATION_OUT_OF_RANGE', layer: 'COLLECTION' },
+      status: 'FAILED',
+    });
+    expect(validateFinal).not.toHaveBeenCalled();
   });
 
   it('候选失败时最多修复一次，并在每次尝试重新生成系统字段', async () => {

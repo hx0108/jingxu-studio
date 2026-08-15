@@ -34,10 +34,11 @@ export interface JobStructureRepairRequest {
 }
 
 export interface JobRunnerDependencies<Repositories extends JobRepositories = JobRepositories> {
+  /** 异步：SHOT_CONTRACT 契约构建前需经 UoW 读取冻结 STORY_BIBLE 的 ID 集合。 */
   readonly buildContract: (
     job: ScriptStageJob,
     invocationId: string,
-  ) => Omit<CandidateContractDependencies, 'commit' | 'repair'>;
+  ) => Promise<Omit<CandidateContractDependencies, 'commit' | 'repair'>>;
   readonly buildRequest: (
     job: ScriptStageJob,
     invocationId: string,
@@ -326,7 +327,7 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
       const initial = await invoke(claimed, 'INITIAL', 0, 0);
       if (!('result' in initial)) return initial;
       let latestInvocationId = initial.invocationId;
-      let activeContract = dependencies.buildContract(claimed, latestInvocationId);
+      let activeContract = await dependencies.buildContract(claimed, latestInvocationId);
       try {
         const contractResult = await executeCandidateContract(initial.result.rawText, {
           injectSystemFields: (candidate) => activeContract.injectSystemFields(candidate),
@@ -386,7 +387,7 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
             );
             if (!('result' in repaired)) throw new TerminalOutcomeError(repaired);
             latestInvocationId = repaired.invocationId;
-            activeContract = dependencies.buildContract(claimed, latestInvocationId);
+            activeContract = await dependencies.buildContract(claimed, latestInvocationId);
             return repaired.result.rawText;
           },
         });

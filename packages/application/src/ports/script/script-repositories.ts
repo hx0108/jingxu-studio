@@ -1,3 +1,5 @@
+import type { ScriptStage } from '@jingxu/contracts';
+
 import type {
   ConsentRecord,
   Episode,
@@ -10,7 +12,6 @@ import type {
   Shot,
   ShotContractVersion,
   StageHead,
-  StagedScriptStage,
   StoryBibleVersion,
   SourceInput,
 } from './script-types';
@@ -65,11 +66,7 @@ export interface ScriptVersionRepositoryPort {
 }
 
 export interface StageHeadRepositoryPort {
-  find(
-    projectId: string,
-    episodeId: string | null,
-    stage: StagedScriptStage,
-  ): Promise<StageHead | null>;
+  find(projectId: string, episodeId: string | null, stage: ScriptStage): Promise<StageHead | null>;
   listByProjectId(projectId: string): Promise<readonly StageHead[]>;
   upsert(head: StageHead, expectedVersionId: string | null): Promise<boolean>;
 }

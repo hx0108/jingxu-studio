@@ -160,6 +160,54 @@ describe('injectShotSystemFields', () => {
     expect(dialogue?.speaker_id).toBe('narrator');
   });
 
+  it('条件—工厂产生真实唯一 id（非 index 决定）—每镜头恰好调用一次且 previous_shot_id 引用真实 shot_id', () => {
+    let shotIdCalls = 0;
+    const uniqueIds = new Map<number, string>();
+    const uniqueContext = {
+      ...context,
+      newShotId: (index: number) => {
+        shotIdCalls += 1;
+        const id = `shot_u${String(shotIdCalls)}`;
+        uniqueIds.set(index, id);
+        return id;
+      },
+    };
+
+    const documents = injectShotSystemFields(
+      {
+        data: {
+          shots: [
+            creativeShot({
+              continuity: {
+                continuity_mode: 'CONTINUOUS_ACTION',
+                first_frame_requirement: '',
+                last_frame_requirement: '',
+                previous_shot_id: null,
+              },
+            }),
+            creativeShot({
+              continuity: {
+                continuity_mode: 'CONTINUOUS_ACTION',
+                first_frame_requirement: '',
+                last_frame_requirement: '',
+                previous_shot_id: null,
+              },
+            }),
+          ],
+        },
+      },
+      uniqueContext,
+    );
+
+    // 每镜头恰好一次：shot_id 与 previous_shot_id 派生共用同一次调用结果。
+    expect(shotIdCalls).toBe(2);
+    expect(documents[0]).toMatchObject({ shot_id: uniqueIds.get(0) });
+    expect(documents[1]).toMatchObject({ shot_id: uniqueIds.get(1) });
+    expect(
+      (documents[1]?.continuity as Record<string, unknown> | undefined)?.previous_shot_id,
+    ).toBe(uniqueIds.get(0));
+  });
+
   it('条件—previous_shot_id 系统派生—CONTINUOUS_ACTION 指向 sequence-1，模型输出值丢弃', () => {
     const first = creativeShot({
       continuity: {

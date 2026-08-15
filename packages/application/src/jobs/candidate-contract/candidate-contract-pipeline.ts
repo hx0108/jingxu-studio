@@ -102,10 +102,13 @@ const evaluateAttempt = (
     });
   }
 
-  const finalFailure = validate('FINAL_SCHEMA', dependencies.validateFinal, finalValue);
-  if (finalFailure !== null) return Object.freeze({ failure: finalFailure, ok: false });
+  // 集合层先于逐条 schema（shot-contract-generation design.md D3）：集合不变量
+  // （成员、集合内引用、ID 源、Σ 时长）能给出有界可修复明细；若 FINAL 先跑，
+  // 集合级问题只会表现为难懂的逐字段 schema 错误。五阶段 COLLECTION 为空桩，顺序无感。
   const collectionFailure = validate('COLLECTION', dependencies.validateCollection, finalValue);
   if (collectionFailure !== null) return Object.freeze({ failure: collectionFailure, ok: false });
+  const finalFailure = validate('FINAL_SCHEMA', dependencies.validateFinal, finalValue);
+  if (finalFailure !== null) return Object.freeze({ failure: finalFailure, ok: false });
   if (dependencies.validatePreCommit !== undefined) {
     const preCommitFailure = validate('PRE_COMMIT', dependencies.validatePreCommit, finalValue);
     if (preCommitFailure !== null) return Object.freeze({ failure: preCommitFailure, ok: false });
