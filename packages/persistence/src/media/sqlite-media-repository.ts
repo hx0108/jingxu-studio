@@ -80,8 +80,10 @@ const mapCandidateRow = (row: Row): MediaCandidateRecord => ({
   height: nullableNumber(row, 'height'),
   id: requiredString(row, 'id'),
   indexInRound: requiredNumber(row, 'index_in_round'),
+  invocationEvidenceRef: nullableString(row, 'invocation_evidence_ref'),
   mimeType: nullableString(row, 'mime_type'),
   modelId: requiredString(row, 'model_id'),
+  providerTaskId: nullableString(row, 'provider_task_id'),
   roundNo: requiredNumber(row, 'round_no'),
   selectedAt: nullableString(row, 'selected_at'),
   shotId: requiredString(row, 'shot_id'),
@@ -108,6 +110,7 @@ const mapTaskRow = (row: Row): MediaTaskRecord => ({
   phase: requiredString(row, 'phase') as MediaTaskPhase,
   projectId: requiredString(row, 'project_id'),
   providerTaskId: nullableString(row, 'provider_task_id'),
+  roundNo: requiredNumber(row, 'round_no'),
   shotId: requiredString(row, 'shot_id'),
   shotVersionId: requiredString(row, 'shot_version_id'),
   updatedAt: requiredString(row, 'updated_at'),
@@ -301,16 +304,11 @@ export class SqliteMediaRepository implements MediaRepository {
     generationInputHash: string;
     modelId: string;
     projectId: string;
+    roundNo: number;
     shotId: string;
     shotVersionId: string;
   }): Promise<readonly MediaCandidateRecord[]> {
     return syncToPromise(() => {
-      const roundRow = this.database
-        .prepare(
-          'SELECT COALESCE(MAX(round_no), 0) AS max_round FROM image_candidates WHERE shot_id = ?',
-        )
-        .get(input.shotId) as { readonly max_round: SqliteOutputValue };
-      const roundNo = Number(roundRow.max_round) + 1;
       const now = this.clock();
       const insert = this.database.prepare(
         `INSERT INTO image_candidates
@@ -324,7 +322,7 @@ export class SqliteMediaRepository implements MediaRepository {
           input.projectId,
           input.shotId,
           input.shotVersionId,
-          roundNo,
+          input.roundNo,
           index,
           input.generationInputHash,
           input.modelId,
@@ -340,9 +338,11 @@ export class SqliteMediaRepository implements MediaRepository {
           height: null,
           id,
           indexInRound: index,
+          invocationEvidenceRef: null,
           mimeType: null,
           modelId: input.modelId,
-          roundNo,
+          providerTaskId: null,
+          roundNo: input.roundNo,
           selectedAt: null,
           shotId: input.shotId,
           shotVersionId: input.shotVersionId,
@@ -353,6 +353,26 @@ export class SqliteMediaRepository implements MediaRepository {
         } satisfies MediaCandidateRecord;
       });
       return records;
+    });
+  }
+
+  public assignCandidateProviderTask(
+    candidateId: string,
+    providerTaskId: string,
+  ): Promise<MediaCandidateRecord> {
+    return syncToPromise(() => {
+      this.database
+        .prepare(
+          `UPDATE image_candidates SET provider_task_id = ?, updated_at = ?
+           WHERE id = ? AND status = 'PENDING' AND provider_task_id IS NULL`,
+        )
+        .run(providerTaskId, this.clock(), candidateId);
+      const candidate = this.requireCandidate(candidateId, 'MEDIA_CANDIDATE_NOT_FOUND');
+      if (candidate.providerTaskId !== providerTaskId) {
+        // 幂等重放（同 taskId）安全；不同 taskId 说明候选已被其他提交占用。
+        throw new PersistenceRuntimeError('MEDIA_CANDIDATE_TASK_CONFLICT');
+      }
+      return candidate;
     });
   }
 
@@ -415,7 +435,8 @@ export class SqliteMediaRepository implements MediaRepository {
         .prepare(
           `SELECT id, shot_id, shot_version_id, round_no, index_in_round, generation_input_hash,
                   status, file_sha256, byte_size, mime_type, width, height, storage_rel_path,
-                  model_id, error_code, selected_at, created_at, updated_at
+                  model_id, provider_task_id, invocation_evidence_ref, error_code, selected_at,
+                  created_at, updated_at
            FROM image_candidates WHERE shot_id = ? ORDER BY round_no, index_in_round`,
         )
         .all(shotId)
@@ -528,13 +549,21 @@ export class SqliteMediaRepository implements MediaRepository {
   }): Promise<MediaTaskRecord> {
     return syncToPromise(() => {
       const now = this.clock();
+      // round_no 与候选轮同源派生：同事务内随后以同值 insertCandidates。
+      const roundRow = this.database
+        .prepare(
+          'SELECT COALESCE(MAX(round_no), 0) AS max_round FROM image_candidates WHERE shot_id = ?',
+        )
+        .get(input.shotId) as { readonly max_round: SqliteOutputValue };
+      const roundNo = Number(roundRow.max_round) + 1;
       try {
         this.database
           .prepare(
             `INSERT INTO media_generation_tasks
              (id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
-              phase, generation_input_hash, candidate_count, error_code, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, NULL, 'SUBMITTED', ?, ?, NULL, ?, ?)`,
+              phase, generation_input_hash, candidate_count, round_no, error_code,
+              created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, NULL, 'SUBMITTED', ?, ?, ?, NULL, ?, ?)`,
           )
           .run(
             input.id,
@@ -544,11 +573,13 @@ export class SqliteMediaRepository implements MediaRepository {
             input.idempotencyKey,
             input.generationInputHash,
             input.candidateCount,
+            roundNo,
             now,
             now,
           );
       } catch {
-        // UNIQUE(project_id, idempotency_key) 兜底并发重放（service 先查再插）。
+        // UNIQUE(project_id, idempotency_key) 兜底并发重放（service 先查再插）；
+        // UNIQUE(shot_id, round_no) 兜底同镜头并发建档。
         throw new PersistenceRuntimeError('MEDIA_TASK_IDEMPOTENCY_CONFLICT');
       }
       return mapTaskRow(this.requireTaskRow(input.id));
@@ -598,7 +629,8 @@ export class SqliteMediaRepository implements MediaRepository {
       this.database
         .prepare(
           `SELECT id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
-                  phase, generation_input_hash, candidate_count, error_code, created_at, updated_at
+                  phase, generation_input_hash, candidate_count, round_no, error_code,
+                  created_at, updated_at
            FROM media_generation_tasks
            WHERE project_id = ? AND phase IN ${ACTIVE_TASK_PHASES}
            ORDER BY created_at, id`,
@@ -627,7 +659,8 @@ export class SqliteMediaRepository implements MediaRepository {
     return this.database
       .prepare(
         `SELECT id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
-                phase, generation_input_hash, candidate_count, error_code, created_at, updated_at
+                phase, generation_input_hash, candidate_count, round_no, error_code,
+                created_at, updated_at
          FROM media_generation_tasks ${whereClause}`,
       )
       .get(...params);
@@ -655,7 +688,8 @@ export class SqliteMediaRepository implements MediaRepository {
       .prepare(
         `SELECT id, shot_id, shot_version_id, round_no, index_in_round, generation_input_hash,
                 status, file_sha256, byte_size, mime_type, width, height, storage_rel_path,
-                model_id, error_code, selected_at, created_at, updated_at
+                model_id, provider_task_id, invocation_evidence_ref, error_code, selected_at,
+                created_at, updated_at
          FROM image_candidates WHERE id = ?`,
       )
       .get(candidateId);

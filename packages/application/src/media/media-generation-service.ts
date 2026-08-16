@@ -173,6 +173,7 @@ export const createMediaGenerationService = (
           generationInputHash: resolved.generationInputHash,
           modelId: dependencies.modelId,
           projectId: input.projectId,
+          roundNo: inserted.roundNo,
           shotId: input.shotId,
           shotVersionId: shot.version.id,
         });

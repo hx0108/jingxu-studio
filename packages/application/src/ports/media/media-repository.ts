@@ -52,8 +52,10 @@ export interface MediaCandidateRecord {
   readonly height: number | null;
   readonly id: string;
   readonly indexInRound: number;
+  readonly invocationEvidenceRef: string | null;
   readonly mimeType: string | null;
   readonly modelId: string;
+  readonly providerTaskId: string | null;
   readonly roundNo: number;
   readonly selectedAt: string | null;
   readonly shotId: string;
@@ -84,6 +86,7 @@ export interface MediaTaskRecord {
   readonly phase: MediaTaskPhase;
   readonly projectId: string;
   readonly providerTaskId: string | null;
+  readonly roundNo: number;
   readonly shotId: string;
   readonly shotVersionId: string;
   readonly updatedAt: string;
@@ -135,7 +138,8 @@ export interface MediaRepository {
   ): Promise<MediaAssetVersionRecord | null>;
 
   /**
-   * 批量预落库一轮 PENDING 候选：round_no 取该镜头 max+1，index_in_round 为 0..count-1。
+   * 批量预落库一轮 PENDING 候选：round_no 由调用方传入（任务建档时同事务派生并
+   * 记录在任务行上，任务与轮一一对应），index_in_round 为 0..count-1。
    * candidateIds 长度必须等于 count。
    */
   insertCandidates(input: {
@@ -143,6 +147,7 @@ export interface MediaRepository {
     readonly generationInputHash: string;
     readonly modelId: string;
     readonly projectId: string;
+    readonly roundNo: number;
     readonly shotId: string;
     readonly shotVersionId: string;
   }): Promise<readonly MediaCandidateRecord[]>;
@@ -200,7 +205,11 @@ export interface MediaRepository {
 
   findTaskById(projectId: string, taskId: string): Promise<MediaTaskRecord | null>;
 
-  /** 建任务行（phase=SUBMITTED，provider_task_id 为 null）；幂等键冲突抛稳定错误。 */
+  /**
+   * 建任务行（phase=SUBMITTED，provider_task_id 为 null）；round_no 在事务内取该镜头
+   * 候选 max+1 派生并返回——调用方随后以同值 insertCandidates（UNIQUE(shot_id, round_no)
+   * 兜底并发）。幂等键冲突抛稳定错误。
+   */
   insertTask(input: {
     readonly candidateCount: number;
     readonly generationInputHash: string;
@@ -210,6 +219,15 @@ export interface MediaRepository {
     readonly shotId: string;
     readonly shotVersionId: string;
   }): Promise<MediaTaskRecord>;
+
+  /**
+   * 异步 Provider：在首次 poll 前把候选级 provider_task_id 持久化（spec 不变式）。
+   * 仅 PENDING 且尚未赋值的候选可赋值；同步 Provider 不调用（列恒空）。
+   */
+  assignCandidateProviderTask(
+    candidateId: string,
+    providerTaskId: string,
+  ): Promise<MediaCandidateRecord>;
 
   /**
    * SUBMITTED→POLLING，同时持久化 provider_task_id（spec：首次 poll 前必须持久化）。

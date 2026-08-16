@@ -99,10 +99,14 @@ CREATE TABLE media_generation_tasks (
   ),
   generation_input_hash TEXT NOT NULL CHECK (length(generation_input_hash) = 64),
   candidate_count INTEGER NOT NULL CHECK (candidate_count > 0 AND candidate_count <= 16),
+  -- 任务与候选轮一一对应（4.2 调度器按轮定位本任务候选）；建档时于同事务内
+  -- 取该镜头候选 max(round_no)+1 派生，与 insertCandidates 落位值一致。
+  round_no INTEGER NOT NULL CHECK (round_no > 0),
   error_code TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  UNIQUE (project_id, idempotency_key)
+  UNIQUE (project_id, idempotency_key),
+  UNIQUE (shot_id, round_no)
 );
 
 CREATE INDEX ix_asset_versions_asset ON asset_versions(asset_id, version_no DESC);

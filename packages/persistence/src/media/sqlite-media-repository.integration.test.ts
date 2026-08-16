@@ -187,6 +187,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             generationInputHash: hash64('h1'),
             modelId: MODEL_ID,
             projectId: 'project_media',
+            roundNo: 1,
             shotId: 'shot_media',
             shotVersionId: 'shotv_media',
           }),
@@ -238,6 +239,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             generationInputHash: hash64('h2'),
             modelId: MODEL_ID,
             projectId: 'project_media',
+            roundNo: 2,
             shotId: 'shot_media',
             shotVersionId: 'shotv_media',
           }),
@@ -265,7 +267,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
         insertShot(database, 'shot_other', 'shotv_other');
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
         await seedSucceededCandidate(unitOfWork, 'cand_a', hash64('h1'));
-        await seedSucceededCandidate(unitOfWork, 'cand_b', hash64('h1'));
+        await seedSucceededCandidate(unitOfWork, 'cand_b', hash64('h1'), undefined, undefined, 2);
         await seedSucceededCandidate(
           unitOfWork,
           'cand_other',
@@ -279,6 +281,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             generationInputHash: hash64('h1'),
             modelId: MODEL_ID,
             projectId: 'project_media',
+            roundNo: 3,
             shotId: 'shot_media',
             shotVersionId: 'shotv_media',
           }),
@@ -327,7 +330,14 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           'shot_other',
           'shotv_other',
         );
-        await seedSucceededCandidate(unitOfWork, 'cand_b', hash64('h_private'));
+        await seedSucceededCandidate(
+          unitOfWork,
+          'cand_b',
+          hash64('h_private'),
+          undefined,
+          undefined,
+          2,
+        );
         await unitOfWork.run((media) => media.selectCandidate('shot_media', 'cand_a'));
 
         const affected = await unitOfWork.run((media) =>
@@ -383,6 +393,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             generationInputHash: hash64('h1'),
             modelId: MODEL_ID,
             projectId: 'project_media',
+            roundNo: 2,
             shotId: 'shot_media',
             shotVersionId: 'shotv_media',
           }),
@@ -427,6 +438,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
               generationInputHash: hash64('h1'),
               modelId: MODEL_ID,
               projectId: 'project_media',
+              roundNo: 1,
               shotId: 'shot_media',
               shotVersionId: 'shotv_media',
             });
@@ -546,7 +558,12 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       const database = await setup(root, 'media_repo_task_fsm.sqlite');
       try {
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
-        const insertTask = (id: string, idempotencyKey: string) =>
+        const insertTask = (
+          id: string,
+          idempotencyKey: string,
+          shotId = 'shot_media',
+          shotVersionId = 'shotv_media',
+        ) =>
           unitOfWork.run((media) =>
             media.insertTask({
               candidateCount: 4,
@@ -554,8 +571,8 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
               id,
               idempotencyKey,
               projectId: 'project_media',
-              shotId: 'shot_media',
-              shotVersionId: 'shotv_media',
+              shotId,
+              shotVersionId,
             }),
           );
         const task = await insertTask('task_1', 'req_1');
@@ -567,6 +584,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           idempotencyKey: 'req_1',
           phase: 'SUBMITTED',
           providerTaskId: null,
+          roundNo: 1,
         });
         // 幂等键冲突（并发重放兜底）。
         await expect(insertTask('task_2', 'req_1')).rejects.toThrow(
@@ -612,12 +630,14 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           unitOfWork.run((media) => media.listUnfinishedTasks('project_media')),
         ).resolves.toEqual([]);
 
-        // 第二个任务：非终态取消 + 失败路径错误码。
-        await insertTask('task_3', 'req_3');
+        // 第二个任务：非终态取消 + 失败路径错误码（异镜头避开 UNIQUE(shot_id, round_no)）。
+        insertShot(database, 'shot_cancel', 'shotv_cancel');
+        insertShot(database, 'shot_fail', 'shotv_fail');
+        await insertTask('task_3', 'req_3', 'shot_cancel', 'shotv_cancel');
         await expect(unitOfWork.run((media) => media.cancelTask('task_3'))).resolves.toMatchObject({
           phase: 'CANCELLED',
         });
-        await insertTask('task_4', 'req_4');
+        await insertTask('task_4', 'req_4', 'shot_fail', 'shotv_fail');
         await expect(
           unitOfWork.run((media) => media.failTask('task_4', 'MODEL_RATE_LIMITED')),
         ).resolves.toMatchObject({ errorCode: 'MODEL_RATE_LIMITED', phase: 'FAILED' });
@@ -625,6 +645,45 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
         await expect(unitOfWork.run((media) => media.completeTask('task_missing'))).rejects.toThrow(
           'MEDIA_TASK_NOT_FOUND',
         );
+
+        // 任务↔轮一一对应：建档时派生 max(round_no)+1；同镜头第二轮任务被
+        // UNIQUE(shot_id, round_no) 拒绝（新轮须先落上一轮候选）。
+        await seedSucceededCandidate(unitOfWork, 'cand_round1', hash64('gen_1'));
+        const taskRound2 = await insertTask('task_5', 'req_5');
+        expect(taskRound2).toMatchObject({ roundNo: 2 });
+        await expect(insertTask('task_6', 'req_6')).rejects.toThrow(
+          'MEDIA_TASK_IDEMPOTENCY_CONFLICT',
+        );
+
+        // 候选级 provider_task_id 留证（spec：首次 poll 前持久化）。
+        const pendingRound = await unitOfWork.run((media) =>
+          media.insertCandidates({
+            candidateIds: ['cand_p1', 'cand_p2'],
+            generationInputHash: hash64('gen_3'),
+            modelId: MODEL_ID,
+            projectId: 'project_media',
+            roundNo: 2,
+            shotId: 'shot_media',
+            shotVersionId: 'shotv_media',
+          }),
+        );
+        expect(pendingRound.every((candidate) => candidate.providerTaskId === null)).toBe(true);
+        await expect(
+          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_p1', 'pt_1')),
+        ).resolves.toMatchObject({ providerTaskId: 'pt_1', status: 'PENDING' });
+        // 幂等重放（同 taskId）安全；不同 taskId / 非 PENDING / 不存在分别稳定拒绝。
+        await expect(
+          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_p1', 'pt_1')),
+        ).resolves.toMatchObject({ providerTaskId: 'pt_1' });
+        await expect(
+          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_p1', 'pt_2')),
+        ).rejects.toThrow('MEDIA_CANDIDATE_TASK_CONFLICT');
+        await expect(
+          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_round1', 'pt_3')),
+        ).rejects.toThrow('MEDIA_CANDIDATE_TASK_CONFLICT');
+        await expect(
+          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_missing', 'pt_4')),
+        ).rejects.toThrow('MEDIA_CANDIDATE_NOT_FOUND');
       } finally {
         database.close();
       }
@@ -638,6 +697,7 @@ const seedSucceededCandidate = async (
   generationInputHash: string,
   shotId = 'shot_media',
   shotVersionId = 'shotv_media',
+  roundNo = 1,
 ): Promise<void> => {
   await unitOfWork.run(async (media) => {
     await media.insertCandidates({
@@ -645,6 +705,7 @@ const seedSucceededCandidate = async (
       generationInputHash,
       modelId: MODEL_ID,
       projectId: 'project_media',
+      roundNo,
       shotId,
       shotVersionId,
     });

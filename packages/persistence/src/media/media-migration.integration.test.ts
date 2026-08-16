@@ -419,20 +419,22 @@ describe('0009_media_assets_images.sql', () => {
       const database = await openMigratedDatabase(root, 'media_constraints_task.sqlite');
       try {
         seedShotGraph(database);
+        let roundCounter = 0;
         const insertTask = (
           id: string,
           phase: string,
           candidateCount: number,
           key: string,
         ): void => {
+          roundCounter += 1;
           database
             .prepare(
               `INSERT INTO media_generation_tasks
                (id, project_id, shot_id, shot_version_id, idempotency_key, phase,
-                generation_input_hash, candidate_count, created_at, updated_at)
-               VALUES (?, 'project_media', 'shot_media', 'shotv_media', ?, ?, ?, ?, ?, ?)`,
+                generation_input_hash, candidate_count, round_no, created_at, updated_at)
+               VALUES (?, 'project_media', 'shot_media', 'shotv_media', ?, ?, ?, ?, ?, ?, ?)`,
             )
-            .run(id, key, phase, 'd'.repeat(64), candidateCount, NOW, NOW);
+            .run(id, key, phase, 'd'.repeat(64), candidateCount, roundCounter, NOW, NOW);
         };
         insertTask('task_1', 'SUBMITTED', 4, 'idem_media_1');
         expect(() => {
@@ -445,6 +447,23 @@ describe('0009_media_assets_images.sql', () => {
           insertTask('task_dup_key', 'POLLING', 4, 'idem_media_1');
         }).toThrow();
         insertTask('task_2', 'COMPLETED', 4, 'idem_media_2');
+        // 任务↔轮一一对应：同镜头重复 round_no 被 UNIQUE 拒绝；round_no ≤ 0 被 CHECK 拒绝。
+        const insertTaskRound = (id: string, key: string, roundNo: number): void => {
+          database
+            .prepare(
+              `INSERT INTO media_generation_tasks
+               (id, project_id, shot_id, shot_version_id, idempotency_key, phase,
+                generation_input_hash, candidate_count, round_no, created_at, updated_at)
+               VALUES (?, 'project_media', 'shot_media', 'shotv_media', ?, 'POLLING', ?, 4, ?, ?, ?)`,
+            )
+            .run(id, key, 'd'.repeat(64), roundNo, NOW, NOW);
+        };
+        expect(() => {
+          insertTaskRound('task_dup_round', 'idem_media_4', 5);
+        }).toThrow();
+        expect(() => {
+          insertTaskRound('task_zero_round', 'idem_media_5', 0);
+        }).toThrow();
       } finally {
         database.close();
       }
