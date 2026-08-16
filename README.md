@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前 Active Change 为 `shot-first-frame-image-generation`（V2 图片切片第一步：逐镜头首帧候选生成、资产版本与参考图、人工选择；产品负责人已拍板提案先行，Provider 选火山方舟豆包 Seedream）。最近归档的 Change 为 `shot-contract-generation` 与 `backup-sidecar-hygiene`（2026-08-16）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前无 Active Change。最近归档的 Change 为 `shot-first-frame-image-generation`（2026-08-17，V2 图片切片第一步：逐镜头首帧候选生成、资产版本与参考图、人工选择，Provider 为火山方舟豆包 Seedream）；此前为 `shot-contract-generation` 与 `backup-sidecar-hygiene`（2026-08-16）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 
@@ -98,8 +98,20 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - Main/Preload 已提供逐方法的 `script`、`job`、`provider` 和 `events` IPC 白名单；`staged-script-generation` 已注入阶段提交器，`job.create` 开放真实剧本生成，不再返回 `JOB_SUBMISSION_UNAVAILABLE`，也不创建假版本或空壳任务。
 - `staged-script-generation` 已实现 SourceInput/Consent/Episode 初始化、五阶段 ScriptService、不可变 DRAFT/READY/STALE_INPUT 版本链、版本历史与恢复、五阶段 Prompt（v2/story_bible v3）、Script Job 提交/校验/恢复，以及 `script` 五方法白名单和剧本工作区；已通过 `openspec validate --strict`、全量门禁与 clean packaged smoke（离线 Mock），后续经真实 Qwen 全流程联调于 2026-08-15 归档。
 - `shot-contract-generation` 已实现第六阶段 SHOT_CONTRACT：分镜候选契约（ModelShotSetCandidate 键存在性）→ 系统字段注入（含 dialogue allOf 精确值系统派生：audio/lip_sync/speaker/台词时长，不信任模型）→ 集合校验（sequence 连续、previous_shot_id 集合内回指、character/scene ID 源自冻结 STORY_BIBLE、Σ target_duration_sec ∈ [30,180]）→ Registry ShotContract 1.1.0 FINAL → 整集 DRAFT/READY/STALE_INPUT 版本链、历史集合恢复、storyboard 工作区与确认/恢复路径；迁移 0008 种子 `shot_contract/v1` 模板（sha256 三处锁死）。真实 Qwen 六阶段联调于 2026-08-16 全绿。
+- `shot-first-frame-image-generation` 已实现 V2 图片切片第一步——逐镜头首帧候选生成：`ImageModelPort`（submit/poll/download，容忍同步与异步双形态）、迁移 0009（assets/asset_versions/image_candidates/media_generation_tasks + Seedream 能力快照播种）、内容寻址存储（写入复算校验 + 原子 rename + 路径三重防逃逸）、`MediaGenerationService`（冻结输入哈希、幂等键、STALE 按输入世代与资产绑定双传播）、同项目串行调度与崩溃恢复（证据三分支零重发）、`image` 六方法 IPC 白名单（singleflight + 输出脱敏复验）、`jingxu://media` 受限协议与 CSP `img-src jingxu:`、分镜工作区首帧面板（世代分组、候选比较、人工选择、历史世代只读）；Mock 与真实 SeedreamImageModelAdapter（model id 快照锁定、错误归一化、结果字节魔数嗅探）。真实火山方舟 Seedream 联调于 2026-08-17 全绿。
 
 ## 最近验证证据
+
+2026-08-17 `shot-first-frame-image-generation` 收尾记录（V2 图片切片第一步 + 真实 Seedream 联调）：
+
+- 真实火山方舟 Seedream 联调全绿（打包产物 + 生产数据根 + 真实 Qwen/Seedream 适配器，探针 1 passed 10.7m；ARK Key 与 DashScope Key 分设，全程经 safeStorage，不经探针读取或回显）：五阶段 + SHOT_CONTRACT 全 SUCCEEDED（9 镜头 READY）；轮1 文生图 4 候选真实 JPEG（238–291KB、全部 1440×2560、`jingxu://media/` 受限协议）；上传 8 资产覆盖圣经全部 character/scene 引用；轮2 参考图生图 generationInputHash 必变（绑定进入生成输入实证）；人工选择、全部资产升版 v2 → 受影响镜头含本镜头、8/8 候选 STALE_INPUT（含未绑定资产的轮1，与 spec「输入哈希不再匹配的候选」语义一致）、选择指针保留可追溯；UI reload 后 8/8 候选 naturalWidth>0。
+- 联调修复：Ark 真实响应 `data[].size` 为 "WxH" 字符串而非实现假设的对象 → 候选宽高落库全 null，违反 spec 尺寸落库要求 → `parseSeedreamSize` 双形态解析 + 单测（合法字符串/畸形降级 null/对象兼容），真实联调复证 8 候选全 1440×2560。
+- 环境发现：① Electron safeStorage v10 密钥随 userData 目录隔离（`Local State` os_crypt.encrypted_key），dev 目录加密的密文在打包进程临时 user-data-dir 下不可解，表现为 27ms MODEL_UNKNOWN（CREDENTIAL_NOT_FOUND 兜底）——生产单安装持久 userData 不受影响，判联调环境特性；且 Playwright 不实时转发子进程 stderr，插桩输出假阴性误导排障（需 `app.process().stderr` 直连取证）。② SHOT_CONTRACT 于真实网络高频撞 120s 调用上限（当晚 8 次提交：5 超时、2 speaker_id oneOf 契约校验失败、1 过）且 MODEL_TIMEOUT 不自动重试；失败作业不写版本、输入未变 → 探针内同项目重提交 ≤3 次收敛。
+- STALE 语义实证：资产升版后按 generationInputHash 传播，当前世代之外的候选全员失效，已选候选保留文件四元组与 selectedAt 指针。
+- 生产库迁移 0009 留证：含审计修复的重打包产物对真实生产根一次启动，库 8→9、升级前备份恰新增 1 份（自身 head=8）、启动审计通过 writeEnabled=true——同时实证 episode_versions 回执解析修复对含 SHOT_CONTRACT 确认回执的真实生产库成立（旧代码下该库下次启动必进只读故障）。
+- 全量门禁（HEAD=53db326）：Format、ESLint、TypeScript 零错误；Unit 650、Contract 106、Integration 197；Playwright Electron E2E 离线 10 passed + 1 skipped。Windows x64 打包 clean 与 v8 升级双 smoke 通过（升级冒烟另揪出 episode_versions 审计解析潜伏缺陷并修复）。
+- `openspec validate shot-first-frame-image-generation --strict` 通过后归档为 `2026-08-17-shot-first-frame-image-generation`（新建 shot-first-frame-image-generation spec）。
+- 真实用户使用与 AC-V1-01 至 AC-V1-06 验收仍待人工核验。
 
 2026-08-16 `backup-sidecar-hygiene` 收尾记录（备份目录 sidecar 卫生修复）：
 
@@ -149,8 +161,8 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ## 当前尚未实现
 
 - 分镜逐镜头人工编辑与锁定（locked_paths 目前恒为空）、导入导出和评测业务用例
-- 真实用户使用和发布验收（真实 Qwen 阶段生成连通性已于 2026-08-16 通过开发者环境六阶段全流程联调）
-- 图片、视频、TTS、口型、成片和其他 V2/V3 能力
+- 真实用户使用和发布验收（真实 Qwen 六阶段与真实 Seedream 首帧生成连通性已分别于 2026-08-16、2026-08-17 通过开发者环境全流程联调）
+- 视频、TTS、口型、成片和其他 V2/V3 能力（V2 图片切片第一步——逐镜头首帧候选——已随 `shot-first-frame-image-generation` 于 2026-08-17 落地；多镜头批量生成、首帧外后帧等在后续 Change）
 - AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 目前具备可重复的 Mock 自动化证据与一次真实 Qwen 开发者环境全流程运行，仍不能据此声称真实用户使用或 V1 发布验收已经完成
 
 这些能力将分别进入后续 OpenSpec Change。`0001_initial.sql` 中存在对应表结构不等于业务方法、页面、Schema 校验或验收链路已经实现。
