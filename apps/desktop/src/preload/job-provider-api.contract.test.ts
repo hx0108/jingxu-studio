@@ -8,6 +8,7 @@ describe('Job Provider Events Preload Contract', () => {
     const api = createJingxuApi(vi.fn());
     expect(Object.keys(api).sort()).toEqual([
       'events',
+      'image',
       'job',
       'project',
       'provider',

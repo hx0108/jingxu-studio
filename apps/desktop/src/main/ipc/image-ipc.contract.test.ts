@@ -7,6 +7,7 @@ import type {
   AssetViewDto,
   ImageCandidateViewDto,
   MediaTaskViewDto,
+  UploadAssetReferenceResultDto,
 } from '@jingxu/contracts';
 import type { ImageIpcService } from './image-ipc';
 import { registerImageIpc } from './image-ipc';
@@ -79,7 +80,10 @@ const asset: AssetViewDto = {
 const okTask: AppResultDto<MediaTaskViewDto> = { data: task, ok: true };
 const okCandidates: AppResultDto<ImageCandidateViewDto[]> = { data: [candidate], ok: true };
 const okAssets: AppResultDto<AssetViewDto[]> = { data: [asset], ok: true };
-const okAssetVersion: AppResultDto<AssetVersionViewDto> = { data: assetVersion, ok: true };
+const okUpload: AppResultDto<UploadAssetReferenceResultDto> = {
+  data: { affectedShots: [{ candidateCount: 1, shotId: 'shot_12345678' }], version: assetVersion },
+  ok: true,
+};
 
 const generateInput = {
   projectId: 'project_12345678',
@@ -114,7 +118,7 @@ const createHarness = (ready = true) => {
     listAssets: vi.fn(() => Promise.resolve(okAssets)),
     listCandidates: vi.fn(() => Promise.resolve(okCandidates)),
     selectCandidate: vi.fn(() => Promise.resolve(okCandidates)),
-    uploadAssetReference: vi.fn(() => Promise.resolve(okAssetVersion)),
+    uploadAssetReference: vi.fn(() => Promise.resolve(okUpload)),
   };
   registerImageIpc(
     { handle: (channel, listener) => handlers.set(channel, listener) },
@@ -200,7 +204,7 @@ describe('Image Main IPC Contract', () => {
 
   it('同 requestId 并发同命令（含上传字节）—singleflight 同结果—Application 只调用一次', async () => {
     const { handlers, service } = createHarness();
-    let finish: ((value: AppResultDto<AssetVersionViewDto>) => void) | undefined;
+    let finish: ((value: AppResultDto<UploadAssetReferenceResultDto>) => void) | undefined;
     vi.mocked(service.uploadAssetReference).mockImplementation(
       () => new Promise((resolve) => (finish = resolve)),
     );
@@ -210,11 +214,8 @@ describe('Image Main IPC Contract', () => {
     await vi.waitFor(() => {
       expect(service.uploadAssetReference).toHaveBeenCalledOnce();
     });
-    finish?.({ data: assetVersion, ok: true });
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      { data: assetVersion, ok: true },
-      { data: assetVersion, ok: true },
-    ]);
+    finish?.(okUpload);
+    await expect(Promise.all([first, second])).resolves.toEqual([okUpload, okUpload]);
     expect(service.uploadAssetReference).toHaveBeenCalledOnce();
   });
 

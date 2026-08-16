@@ -113,7 +113,13 @@ export const createImageFeatureRegistration = ({
       const mediaUnitOfWork = persistenceRuntime.getMediaUnitOfWork();
       const workspaceQuery = persistenceRuntime.getScriptWorkspaceQuery();
       const projectUnitOfWork = persistenceRuntime.getProjectUnitOfWork();
-      if (mediaUnitOfWork === null || workspaceQuery === null || projectUnitOfWork === null) {
+      const formatProfileRepository = persistenceRuntime.getFormatProfileRepository();
+      if (
+        mediaUnitOfWork === null ||
+        workspaceQuery === null ||
+        projectUnitOfWork === null ||
+        formatProfileRepository === null
+      ) {
         return false;
       }
 
@@ -134,12 +140,11 @@ export const createImageFeatureRegistration = ({
             modelId: SEEDREAM_MODEL_ID,
           });
 
-      const formatProfiles: Pick<FormatProfileRepository, 'findAllByProject'> = {
-        findAllByProject: (projectId) =>
-          projectUnitOfWork.run(({ formatProfiles: repository }) =>
-            repository.findAllByProject(projectId),
-          ),
-      };
+      // 画幅解析是只读查询且会在媒体事务内发生：必须直连连接，若经
+      // projectUnitOfWork.run 排队，共享 FIFO 事务队列会与外层媒体事务自锁
+      // （5.3 E2E 实证：先表现为 "cannot start a transaction within a transaction"）。
+      const formatProfiles: Pick<FormatProfileRepository, 'findAllByProject'> =
+        formatProfileRepository;
       const referenceImages = {
         readReference: ({
           fileSha256,

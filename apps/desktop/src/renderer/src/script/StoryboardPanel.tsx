@@ -7,6 +7,7 @@ import type {
   StoryboardWorkspaceDto,
 } from '@jingxu/contracts';
 
+import { FirstFramePanel } from './FirstFramePanel';
 import { isTerminalJob } from './script-ui-policy';
 
 const SHOT_SIZE_LABELS: Record<StoryboardShotSummaryDto['shotSize'], string> = {
@@ -46,6 +47,8 @@ const STORYBOARD_JOB_ERROR_COPY: Readonly<Record<string, string>> = {
 
 export interface StoryboardPanelProps {
   readonly episodeTargetDurationSec: number;
+  /** 首帧面板按 projectId 定界媒体通道调用。 */
+  readonly projectId: string;
   /** null 表示当前可生成；否则为不可生成的原因（同时禁用按钮）。 */
   readonly generateHint: string | null;
   readonly job: JobSummaryDto | null;
@@ -64,6 +67,7 @@ export const StoryboardPanel = ({
   onGenerate,
   onRestore,
   pending,
+  projectId,
   storyboard,
 }: StoryboardPanelProps) => {
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
@@ -207,6 +211,12 @@ export const StoryboardPanel = ({
               <dd>{selectedShot.versionId}</dd>
             </div>
           </dl>
+          <FirstFramePanel
+            key={selectedShot.shotId}
+            projectId={projectId}
+            shot={selectedShot}
+            storyboardStatus={current?.status ?? null}
+          />
         </section>
       )}
       <section aria-labelledby="storyboard-history-title">

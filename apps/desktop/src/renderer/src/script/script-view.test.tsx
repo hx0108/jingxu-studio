@@ -107,6 +107,7 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         onGenerate={vi.fn()}
         onRestore={vi.fn()}
         pending={false}
+        projectId="project_12345678"
         storyboard={storyboard}
       />,
     );
@@ -127,11 +128,16 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     expect(html).toContain('shot_00000001');
     expect(html).toContain('12s');
     expect(html).toContain('EXTREME_LONG');
+    // 逐镜头首帧面板挂载在详情内：DRAFT 整集下生成首帧按钮禁用并给出提示。
+    expect(html).toContain('首帧候选 · 镜头 #1');
+    expect(html).toContain('分镜整集未确认 READY；确认后才能为镜头生成首帧。');
+    expect(html).toContain('正在加载首帧候选…');
+    // 分镜自身操作可执行（首帧按钮的 disabled 属预期，不在此断言）。
+    expect(html).toContain('<button type="button">生成整集分镜</button>');
     // 只读边界与历史恢复入口。
     expect(html).toContain('不支持编辑、拆分、合并、排序或删除');
     expect(html).toContain('v1 · READY · 2 个镜头');
     expect(html).toContain('恢复为新草稿');
-    expect(html).not.toContain('disabled=""');
   });
 
   it('尚未生成分镜—空态提示、未生成徽标且无镜头卡片', () => {
@@ -144,6 +150,7 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         onGenerate={vi.fn()}
         onRestore={vi.fn()}
         pending={false}
+        projectId="project_12345678"
         storyboard={{ current: null, history: [], shots: [], totalDurationSec: 0 }}
       />,
     );
@@ -170,6 +177,7 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         onGenerate={vi.fn()}
         onRestore={vi.fn()}
         pending={false}
+        projectId="project_12345678"
         storyboard={{ current: null, history: [], shots: [], totalDurationSec: 0 }}
       />,
     );
@@ -190,6 +198,7 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         onGenerate={vi.fn()}
         onRestore={vi.fn()}
         pending={false}
+        projectId="project_12345678"
         storyboard={{
           current: storyboardVersion({
             id: 'episodever_0003',

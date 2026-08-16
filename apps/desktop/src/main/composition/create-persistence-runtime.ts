@@ -11,6 +11,7 @@ import { SchemaResourceAdapter } from '../adapters/schema-resource-adapter';
 
 import type {
   CompiledSchemaRegistry,
+  FormatProfileRepository,
   JobRepositoryPort,
   JobUnitOfWorkPort,
   MediaUnitOfWorkPort,
@@ -25,6 +26,7 @@ import type {
 
 export interface DesktopPersistenceRuntime {
   readonly close: () => void;
+  readonly getFormatProfileRepository: () => FormatProfileRepository | null;
   readonly getJobUnitOfWork: () => JobUnitOfWorkPort | null;
   readonly getJobRepository: () => JobRepositoryPort | null;
   readonly getMediaUnitOfWork: () => MediaUnitOfWorkPort | null;
@@ -85,6 +87,7 @@ export const createDesktopPersistenceRuntime = async ({
       startupService.close();
       registry.close();
     },
+    getFormatProfileRepository: () => adapter.getFormatProfileRepository(),
     getJobUnitOfWork: () => adapter.getJobUnitOfWork(),
     getJobRepository: () => adapter.getJobRepository(),
     getMediaUnitOfWork: () => adapter.getMediaUnitOfWork(),

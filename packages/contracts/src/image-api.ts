@@ -143,6 +143,21 @@ export const assetViewSchema = z
     }
   });
 
+/** 资产升版 STALE 传播的受影响镜头摘要（spec：升版 MUST 支持列出受影响镜头清单）。 */
+export const staleAffectedShotSchema = z
+  .object({ candidateCount: z.number().int().positive(), shotId: shotIdSchema })
+  .strict();
+export type StaleAffectedShotDto = z.infer<typeof staleAffectedShotSchema>;
+
+/** 上传结果：新版本视图 + 本次升版触发 STALE 的受影响镜头（无候选受影响则为空数组）。 */
+export const uploadAssetReferenceResultSchema = z
+  .object({
+    affectedShots: z.array(staleAffectedShotSchema).max(180),
+    version: assetVersionViewSchema,
+  })
+  .strict();
+export type UploadAssetReferenceResultDto = z.infer<typeof uploadAssetReferenceResultSchema>;
+
 /**
  * 生成输入哈希的输入集（design D3）：哈希对象逐字段对齐服务层计算，
  * 契约层固化字段集防漂移。哈希算法（sha256 拼接顺序）属 application 实现。
@@ -221,10 +236,10 @@ export interface ImageApi {
   /** 人工选择/切换当前首帧；返回该镜头全量候选以刷新选择态。 */
   selectCandidate(input: SelectCandidateInputDto): Promise<AppResultDto<ImageCandidateViewDto[]>>;
   listAssets(input: ListAssetsInputDto): Promise<AppResultDto<AssetViewDto[]>>;
-  /** 上传资产参考图（≤20MB PNG/JPEG/WebP），产生新的不可变 AssetVersion。 */
+  /** 上传资产参考图（≤20MB PNG/JPEG/WebP），产生新的不可变 AssetVersion 并返回受影响镜头。 */
   uploadAssetReference(
     input: UploadAssetReferenceInputDto,
-  ): Promise<AppResultDto<AssetVersionViewDto>>;
+  ): Promise<AppResultDto<UploadAssetReferenceResultDto>>;
   getMediaTask(input: GetMediaTaskInputDto): Promise<AppResultDto<MediaTaskViewDto>>;
 }
 

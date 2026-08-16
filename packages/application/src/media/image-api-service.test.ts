@@ -258,9 +258,11 @@ describe('createImageApiService', () => {
       'trace_1',
     );
     if (!first.ok) throw new Error('首次上传应成功');
-    expect(first.data).toMatchObject({ byteSize: 3, provenance: 'UPLOADED', versionNo: 1 });
-    expect(first.data.assetId).toMatch(/^gen_/u);
-    expect(first.data.mediaUrl.startsWith('jingxu://media/asset-version/')).toBe(true);
+    expect(first.data.version).toMatchObject({ byteSize: 3, provenance: 'UPLOADED', versionNo: 1 });
+    expect(first.data.version.assetId).toMatch(/^gen_/u);
+    expect(first.data.version.mediaUrl.startsWith('jingxu://media/asset-version/')).toBe(true);
+    // 无候选引用旧版本：受影响镜头清单为空但字段恒在（Renderer 决策入口）。
+    expect(first.data.affectedShots).toEqual([]);
     const second = await fixture.service.uploadAssetReference(
       {
         assetType: 'CHARACTER',
@@ -275,11 +277,43 @@ describe('createImageApiService', () => {
       },
       'trace_1',
     );
-    expect(second).toMatchObject({ data: { versionNo: 2 }, ok: true });
+    expect(second).toMatchObject({ data: { version: { versionNo: 2 } }, ok: true });
     const assets = await fixture.repository.listAssets('project_1');
     expect(assets).toHaveLength(1);
     expect(assets[0]?.versions).toHaveLength(2);
     expect(fixture.writes).toHaveLength(2);
+  });
+
+  it('uploadAssetReference—升版传播受影响镜头摘要—映射进返回结果', async () => {
+    const fixture = buildFixture({
+      ...generationStub(null),
+      propagateStaleForAssetChange: () =>
+        Promise.resolve({
+          data: [{ candidateCount: 4, shotId: 'shot_1' }],
+          ok: true,
+        } as AppResultDto<readonly MediaStaleAffectedShot[]>),
+    });
+    const result = await fixture.service.uploadAssetReference(
+      {
+        assetType: 'SCENE',
+        bibleRefId: 'scene_alley',
+        byteSize: 3,
+        bytes: Uint8Array.from([1, 2, 3]),
+        description: null,
+        displayName: '雨巷',
+        mimeType: 'image/png',
+        projectId: 'project_1',
+        requestId: 'request_upload_4',
+      },
+      'trace_1',
+    );
+    expect(result).toMatchObject({
+      data: {
+        affectedShots: [{ candidateCount: 4, shotId: 'shot_1' }],
+        version: { versionNo: 1 },
+      },
+      ok: true,
+    });
   });
 
   it('listAssets—currentVersion 指向最新版本—空资产 currentVersion 为 null', async () => {

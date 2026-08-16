@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { ImageApi } from './image-api';
 import type { ProjectApi } from './project-api';
 import type { EventsApi, JobApi, ProviderApi } from './job-provider-api';
 import type { ScriptApi } from './script-api';
@@ -129,6 +130,7 @@ export * from './stage';
 
 export interface JingxuApi {
   readonly events: EventsApi;
+  readonly image: ImageApi;
   readonly job: JobApi;
   readonly project: ProjectApi;
   readonly provider: ProviderApi;

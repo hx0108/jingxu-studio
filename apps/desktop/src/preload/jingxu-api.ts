@@ -1,6 +1,11 @@
 import {
   appResultSchema,
+  assetViewSchema,
   EVENTS_IPC_CHANNELS,
+  generateCandidatesInputSchema,
+  getMediaTaskInputSchema,
+  IMAGE_IPC_CHANNELS,
+  imageCandidateViewSchema,
   jobCreateInputSchema,
   jobGetInputSchema,
   JOB_IPC_CHANNELS,
@@ -8,6 +13,9 @@ import {
   jobMutationInputSchema,
   jobSummarySchema,
   jobUpdatesSubscriptionSchema,
+  listAssetsInputSchema,
+  listCandidatesInputSchema,
+  mediaTaskViewSchema,
   createProjectInputSchema,
   deleteProjectInputSchema,
   PROJECT_IPC_CHANNELS,
@@ -24,6 +32,7 @@ import {
   restoreProjectInputSchema,
   RUNTIME_IPC_CHANNELS,
   SCRIPT_IPC_CHANNELS,
+  selectCandidateInputSchema,
   confirmScriptVersionInputSchema,
   getScriptWorkspaceInputSchema,
   initializeOriginalInputSchema,
@@ -35,7 +44,11 @@ import {
   startupStatusSchema,
   subscriptionResultSchema,
   updateProjectInputSchema,
+  uploadAssetReferenceInputSchema,
+  uploadAssetReferenceResultSchema,
   type CreateProjectInputDto,
+  type GenerateCandidatesInputDto,
+  type GetMediaTaskInputDto,
   type JobCreateInputDto,
   type JobGetInputDto,
   type JobListInputDto,
@@ -46,6 +59,8 @@ import {
   type ConfirmScriptVersionInputDto,
   type GetScriptWorkspaceInputDto,
   type InitializeOriginalInputDto,
+  type ListAssetsInputDto,
+  type ListCandidatesInputDto,
   type ProjectGetInputDto,
   type ProjectListInputDto,
   type ProviderCredentialCommandDto,
@@ -56,12 +71,15 @@ import {
   type RestoreProjectInputDto,
   type RestoreScriptVersionInputDto,
   type SaveScriptDraftInputDto,
+  type SelectCandidateInputDto,
   type StartupCommandDto,
   type UpdateProjectInputDto,
+  type UploadAssetReferenceInputDto,
 } from '@jingxu/contracts';
 
 export {
   EVENTS_IPC_CHANNELS,
+  IMAGE_IPC_CHANNELS,
   JOB_IPC_CHANNELS,
   PROJECT_IPC_CHANNELS,
   PROVIDER_IPC_CHANNELS,
@@ -80,6 +98,38 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
           await invoke(EVENTS_IPC_CHANNELS.subscribeJobUpdates, validated),
         );
       },
+    }),
+    image: Object.freeze({
+      generateCandidates: async (input: GenerateCandidatesInputDto) =>
+        appResultSchema(mediaTaskViewSchema).parse(
+          await invoke(
+            IMAGE_IPC_CHANNELS.generateCandidates,
+            generateCandidatesInputSchema.parse(input),
+          ),
+        ),
+      listCandidates: async (input: ListCandidatesInputDto) =>
+        appResultSchema(imageCandidateViewSchema.array()).parse(
+          await invoke(IMAGE_IPC_CHANNELS.listCandidates, listCandidatesInputSchema.parse(input)),
+        ),
+      selectCandidate: async (input: SelectCandidateInputDto) =>
+        appResultSchema(imageCandidateViewSchema.array()).parse(
+          await invoke(IMAGE_IPC_CHANNELS.selectCandidate, selectCandidateInputSchema.parse(input)),
+        ),
+      listAssets: async (input: ListAssetsInputDto) =>
+        appResultSchema(assetViewSchema.array()).parse(
+          await invoke(IMAGE_IPC_CHANNELS.listAssets, listAssetsInputSchema.parse(input)),
+        ),
+      uploadAssetReference: async (input: UploadAssetReferenceInputDto) =>
+        appResultSchema(uploadAssetReferenceResultSchema).parse(
+          await invoke(
+            IMAGE_IPC_CHANNELS.uploadAssetReference,
+            uploadAssetReferenceInputSchema.parse(input),
+          ),
+        ),
+      getMediaTask: async (input: GetMediaTaskInputDto) =>
+        appResultSchema(mediaTaskViewSchema).parse(
+          await invoke(IMAGE_IPC_CHANNELS.getTask, getMediaTaskInputSchema.parse(input)),
+        ),
     }),
     job: Object.freeze({
       create: async (input: JobCreateInputDto) =>

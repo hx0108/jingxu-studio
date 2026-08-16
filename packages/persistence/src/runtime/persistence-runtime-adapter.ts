@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import type {
+  FormatProfileRepository,
   JobRepositoryPort,
   JobUnitOfWorkPort,
   MediaUnitOfWorkPort,
@@ -29,6 +30,7 @@ import { loadMigrationSet } from '../migrations/migration-loader';
 import { restoreManagedBackup } from '../recovery/recovery-manager';
 import { SqliteJobRepository } from '../job/sqlite-job-repository';
 import { SqliteJobUnitOfWork } from '../job/sqlite-job-unit-of-work';
+import { SqliteFormatProfileRepository } from '../project/sqlite-format-profile-repository';
 import { SqliteProjectUnitOfWork } from '../project/sqlite-project-unit-of-work';
 import { SqliteProviderProfileRepository } from '../provider/sqlite-provider-profile-repository';
 import { SqliteProviderUnitOfWork } from '../provider/sqlite-provider-unit-of-work';
@@ -160,6 +162,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   readonly #migrationDirectory: string;
   readonly #paths: ManagedPaths;
   #operationTail: Promise<void> = Promise.resolve();
+  #formatProfileRepository: FormatProfileRepository | null = null;
   #projectUnitOfWork: ProjectUnitOfWorkPort | null = null;
   #schemaManifestUnitOfWork: SchemaManifestUnitOfWorkPort | null = null;
   #jobUnitOfWork: JobUnitOfWorkPort | null = null;
@@ -186,6 +189,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   }
 
   public close(): void {
+    this.#formatProfileRepository = null;
     this.#projectUnitOfWork = null;
     this.#schemaManifestUnitOfWork = null;
     this.#jobUnitOfWork = null;
@@ -197,6 +201,11 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
     this.#mediaUnitOfWork = null;
     this.#transactionCoordinator = null;
     this.#manager.close();
+  }
+
+  /** Returns a standalone read-only FormatProfile repository over the audited write connection. */
+  public getFormatProfileRepository(): FormatProfileRepository | null {
+    return this.#formatProfileRepository;
   }
 
   /** Returns the single Project UnitOfWork only after the startup audit reached READY. */
@@ -313,6 +322,8 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
       const backups = await listVerifiedBackups(this.#paths);
       this.#transactionCoordinator ??= new SqliteTransactionCoordinator(database);
       const coordinator = this.#transactionCoordinator;
+      // 只读直查（不经事务队列）：媒体事务内解析画幅时若经 UoW 排队会在共享 FIFO 上自锁。
+      this.#formatProfileRepository ??= new SqliteFormatProfileRepository(database);
       this.#projectUnitOfWork ??= new SqliteProjectUnitOfWork(database, coordinator);
       this.#schemaManifestUnitOfWork ??= new SqliteSchemaManifestUnitOfWork(database, coordinator);
       this.#jobUnitOfWork ??= new SqliteJobUnitOfWork(database, coordinator);
@@ -321,10 +332,13 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
       this.#providerProfileRepository ??= new SqliteProviderProfileRepository(database);
       this.#scriptUnitOfWork ??= new SqliteScriptUnitOfWork(database, coordinator);
       this.#scriptWorkspaceQuery ??= new SqliteScriptWorkspaceQuery(database);
-      this.#mediaUnitOfWork ??= new SqliteMediaUnitOfWork(database, this.#clock);
+      // 媒体域必须共用进程级 FIFO 事务队列：自建协调器会与其它 UoW 在同一连接上
+      // 交错 BEGIN（"cannot start a transaction within a transaction"，5.3 E2E 实证）。
+      this.#mediaUnitOfWork ??= new SqliteMediaUnitOfWork(database, this.#clock, coordinator);
       completedPhases.push('RECOVERY_GATE');
       return { backups, completedPhases, ok: true };
     } catch (error) {
+      this.#formatProfileRepository = null;
       this.#projectUnitOfWork = null;
       this.#schemaManifestUnitOfWork = null;
       this.#jobUnitOfWork = null;

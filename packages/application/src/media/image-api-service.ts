@@ -18,6 +18,7 @@ import type {
   MediaTaskViewDto,
   SelectCandidateInputDto,
   UploadAssetReferenceInputDto,
+  UploadAssetReferenceResultDto,
 } from '@jingxu/contracts';
 import { assetVersionMediaUrl, candidateMediaUrl } from '@jingxu/contracts';
 
@@ -62,7 +63,7 @@ export interface ImageApiService {
   uploadAssetReference(
     input: UploadAssetReferenceInputDto,
     traceId: string,
-  ): Promise<AppResultDto<AssetVersionViewDto>>;
+  ): Promise<AppResultDto<UploadAssetReferenceResultDto>>;
   getMediaTask(
     input: GetMediaTaskInputDto,
     traceId: string,
@@ -242,7 +243,11 @@ export const createImageApiService = (
           traceId,
         );
         if (!propagated.ok) return propagated;
-        return { data: toAssetVersionView(version), ok: true };
+        // 受影响镜头清单随版本返回（spec：资产升版 MUST 支持列出受影响镜头供用户决策）。
+        return {
+          data: { affectedShots: [...propagated.data], version: toAssetVersionView(version) },
+          ok: true,
+        };
       } catch {
         return mediaPersistenceFailure(traceId);
       }

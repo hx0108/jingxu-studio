@@ -10,6 +10,7 @@ import {
   imageCandidateViewSchema,
   mediaTaskViewSchema,
   uploadAssetReferenceInputSchema,
+  uploadAssetReferenceResultSchema,
 } from './image-api';
 
 const id = 'cand_00000001';
@@ -160,6 +161,27 @@ describe('image-api contracts', () => {
     ).toBe(false);
     expect(
       uploadAssetReferenceInputSchema.safeParse({ ...upload, mimeType: 'image/gif' }).success,
+    ).toBe(false);
+  });
+
+  it('上传结果—携带新版本与受影响镜头清单—未知字段拒绝', () => {
+    const result = {
+      affectedShots: [{ candidateCount: 4, shotId }],
+      version: assetVersion,
+    } as const;
+    expect(uploadAssetReferenceResultSchema.safeParse(result).success).toBe(true);
+    expect(
+      uploadAssetReferenceResultSchema.safeParse({ ...result, affectedShots: [] }).success,
+    ).toBe(true);
+    expect(
+      uploadAssetReferenceResultSchema.safeParse({
+        ...result,
+        affectedShots: [{ candidateCount: 0, shotId }],
+      }).success,
+    ).toBe(false);
+    expect(
+      uploadAssetReferenceResultSchema.safeParse({ ...result, storageRelPath: 'C:\\secret' })
+        .success,
     ).toBe(false);
   });
 

@@ -2,7 +2,6 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import {
   appResultSchema,
-  assetVersionViewSchema,
   assetViewSchema,
   generateCandidatesInputSchema,
   getMediaTaskInputSchema,
@@ -13,10 +12,10 @@ import {
   mediaTaskViewSchema,
   selectCandidateInputSchema,
   uploadAssetReferenceInputSchema,
+  uploadAssetReferenceResultSchema,
 } from '@jingxu/contracts';
 import type {
   AppResultDto,
-  AssetVersionViewDto,
   AssetViewDto,
   GenerateCandidatesInputDto,
   GetMediaTaskInputDto,
@@ -26,6 +25,7 @@ import type {
   MediaTaskViewDto,
   SelectCandidateInputDto,
   UploadAssetReferenceInputDto,
+  UploadAssetReferenceResultDto,
 } from '@jingxu/contracts';
 import { z, type ZodType } from 'zod';
 
@@ -61,7 +61,7 @@ export interface ImageIpcService {
   readonly uploadAssetReference: (
     input: UploadAssetReferenceInputDto,
     traceId: string,
-  ) => Promise<AppResultDto<AssetVersionViewDto>>;
+  ) => Promise<AppResultDto<UploadAssetReferenceResultDto>>;
   readonly getMediaTask: (
     input: GetMediaTaskInputDto,
     traceId: string,
@@ -157,7 +157,7 @@ export const registerImageIpc = (
   const taskResult = appResultSchema(mediaTaskViewSchema);
   const candidatesResult = appResultSchema(z.array(imageCandidateViewSchema));
   const assetsResult = appResultSchema(z.array(assetViewSchema));
-  const assetVersionResult = appResultSchema(assetVersionViewSchema);
+  const uploadResult = appResultSchema(uploadAssetReferenceResultSchema);
 
   const registerQuery = <TInput, TOutput>(
     channel: string,
@@ -218,7 +218,7 @@ export const registerImageIpc = (
   registerCommand(
     IMAGE_IPC_CHANNELS.uploadAssetReference,
     uploadAssetReferenceInputSchema,
-    assetVersionResult,
+    uploadResult,
     (input, traceId) => service.uploadAssetReference(input, traceId),
     // 签名不序列化字节（≤20MB Uint8Array 的 JSON 展开是内存炸弹）：哈希代替。
     (input) =>

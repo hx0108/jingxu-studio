@@ -495,6 +495,7 @@ export const ScriptWorkspaceView = ({
         episodeTargetDurationSec={workspace.episode.targetDurationSec}
         generateHint={storyboardGenerateHint}
         job={job}
+        projectId={projectId}
         onConfirm={() => {
           if (globalThis.confirm('确认当前整集分镜为 READY？')) {
             const currentStoryboard = workspace.storyboard.current;

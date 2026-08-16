@@ -1,4 +1,5 @@
 import {
+  IMAGE_IPC_CHANNELS,
   PROJECT_IPC_CHANNELS,
   type AppResultDto,
   type CreateProjectInputDto,
@@ -80,6 +81,7 @@ describe('window.jingxu 白名单 Contract', () => {
     expect(Object.isFrozen(api.project)).toBe(true);
     expect(Object.keys(api).sort()).toEqual([
       'events',
+      'image',
       'job',
       'project',
       'provider',
@@ -152,8 +154,174 @@ describe('window.jingxu 白名单 Contract', () => {
       expect(Reflect.has(api.job, methodName)).toBe(false);
       expect(Reflect.has(api.provider, methodName)).toBe(false);
       expect(Reflect.has(api.events, methodName)).toBe(false);
+      expect(Reflect.has(api.image, methodName)).toBe(false);
     },
   );
+
+  it('Image Change—image 恰有冻结的六方法白名单—零路径/SQL/存储入口', () => {
+    const api = createJingxuApi(vi.fn());
+
+    expect(Object.isFrozen(api.image)).toBe(true);
+    expect(Object.keys(api.image).sort()).toEqual([
+      'generateCandidates',
+      'getMediaTask',
+      'listAssets',
+      'listCandidates',
+      'selectCandidate',
+      'uploadAssetReference',
+    ]);
+    for (const forbidden of ['path', 'sql', 'database', 'repository', 'node', 'persistence']) {
+      expect(Reflect.has(api.image, forbidden)).toBe(false);
+    }
+  });
+
+  it('调用六个 image 方法—输入合法—只 invoke 固定 channel 且校验输出（字节引用原样透传）', async () => {
+    const now = '2026-08-16T00:00:00.000Z';
+    const hash = 'a'.repeat(64);
+    const task = {
+      candidateCount: 4,
+      createdAt: now,
+      errorCode: null,
+      generationInputHash: hash,
+      id: 'task_12345678',
+      phase: 'COMPLETED' as const,
+      shotId: 'shot_12345678',
+      shotVersionId: 'scv_12345678',
+      updatedAt: now,
+    };
+    const candidate = {
+      byteSize: 1024,
+      createdAt: now,
+      errorCode: null,
+      generationInputHash: hash,
+      height: 1440,
+      id: 'cand_12345678',
+      indexInRound: 0,
+      mediaUrl: 'jingxu://media/candidate/cand_12345678',
+      mimeType: 'image/png',
+      roundNo: 1,
+      selectedAt: null,
+      shotId: 'shot_12345678',
+      shotVersionId: 'scv_12345678',
+      status: 'SUCCEEDED' as const,
+      width: 2560,
+    };
+    const assetVersion = {
+      assetId: 'asset_12345678',
+      byteSize: 3,
+      createdAt: now,
+      description: null,
+      height: null,
+      id: 'assetv_12345678',
+      mediaUrl: 'jingxu://media/asset-version/assetv_12345678',
+      mimeType: 'image/png' as const,
+      provenance: 'UPLOADED' as const,
+      versionNo: 1,
+      width: null,
+    };
+    const invoke = vi.fn((channel: string) => {
+      switch (channel) {
+        case IMAGE_IPC_CHANNELS.generateCandidates:
+        case IMAGE_IPC_CHANNELS.getTask:
+          return Promise.resolve({ data: task, ok: true });
+        case IMAGE_IPC_CHANNELS.listCandidates:
+        case IMAGE_IPC_CHANNELS.selectCandidate:
+          return Promise.resolve({ data: [candidate], ok: true });
+        case IMAGE_IPC_CHANNELS.listAssets:
+          return Promise.resolve({
+            data: [
+              {
+                assetType: 'SCENE',
+                bibleRefId: 'scene_12345678',
+                createdAt: now,
+                currentVersion: assetVersion,
+                displayName: '雨巷',
+                id: 'asset_12345678',
+                projectId: 'project_12345678',
+                updatedAt: now,
+                versions: [assetVersion],
+              },
+            ],
+            ok: true,
+          });
+        default:
+          return Promise.resolve({
+            data: {
+              affectedShots: [{ candidateCount: 4, shotId: 'shot_12345678' }],
+              version: assetVersion,
+            },
+            ok: true,
+          });
+      }
+    });
+    const api = createJingxuApi(invoke);
+    const generateInput = {
+      projectId: 'project_12345678',
+      requestId: 'request_gen_00001',
+      shotId: 'shot_12345678',
+    };
+    const listCandidatesInput = { projectId: 'project_12345678', shotId: 'shot_12345678' };
+    const selectInput = {
+      candidateId: 'cand_12345678',
+      projectId: 'project_12345678',
+      requestId: 'request_sel_00001',
+    };
+    const listAssetsInput = { projectId: 'project_12345678' };
+    const uploadInput = {
+      assetType: 'SCENE' as const,
+      bibleRefId: 'scene_12345678',
+      byteSize: 3,
+      bytes: Uint8Array.from([1, 2, 3]),
+      description: null,
+      displayName: '雨巷',
+      mimeType: 'image/png' as const,
+      projectId: 'project_12345678',
+      requestId: 'request_upload_001',
+    };
+    const taskInput = { projectId: 'project_12345678', taskId: 'task_12345678' };
+
+    await expect(api.image.generateCandidates(generateInput)).resolves.toEqual({
+      data: task,
+      ok: true,
+    });
+    await expect(api.image.listCandidates(listCandidatesInput)).resolves.toEqual({
+      data: [candidate],
+      ok: true,
+    });
+    await expect(api.image.selectCandidate(selectInput)).resolves.toEqual({
+      data: [candidate],
+      ok: true,
+    });
+    await expect(api.image.listAssets(listAssetsInput)).resolves.toMatchObject({
+      data: [{ bibleRefId: 'scene_12345678' }],
+      ok: true,
+    });
+    await expect(api.image.uploadAssetReference(uploadInput)).resolves.toMatchObject({
+      data: { affectedShots: [{ shotId: 'shot_12345678' }], version: { versionNo: 1 } },
+      ok: true,
+    });
+    await expect(api.image.getMediaTask(taskInput)).resolves.toEqual({ data: task, ok: true });
+    expect(invoke.mock.calls).toEqual([
+      [IMAGE_IPC_CHANNELS.generateCandidates, generateInput],
+      [IMAGE_IPC_CHANNELS.listCandidates, listCandidatesInput],
+      [IMAGE_IPC_CHANNELS.selectCandidate, selectInput],
+      [IMAGE_IPC_CHANNELS.listAssets, listAssetsInput],
+      // 预校验不改写字节缓冲：≤20MB Uint8Array 原样引用透传（无拷贝/序列化）。
+      [IMAGE_IPC_CHANNELS.uploadAssetReference, { ...uploadInput, bytes: uploadInput.bytes }],
+      [IMAGE_IPC_CHANNELS.getTask, taskInput],
+    ]);
+    const uploadCall = (invoke.mock.calls as readonly (readonly unknown[])[]).find(
+      ([channel]) => channel === IMAGE_IPC_CHANNELS.uploadAssetReference,
+    );
+    expect((uploadCall?.[1] as { bytes: Uint8Array }).bytes).toBe(uploadInput.bytes);
+
+    // 输出校验：越权字段的媒体任务不得进入 Renderer。
+    await expect(
+      createJingxuApi(
+        vi.fn(() => Promise.resolve({ data: { ...task, sql: 'SELECT 1' }, ok: true })),
+      ).image.getMediaTask(taskInput),
+    ).rejects.toThrow();
+  });
 
   it('Project Change—创建公开 API—project 恰有冻结的六方法白名单', () => {
     const api = createJingxuApi(vi.fn());

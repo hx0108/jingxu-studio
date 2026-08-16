@@ -1,8 +1,9 @@
-import type { AppErrorDto, ScriptApi } from '@jingxu/contracts';
+import type { AppErrorDto, ImageApi, ScriptApi } from '@jingxu/contracts';
 
 export const getScriptClient = (): ScriptApi => window.jingxu.script;
 export const getJobClient = () => window.jingxu.job;
 export const getProviderClient = () => window.jingxu.provider;
+export const getImageClient = (): ImageApi => window.jingxu.image;
 export const createScriptRequestId = (operation: string): string =>
   `${operation}_${globalThis.crypto.randomUUID()}`;
 

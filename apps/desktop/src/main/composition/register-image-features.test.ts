@@ -134,6 +134,7 @@ const buildHarness = (writeEnabled = true): Harness => {
     },
   };
   const runtime = {
+    getFormatProfileRepository: () => repositories.formatProfiles,
     getMediaUnitOfWork: () => ({
       run: <T>(work: (media: MediaRepository) => Promise<T>) => work(mediaRepository),
     }),
@@ -204,9 +205,10 @@ describe('createImageFeatureRegistration', () => {
         projectId: 'project_00000001',
         requestId: 'request_upload_0001',
       });
-      const uploaded = (upload as { data: { mediaUrl: string; versionNo: number } }).data;
-      expect(uploaded.versionNo).toBe(1);
-      expect(uploaded.mediaUrl.startsWith('jingxu://media/asset-version/')).toBe(true);
+      const uploaded = (upload as { data: { version: { mediaUrl: string; versionNo: number } } })
+        .data;
+      expect(uploaded.version.versionNo).toBe(1);
+      expect(uploaded.version.mediaUrl.startsWith('jingxu://media/asset-version/')).toBe(true);
 
       const generated = await harness.invoke(IMAGE_IPC_CHANNELS.generateCandidates, {
         projectId: 'project_00000001',
