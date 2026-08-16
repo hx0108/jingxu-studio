@@ -100,6 +100,37 @@ describe('SeedreamImageModelAdapter', () => {
     });
   });
 
+  it('submit—官方 size 为 "WxH" 字符串时解析宽高—畸形字符串降级 null', async () => {
+    const stringSizeFetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        jsonResponse({ ...okBody, data: [{ size: '2560x1440', url: RESULT_URL }] }),
+      ),
+    );
+    const adapter = new SeedreamImageModelAdapter({
+      credentialId: 'cred_ark',
+      credentialPort: credentialPort(),
+      fetch: stringSizeFetch,
+    });
+    const submission = await adapter.submit(request(), new AbortController().signal);
+    expect(submission.kind).toBe('SYNC');
+    if (submission.kind !== 'SYNC') return;
+    expect(submission.result.height).toBe(1440);
+    expect(submission.result.width).toBe(2560);
+
+    const malformedFetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(jsonResponse({ ...okBody, data: [{ size: 'large', url: RESULT_URL }] })),
+    );
+    const malformed = await new SeedreamImageModelAdapter({
+      credentialId: 'cred_ark',
+      credentialPort: credentialPort(),
+      fetch: malformedFetch,
+    }).submit(request(), new AbortController().signal);
+    expect(malformed.kind).toBe('SYNC');
+    if (malformed.kind !== 'SYNC') return;
+    expect(malformed.result.height).toBeNull();
+    expect(malformed.result.width).toBeNull();
+  });
+
   it('submit—参考图编码为 data URI 且非法 mime/超张数被拒', async () => {
     const fetchMock = okFetch();
     const adapter = new SeedreamImageModelAdapter({

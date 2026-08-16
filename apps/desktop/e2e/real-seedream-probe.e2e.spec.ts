@@ -1,4 +1,6 @@
 import { readFile } from 'node:fs/promises';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { encodeMockPng } from '@jingxu/model-adapters';
@@ -36,13 +38,37 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
   );
   const apiKey = (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
 
+  // safeStorage v10 密钥随 userData 目录隔离：临时 user-data-dir 的进程解不开其他目录
+  // 加密的旧密文（联调实录：表现为 27ms MODEL_UNKNOWN）。删除引导密文，让本进程以
+  // 当前目录密钥重加密 ARK Key；文本凭据同理，由 JINGXU_REAL_REFRESH_CREDENTIAL=1
+  // 在进程内走 saveCredential 重存。
+  rmSync(
+    path.join(
+      process.env.LOCALAPPDATA ?? '',
+      'JingxuStudio',
+      'secrets',
+      'profile-image-primary.bin',
+    ),
+    { force: true },
+  );
+
   let application: ElectronApplication | undefined;
   try {
     // --no-proxy-server：主进程 fetch 走 Chromium 网络栈并读系统代理；系统代理间歇不可用
     // 会表现为 MODEL_NETWORK_ERROR（2026-08-16 README 联调记录）。探针直连取证。
+    // JINGXU_PROBE_EXECUTABLE 设定时以打包产物启动（dev 入口 .vite/build 可能缺失）；
+    // 未设时走 dev 目录。两者都不设 JINGXU_E2E → 生产数据根 + 真实适配器。
+    const probeExecutable = process.env.JINGXU_PROBE_EXECUTABLE ?? '';
     application = await electron.launch({
-      args: [desktopRoot, '--no-proxy-server'],
+      args:
+        probeExecutable === ''
+          ? [desktopRoot, '--no-proxy-server']
+          : [
+              `--user-data-dir=${path.join(mkdtempSync(path.join(tmpdir(), 'jingxu-probe-')))}`,
+              '--no-proxy-server',
+            ],
       env: { ...environment(), JINGXU_IMAGE_CREDENTIAL_FILE: arkKeyFile },
+      ...(probeExecutable === '' ? {} : { executablePath: probeExecutable }),
     });
     const page = await application.firstWindow();
     await page
@@ -199,41 +225,48 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
             errorCode: 'SCENE_SCRIPT_NOT_READY',
           };
         }
-        const queuedShot = await window.jingxu.job.create({
-          episodeId: workspace.episode.id,
-          expectedInputVersionId: sceneReadyId,
-          idempotencyKey: requestId('idem-shot-contract'),
-          operationType: 'GENERATE',
-          projectId,
-          requestId: requestId('job-shot-contract'),
-          stage: 'SHOT_CONTRACT',
-        });
-        if (!queuedShot.ok) {
-          return {
-            projectId,
-            stageResults,
-            step: 'job.create-shot',
-            errorCode: queuedShot.error.code,
-          };
-        }
+        // SHOT_CONTRACT 是最重阶段，120s 调用上限在真实网络下高频超时/偶发契约校验失败
+        // （2026-08-17 联调实录）；失败作业不写版本，输入未变 → 同一项目内重新提交即可，
+        // 不必整程重跑五阶段。探针内最多提交 3 次。
         let shotStatus = 'TIMEOUT_POLL';
         let shotError: string | undefined;
-        for (let attempt = 0; attempt < 400; attempt += 1) {
-          const status = await window.jingxu.job.get({ jobId: queuedShot.data.id });
-          if (!status.ok) {
-            shotStatus = `job.get:${status.error.code}`;
-            break;
+        for (let shotAttempt = 0; shotAttempt < 3 && shotStatus !== 'SUCCEEDED'; shotAttempt++) {
+          const queuedShot = await window.jingxu.job.create({
+            episodeId: workspace.episode.id,
+            expectedInputVersionId: sceneReadyId,
+            idempotencyKey: requestId(`idem-shot-contract-${String(shotAttempt)}`),
+            operationType: 'GENERATE',
+            projectId,
+            requestId: requestId(`job-shot-contract-${String(shotAttempt)}`),
+            stage: 'SHOT_CONTRACT',
+          });
+          if (!queuedShot.ok) {
+            return {
+              projectId,
+              stageResults,
+              step: 'job.create-shot',
+              errorCode: queuedShot.error.code,
+            };
           }
-          if (status.data.status === 'FAILED' || status.data.status === 'CANCELLED') {
-            shotStatus = status.data.status;
-            shotError = status.data.errorCode ?? undefined;
-            break;
+          shotStatus = 'TIMEOUT_POLL';
+          shotError = undefined;
+          for (let attempt = 0; attempt < 400; attempt += 1) {
+            const status = await window.jingxu.job.get({ jobId: queuedShot.data.id });
+            if (!status.ok) {
+              shotStatus = `job.get:${status.error.code}`;
+              break;
+            }
+            if (status.data.status === 'FAILED' || status.data.status === 'CANCELLED') {
+              shotStatus = status.data.status;
+              shotError = status.data.errorCode ?? undefined;
+              break;
+            }
+            if (status.data.status === 'SUCCEEDED') {
+              shotStatus = status.data.status;
+              break;
+            }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
           }
-          if (status.data.status === 'SUCCEEDED') {
-            shotStatus = status.data.status;
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, 1000));
         }
         const shotWorkspace = await window.jingxu.script.getWorkspace({ projectId });
         const storyboard = shotWorkspace.ok ? shotWorkspace.data.storyboard : null;
@@ -411,7 +444,9 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
           throw new Error('select:not-reflected');
         }
 
-        // 资产升版 v2：受影响镜头必须包含本镜头，轮2候选全员 STALE_INPUT，轮1不受影响。
+        // 资产升版 v2：受影响镜头必须包含本镜头；失效语义为「输入哈希不再匹配的候选
+        // STALE_INPUT」（spec Requirement），轮2（绑定 v1）与轮1（未绑定，但当前输入
+        // 世代已变）全部失效；选择指针保留在 STALE 候选上可读（selectedAt 不丢）。
         const affected = [];
         for (const [index, ref] of bounded.entries()) {
           const bytes = referenceV2PerAsset[index] ?? referenceV2PerAsset[0];
@@ -436,21 +471,27 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
         if (affectedCounts === 0) throw new Error('stale:shot-not-affected');
         const restaled = await window.jingxu.image.listCandidates({ projectId, shotId });
         if (!restaled.ok) throw new Error(`restale:${restaled.error.code}`);
-        const staleRound2 = round2.filter((candidate) => candidate.status === 'STALE_INPUT');
-        const intactRound1 = round1.filter(
-          (candidate) => candidate.status === 'SUCCEEDED' && candidate.selectedAt === null,
+        const fresh = restaled.data;
+        const staleAll = fresh.filter((candidate) => candidate.status === 'STALE_INPUT');
+        const staleRound2 = fresh.filter(
+          (candidate) => candidate.roundNo === 2 && candidate.status === 'STALE_INPUT',
         );
+        if (staleAll.length !== fresh.length) {
+          throw new Error(`stale-not-all:${String(staleAll.length)}/${String(fresh.length)}`);
+        }
         if (staleRound2.length !== round2.length) {
           throw new Error(`stale-round2:${String(staleRound2.length)}/${String(round2.length)}`);
         }
         if (!staleRound2.some((candidate) => candidate.id === chosen.id)) {
           throw new Error('stale:selected-not-included');
         }
+        if (!fresh.some((candidate) => candidate.id === chosen.id && candidate.selectedAt !== null)) {
+          throw new Error('stale:selected-pointer-lost');
+        }
         return {
           affectedShotEntries: affected.filter((entry) => entry.shotId === shotId).length,
           hash1,
           hash2,
-          intactRound1: intactRound1.length,
           referenceAssets: bounded.length,
           round1Bytes: succeeded1.map((candidate) => candidate.byteSize),
           round1Dimensions: succeeded1.map((candidate) => ({
@@ -459,14 +500,15 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
           })),
           round2Bytes: succeeded2.map((candidate) => candidate.byteSize),
           selectedCandidateId: chosen.id,
+          staleAll: staleAll.length,
           staleRound2: staleRound2.length,
-          totalCandidates: restaled.data.length,
+          totalCandidates: fresh.length,
         };
       },
       { projectId: seedOk.projectId, referenceV1, referenceV2PerAsset, shotId: seedOk.shotId },
     );
 
-    // 阶段三：UI 经受限协议真实解码（真实 PNG 字节 naturalWidth>0）。
+    // 阶段三：UI 经受限协议真实解码（真实图片字节 naturalWidth>0）。
     await page.reload();
     await page.locator('.project-card-main', { hasText: projectName }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();

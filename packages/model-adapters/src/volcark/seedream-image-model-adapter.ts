@@ -41,7 +41,8 @@ export const deriveSeedreamBaseUrl = (): string => 'https://ark.cn-beijing.volce
 interface SeedreamResponse {
   readonly data?: readonly {
     readonly error?: { readonly code?: unknown };
-    readonly size?: { readonly height?: unknown; readonly width?: unknown };
+    /** 官方响应为 "WxH" 字符串（7.1 联调实录）；兼容对象形态。 */
+    readonly size?: { readonly height?: unknown; readonly width?: unknown } | string;
     readonly url?: unknown;
   }[];
   readonly id?: unknown;
@@ -86,6 +87,24 @@ const base64Of = (bytes: Uint8Array): string => {
     out += b2 === undefined ? '=' : base64Char(b2 & 0x3f);
   }
   return out;
+};
+
+/** 官方 "WxH" 字符串 → 宽高；对象形态兼容；不可解析为 null（Port 允许未知）。 */
+const parseSeedreamSize = (
+  size: { readonly height?: unknown; readonly width?: unknown } | string | undefined,
+): Readonly<{ height: number | null; width: number | null }> => {
+  if (typeof size === 'string') {
+    const match = /^([1-9][0-9]{0,4})x([1-9][0-9]{0,4})$/u.exec(size);
+    if (match === null) return { height: null, width: null };
+    return {
+      height: Number.parseInt(match[2] ?? '0', 10),
+      width: Number.parseInt(match[1] ?? '0', 10),
+    };
+  }
+  return {
+    height: typeof size?.height === 'number' ? size.height : null,
+    width: typeof size?.width === 'number' ? size.width : null,
+  };
 };
 
 /** 结果字节嗅探（下载段不信任 Content-Type 时的兜底）。 */
@@ -201,11 +220,12 @@ export class SeedreamImageModelAdapter implements ImageModelPort {
           normalized('MODEL_INVALID_RESPONSE', false, '重新生成或稍后重试'),
         );
       }
+      const reportedSize = parseSeedreamSize(item.size);
       const result: ImageResultRef = Object.freeze({
-        height: typeof item.size?.height === 'number' ? item.size.height : null,
+        height: reportedSize.height,
         providerRequestId: typeof payload.id === 'string' ? payload.id : null,
         url: item.url,
-        width: typeof item.size?.width === 'number' ? item.size.width : null,
+        width: reportedSize.width,
       });
       return Object.freeze({
         kind: 'SYNC',
