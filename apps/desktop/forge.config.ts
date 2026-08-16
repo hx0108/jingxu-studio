@@ -35,6 +35,9 @@ const forgeConfig = {
       ...(electronCacheRoot === undefined ? {} : { cacheRoot: electronCacheRoot }),
     },
     ...(electronZipDirectory === undefined ? {} : { electronZipDir: electronZipDirectory }),
+    // 磁盘受限的离线打包可设 JINGXU_PACKAGER_TMPDIR=0：跳过临时模板目录直写输出，
+    // 峰值磁盘占用减半（模板目录默认落在系统盘 os.tmpdir，全盘吃紧时会 ENOSPC）。
+    ...(process.env.JINGXU_PACKAGER_TMPDIR === '0' ? { tmpdir: false } : {}),
     executableName: 'jingxu-studio',
     extraResource: [migrationResourceDirectory, schemaResourceDirectory],
   },

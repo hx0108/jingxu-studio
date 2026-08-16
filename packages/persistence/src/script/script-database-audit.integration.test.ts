@@ -110,4 +110,55 @@ describe('Script database invariant audit', () => {
       }
     });
   });
+
+  it('SHOT_CONTRACT 确认回执—versionId 指向分镜集合 episode 版本—回执规则放行', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = new SqliteTestDatabase(path.join(root, 'storyboard-receipt.sqlite'));
+      try {
+        database.pragma('foreign_keys = ON');
+        applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
+        seedBase(database);
+        // 分镜契约确认（v8 起）落 episode_versions（分镜集合版本），回执 versionId 指向它。
+        // 若审计只解析 script/story_bible 两表，下次启动会把合法库误判只读故障
+        // （6.2 升级冒烟实证）。
+        database
+          .prepare(
+            `INSERT INTO story_bible_versions
+             (id,project_id,version_no,document_json,document_sha256,status,source,created_at)
+             VALUES ('bible_audit','project_audit',1,'{}',?,'READY','AI',?)`,
+          )
+          .run('c'.repeat(64), NOW);
+        database
+          .prepare(
+            `INSERT INTO episodes (id,project_id,title,target_duration_sec,created_at,updated_at)
+             VALUES ('episode_audit','project_audit','第1集',90,?,?)`,
+          )
+          .run(NOW, NOW);
+        database
+          .prepare(
+            `INSERT INTO episode_versions
+             (id,episode_id,version_no,story_bible_version_id,format_profile_id,
+              target_duration_sec,shot_set_hash,status,created_at)
+             VALUES ('episode_version_audit','episode_audit',1,'bible_audit','format_audit',
+                     90,?,'READY',?)`,
+          )
+          .run('d'.repeat(64), NOW);
+        database
+          .prepare(
+            `INSERT INTO command_receipts
+             (request_id,command_name,payload_sha256,project_id,result_ref_json,trace_id,committed_at)
+             VALUES ('request_storyboard','CONFIRM_SCRIPT_VERSION',?,'project_audit',?,
+                     'trace_audit',?)`,
+          )
+          .run('e'.repeat(64), '{"versionId":"episode_version_audit"}', NOW);
+        expect(
+          runDatabaseAudit(database).findings.find(
+            ({ ruleId }) => ruleId === 'command-receipts.references-resolve',
+          ),
+        ).toMatchObject({ evidenceCount: 0, status: 'PASS' });
+      } finally {
+        database.close();
+      }
+    });
+  });
 });

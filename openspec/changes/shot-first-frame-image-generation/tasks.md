@@ -58,8 +58,11 @@
 
 - [x] 6.1 全量门禁：format / lint / typecheck / unit / contract / integration / e2e（离线 Mock）
   - 2026-08-16 完成（HEAD=53db326）：prettier --check 受管全集通过；eslint . --max-warnings=0 零告警；tsc -b 全仓 0 错误；Unit 650/650（78 文件）；Contract 106/106（14 文件）；Integration 196/196（35 文件）；E2E 离线 10 passed / 1 skipped（real-qwen-probe 为 7.x 真实联调门控探针，离线环境按设计跳过）——含 5.3 first-frame happy path、5.2 media-protocol 越权/CSP、packaged-smoke exe 启动、五阶段/分镜闭环全绿。三包构建（main 703ms / preload 121ms / renderer 438ms）后执行
-- [ ] 6.2 Windows x64 packaged smoke：clean（迁移 1–9、Mock 图片闭环、凭据哨兵泄漏扫描含图片通道）+ v8 升级 smoke
+- [x] 6.2 Windows x64 packaged smoke：clean（迁移 1–9、Mock 图片闭环、凭据哨兵泄漏扫描含图片通道）+ v8 升级 smoke
       — 验证：两项 smoke 通过
+  - 2026-08-16 完成：`scripts/verify-packaged-image-smoke.mjs`（node 直跑 + jiti 引入共享播种助手，沿仓库既有 packaged smoke 脚本先例；Playwright runner 的 loader 不支持 `node:sqlite` 故不走 spec）与 `scripts/verify-packaged-v8-upgrade-smoke.mjs` 双双 exit=0。clean：全新受管理根由打包 exe 自行迁移 1–9（schema_migrations MAX=9），JINGXU_E2E=1 下五阶段+分镜播种（复用 `apps/desktop/e2e/support/storyboard-seeding.ts`，v8 起通用通道，dev E2E 与打包冒烟共用）→ 资产 v1→生成 4 候选 COMPLETED→mediaUrl 全为 `jingxu://media/`→人工选择（selected_at=1）→升版 v2（asset_versions=2、旧世代 4 候选全员 STALE_INPUT、受影响镜头 1）→ UI 经受限协议真实解码（naturalWidth>0）→ 凭据哨兵泄漏扫描受管理根+用户数据+LOCALAPPDATA 陷阱 0 命中（项目 SQLite/WAL/SHM 除外），Renderer HTML 无哨兵无 `sk-`。v8 升级：head-8 旧产物播种真实 v8 库（MAX=8）→ 当前产物同根启动自动迁移 8→9、升级前备份恰 1 份且自身 MAX=8、projects(deleted_at IS NULL)=1、getWorkspace 分镜 READY。
+  - **升级冒烟揪出 v8 潜伏生产缺陷并修复**：SHOT_CONTRACT 确认回执的 versionId 落在 `episode_versions`（分镜集合版本），而审计 `command-receipts.references-resolve` 只解析 script_versions ∪ story_bible_versions——确认过分镜的库在**下次启动**即 DATABASE_INVARIANT_FAILED 进只读故障（此前所有 E2E 都在单次会话内完成、不再启动，故从未触发）。修复：审计解析集补 `episode_versions`（`packages/persistence/src/audit/database-audit.ts`），新增集成复现测试（script-database-audit.integration.test.ts，先红后绿）。全门禁复验：format/lint/typecheck、Unit 650/650、Contract 106/106、Integration 197/197（含新测试）、E2E 10 passed/1 skipped。
+  - 打包重做与磁盘治理：审计修复后按离线配方重打包（JINGXU_ELECTRON_ZIP_DIR + JINGXU_ELECTRON_SHA256 + 新增 `JINGXU_PACKAGER_TMPDIR=0`（forge.config.ts，跳过系统盘临时模板目录）），两项冒烟对重打产物复跑全绿。dev 运行时 electron dist 经 `ELECTRON_OVERRIDE_DIST_PATH` 指向 D: 完整副本（C: 全盘吃紧，被锁目录无法就地恢复）。
 
 ## 7. 真实联调与归档
 

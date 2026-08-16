@@ -151,7 +151,12 @@ export const runDatabaseAudit = (
                   WHERE sv.id=json_extract(cr.result_ref_json,'$.versionId') AND sv.project_id=cr.project_id
                   UNION ALL
                   SELECT 1 FROM story_bible_versions sb
-                  WHERE sb.id=json_extract(cr.result_ref_json,'$.versionId') AND sb.project_id=cr.project_id)
+                  WHERE sb.id=json_extract(cr.result_ref_json,'$.versionId') AND sb.project_id=cr.project_id
+                  UNION ALL
+                  -- SHOT_CONTRACT 确认/恢复的 versionId 指向分镜集合版本（episode_versions）。
+                  SELECT 1 FROM episode_versions ev
+                  WHERE ev.id=json_extract(cr.result_ref_json,'$.versionId')
+                    AND ev.episode_id IN (SELECT e.id FROM episodes e WHERE e.project_id=cr.project_id))
               ELSE 1
             END`,
       )
