@@ -67,5 +67,6 @@
 ## 7. 真实联调与归档
 
 - [ ] 7.1 真实火山方舟 Seedream 联调探针（门控环境变量，方舟 ARK Key 与 DashScope Key 分设）：上传参考图→文生图与参考图生图各至少一轮→候选落盘→人工选择→资产升版触发 STALE
-- [ ] 7.2 生产库迁移 0009 留证（schema_migrations MAX(version)=9、备份生成）
+- [x] 7.2 生产库迁移 0009 留证（schema_migrations MAX(version)=9、备份生成）
+  - 2026-08-16 完成（`scripts/verify-production-migration-0009.mjs`，JSON 留证 `{"backupsAfter":9,"backupsBefore":8,"headAfter":9,"headBefore":8,"newBackupHead":8,"writeEnabled":true}`）：含审计修复的重打包产物无 JINGXU_E2E 启动一次，真实生产根 `%LOCALAPPDATA%\JingxuStudio` 的库 8→9、升级前备份恰新增 1 份且自身 head=8、启动审计通过（writeEnabled=true）——同时实证 6.2 的 episode_versions 回执解析修复对含 SHOT_CONTRACT 确认回执的真实生产库成立（旧代码下该库下次启动必进只读故障）。dev 入口 `.vite/build/main.js` 已在磁盘治理中删除，故以打包产物执行（亦更贴近真实升级路径）。
 - [ ] 7.3 README 同步（已实现/未实现/联调记录）、`openspec validate --strict`、归档
