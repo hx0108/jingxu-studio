@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import {
@@ -107,6 +108,40 @@ export const createImageFeatureRegistration = ({
     ...(newTraceId === undefined ? [] : [{ newTraceId }]),
   );
 
+  /**
+   * 7.1 门控联调接线：设 JINGXU_IMAGE_CREDENTIAL_FILE（指向 ARK Key 明文文件）时，
+   * 启动期一次性写入图片固定凭据（safeStorage 密文；wx 独占创建，已存在不覆盖，
+   * 轮换需先删 secrets 文件）。Key 只经此路径入密文，不进环境快照、日志与数据库；
+   * 任何失败只报原因码不回显内容。正式配置 UI 另行接线（design D5 红线不变）。
+   */
+  const bootstrapImageCredential = (): void => {
+    const keyFile = process.env.JINGXU_IMAGE_CREDENTIAL_FILE;
+    if (keyFile === undefined || keyFile === '' || useE2eMock) return;
+    try {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('ENCRYPTION_UNAVAILABLE');
+      const plaintext = readFileSync(keyFile, 'utf8').replace(/^﻿/u, '').trim();
+      if (plaintext.length === 0) throw new Error('EMPTY_KEY_FILE');
+      const secretsDirectory = path.join(managedRoot, 'secrets');
+      mkdirSync(secretsDirectory, { recursive: true });
+      writeFileSync(
+        path.join(secretsDirectory, `${IMAGE_CREDENTIAL_ID}.bin`),
+        safeStorage.encryptString(plaintext),
+        { flag: 'wx', mode: 0o600 },
+      );
+    } catch (error) {
+      const failure = error as { code?: unknown; message?: unknown };
+      const reason =
+        typeof failure.code === 'string'
+          ? failure.code
+          : typeof failure.message === 'string'
+            ? failure.message
+            : 'UNKNOWN';
+      if (reason !== 'EEXIST') {
+        process.stderr.write(`镜序 Studio 图片凭据联调接线失败：${reason}\n`);
+      }
+    }
+  };
+
   return {
     ensureRegistered: () => {
       if (registered || !persistenceRuntime.startupService.getStatus().writeEnabled) return false;
@@ -122,6 +157,7 @@ export const createImageFeatureRegistration = ({
       ) {
         return false;
       }
+      bootstrapImageCredential();
 
       const store = createContentAddressedStore(managedRoot);
       const credentials = new CredentialAdapter({
