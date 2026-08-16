@@ -56,7 +56,8 @@
 
 ## 6. 门禁与打包
 
-- [ ] 6.1 全量门禁：format / lint / typecheck / unit / contract / integration / e2e（离线 Mock）
+- [x] 6.1 全量门禁：format / lint / typecheck / unit / contract / integration / e2e（离线 Mock）
+  - 2026-08-16 完成（HEAD=53db326）：prettier --check 受管全集通过；eslint . --max-warnings=0 零告警；tsc -b 全仓 0 错误；Unit 650/650（78 文件）；Contract 106/106（14 文件）；Integration 196/196（35 文件）；E2E 离线 10 passed / 1 skipped（real-qwen-probe 为 7.x 真实联调门控探针，离线环境按设计跳过）——含 5.3 first-frame happy path、5.2 media-protocol 越权/CSP、packaged-smoke exe 启动、五阶段/分镜闭环全绿。三包构建（main 703ms / preload 121ms / renderer 438ms）后执行
 - [ ] 6.2 Windows x64 packaged smoke：clean（迁移 1–9、Mock 图片闭环、凭据哨兵泄漏扫描含图片通道）+ v8 升级 smoke
       — 验证：两项 smoke 通过
 
