@@ -150,7 +150,7 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
       apiFrozen: true,
       apiKeys: ['events', 'job', 'project', 'provider', 'runtime', 'script'],
       contentSecurityPolicy:
-        "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src jingxu:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
       externalResourceUrls: [],
       hasIpcRenderer: false,
       hasProcess: false,

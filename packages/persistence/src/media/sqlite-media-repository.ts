@@ -6,11 +6,13 @@ import type {
   MediaCandidateRecord,
   MediaRepository,
   MediaStaleAffectedShot,
+  MediaStoredFileRef,
   MediaTaskPhase,
   MediaTaskRecord,
 } from '@jingxu/application';
 
 import type { SqliteDatabase, SqliteOutputValue } from '../runtime/sqlite-database';
+import { deriveMediaStorageRelPath } from './content-addressed-store';
 import { PersistenceRuntimeError } from '../runtime/persistence-error';
 import { syncToPromise } from '../runtime/sync-to-promise';
 
@@ -459,6 +461,46 @@ export class SqliteMediaRepository implements MediaRepository {
         )
         .get(candidateId, projectId);
       return row === undefined ? null : mapCandidateRow(row);
+    });
+  }
+
+  public findCandidateMediaById(candidateId: string): Promise<MediaStoredFileRef | null> {
+    return syncToPromise(() => {
+      const row = this.database
+        .prepare(
+          `SELECT byte_size, mime_type, storage_rel_path FROM image_candidates
+           WHERE id = ? AND storage_rel_path IS NOT NULL AND mime_type IS NOT NULL
+             AND byte_size IS NOT NULL`,
+        )
+        .get(candidateId) as Row | undefined;
+      if (row === undefined) return null;
+      return {
+        byteSize: requiredNumber(row, 'byte_size'),
+        mimeType: requiredString(row, 'mime_type'),
+        storageRelPath: requiredString(row, 'storage_rel_path'),
+      };
+    });
+  }
+
+  public findAssetVersionMediaById(versionId: string): Promise<MediaStoredFileRef | null> {
+    return syncToPromise(() => {
+      const row = this.database
+        .prepare(
+          `SELECT v.byte_size, v.mime_type, v.file_sha256, a.project_id
+           FROM asset_versions v JOIN assets a ON a.id = v.asset_id WHERE v.id = ?`,
+        )
+        .get(versionId) as Row | undefined;
+      if (row === undefined) return null;
+      return {
+        byteSize: requiredNumber(row, 'byte_size'),
+        mimeType: requiredString(row, 'mime_type'),
+        storageRelPath: deriveMediaStorageRelPath({
+          fileSha256: requiredString(row, 'file_sha256'),
+          mimeType: requiredString(row, 'mime_type'),
+          namespace: 'assets',
+          projectId: requiredString(row, 'project_id'),
+        }),
+      };
     });
   }
 

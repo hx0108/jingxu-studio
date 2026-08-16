@@ -1,8 +1,9 @@
 import path from 'node:path';
 import os from 'node:os';
+import { readFile } from 'node:fs/promises';
 
 import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, session } from 'electron';
-import { deriveWindowsProductionRoot } from '@jingxu/persistence';
+import { createContentAddressedStore, deriveWindowsProductionRoot } from '@jingxu/persistence';
 
 import { deriveSchemaResourceDirectory } from './adapters/schema-resource-adapter';
 import type { SafeStorageFacade } from './adapters/credential';
@@ -31,6 +32,7 @@ import {
 } from './composition/register-script-features';
 import { registerRuntimeIpc } from './ipc/runtime-ipc';
 import { registerAppProtocol } from './security/app-protocol';
+import { handleMediaProtocolRequest } from './security/media-protocol';
 
 const APP_SCHEME = 'jingxu';
 const APP_HOST = 'app';
@@ -110,6 +112,33 @@ const createMainWindow = async (): Promise<void> => {
   if (devServerUrl === undefined && !appProtocolRegistered) {
     registerAppProtocol({
       fetchResource: (url) => net.fetch(url),
+      handleMediaRequest: (request) =>
+        handleMediaProtocolRequest(request, {
+          locator: {
+            // 运行时不可读（启动故障）时反查直接落空，协议统一 404——不区分存在性。
+            findAssetVersionMedia: async (versionId) => {
+              const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+              if (unitOfWork === null) return null;
+              try {
+                return await unitOfWork.run((media) => media.findAssetVersionMediaById(versionId));
+              } catch {
+                return null;
+              }
+            },
+            findCandidateMedia: async (candidateId) => {
+              const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+              if (unitOfWork === null) return null;
+              try {
+                return await unitOfWork.run((media) => media.findCandidateMediaById(candidateId));
+              } catch {
+                return null;
+              }
+            },
+          },
+          readFile: (absolutePath) => readFile(absolutePath),
+          resolveWithinProjects:
+            createContentAddressedStore(getManagedRoot()).resolvePathWithinProjects,
+        }),
       protocol,
       rendererRoot: path.join(__dirname, '..', 'renderer', rendererName),
       trustedHost: APP_HOST,

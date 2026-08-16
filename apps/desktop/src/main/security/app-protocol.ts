@@ -18,6 +18,8 @@ export interface RegisterAppProtocolDependencies {
   rendererRoot: string;
   trustedHost: string;
   fetchResource: (url: string) => Promise<Response>;
+  /** `jingxu://media` 受限取图协议（5.2）；未注入时该 host 一律 404。 */
+  handleMediaRequest?: (request: AppProtocolRequest) => Promise<Response>;
 }
 
 const notFound = (): Response => new Response('Not found', { status: 404 });
@@ -27,11 +29,17 @@ export const registerAppProtocol = ({
   rendererRoot,
   trustedHost,
   fetchResource,
+  handleMediaRequest,
 }: RegisterAppProtocolDependencies): void => {
   const normalizedRoot = path.resolve(rendererRoot);
 
   protocol.handle('jingxu', async (request) => {
     const requestUrl = new URL(request.url);
+    if (requestUrl.hostname === 'media') {
+      return handleMediaRequest === undefined
+        ? notFound()
+        : handleMediaRequest(request).catch(() => notFound());
+    }
     if (request.method !== 'GET' || requestUrl.hostname !== trustedHost) {
       return notFound();
     }

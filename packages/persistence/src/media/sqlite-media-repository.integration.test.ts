@@ -689,6 +689,72 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       }
     });
   });
+
+  it('取图协议反查—候选仅落盘行命中—资产版本路径按内容寻址派生', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await setup(root, 'media_repo_media_lookup.sqlite');
+      try {
+        const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
+        await seedSucceededCandidate(unitOfWork, 'cand_stored', hash64('stored'));
+        // 未落盘候选（PENDING）不命中。
+        await unitOfWork.run((media) =>
+          media.insertCandidates({
+            candidateIds: ['cand_pending'],
+            generationInputHash: hash64('pending'),
+            modelId: MODEL_ID,
+            projectId: 'project_media',
+            roundNo: 2,
+            shotId: 'shot_media',
+            shotVersionId: 'shotv_media',
+          }),
+        );
+        await expect(
+          unitOfWork.run((media) => media.findCandidateMediaById('cand_stored')),
+        ).resolves.toEqual({
+          byteSize: 1024,
+          mimeType: 'image/png',
+          storageRelPath: `projects/project_media/images/ff/${'f'.repeat(64)}.png`,
+        });
+        await expect(
+          unitOfWork.run((media) => media.findCandidateMediaById('cand_pending')),
+        ).resolves.toBeNull();
+        await expect(
+          unitOfWork.run((media) => media.findCandidateMediaById('cand_unknown')),
+        ).resolves.toBeNull();
+
+        await unitOfWork.run((media) =>
+          media.createAsset({
+            assetType: 'SCENE',
+            bibleRefId: 'scene_media_lookup',
+            displayName: '雨巷',
+            id: 'asset_lookup',
+            projectId: 'project_media',
+          }),
+        );
+        await unitOfWork.run((media) =>
+          media.appendAssetVersion({
+            assetId: 'asset_lookup',
+            byteSize: 2048,
+            fileSha256: 'a'.repeat(64),
+            id: 'version_lookup',
+            mimeType: 'image/webp',
+          }),
+        );
+        await expect(
+          unitOfWork.run((media) => media.findAssetVersionMediaById('version_lookup')),
+        ).resolves.toEqual({
+          byteSize: 2048,
+          mimeType: 'image/webp',
+          storageRelPath: `projects/project_media/assets/aa/${'a'.repeat(64)}.webp`,
+        });
+        await expect(
+          unitOfWork.run((media) => media.findAssetVersionMediaById('version_missing')),
+        ).resolves.toBeNull();
+      } finally {
+        database.close();
+      }
+    });
+  });
 });
 
 const seedSucceededCandidate = async (

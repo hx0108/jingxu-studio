@@ -72,6 +72,16 @@ export interface MediaStaleAffectedShot {
   readonly shotId: string;
 }
 
+/**
+ * 受限取图协议（`jingxu://media/<candidate|asset-version>/<id>`）按 id 反查的
+ * 落盘文件引用（design D4）：只暴露内容寻址相对路径与 mime，不含项目上下文。
+ */
+export interface MediaStoredFileRef {
+  readonly byteSize: number;
+  readonly mimeType: string;
+  readonly storageRelPath: string;
+}
+
 /** media_generation_tasks 的 phase 单字段状态机（design D3；含三个终态）。 */
 export type MediaTaskPhase =
   'SUBMITTED' | 'POLLING' | 'DOWNLOADING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
@@ -180,6 +190,16 @@ export interface MediaRepository {
 
   /** IPC selectCandidate 入口：候选 id 反查（项目内定位，跨项目不可见）。 */
   findCandidateById(projectId: string, candidateId: string): Promise<MediaCandidateRecord | null>;
+
+  /**
+   * 受限取图协议入口：候选 id 反查落盘文件（仅已落盘候选命中；PENDING/FAILED/
+   * 未知 id 返回 null）。不含项目参数——id 为系统生成，越权标识由这里与
+   * 路径解析层共同拒绝。
+   */
+  findCandidateMediaById(candidateId: string): Promise<MediaStoredFileRef | null>;
+
+  /** 受限取图协议入口：资产版本 id 反查落盘文件（版本不可变，任意版本可取）。 */
+  findAssetVersionMediaById(versionId: string): Promise<MediaStoredFileRef | null>;
 
   /**
    * 原子切换选择指针：同镜头先清后设。仅 SUCCEEDED 候选可被选择；

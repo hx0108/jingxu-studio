@@ -5,10 +5,18 @@ import type {
   MediaCandidateRecord,
   MediaRepository,
   MediaStaleAffectedShot,
+  MediaStoredFileRef,
   MediaTaskRecord,
 } from '../ports/media/media-repository';
 
 const NOW = '2026-08-16T00:00:00.000Z';
+
+/** 与 persistence deriveMediaStorageRelPath 的 MIME 扩展名映射保持一致。 */
+const MIME_TO_EXTENSION: Readonly<Record<string, string>> = Object.freeze({
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+});
 
 /**
  * 内存版 MediaRepository（沿 project/in-memory-ports.ts 模式提取，供 service 与
@@ -232,6 +240,36 @@ export class InMemoryMediaRepository implements MediaRepository {
     return Promise.resolve(
       this.candidateProjectIds.get(candidateId) === projectId ? candidate : null,
     );
+  }
+
+  /** 落盘候选反查（取图协议入口）：未落盘（PENDING/FAILED）或未知 id 返回 null。 */
+  public findCandidateMediaById(candidateId: string): Promise<MediaStoredFileRef | null> {
+    const candidate = this.candidates.find((entry) => entry.id === candidateId);
+    if (candidate === undefined) return Promise.resolve(null);
+    if (candidate.storageRelPath === null || candidate.mimeType === null) {
+      return Promise.resolve(null);
+    }
+    if (candidate.byteSize === null) return Promise.resolve(null);
+    return Promise.resolve({
+      byteSize: candidate.byteSize,
+      mimeType: candidate.mimeType,
+      storageRelPath: candidate.storageRelPath,
+    });
+  }
+
+  /** 资产版本反查：路径由 (projectId, sha256, mime) 派生（与 SQL 实现同规则）。 */
+  public findAssetVersionMediaById(versionId: string): Promise<MediaStoredFileRef | null> {
+    const version = this.versions.find((entry) => entry.id === versionId);
+    if (version === undefined) return Promise.resolve(null);
+    const asset = this.assets.find((entry) => entry.id === version.assetId);
+    if (asset === undefined) return Promise.resolve(null);
+    const extension = MIME_TO_EXTENSION[version.mimeType];
+    if (extension === undefined) return Promise.resolve(null);
+    return Promise.resolve({
+      byteSize: version.byteSize,
+      mimeType: version.mimeType,
+      storageRelPath: `projects/${asset.projectId}/assets/${version.fileSha256.slice(0, 2)}/${version.fileSha256}.${extension}`,
+    });
   }
 
   /** 先清后设（SQL 实现语义对齐）：仅 SUCCEEDED 可选，同镜头唯一选择指针。 */
