@@ -13,6 +13,7 @@ import type {
   CompiledSchemaRegistry,
   JobRepositoryPort,
   JobUnitOfWorkPort,
+  MediaUnitOfWorkPort,
   ProjectUnitOfWorkPort,
   ProviderProfileRepositoryPort,
   ProviderUnitOfWorkPort,
@@ -26,6 +27,7 @@ export interface DesktopPersistenceRuntime {
   readonly close: () => void;
   readonly getJobUnitOfWork: () => JobUnitOfWorkPort | null;
   readonly getJobRepository: () => JobRepositoryPort | null;
+  readonly getMediaUnitOfWork: () => MediaUnitOfWorkPort | null;
   readonly getProjectUnitOfWork: () => ProjectUnitOfWorkPort | null;
   readonly getProviderUnitOfWork: () => ProviderUnitOfWorkPort | null;
   readonly getProviderProfileRepository: () => ProviderProfileRepositoryPort | null;
@@ -85,6 +87,7 @@ export const createDesktopPersistenceRuntime = async ({
     },
     getJobUnitOfWork: () => adapter.getJobUnitOfWork(),
     getJobRepository: () => adapter.getJobRepository(),
+    getMediaUnitOfWork: () => adapter.getMediaUnitOfWork(),
     getProjectUnitOfWork: () => adapter.getProjectUnitOfWork(),
     getProviderUnitOfWork: () => adapter.getProviderUnitOfWork(),
     getProviderProfileRepository: () => adapter.getProviderProfileRepository(),

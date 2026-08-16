@@ -54,10 +54,13 @@ export const projectErrorCodeSchema = z.enum([
   'SCRIPT_VERSION_CONFLICT',
   'SCRIPT_SCHEMA_INVALID',
   'SCRIPT_STAGE_UNSUPPORTED',
-  // V2 图片切片（shot-first-frame-image-generation §4.1）。
+  // V2 图片切片（shot-first-frame-image-generation §4.1/§5.1）。
   'MEDIA_STORYBOARD_NOT_READY',
   'MEDIA_SHOT_NOT_IN_READY_SET',
   'MEDIA_PERSISTENCE_FAILED',
+  'MEDIA_TASK_NOT_FOUND',
+  'MEDIA_CANDIDATE_NOT_FOUND',
+  'MEDIA_CANDIDATE_NOT_SELECTABLE',
 ]);
 export type ProjectErrorCode = z.infer<typeof projectErrorCodeSchema>;
 

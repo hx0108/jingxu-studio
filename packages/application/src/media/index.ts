@@ -14,6 +14,12 @@ export type {
   MediaGenerationService,
   MediaGenerationServiceDependencies,
 } from './media-generation-service';
+export { createImageApiService } from './image-api-service';
+export type {
+  ImageApiService,
+  ImageApiServiceDependencies,
+  MediaAssetFileStorePort,
+} from './image-api-service';
 export { InMemoryMediaRepository } from './in-memory-media-repository';
 export { createMediaRequestBlueprintBuilder } from './media-request-blueprint';
 export type {

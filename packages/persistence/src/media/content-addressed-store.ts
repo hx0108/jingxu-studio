@@ -78,6 +78,26 @@ export interface ContentAddressedStoreOptions {
   readonly writeFileImpl?: (filePath: string, bytes: Uint8Array) => Promise<void>;
 }
 
+/** 由 (projectId, namespace, sha256, mimeType) 派生规范相对路径；非法输入抛稳定错误。 */
+export const deriveMediaStorageRelPath = (input: {
+  readonly fileSha256: string;
+  readonly mimeType: string;
+  readonly namespace: MediaNamespace;
+  readonly projectId: string;
+}): string => {
+  const extension = MIME_TO_EXTENSION[input.mimeType];
+  if (extension === undefined) {
+    throw new PersistenceRuntimeError('MEDIA_STORE_MIME_UNSUPPORTED');
+  }
+  if (!PROJECT_ID_PATTERN.test(input.projectId)) {
+    throw new PersistenceRuntimeError('MEDIA_STORE_PROJECT_INVALID');
+  }
+  if (!/^[0-9a-f]{64}$/u.test(input.fileSha256)) {
+    throw new PersistenceRuntimeError('MEDIA_STORE_INVALID_PATH');
+  }
+  return `projects/${input.projectId}/${input.namespace}/${input.fileSha256.slice(0, 2)}/${input.fileSha256}.${extension}`;
+};
+
 export const createContentAddressedStore = (
   managedRoot: string,
   options: ContentAddressedStoreOptions = {},
@@ -116,15 +136,13 @@ export const createContentAddressedStore = (
 
   return {
     write: async ({ bytes, mimeType, namespace, projectId }) => {
-      const extension = MIME_TO_EXTENSION[mimeType];
-      if (extension === undefined) {
-        throw new PersistenceRuntimeError('MEDIA_STORE_MIME_UNSUPPORTED');
-      }
-      if (!PROJECT_ID_PATTERN.test(projectId)) {
-        throw new PersistenceRuntimeError('MEDIA_STORE_PROJECT_INVALID');
-      }
       const sha256 = sha256Of(bytes);
-      const storageRelPath = `projects/${projectId}/${namespace}/${sha256.slice(0, 2)}/${sha256}.${extension}`;
+      const storageRelPath = deriveMediaStorageRelPath({
+        fileSha256: sha256,
+        mimeType,
+        namespace,
+        projectId,
+      });
       const absoluteFinal = toAbsolutePath(managedRoot, storageRelPath);
       if (!isWithin(projectsRoot, absoluteFinal)) {
         throw new PersistenceRuntimeError('MEDIA_STORE_INVALID_PATH');

@@ -58,6 +58,9 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   MEDIA_STORYBOARD_NOT_READY: ['分镜尚未确认', '先在分镜阶段确认 READY 后再生成首帧。'],
   MEDIA_SHOT_NOT_IN_READY_SET: ['镜头不在当前分镜集合中', '刷新分镜工作区后重试。'],
   MEDIA_PERSISTENCE_FAILED: ['媒体数据暂时无法保存', '请稍后重试。'],
+  MEDIA_TASK_NOT_FOUND: ['找不到这个生成任务', '刷新首帧面板后重试。'],
+  MEDIA_CANDIDATE_NOT_FOUND: ['找不到这个候选图', '刷新首帧面板后重选。'],
+  MEDIA_CANDIDATE_NOT_SELECTABLE: ['该候选不可设为当前首帧', '刷新后选择最新成功的候选。'],
 };
 
 /** 只按稳定 code 映射文案，绝不展示来自基础设施的 message。 */

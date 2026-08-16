@@ -178,6 +178,9 @@ export interface MediaRepository {
   /** 列出镜头全部候选（轮次与轮内索引升序），世代分组由上层按 hash 归并。 */
   listCandidates(shotId: string): Promise<readonly MediaCandidateRecord[]>;
 
+  /** IPC selectCandidate 入口：候选 id 反查（项目内定位，跨项目不可见）。 */
+  findCandidateById(projectId: string, candidateId: string): Promise<MediaCandidateRecord | null>;
+
   /**
    * 原子切换选择指针：同镜头先清后设。仅 SUCCEEDED 候选可被选择；
    * 候选不存在、不属于该镜头或不可选时抛稳定错误。

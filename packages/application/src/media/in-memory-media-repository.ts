@@ -20,6 +20,8 @@ export class InMemoryMediaRepository implements MediaRepository {
   public readonly versions: MediaAssetVersionRecord[] = [];
   public readonly candidates: MediaCandidateRecord[] = [];
   public readonly tasks: MediaTaskRecord[] = [];
+  /** 候选行不含 projectId 字段；insert 时旁路登记供 findCandidateById 过滤。 */
+  private readonly candidateProjectIds = new Map<string, string>();
 
   public findAssetByIdentity(
     projectId: string,
@@ -79,16 +81,18 @@ export class InMemoryMediaRepository implements MediaRepository {
     return Promise.resolve(record);
   }
 
-  public listAssets(): Promise<
-    readonly { asset: MediaAssetRecord; versions: readonly MediaAssetVersionRecord[] }[]
-  > {
+  public listAssets(
+    projectId: string,
+  ): Promise<readonly { asset: MediaAssetRecord; versions: readonly MediaAssetVersionRecord[] }[]> {
     return Promise.resolve(
-      this.assets.map((asset) => ({
-        asset,
-        versions: this.versions
-          .filter((version) => version.assetId === asset.id)
-          .sort((a, b) => a.versionNo - b.versionNo),
-      })),
+      this.assets
+        .filter((asset) => asset.projectId === projectId)
+        .map((asset) => ({
+          asset,
+          versions: this.versions
+            .filter((version) => version.assetId === asset.id)
+            .sort((a, b) => a.versionNo - b.versionNo),
+        })),
     );
   }
 
@@ -145,6 +149,7 @@ export class InMemoryMediaRepository implements MediaRepository {
       this.candidates.push(record);
       return record;
     });
+    records.forEach((record) => this.candidateProjectIds.set(record.id, input.projectId));
     return Promise.resolve(records);
   }
 
@@ -218,8 +223,34 @@ export class InMemoryMediaRepository implements MediaRepository {
     );
   }
 
-  public selectCandidate(): Promise<void> {
-    throw new Error('not used in media service tests');
+  public findCandidateById(
+    projectId: string,
+    candidateId: string,
+  ): Promise<MediaCandidateRecord | null> {
+    const candidate = this.candidates.find((entry) => entry.id === candidateId);
+    if (candidate === undefined) return Promise.resolve(null);
+    return Promise.resolve(
+      this.candidateProjectIds.get(candidateId) === projectId ? candidate : null,
+    );
+  }
+
+  /** 先清后设（SQL 实现语义对齐）：仅 SUCCEEDED 可选，同镜头唯一选择指针。 */
+  public selectCandidate(shotId: string, candidateId: string): Promise<void> {
+    const candidate = this.candidates.find(
+      (entry) => entry.id === candidateId && entry.shotId === shotId,
+    );
+    if (candidate === undefined) throw new Error('MEDIA_CANDIDATE_NOT_FOUND');
+    if (candidate.status !== 'SUCCEEDED') throw new Error('MEDIA_CANDIDATE_NOT_SELECTABLE');
+    this.candidates.forEach((entry, index) => {
+      if (entry.shotId !== shotId) return;
+      if (entry.selectedAt === null) return;
+      this.candidates[index] = { ...entry, selectedAt: null, updatedAt: NOW };
+    });
+    const target = this.candidates.find((entry) => entry.id === candidateId);
+    if (target === undefined) throw new Error('MEDIA_CANDIDATE_NOT_FOUND');
+    const index = this.candidates.indexOf(target);
+    this.candidates[index] = { ...target, selectedAt: NOW, updatedAt: NOW };
+    return Promise.resolve();
   }
 
   public markCandidatesStaleByShotVersion(

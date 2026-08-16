@@ -17,6 +17,10 @@ import {
   type JobProviderFeatureRegistration,
 } from './composition/register-job-provider-features';
 import {
+  createImageFeatureRegistration,
+  type ImageFeatureRegistration,
+} from './composition/register-image-features';
+import {
   createProjectFeatureRegistration,
   type ProjectFeatureRegistration,
 } from './composition/register-project-features';
@@ -40,6 +44,7 @@ let persistenceRuntime: DesktopPersistenceRuntime | null = null;
 let projectFeatureRegistration: ProjectFeatureRegistration | null = null;
 let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null;
 let scriptFeatureRegistration: ScriptFeatureRegistration | null = null;
+let imageFeatureRegistration: ImageFeatureRegistration | null = null;
 let shutdownStarted = false;
 
 const createSafeStorageFacade = (): SafeStorageFacade => ({
@@ -183,14 +188,25 @@ if (!singleInstanceLockAcquired) {
           persistenceRuntime,
           trustedUrl: getTrustedUrl(),
         });
+        imageFeatureRegistration = createImageFeatureRegistration({
+          clock: () => new Date().toISOString(),
+          ipcRegistrar,
+          managedRoot,
+          persistenceRuntime,
+          safeStorage: createSafeStorageFacade(),
+          trustedUrl: getTrustedUrl(),
+          useE2eMock: process.env.JINGXU_E2E === '1',
+        });
         registerRuntimeIpc(ipcRegistrar, persistenceRuntime.startupService, getTrustedUrl(), () => {
           projectFeatureRegistration?.ensureRegistered();
           jobProviderFeatureRegistration?.ensureRegistered();
           scriptFeatureRegistration?.ensureRegistered();
+          imageFeatureRegistration?.ensureRegistered();
         });
         projectFeatureRegistration.ensureRegistered();
         jobProviderFeatureRegistration.ensureRegistered();
         scriptFeatureRegistration.ensureRegistered();
+        imageFeatureRegistration.ensureRegistered();
       }
       await createMainWindow();
     })
@@ -209,6 +225,7 @@ if (!singleInstanceLockAcquired) {
     if (!shutdownStarted && jobProviderFeatureRegistration !== null) {
       event.preventDefault();
       shutdownStarted = true;
+      void imageFeatureRegistration?.stop();
       void jobProviderFeatureRegistration.stop().finally(() => {
         app.quit();
       });
@@ -217,6 +234,7 @@ if (!singleInstanceLockAcquired) {
     projectFeatureRegistration = null;
     jobProviderFeatureRegistration = null;
     scriptFeatureRegistration = null;
+    imageFeatureRegistration = null;
     persistenceRuntime?.close();
     persistenceRuntime = null;
   });

@@ -444,6 +444,24 @@ export class SqliteMediaRepository implements MediaRepository {
     );
   }
 
+  public findCandidateById(
+    projectId: string,
+    candidateId: string,
+  ): Promise<MediaCandidateRecord | null> {
+    return syncToPromise(() => {
+      const row = this.database
+        .prepare(
+          `SELECT id, shot_id, shot_version_id, round_no, index_in_round, generation_input_hash,
+                  status, file_sha256, byte_size, mime_type, width, height, storage_rel_path,
+                  model_id, provider_task_id, invocation_evidence_ref, error_code, selected_at,
+                  created_at, updated_at
+           FROM image_candidates WHERE id = ? AND project_id = ?`,
+        )
+        .get(candidateId, projectId);
+      return row === undefined ? null : mapCandidateRow(row);
+    });
+  }
+
   public selectCandidate(shotId: string, candidateId: string): Promise<void> {
     return syncToPromise(() => {
       const row = this.database
