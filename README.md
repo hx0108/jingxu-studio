@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前无 Active Change。最近归档的 Change 为 `shot-first-frame-image-generation`（2026-08-17，V2 图片切片第一步：逐镜头首帧候选生成、资产版本与参考图、人工选择，Provider 为火山方舟豆包 Seedream）；此前为 `shot-contract-generation` 与 `backup-sidecar-hygiene`（2026-08-16）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前 Active Change 为 `image-credential-management`（真实用户可用性收尾：图片 Provider 凭据配置 UI + SHOT_CONTRACT 调用超时/重试稳健化；提案已登记，待产品负责人拍板 design.md D1–D4 后 Apply）。最近归档的 Change 为 `shot-first-frame-image-generation`（2026-08-17，V2 图片切片第一步：逐镜头首帧候选生成、资产版本与参考图、人工选择，Provider 为火山方舟豆包 Seedream）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 
