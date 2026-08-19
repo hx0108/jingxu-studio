@@ -4,9 +4,11 @@ import type {
   ImageDownload,
   ImageGenerationRequest,
   ImageModelPort,
+  ImageRawResponse,
   ImageResultRef,
   ImageTaskStatus,
   ImageTaskSubmission,
+  ModelCallEvidence,
   NormalizedModelError,
 } from '@jingxu/application';
 
@@ -50,11 +52,31 @@ interface SeedreamResponse {
 }
 
 class SeedreamAdapterError extends Error {
-  public constructor(public readonly normalized: NormalizedModelError) {
+  /**
+   * 原始响应证据（main-only 留证通道，design D5）：本地校验失败未发请求时为
+   * 全 null；不进入 normalized（Renderer 可达路径）与日志。
+   */
+  public constructor(
+    public readonly normalized: NormalizedModelError,
+    public readonly evidence: ModelCallEvidence = { bodyText: null, httpStatus: null, truncated: false },
+  ) {
     super(normalized.code);
     this.name = 'SeedreamAdapterError';
   }
 }
+
+/** 响应体读取上限（design D3 防御性截断；实际响应远小于此）。 */
+const RESPONSE_BODY_READ_CAP = 65_536;
+
+/** 读体（留证 + 解析共用）：超限截断并如实标记。 */
+const readBodyCapped = async (
+  response: Response,
+): Promise<{ bodyText: string; truncated: boolean }> => {
+  const raw = await response.text();
+  return raw.length > RESPONSE_BODY_READ_CAP
+    ? { bodyText: raw.slice(0, RESPONSE_BODY_READ_CAP), truncated: true }
+    : { bodyText: raw, truncated: false };
+};
 
 export interface SeedreamImageModelAdapterOptions {
   readonly baseUrl?: string;
@@ -203,8 +225,21 @@ export class SeedreamImageModelAdapter implements ImageModelPort {
         redirect: 'error',
         signal: invocationSignal,
       });
-      if (!response.ok) throw new SeedreamAdapterError(this.#normalizeStatus(response.status));
-      const payload = (await response.json()) as SeedreamResponse;
+      // 先读体再判错：非 2xx 的原始 body 是限流/风控复盘唯一证据（design D5）。
+      const { bodyText, truncated } = await readBodyCapped(response);
+      const raw: ImageRawResponse = Object.freeze({ bodyText, httpStatus: response.status, truncated });
+      if (!response.ok) {
+        throw new SeedreamAdapterError(this.#normalizeStatus(response.status), raw);
+      }
+      let payload: SeedreamResponse;
+      try {
+        payload = JSON.parse(bodyText) as SeedreamResponse;
+      } catch {
+        throw new SeedreamAdapterError(
+          normalized('MODEL_INVALID_RESPONSE', false, '重新生成或稍后重试'),
+          raw,
+        );
+      }
       const item = payload.data?.[0];
       if (item?.error !== undefined) {
         // 逐项失败（快照 response.partial_failure）：只传播稳定错误码，不透传 message。
@@ -213,11 +248,13 @@ export class SeedreamImageModelAdapter implements ImageModelPort {
           providerCode.includes('content') || providerCode.includes('sensitive')
             ? normalized('MODEL_CONTENT_REJECTED', false, '调整提示词或参考图后重新生成')
             : normalized('MODEL_PROVIDER_ERROR', true, '等待后重试'),
+          raw,
         );
       }
       if (typeof item?.url !== 'string' || item.url.length === 0) {
         throw new SeedreamAdapterError(
           normalized('MODEL_INVALID_RESPONSE', false, '重新生成或稍后重试'),
+          raw,
         );
       }
       const reportedSize = parseSeedreamSize(item.size);
@@ -229,6 +266,7 @@ export class SeedreamImageModelAdapter implements ImageModelPort {
       });
       return Object.freeze({
         kind: 'SYNC',
+        raw,
         result,
         usage: {
           generatedImages:
@@ -271,8 +309,11 @@ export class SeedreamImageModelAdapter implements ImageModelPort {
         signal: AbortSignal.any([signal, this.#timeoutSignal(SEEDREAM_INVOCATION_TIMEOUT_MS)]),
       });
       if (!response.ok) {
+        // 下载段失败原文同样留证（design D5）；成功段字节走 CAS，不入证据。
+        const { bodyText, truncated } = await readBodyCapped(response);
         throw new SeedreamAdapterError(
           normalized('MODEL_RESULT_UNAVAILABLE', false, '重新生成候选'),
+          { bodyText, httpStatus: response.status, truncated },
         );
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
@@ -290,6 +331,10 @@ export class SeedreamImageModelAdapter implements ImageModelPort {
     return error instanceof SeedreamAdapterError
       ? error.normalized
       : normalized('MODEL_UNKNOWN', false, '检查 Provider 配置后重试');
+  }
+
+  public evidenceOf(error: unknown): ModelCallEvidence | null {
+    return error instanceof SeedreamAdapterError ? error.evidence : null;
   }
 
   #assertSizeLegal(request: ImageGenerationRequest): void {

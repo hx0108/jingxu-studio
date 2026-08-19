@@ -78,6 +78,7 @@ describe('SeedreamImageModelAdapter', () => {
     const submission = await adapter.submit(request(), new AbortController().signal);
     expect(submission).toEqual({
       kind: 'SYNC',
+      raw: { bodyText: JSON.stringify(okBody), httpStatus: 200, truncated: false },
       result: {
         height: 1800,
         providerRequestId: 'resp_123',
@@ -283,6 +284,70 @@ describe('SeedreamImageModelAdapter', () => {
     await expect(expired.download(resultRef(), new AbortController().signal)).rejects.toThrow(
       'MODEL_RESULT_UNAVAILABLE',
     );
+  });
+
+  it('evidenceOf—429 原文留证与 64KiB 截断标记—不含凭据且不进 normalized', async () => {
+    const rateBody = JSON.stringify({ error: { code: 'RateLimitExceeded', message: 'qps 超限' } });
+    const adapter = new SeedreamImageModelAdapter({
+      credentialId: 'cred_ark',
+      credentialPort: credentialPort(),
+      fetch: vi.fn<typeof globalThis.fetch>(() =>
+        Promise.resolve(new Response(rateBody, { status: 429 })),
+      ),
+    });
+    const caught = await adapter
+      .submit(request(), new AbortController().signal)
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(adapter.normalizeError(caught)).toMatchObject({ code: 'MODEL_RATE_LIMITED' });
+    // normalized（Renderer 可达路径）只含稳定码，不含 Provider 原文。
+    expect(JSON.stringify(adapter.normalizeError(caught))).not.toContain('RateLimitExceeded');
+    expect(adapter.evidenceOf(caught)).toEqual({
+      bodyText: rateBody,
+      httpStatus: 429,
+      truncated: false,
+    });
+    expect(JSON.stringify(adapter.evidenceOf(caught))).not.toContain(ARK_KEY);
+
+    const truncating = new SeedreamImageModelAdapter({
+      credentialId: 'cred_ark',
+      credentialPort: credentialPort(),
+      fetch: vi.fn<typeof globalThis.fetch>(() =>
+        Promise.resolve(new Response('x'.repeat(65_537), { status: 500 })),
+      ),
+    });
+    const truncError = await truncating
+      .submit(request(), new AbortController().signal)
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(truncating.evidenceOf(truncError)).toEqual({
+      bodyText: 'x'.repeat(65_536),
+      httpStatus: 500,
+      truncated: true,
+    });
+
+    // 本地校验失败（未发请求）证据为全 null；非本适配器错误返回 null。
+    const local = new SeedreamImageModelAdapter({
+      credentialId: 'cred_ark',
+      credentialPort: credentialPort(),
+      fetch: okFetch(),
+    });
+    const localError = await local
+      .submit(request({ size: { height: 100, width: 100 } }), new AbortController().signal)
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(local.evidenceOf(localError)).toEqual({
+      bodyText: null,
+      httpStatus: null,
+      truncated: false,
+    });
+    expect(adapter.evidenceOf(new Error('unrelated'))).toBeNull();
   });
 
   it('validateCredential—可解密即 ok—失败归一化 CREDENTIAL_INVALID 且不含 Key', async () => {
