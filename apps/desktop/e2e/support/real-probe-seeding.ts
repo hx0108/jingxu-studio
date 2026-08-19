@@ -60,7 +60,12 @@ export const seedRealStoryboardReady = async (
       return { errorCode: created.error.code, stageResults: [], step: 'project.create' };
     const projectId = created.data.id;
     const initialized = await window.jingxu.script.initializeOriginal({
-      creativeText: '一名失忆侦探在午夜列车醒来，必须在终点前找出偷走所有乘客记忆的人。',
+      // 2026-08-20 实录：原「午夜列车失忆侦探」题材下 Qwen 对口型对白镜头连续 3 次
+      // 给 null speaker_id（FINAL 层 SCHEMA_VALIDATION_TYPE 拒绝；昨日同题材 5/5 通过
+      // ——provider 侧输出漂移，与 media-invocation-evidence 无关）。改用失声主角的
+      // 旁白叙事题材绕开该漂移点取证；漂移本身另立事项跟进。
+      creativeText:
+        '一名失声的天文摄影师独自留守北极科考站，极夜降临后只能靠摩尔斯电码向外界求援，并独自解开队友失踪的真相。',
       dataProcessingConsent: true,
       projectId,
       requestId: requestId('initialize'),
