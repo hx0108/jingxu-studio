@@ -69,6 +69,7 @@ interface Fixture {
 
 const buildFixture = (
   generation: MediaGenerationService = generationStub({ id: 'task_1', projectId: 'project_1' }),
+  assertCredentialReady?: () => Promise<void>,
 ): Fixture => {
   const repository = new InMemoryMediaRepository();
   const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
@@ -76,6 +77,7 @@ const buildFixture = (
   const writes: { byteSize: number; projectId: string; sha256: string }[] = [];
   let counter = 0;
   const service = createImageApiService({
+    ...(assertCredentialReady === undefined ? {} : { assertCredentialReady }),
     assetFileStore: {
       writeAsset: ({ bytes, projectId }) => {
         counter += 1;
@@ -165,6 +167,48 @@ describe('createImageApiService', () => {
     );
     expect(result).toMatchObject({ error: { code: 'MEDIA_STORYBOARD_NOT_READY' }, ok: false });
     expect(fixture.kicked).toEqual([]);
+  });
+
+  it('凭据闸抛错—generateCandidates 前置稳定失败—不触发生成、kick 与其余五方法', async () => {
+    let gateCalls = 0;
+    const fixture = buildFixture(
+      generationStub({ id: 'task_1', projectId: 'project_1' }),
+      async () => {
+        gateCalls += 1;
+        throw new Error('CREDENTIAL_NOT_FOUND');
+      },
+    );
+
+    const result = await fixture.service.generateCandidates(
+      { projectId: 'project_1', requestId: 'request_12345678', shotId: 'shot_1' },
+      'trace_1',
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe('MODEL_CREDENTIAL_INVALID');
+      expect(result.error.userAction).toContain('图片');
+    }
+    expect(gateCalls).toBe(1);
+    expect(fixture.kicked).toEqual([]);
+    // 查询类方法不受凭据闸影响。
+    await expect(
+      fixture.service.listCandidates({ projectId: 'project_1', shotId: 'shot_1' }, 'trace_1'),
+    ).resolves.toMatchObject({ ok: true });
+  });
+
+  it('凭据闸通过—generateCandidates 正常建档并 kick（闸在场不改变行为）', async () => {
+    const fixture = buildFixture(generationStub({ id: 'task_1', projectId: 'project_1' }), () =>
+      Promise.resolve(),
+    );
+
+    const result = await fixture.service.generateCandidates(
+      { projectId: 'project_1', requestId: 'request_12345678', shotId: 'shot_1' },
+      'trace_1',
+    );
+
+    expect(result.ok).toBe(true);
+    expect(fixture.kicked).toEqual(['project_1']);
   });
 
   it('listCandidates—SUCCEEDED 携带受限 mediaUrl—其余状态为 null', async () => {

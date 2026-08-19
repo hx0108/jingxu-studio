@@ -409,3 +409,131 @@ describe('createJobProviderIpcService — 边界 Host', () => {
     expect(result.error.code).toBe('IPC_INVALID_REQUEST');
   });
 });
+
+describe('createJobProviderIpcService — 图片档分发（image-credential-management D1）', () => {
+  const IMAGE_PROFILE_ID = 'profile-image-primary';
+  const imageView: ProviderProfileView = {
+    configured: false,
+    enabled: true,
+    last4: null,
+    lastValidatedAt: null,
+    modelId: 'doubao-seedream-5-0-lite-260128',
+    modelSnapshotDate: '2026-01-28',
+    provider: 'VOLCARK_SEEDREAM',
+    region: 'cn-beijing',
+    versionId: IMAGE_PROFILE_ID,
+    workspaceId: 'ark',
+  };
+
+  const createImageHarness = () => {
+    const text = {
+      getProfile: vi.fn(() => Promise.resolve(configuredView)),
+      saveProfile: vi.fn(() => Promise.resolve(configuredView)),
+      saveCredential: vi.fn(() => Promise.resolve(configuredView)),
+      testCredential: vi.fn((): Promise<CredentialCheck> => Promise.resolve({ ok: true })),
+      deleteCredential: vi.fn(() => Promise.resolve(defaultView)),
+    };
+    const image = {
+      getProfile: vi.fn(() => Promise.resolve(imageView)),
+      saveProfile: vi.fn(() => Promise.resolve(imageView)),
+      saveCredential: vi.fn(() => Promise.resolve(imageView)),
+      testCredential: vi.fn((): Promise<CredentialCheck> => Promise.resolve({ ok: true })),
+      deleteCredential: vi.fn(() => Promise.resolve(imageView)),
+    };
+    const service = createJobProviderIpcService({
+      image: { profileId: IMAGE_PROFILE_ID, service: image as unknown as ProviderService },
+      jobs: {} as JobService,
+      newSubscriptionId: () => SUBSCRIPTION_ID,
+      newTraceId: () => TRACE_ID,
+      provider: text as unknown as ProviderService,
+    });
+    return { image, service, text };
+  };
+
+  it('图片档 profileId—五通道分发到图片 ProviderService，文本档不受影响', async () => {
+    const h = createImageHarness();
+    const imageGet: ProviderGetInputDto = { profileId: IMAGE_PROFILE_ID };
+    const imageSaveCredential: ProviderCredentialCommandDto = {
+      apiKey: 'ark-secret-1234567890',
+      expectedVersionId: IMAGE_PROFILE_ID,
+      profileId: IMAGE_PROFILE_ID,
+      requestId: 'request-image-save',
+    };
+    const imageMutation: ProviderMutationInputDto = {
+      expectedVersionId: IMAGE_PROFILE_ID,
+      profileId: IMAGE_PROFILE_ID,
+      requestId: 'request-image-mutate',
+    };
+
+    await expect(h.service.invoke(PROVIDER_IPC_CHANNELS.getProfile, imageGet)).resolves.toEqual({
+      data: expectedDto(imageView),
+      ok: true,
+    });
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.saveCredential, imageSaveCredential),
+    ).resolves.toEqual({ data: expectedDto(imageView), ok: true });
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.testCredential, imageMutation),
+    ).resolves.toEqual({ data: expectedDto(imageView), ok: true });
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.deleteCredential, imageMutation),
+    ).resolves.toEqual({ data: expectedDto(imageView), ok: true });
+
+    expect(h.image.getProfile).toHaveBeenCalledWith(IMAGE_PROFILE_ID);
+    expect(h.image.saveCredential).toHaveBeenCalledWith(IMAGE_PROFILE_ID, 'ark-secret-1234567890');
+    expect(h.image.testCredential).toHaveBeenCalledWith(IMAGE_PROFILE_ID);
+    expect(h.image.deleteCredential).toHaveBeenCalledWith(IMAGE_PROFILE_ID);
+    expect(h.text.getProfile).not.toHaveBeenCalled();
+    expect(h.text.saveCredential).not.toHaveBeenCalled();
+    expect(h.text.testCredential).not.toHaveBeenCalled();
+    expect(h.text.deleteCredential).not.toHaveBeenCalled();
+
+    // 文本档 profileId 仍走文本 ProviderService。
+    await h.service.invoke(PROVIDER_IPC_CHANNELS.getProfile, providerGetInput);
+    expect(h.text.getProfile).toHaveBeenCalledWith(providerGetInput.profileId);
+    // 图片档 getProfile 共两次：显式一次 + 图片 testCredential 成功后的回读一次。
+    expect(h.image.getProfile).toHaveBeenCalledTimes(2);
+  });
+
+  it('图片档解密失败—MODEL_CREDENTIAL_INVALID—文案按档覆盖并指向图片配置入口', async () => {
+    const h = createImageHarness();
+    h.image.testCredential.mockResolvedValueOnce({
+      detail: 'CREDENTIAL_NOT_FOUND',
+      errorCode: 'MODEL_CREDENTIAL_INVALID' as const,
+      ok: false,
+    });
+    const imageMutation: ProviderMutationInputDto = {
+      expectedVersionId: IMAGE_PROFILE_ID,
+      profileId: IMAGE_PROFILE_ID,
+      requestId: 'request-image-test',
+    };
+
+    const result = (await h.service.invoke(
+      PROVIDER_IPC_CHANNELS.testCredential,
+      imageMutation,
+    )) as {
+      ok: false;
+      error: { code: string; message: string; userAction: string | null };
+    };
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('MODEL_CREDENTIAL_INVALID');
+    expect(result.error.message).toContain('密文无法解密');
+    expect(result.error.userAction).toContain('图片 Provider 设置');
+    // 存储层原因码不回显。
+    expect(JSON.stringify(result)).not.toContain('CREDENTIAL_NOT_FOUND');
+
+    // 同码文本档文案不受覆盖影响。
+    h.text.testCredential.mockResolvedValueOnce({
+      detail: null,
+      errorCode: 'MODEL_CREDENTIAL_INVALID' as const,
+      ok: false,
+    });
+    const textResult = (await h.service.invoke(
+      PROVIDER_IPC_CHANNELS.testCredential,
+      providerMutationInput,
+    )) as { ok: false; error: { message: string; userAction: string | null } };
+    expect(textResult.error.message).toContain('校验未通过');
+    expect(textResult.error.userAction).not.toContain('图片');
+  });
+});

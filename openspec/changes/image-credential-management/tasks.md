@@ -2,38 +2,48 @@
 
 ## 0. 立项核对与拍板（Apply 前置）
 
-- [ ] 0.1 产品负责人拍板 design.md D1–D4（D3 三方案选型与数值：SHOT_CONTRACT 超时 300 秒、超时重试预算 1 次、deadline 960 秒均可调），拍板结论回写 design.md 决策点汇总表
-- [ ] 0.2 若 D3 非方案一：同步修订 jobrunner spec delta 两条 Requirement 与 4.x 任务分解，复跑 `openspec validate image-credential-management --strict`
+- [x] 0.1 产品负责人拍板 design.md D1–D4（D3 三方案选型与数值：SHOT_CONTRACT 超时 300 秒、超时重试预算 1 次、deadline 960 秒均可调），拍板结论回写 design.md 决策点汇总表
+  - 2026-08-17 拍板：「D1–D4 全按推荐」——D1=A（复用 provider 五通道）、D2=A（解密校验+前置失败码）、D3=方案一（300s/预算 1 次/960s，数值维持起草值）、D4=A（ProviderSettings 内图片卡片）；已回写 design.md 决策表
+- [x] 0.2 若 D3 非方案一：同步修订 jobrunner spec delta 两条 Requirement 与 4.x 任务分解，复跑 `openspec validate image-credential-management --strict`
+  - 2026-08-17：D3 即方案一，delta 与 4.x 任务无需修订（任务保留作拍板记录，validate 已于立项时通过）
 
 ## 1. 契约（contracts）
 
-- [ ] 1.1 provider 契约扩展图片档：ProviderProfileDto 容纳 workspaceId 可空与分档 configured 判定；testCredential 输入/输出不变（分档分发属 Main 组合根）
+- [x] 1.1 provider 契约扩展图片档：ProviderProfileDto 容纳 workspaceId 可空与分档 configured 判定；testCredential 输入/输出不变（分档分发属 Main 组合根）
       — 验证：contract 测试（含图片档 round-trip、strict 拒绝未知字段）；Renderer/Preload 类型单一来源同步
-- [ ] 1.2 IMAGE_IPC 或 provider 通道错误文案：MODEL_CREDENTIAL_INVALID 的图片档 userAction 指向配置入口；Renderer ERROR_COPY 穷尽同步
+  - 2026-08-19：DDL 证实 workspace_id NOT NULL → 修订为保非空 + 图片档占位 'ark'（见 design.md Apply 期修订 #1）；provider 枚举扩 VOLCARK_SEEDREAM；contract 测试 6/6 绿（图片档 round-trip、OPENAI 拒绝、apiKey strict 拒绝）
+- [x] 1.2 IMAGE_IPC 或 provider 通道错误文案：MODEL_CREDENTIAL_INVALID 的图片档 userAction 指向配置入口；Renderer ERROR_COPY 穷尽同步
       — 验证：contract 测试
+  - 2026-08-19：Main 侧 job-provider-service 按档覆盖 IMAGE_CREDENTIAL_TEST_FAILURES（ipc 单测 14/14）；Renderer ERROR_COPY 无需新增条目（MODEL_CREDENTIAL_INVALID 已有，图片指引经 userAction 透传，见 design.md 修订 #4）
 
 ## 2. Main 与组合根
 
-- [ ] 2.1 图片档 defaults 注册与 testCredential 分档分发（文本档→Qwen 真实微调用不变；图片档→Seedream 解密校验）；provider 五通道对图片档全可用（保存/删除同步删密文+审计，沿用 CredentialAdapter 与审计路径）
+- [x] 2.1 图片档 defaults 注册与 testCredential 分档分发（文本档→Qwen 真实微调用不变；图片档→Seedream 解密校验）；provider 五通道对图片档全可用（保存/删除同步删密文+审计，沿用 CredentialAdapter 与审计路径）
       — 验证：composition 集成测试（真实 safeStorage 替身 + tmpdir secrets：保存→末 4 位→删除清理→审计事件；两档互不干扰）
-- [ ] 2.2 `bootstrapImageCredential` 环境变量路径语义保持（wx 独占、已存在跳过、仅联调/E2E 门控）；UI 保存路径支持覆盖轮换；源码注释「配置流程随 7.x 联调接线」更新为指向本 Change
+  - 2026-08-19：composition 闭环测试 5/5 绿（保存→末 4 位 9999→解密测试→删除清密文+审计 ['profile-image-primary']→文本档互不干扰）；IPC 五通道分发 14/14 绿
+- [x] 2.2 `bootstrapImageCredential` 环境变量路径语义保持（wx 独占、已存在跳过、仅联调/E2E 门控）；UI 保存路径支持覆盖轮换；源码注释「配置流程随 7.x 联调接线」更新为指向本 Change
       — 验证：unit（独占创建矩阵：无文件→写入、已存在→跳过、UI 路径→覆盖）
-- [ ] 2.3 凭据未配置/不可解时 `generateCandidates` 前置稳定失败 MODEL_CREDENTIAL_INVALID（含 userAction），替代适配器内 MODEL_UNKNOWN 兜底；其余五个 image 方法不受影响
+  - 2026-08-19：CredentialAdapter 增 overwriteExisting 选项（图片档固定 id 轮换 w 覆盖，文本档维持 wx）；矩阵测试 5/5 绿；bootstrap 注释已改指向本 Change
+- [x] 2.3 凭据未配置/不可解时 `generateCandidates` 前置稳定失败 MODEL_CREDENTIAL_INVALID（含 userAction），替代适配器内 MODEL_UNKNOWN 兜底；其余五个 image 方法不受影响
       — 验证：image-api-service unit + image-ipc contract（未配置矩阵：生成拒绝、查询可用、无 Key/密文路径泄漏）
+  - 2026-08-19：image-api-service 12/12 绿（前置失败含 userAction、不 kick、listCandidates 不受影响）；ipc 链路未配置矩阵随 3.2/5.1 E2E 复核
 
 ## 3. Renderer
 
-- [ ] 3.1 `ProviderSettings` 新增图片 Provider 卡片（保存后清空输入、测试/删除、末 4 位、model id 只读展示、验证范围如实文案）；首帧面板对 MODEL_CREDENTIAL_INVALID 给出配置入口提示
+- [x] 3.1 `ProviderSettings` 新增图片 Provider 卡片（保存后清空输入、测试/删除、末 4 位、model id 只读展示、验证范围如实文案）；首帧面板对 MODEL_CREDENTIAL_INVALID 给出配置入口提示
       — 验证：组件测试（renderToStaticMarkup 基线）+ E2E：Mock 档下 UI 保存→测试→删除闭环，页面无完整 Key 长期状态
+  - 2026-08-19：ImageProviderCard（展示组件+自取数 wrapper）挂载于 ProviderSettings；组件测试 5/5（末 4 位/只读 model id/如实文案/错误展示/pending 禁用）；首帧面板零改动（userAction 透传，见 design.md 修订 #4）；E2E 闭环部分随 3.2 执行
 - [ ] 3.2 E2E 回归：既有 first-frame happy path 与 bootstrap 用例零回归（图片档未配置时首帧面板呈现引导而非静默失败）
       — 验证：Playwright Electron E2E
 
 ## 4. SHOT_CONTRACT 超时与重试（D3 方案一；拍板后按 0.2 修订）
 
-- [ ] 4.1 `QwenTextModelAdapter` 按阶段推导调用超时（导出 STAGE→ms 常量表：SHOT_CONTRACT 300 秒、其余 120 秒；timeoutSignal 注入不变）
+- [x] 4.1 `QwenTextModelAdapter` 按阶段推导调用超时（导出 STAGE→ms 常量表：SHOT_CONTRACT 300 秒、其余 120 秒；timeoutSignal 注入不变）
       — 验证：unit（各阶段超时常量、注入 clock 断言 abort 时机；其余行为零回归 9/9 式复跑）
-- [ ] 4.2 JobRunner：MODEL_TIMEOUT 纳入 transport retry（独立预算至多 1 次，`transport_attempts` 0–3 CHECK 不变）；重试前复核剩余 deadline 预算；`deadline_at` 按阶段推导（SHOT_CONTRACT 960 秒、其余 300 秒）
+  - 2026-08-19：STAGE_INVOCATION_TIMEOUT_MS/STAGE_DEADLINE_MS 落 application ports/text-model（值导出双 barrel，Runner 与适配器同源防漂移）；适配器按 request.stage 取超时，QWEN_INVOCATION_TIMEOUT_MS 改由表派生保兼容；adapter+runner 单测 39/39 绿（含 300s/120s 分阶段断言）
+- [x] 4.2 JobRunner：MODEL_TIMEOUT 纳入 transport retry（独立预算至多 1 次，`transport_attempts` 0–3 CHECK 不变）；重试前复核剩余 deadline 预算；`deadline_at` 按阶段推导（SHOT_CONTRACT 960 秒、其余 300 秒）
       — 验证：unit/integration（超时→1 次重试→成功；预算不足直接终态；5xx 路径最多 2 次不变；崩溃恢复矩阵零回归）
+  - 2026-08-19：run 作用域 TimeoutRetryBudget（initial 与结构修复共用）；重试闸三类判定（超时预算/可重试传输/墙钟余量）；claim 前 findById 按阶段落 deadline（缺失兜底 300s）；单测覆盖超时 1 次重试成功、连续超时终态、墙钟不足不重试、分阶段 deadline/timeout_at；崩溃恢复矩阵随 4.3/5.1 全量门禁复核
 - [ ] 4.3 既有测试基线同步（120 秒/300 秒断言、恢复矩阵）与 spec delta 数值一致性复核
       — 验证：全量门禁零回归
 

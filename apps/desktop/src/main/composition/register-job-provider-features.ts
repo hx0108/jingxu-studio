@@ -2,9 +2,20 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
 import { ProviderService } from '@jingxu/application';
-import type { ProviderProfile, ProviderProfileDefaults, TextModelPort } from '@jingxu/application';
+import type {
+  CredentialCheck,
+  ProviderProfile,
+  ProviderProfileDefaults,
+  TextModelPort,
+} from '@jingxu/application';
 import type { AppResultDto } from '@jingxu/contracts';
-import { QWEN_MODEL_ID, QwenTextModelAdapter, deriveQwenBaseUrl } from '@jingxu/model-adapters';
+import {
+  QWEN_MODEL_ID,
+  QwenTextModelAdapter,
+  SEEDREAM_MODEL_ID,
+  deriveQwenBaseUrl,
+  deriveSeedreamBaseUrl,
+} from '@jingxu/model-adapters';
 
 import { CredentialAdapter, type SafeStorageFacade } from '../adapters/credential';
 import { E2eScriptTextModelAdapter } from '../adapters/e2e-script-text-model-adapter';
@@ -21,6 +32,7 @@ import {
   createDesktopScriptGenerationRuntime,
   PRIMARY_QWEN_PROFILE_ID,
 } from './create-script-generation-runtime';
+import { IMAGE_CREDENTIAL_ID } from './register-image-features';
 import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
 
 export interface RegisterJobProviderFeaturesOptions {
@@ -46,7 +58,23 @@ const PROVIDER_DEFAULTS: ProviderProfileDefaults = {
   baseUrl: deriveQwenBaseUrl(DEFAULT_WORKSPACE_ID),
   modelId: QWEN_MODEL_ID,
   modelSnapshotDate: '2026-05-26',
+  provider: 'QWEN',
   workspaceId: DEFAULT_WORKSPACE_ID,
+};
+
+/**
+ * 图片档（D1=A）：profileId 与固定凭据引用同名；Seedream 生成路径不读该行
+ * （按 IMAGE_CREDENTIAL_ID 直读密文），行只承载配置状态/末 4 位/审计。
+ * ARK 无工作区概念——workspace_id 为 DB NOT NULL 惰性占位，UI 不展示、不参与请求。
+ */
+const IMAGE_PROFILE_ID = IMAGE_CREDENTIAL_ID;
+const IMAGE_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
+  baseUrl: deriveSeedreamBaseUrl(),
+  modelId: SEEDREAM_MODEL_ID,
+  // 取自锁定 model id 的 yymmdd 版本段：doubao-seedream-5-0-lite-260128 → 2026-01-28。
+  modelSnapshotDate: '2026-01-28',
+  provider: 'VOLCARK_SEEDREAM',
+  workspaceId: 'ark',
 };
 
 const startupBlocked = <T>(traceId: string): AppResultDto<T> => ({
@@ -130,6 +158,33 @@ export const createJobProviderFeatureRegistration = ({
         textModelFactory: createProviderAdapter,
         unitOfWork: providerUnitOfWork,
       });
+      // 图片档凭据：固定 id + 覆写轮换（与文本档共享 secrets 目录；文本档仍为随机 id + wx）。
+      const imageCredentials = new CredentialAdapter({
+        clock,
+        createId: () => IMAGE_PROFILE_ID,
+        overwriteExisting: true,
+        safeStorage,
+        secretsDirectory: path.join(managedRoot, 'secrets'),
+      });
+      // 图片档 testCredential = 解密加载校验（D2=A：零计费请求；ARK 无免费探测端点）。
+      const imageCredentialValidator = {
+        validateCredential: async (): Promise<CredentialCheck> => {
+          try {
+            await imageCredentials.loadCredential(IMAGE_PROFILE_ID);
+            return { ok: true };
+          } catch {
+            return { detail: null, errorCode: 'MODEL_CREDENTIAL_INVALID', ok: false };
+          }
+        },
+      };
+      const imageProviderService = new ProviderService({
+        clock,
+        credentials: imageCredentials,
+        defaults: IMAGE_PROVIDER_DEFAULTS,
+        profiles,
+        textModelFactory: () => imageCredentialValidator,
+        unitOfWork: providerUnitOfWork,
+      });
       const scriptRuntime = createDesktopScriptGenerationRuntime({
         clock,
         registry,
@@ -147,6 +202,7 @@ export const createJobProviderFeatureRegistration = ({
       });
 
       activeService = createJobProviderIpcService({
+        image: { profileId: IMAGE_PROFILE_ID, service: imageProviderService },
         jobs: jobService,
         newSubscriptionId: subscriptionId,
         newTraceId: traceId,

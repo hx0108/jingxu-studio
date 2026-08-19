@@ -40,11 +40,24 @@
 - **A（推荐）**：`ProviderSettings` 同卡片组内新增「图片 Provider（火山方舟 Seedream）」卡片——仅 API Key 一个输入（无 Workspace/Model 输入；model id 从能力快照只读展示 `doubao-seedream-5-0-lite-260128`），保存/测试/删除三按钮与末 4 位状态行完全沿用文本卡片交互。首帧面板在 `MODEL_CREDENTIAL_INVALID` 错误下给出跳转提示。
 - **B**：独立设置路由/弹窗——当前应用无全局设置页，为此引入路由属过度设计。
 
-## 决策点汇总（待产品负责人拍板）
+## 决策点汇总
 
-| # | 决策点 | 推荐 | 备选 |
+| # | 决策点 | 拍板（2026-08-17，产品负责人「D1–D4 全按推荐」） | 备选（未采纳） |
 |---|---|---|---|
-| D1 | 图片凭据配置通道 | A：复用 provider 五通道 + 图片档 defaults | B：image 通道三方法；C 已否决 |
-| D2 | testCredential 语义 | A：解密校验 + 前置稳定失败码 | B（计费探测）已否决 |
-| D3 | SHOT_CONTRACT 超时/重试 | 方案一：300s + 超时重试预算 1 次 + deadline 960s | 方案二：仅上调超时；方案三独立 Change |
-| D4 | UI 放置 | A：ProviderSettings 内新增图片卡片 | B：独立设置页 |
+| D1 | 图片凭据配置通道 | **A：复用 provider 五通道 + 图片档 defaults** | B：image 通道三方法；C 已否决 |
+| D2 | testCredential 语义 | **A：解密校验 + 前置稳定失败码** | B（计费探测）已否决 |
+| D3 | SHOT_CONTRACT 超时/重试 | **方案一：300s + 超时重试预算 1 次 + deadline 960s** | 方案二：仅上调超时；方案三独立 Change |
+| D4 | UI 放置 | **A：ProviderSettings 内新增图片卡片** | B：独立设置页 |
+
+D3 数值维持起草值：SHOT_CONTRACT 调用超时 300 秒、MODEL_TIMEOUT 重试预算至多 1 次、`deadline_at` 960 秒；其余阶段 120 秒/300 秒不变。jobrunner spec delta 与 tasks 4.x 即按此实施。
+
+## Apply 期修订记录（2026-08-19）
+
+实施中发现与起草稿的偏差，均已按「保拍板结论、零迁移承诺」处理：
+
+1. **workspaceId 非空（DDL 事实）**：`0001_initial.sql` 的 `provider_profiles.workspace_id` 为 `NOT NULL CHECK (length > 0)`，起草稿「图片档 workspaceId 可空」需表重建迁移才能落地。修订：契约/DTO 保持 workspaceId 非空，图片档 defaults 写入占位 `'ark'`（UI 永不展示该字段；`region='cn-beijing'` 对 ARK 属实）。provider_profiles DDL 本就非枚举约束（TEXT），`VOLCARK_SEEDREAM` 落库无需迁移，「无迁移、head=9」承诺保持。
+2. **MODEL_TIMEOUT 归一化不改**：适配器层 `MODEL_TIMEOUT` 的 `retryable=false` 维持原语义（归一化面向 Provider 边界）；「是否重试超时」上移为 Runner 内独立预算判定（`isTimeout ? 预算余量 : retryableTransport`），两层职责不混。
+3. **无退避睡眠（既有事实，如实记录）**：既有 jobrunner spec 措辞含「退避」，但实现历来无 backoff sleep（重试立即续跑）。本 Change 不改动该行为；960 秒 deadline 余量按「无退避」口径计算（300×3+60 覆盖 1+1 次满超时调用与余量）。
+4. **首帧面板零改动**：`describeProjectError` 优先取 `error.userAction ?? fallbackAction`，Main 侧前置失败携带的图片配置指引自动透传到首帧面板，无需 Renderer 代码变更。
+5. **图片 profileId 镜像**：Renderer 不 import Main 侧符号，`IMAGE_PROFILE_ID='profile-image-primary'` 在 `ImageProviderCard.tsx` 本地常量镜像（与 `register-image-features` 同值），避免 renderer→main 依赖。
+

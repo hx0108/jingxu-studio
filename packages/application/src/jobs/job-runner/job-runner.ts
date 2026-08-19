@@ -4,6 +4,10 @@ import type {
   CandidateContractDependencies,
   CandidateContractFailure,
 } from '../candidate-contract/index';
+import {
+  STAGE_DEADLINE_MS,
+  STAGE_INVOCATION_TIMEOUT_MS,
+} from '../../ports/text-model/stage-invocation-limits';
 import type {
   JobRepositories,
   ModelInvocation,
@@ -84,6 +88,11 @@ type InvocationGeneration = Readonly<{
   result: TextGenerationResult;
 }>;
 
+/** 作业级 MODEL_TIMEOUT 重试预算（D3：至多 1 次；崩溃恢复不自动重发，预算随运行消亡）。 */
+interface TimeoutRetryBudget {
+  retries: number;
+}
+
 /**
  * 创建 Application 层确定性 JobRunner。所有 Provider 调用均在 UnitOfWork 外执行。
  */
@@ -126,6 +135,7 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
     attemptKind: ModelInvocationAttemptKind,
     transportAttempts: number,
     structureRepairAttempts: number,
+    timeoutBudget: TimeoutRetryBudget,
     repair?: JobStructureRepairRequest,
   ): Promise<InvocationGeneration | JobRunnerOutcome> => {
     let currentTransportAttempts = transportAttempts;
@@ -181,7 +191,11 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
       await dependencies.unitOfWork.run(async ({ invocations }) => {
         await invocations.insert(invocation);
         requireWrite(
-          await invocations.markRequestSent(invocationId, at, plusMilliseconds(at, 120_000)),
+          await invocations.markRequestSent(
+            invocationId,
+            at,
+            plusMilliseconds(at, STAGE_INVOCATION_TIMEOUT_MS[request.stage]),
+          ),
         );
       });
 
@@ -245,8 +259,19 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
         });
         if (cancelled) return Object.freeze({ status: 'CANCELLED' as const });
         const normalized = dependencies.textModel.normalizeError(unknownError);
-        if (retryableTransport(normalized) && currentTransportAttempts < 2) {
+        // D3 拍板：MODEL_TIMEOUT 纳入 transport retry 但独立预算至多 1 次（作业级）；
+        // 每次 retry 前复核剩余墙钟预算——再跑一次的最坏时长已越界即终态，避免注定失败的长跑。
+        const isTimeout = normalized.code === 'MODEL_TIMEOUT';
+        const retryEligible = isTimeout
+          ? timeoutBudget.retries === 0
+          : retryableTransport(normalized);
+        const deadlineBudgetLeft =
+          job.deadlineAt !== null &&
+          Date.parse(failedAt) + STAGE_INVOCATION_TIMEOUT_MS[request.stage] <=
+            Date.parse(job.deadlineAt);
+        if (retryEligible && deadlineBudgetLeft && currentTransportAttempts < 2) {
           currentTransportAttempts += 1;
+          if (isTimeout) timeoutBudget.retries += 1;
           await dependencies.unitOfWork.run(async ({ invocations, jobs }) => {
             requireWrite(
               await invocations.finish(invocationId, 'FAILED', failedAt, normalized.code),
@@ -313,8 +338,14 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
     run: async (jobId: string) => {
       const at = dependencies.now();
       const claimed = await dependencies.unitOfWork.run(async ({ jobs }) => {
+        // D3：deadline 按阶段派生（SHOT_CONTRACT 960s，其余 300s）；目标缺失/竞态由
+        // claimQueued 乐观锁自守，此处仅兜底常量。
+        const target = await jobs.findById(jobId);
         const won = await jobs.claimQueued({
-          deadlineAt: plusMilliseconds(at, 300_000),
+          deadlineAt: plusMilliseconds(
+            at,
+            target === null ? 300_000 : STAGE_DEADLINE_MS[target.stage],
+          ),
           jobId,
           leaseExpiresAt: plusMilliseconds(at, 30_000),
           leaseToken: dependencies.createLeaseToken(),
@@ -324,7 +355,9 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
       });
       if (claimed === null) return Object.freeze({ status: 'NOT_CLAIMED' as const });
 
-      const initial = await invoke(claimed, 'INITIAL', 0, 0);
+      // 作业级 MODEL_TIMEOUT 预算：initial 与结构修复共用（至多 1 次重试）。
+      const timeoutBudget: TimeoutRetryBudget = { retries: 0 };
+      const initial = await invoke(claimed, 'INITIAL', 0, 0, timeoutBudget);
       if (!('result' in initial)) return initial;
       let latestInvocationId = initial.invocationId;
       let activeContract = await dependencies.buildContract(claimed, latestInvocationId);
@@ -383,6 +416,7 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
               'STRUCTURE_REPAIR',
               transportAttempts,
               1,
+              timeoutBudget,
               Object.freeze({ failure, rawText }),
             );
             if (!('result' in repaired)) throw new TerminalOutcomeError(repaired);

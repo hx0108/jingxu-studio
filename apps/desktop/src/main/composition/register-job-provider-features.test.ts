@@ -1,13 +1,18 @@
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
 import type {
   CompiledSchemaRegistry,
   JobRepositoryPort,
   JobUnitOfWorkPort,
+  ProviderProfile,
   ProviderProfileRepositoryPort,
   ProviderUnitOfWorkPort,
   ScriptUnitOfWorkPort,
 } from '@jingxu/application';
 import { PROVIDER_IPC_CHANNELS } from '@jingxu/contracts';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { SafeStorageFacade } from '../adapters/credential';
 import type { JobProviderIpcRegistrar } from '../ipc/job-provider-gate';
@@ -15,6 +20,16 @@ import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
 import { createJobProviderFeatureRegistration } from './register-job-provider-features';
 
 const TRUSTED_URL = 'jingxu://app/index.html';
+
+const roots: string[] = [];
+const createRoot = async (): Promise<string> => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-jp-features-'));
+  roots.push(root);
+  return root;
+};
+afterEach(async () =>
+  Promise.all(roots.splice(0).map((root) => rm(root, { force: true, recursive: true }))),
+);
 
 const trustedEvent = () => {
   const frame = { url: TRUSTED_URL };
@@ -32,6 +47,7 @@ interface Harness {
     string,
     (event: ReturnType<typeof trustedEvent>, ...arguments_: readonly unknown[]) => Promise<unknown>
   >;
+  readonly root: string;
   readonly setReady: (ready: boolean) => void;
   readonly setUnits: (
     units: {
@@ -46,7 +62,9 @@ interface Harness {
   readonly registration: ReturnType<typeof createJobProviderFeatureRegistration>;
 }
 
-const createHarness = (): Harness => {
+const createHarness = (
+  overrides: { managedRoot?: string; safeStorage?: SafeStorageFacade } = {},
+): Harness => {
   const handlers = new Map<
     string,
     (event: ReturnType<typeof trustedEvent>, ...arguments_: readonly unknown[]) => Promise<unknown>
@@ -89,15 +107,16 @@ const createHarness = (): Harness => {
   const registration = createJobProviderFeatureRegistration({
     clock: () => '2026-08-12T00:00:00.000Z',
     ipcRegistrar: registrar,
-    managedRoot: '/tmp/jingxu-managed',
+    managedRoot: overrides.managedRoot ?? '/tmp/jingxu-managed',
     persistenceRuntime,
-    safeStorage,
+    safeStorage: overrides.safeStorage ?? safeStorage,
     trustedUrl: TRUSTED_URL,
   });
 
   return {
     handlers,
     registration,
+    root: overrides.managedRoot ?? '/tmp/jingxu-managed',
     setReady: (value: boolean) => {
       ready = value;
     },
@@ -191,5 +210,97 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     expect(result.data.provider).toBe('QWEN');
     expect(result.data.configured).toBe(false);
     expect(result.data.last4).toBeNull();
+  });
+
+  it('图片档凭据闭环—保存→解密测试→删除—密文清理、审计事件、两档互不干扰', async () => {
+    // 可逆 safeStorage 替身（密文=enc:+明文）：只为让解密测试可判真伪；
+    // 落盘仅密文由 credential-adapter 测试另行钉死。
+    const reversibleStorage: SafeStorageFacade = {
+      decryptString: (encrypted) => new TextDecoder().decode(encrypted).replace(/^enc:/u, ''),
+      encryptString: (plaintext) => new TextEncoder().encode(`enc:${plaintext}`),
+      isEncryptionAvailable: () => true,
+    };
+    const profiles = new Map<string, ProviderProfile>();
+    const auditEvents: string[] = [];
+    const units = configuredUnits();
+    units.providerProfileRepository = {
+      delete: async (id: string) => {
+        profiles.delete(id);
+      },
+      findById: async (id: string) => profiles.get(id) ?? null,
+      save: async (profile: ProviderProfile) => {
+        profiles.set(profile.id, profile);
+      },
+    } as unknown as ProviderProfileRepositoryPort;
+    units.providerUnitOfWork = {
+      run: (work: (repositories: never) => Promise<unknown>) =>
+        work({
+          audit: {
+            recordCredentialDeleted: async (id: string) => {
+              auditEvents.push(id);
+            },
+          },
+          profiles: units.providerProfileRepository,
+        } as never),
+    } as unknown as ProviderUnitOfWorkPort;
+
+    const h = createHarness({ managedRoot: await createRoot(), safeStorage: reversibleStorage });
+    h.setReady(true);
+    h.setUnits(units);
+    h.registration.ensureRegistered();
+    const invoke = (channel: string, input: unknown) =>
+      h.handlers.get(channel)?.(trustedEvent(), input) as Promise<{
+        ok: boolean;
+        data?: { configured: boolean; last4: string | null; provider: string; validated: boolean };
+      }>;
+    const IMAGE_INPUT = { profileId: 'profile-image-primary' };
+
+    // 保存：图片档行惰性建档，末 4 位回读，provider=VOLCARK_SEEDREAM。
+    const saved = await invoke(PROVIDER_IPC_CHANNELS.saveCredential, {
+      apiKey: 'ark-key-abcd9999',
+      expectedVersionId: 'profile-image-primary',
+      profileId: 'profile-image-primary',
+      requestId: 'request-image-save-0001',
+    });
+    expect(saved.ok).toBe(true);
+    expect(saved.data).toMatchObject({
+      configured: true,
+      last4: '9999',
+      provider: 'VOLCARK_SEEDREAM',
+    });
+
+    // 测试：解密校验成功并落 lastValidatedAt（零网络）。
+    const tested = await invoke(PROVIDER_IPC_CHANNELS.testCredential, {
+      ...IMAGE_INPUT,
+      expectedVersionId: 'profile-image-primary',
+      requestId: 'request-image-test-0001',
+    });
+    expect(tested.ok).toBe(true);
+    expect(tested.data?.validated).toBe(true);
+
+    // 删除：行清理 + 审计事件 + 密文文件清理。
+    const deleted = await invoke(PROVIDER_IPC_CHANNELS.deleteCredential, {
+      ...IMAGE_INPUT,
+      expectedVersionId: 'profile-image-primary',
+      requestId: 'request-image-delete-0001',
+    });
+    expect(deleted.ok).toBe(true);
+    expect(deleted.data?.configured).toBe(false);
+    expect(auditEvents).toEqual(['profile-image-primary']);
+    expect(await readdir(path.join(h.root, 'secrets'))).toEqual([]);
+
+    // 两档互不干扰：文本档保存产生独立 UUID 密文，图片档保持未配置。
+    const textSaved = await invoke(PROVIDER_IPC_CHANNELS.saveCredential, {
+      apiKey: 'qwen-key-abcd4321',
+      expectedVersionId: 'profile_qwen_primary',
+      profileId: 'profile_qwen_primary',
+      requestId: 'request-text-save-0001',
+    });
+    expect(textSaved.data).toMatchObject({ configured: true, last4: '4321', provider: 'QWEN' });
+    const imageView = await invoke(PROVIDER_IPC_CHANNELS.getProfile, IMAGE_INPUT);
+    expect(imageView.data?.configured).toBe(false);
+    const secretFiles = await readdir(path.join(h.root, 'secrets'));
+    expect(secretFiles).toHaveLength(1);
+    expect(secretFiles[0]).not.toBe('profile-image-primary.bin');
   });
 });

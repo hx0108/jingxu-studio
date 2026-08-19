@@ -15,6 +15,7 @@ const DEFAULTS: ProviderProfileDefaults = {
   baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
   modelId: 'qwen3.7-plus-2026-05-26',
   modelSnapshotDate: '2026-05-26',
+  provider: 'QWEN',
   workspaceId: 'workspace-1',
 };
 

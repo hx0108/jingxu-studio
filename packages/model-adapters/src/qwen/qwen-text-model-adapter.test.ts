@@ -145,6 +145,29 @@ describe('QwenTextModelAdapter', () => {
     }
   });
 
+  it('按阶段取超时—SHOT_CONTRACT 300s、常规阶段 120s（image-credential-management D3）', async () => {
+    const observed: number[] = [];
+    const adapter = new QwenTextModelAdapter({
+      credentialId: 'credential-1',
+      credentialPort,
+      fetch: vi.fn(() =>
+        Promise.resolve(
+          response(200, {
+            choices: [{ finish_reason: 'stop', message: { content: '{"ok":true}' } }],
+          }),
+        ),
+      ),
+      timeoutSignal: (milliseconds) => {
+        observed.push(milliseconds);
+        return new AbortController().signal;
+      },
+      workspaceId: 'workspace-123',
+    });
+    await adapter.generate({ ...request, stage: 'SHOT_CONTRACT' }, new AbortController().signal);
+    await adapter.generate(request, new AbortController().signal);
+    expect(observed).toEqual([300_000, 120_000]);
+  });
+
   it('message.content 为字符串但 JSON 非法—原样返回—交给 Candidate Pipeline 修复', async () => {
     const adapter = new QwenTextModelAdapter({
       credentialId: 'credential-1',

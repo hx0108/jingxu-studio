@@ -26,7 +26,7 @@ import { CredentialAdapter, type SafeStorageFacade } from '../adapters/credentia
 import { registerImageIpc, type ImageIpcRegistrar, type ImageIpcService } from '../ipc/image-ipc';
 import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
 
-/** ARK Key 的 safeStorage 凭据引用（与 DashScope 主 Key 分存；配置流程随 7.x 联调接线）。 */
+/** ARK Key 的 safeStorage 凭据引用（与 DashScope 主 Key 分存；UI 配置走 provider 五通道，见 image-credential-management）。 */
 export const IMAGE_CREDENTIAL_ID = 'profile-image-primary';
 /** 每轮候选数 N（design D6-1：方舟无 n 参数，N 次独立请求聚合为一个任务行）。 */
 const IMAGE_CANDIDATE_COUNT = 4;
@@ -109,10 +109,11 @@ export const createImageFeatureRegistration = ({
   );
 
   /**
-   * 7.1 门控联调接线：设 JINGXU_IMAGE_CREDENTIAL_FILE（指向 ARK Key 明文文件）时，
-   * 启动期一次性写入图片固定凭据（safeStorage 密文；wx 独占创建，已存在不覆盖，
-   * 轮换需先删 secrets 文件）。Key 只经此路径入密文，不进环境快照、日志与数据库；
-   * 任何失败只报原因码不回显内容。正式配置 UI 另行接线（design D5 红线不变）。
+   * 门控联调接线（保留路径）：设 JINGXU_IMAGE_CREDENTIAL_FILE（指向 ARK Key 明文文件）
+   * 且非 E2E Mock 时，启动期一次性写入图片固定凭据（safeStorage 密文；wx 独占创建，
+   * 已存在不覆盖——不吞并 UI 已保存的 Key）。Key 只经此路径入密文，不进环境快照、
+   * 日志与数据库；任何失败只报原因码不回显内容。正式配置走 provider 五通道的图片档
+   * （ProviderSettings 图片卡片，保存即覆写轮换同一固定引用；design D5 红线不变）。
    */
   const bootstrapImageCredential = (): void => {
     const keyFile = process.env.JINGXU_IMAGE_CREDENTIAL_FILE;
@@ -235,6 +236,14 @@ export const createImageFeatureRegistration = ({
       });
 
       activeService = createImageApiService({
+        assertCredentialReady:
+          // Mock 档不设闸（无凭据依赖）；真实档在生成前解密探一次，
+          // 未配置/不可解密以稳定 MODEL_CREDENTIAL_INVALID 拒绝（D2，替代 MODEL_UNKNOWN 兜底）。
+          useE2eMock
+            ? undefined
+            : async () => {
+                await credentials.loadCredential(IMAGE_CREDENTIAL_ID);
+              },
         assetFileStore: {
           writeAsset: ({ bytes, mimeType, projectId }) =>
             store.write({ bytes, mimeType, namespace: 'assets', projectId }),

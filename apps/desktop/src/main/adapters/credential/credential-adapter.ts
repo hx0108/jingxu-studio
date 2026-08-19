@@ -12,6 +12,8 @@ export interface SafeStorageFacade {
 export interface CredentialAdapterOptions {
   readonly clock?: () => string;
   readonly createId?: () => string;
+  /** 固定 id 的 UI 轮换路径（图片档）：覆写已存在密文；默认 wx 独占创建（引导路径语义不变）。 */
+  readonly overwriteExisting?: boolean;
   readonly safeStorage: SafeStorageFacade;
   readonly secretsDirectory: string;
 }
@@ -32,12 +34,14 @@ const CREDENTIAL_ID = /^[a-zA-Z0-9-]+$/u;
 export class CredentialAdapter implements CredentialPort {
   readonly #clock: () => string;
   readonly #createId: () => string;
+  readonly #overwriteExisting: boolean;
   readonly #safeStorage: SafeStorageFacade;
   readonly #secretsDirectory: string;
 
   public constructor(options: CredentialAdapterOptions) {
     this.#clock = options.clock ?? (() => new Date().toISOString());
     this.#createId = options.createId ?? (() => crypto.randomUUID());
+    this.#overwriteExisting = options.overwriteExisting === true;
     this.#safeStorage = options.safeStorage;
     this.#secretsDirectory = path.resolve(options.secretsDirectory);
   }
@@ -53,7 +57,10 @@ export class CredentialAdapter implements CredentialPort {
     try {
       const encrypted = this.#safeStorage.encryptString(plaintext);
       await mkdir(this.#secretsDirectory, { recursive: true });
-      await writeFile(this.#pathFor(id), encrypted, { flag: 'wx', mode: 0o600 });
+      await writeFile(this.#pathFor(id), encrypted, {
+        flag: this.#overwriteExisting ? 'w' : 'wx',
+        mode: 0o600,
+      });
       return { createdAt: this.#clock(), id, kind: 'API_KEY', last4: plaintext.slice(-4) || null };
     } catch (error) {
       if (error instanceof CredentialStorageError) throw error;

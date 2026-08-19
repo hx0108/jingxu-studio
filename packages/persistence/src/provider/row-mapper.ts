@@ -1,4 +1,8 @@
-import type { ProviderProfile, ProviderProfileConfig } from '@jingxu/application';
+import type {
+  ProviderProfile,
+  ProviderProfileConfig,
+  ProviderProfileKind,
+} from '@jingxu/application';
 
 import { PersistenceRuntimeError } from '../runtime/persistence-error';
 import type { SqliteOutputValue } from '../runtime/sqlite-database';
@@ -65,7 +69,8 @@ export const mapProviderProfileRow = (row: ProviderProfileRow): ProviderProfile 
   const credentialRef = requiredString(row.credential_ref);
   const enabled = row.enabled;
 
-  if (provider !== 'QWEN') invalidRow();
+  const providerKind: ProviderProfileKind =
+    provider === 'QWEN' || provider === 'VOLCARK_SEEDREAM' ? provider : invalidRow();
   if (region !== 'cn-beijing') invalidRow();
   if (!HTTPS_BASE_URL.test(baseUrl)) invalidRow();
   if (enabled !== 0 && enabled !== 1) invalidRow();
@@ -85,7 +90,7 @@ export const mapProviderProfileRow = (row: ProviderProfileRow): ProviderProfile 
     id,
     modelId,
     modelSnapshotDate,
-    provider: 'QWEN',
+    provider: providerKind,
     region: 'cn-beijing',
     workspaceId,
   };

@@ -201,7 +201,20 @@ const CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFa
     },
   });
 
+/** 图片档解密校验的失败文案覆盖（spread 保持 ModelErrorCode 穷尽；其余 code 沿用文本档表）。 */
+const IMAGE_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFailureCopy>> =
+  Object.freeze({
+    ...CREDENTIAL_TEST_FAILURES,
+    MODEL_CREDENTIAL_INVALID: {
+      message: '图片 API Key 密文无法解密读取（未配置、系统密钥变更或目录迁移）。',
+      retryable: false,
+      userAction: '请在图片 Provider 设置中重新粘贴 ARK API Key 并保存。',
+    },
+  });
+
 export interface JobProviderIpcDependencies {
+  /** 图片档（image-credential-management D1）：按 profileId 精确命中时分发到独立 ProviderService。 */
+  readonly image?: Readonly<{ profileId: string; service: ProviderService }>;
   readonly jobs: JobService;
   readonly provider: ProviderService;
   readonly newTraceId?: () => string;
@@ -236,6 +249,10 @@ export const createJobProviderIpcService = (
   const coordinator = new RequestCoordinator();
   const newTraceId = dependencies.newTraceId ?? randomUUID;
   const newSubscriptionId = dependencies.newSubscriptionId ?? randomUUID;
+  const isImageProfile = (profileId: string): boolean =>
+    dependencies.image !== undefined && profileId === dependencies.image.profileId;
+  const providerFor = (profileId: string): ProviderService =>
+    isImageProfile(profileId) ? dependencies.image!.service : dependencies.provider;
 
   const mutate = <T>(
     input: MutationInput,
@@ -290,7 +307,7 @@ export const createJobProviderIpcService = (
     traceId: string,
   ): Promise<AppResultDto<ProviderProfileDto>> => {
     try {
-      const view = await dependencies.provider.getProfile(input.profileId);
+      const view = await providerFor(input.profileId).getProfile(input.profileId);
       return validateOutput(PROVIDER_PROFILE_RESULT, ok(toProviderDto(view)), traceId);
     } catch {
       return mapProviderError(undefined, traceId, 'PROVIDER_CALL_FAILED');
@@ -306,7 +323,7 @@ export const createJobProviderIpcService = (
       traceId,
       async () => {
         try {
-          const view = await dependencies.provider.saveProfile(
+          const view = await providerFor(input.profileId).saveProfile(
             input.profileId,
             input.workspaceId,
             input.enabled,
@@ -329,7 +346,10 @@ export const createJobProviderIpcService = (
       traceId,
       async () => {
         try {
-          const view = await dependencies.provider.saveCredential(input.profileId, input.apiKey);
+          const view = await providerFor(input.profileId).saveCredential(
+            input.profileId,
+            input.apiKey,
+          );
           return ok(toProviderDto(view));
         } catch (error) {
           return mapProviderError(error, traceId, 'PROVIDER_CREDENTIAL_UNAVAILABLE');
@@ -348,11 +368,16 @@ export const createJobProviderIpcService = (
       traceId,
       async () => {
         try {
-          const check = await dependencies.provider.testCredential(input.profileId);
+          const check = await providerFor(input.profileId).testCredential(input.profileId);
           if (!check.ok) {
             // 透传模型端口的稳定失败码；表类型在编译期强制全键覆盖，
             // 运行时意外由外层 catch 归一化为 PROVIDER_CALL_FAILED。
-            const known = CREDENTIAL_TEST_FAILURES[check.errorCode];
+            // 图片档走解密校验语义，失败文案按档覆盖（D2）。
+            const known = (
+              isImageProfile(input.profileId)
+                ? IMAGE_CREDENTIAL_TEST_FAILURES
+                : CREDENTIAL_TEST_FAILURES
+            )[check.errorCode];
             return err<ProviderProfileDto>(
               check.errorCode,
               traceId,
@@ -361,7 +386,7 @@ export const createJobProviderIpcService = (
               known.userAction,
             );
           }
-          const view = await dependencies.provider.getProfile(input.profileId);
+          const view = await providerFor(input.profileId).getProfile(input.profileId);
           return ok(toProviderDto(view));
         } catch (error) {
           return mapProviderError(error, traceId, 'PROVIDER_CALL_FAILED');
@@ -380,7 +405,7 @@ export const createJobProviderIpcService = (
       traceId,
       async () => {
         try {
-          const view = await dependencies.provider.deleteCredential(input.profileId);
+          const view = await providerFor(input.profileId).deleteCredential(input.profileId);
           return ok(toProviderDto(view));
         } catch (error) {
           return mapProviderError(error, traceId, 'PROVIDER_CREDENTIAL_UNAVAILABLE');

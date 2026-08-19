@@ -71,6 +71,8 @@ export interface ImageApiService {
 }
 
 export interface ImageApiServiceDependencies {
+  /** 生成前置凭据闸：抛错即以稳定 MODEL_CREDENTIAL_INVALID 拒绝（Mock 档不注入；design D2）。 */
+  readonly assertCredentialReady?: (() => Promise<void>) | undefined;
   readonly assetFileStore: MediaAssetFileStorePort;
   readonly generation: MediaGenerationService;
   readonly mediaUnitOfWork: MediaUnitOfWorkPort;
@@ -155,6 +157,20 @@ export const createImageApiService = (
   const { mediaUnitOfWork } = dependencies;
   return {
     generateCandidates: async (input, traceId) => {
+      // 凭据前置闸（D2）：未配置/不可解密先于建档稳定失败，其余五个 image 方法不受影响。
+      if (dependencies.assertCredentialReady !== undefined) {
+        try {
+          await dependencies.assertCredentialReady();
+        } catch {
+          return mediaFailure(
+            'MODEL_CREDENTIAL_INVALID',
+            '图片 Provider 凭据未配置或密文不可解密。',
+            traceId,
+            false,
+            '在剧本工作区「Provider 设置」的图片卡片中保存 ARK API Key 后重试。',
+          );
+        }
+      }
       const created = await dependencies.generation.generateCandidates(input, traceId);
       if (!created.ok) return created;
       dependencies.scheduler.kick(input.projectId);

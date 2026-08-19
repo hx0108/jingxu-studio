@@ -77,15 +77,18 @@ interface TestJobRepositories extends JobRepositories {
 const createHarness = (
   steps: readonly (NormalizedModelError | TextGenerationResult)[],
   options?: Readonly<{
+    claimDeadlineAt?: string;
     commitError?: 'STALE_INPUT';
     commitFails?: boolean;
     finalInvalid?: boolean;
     preCommitStale?: boolean;
     requestBuildError?: 'STALE_INPUT' | 'OTHER';
+    stage?: ScriptStageJob['stage'];
   }>,
 ) => {
   const events: string[] = [];
   const store: Store = { invocations: [], job: queuedJob(), versions: [] };
+  if (options?.stage !== undefined) store.job = { ...store.job, stage: options.stage };
   let transactionActive = false;
   let cursor = 0;
 
@@ -106,7 +109,7 @@ const createHarness = (
       if (store.job.status !== 'QUEUED') return Promise.resolve(false);
       store.job = {
         ...store.job,
-        deadlineAt: command.deadlineAt,
+        deadlineAt: options?.claimDeadlineAt ?? command.deadlineAt,
         leaseExpiresAt: command.leaseExpiresAt,
         leaseToken: command.leaseToken,
         startedAt: command.startedAt,
@@ -414,27 +417,25 @@ describe('JobRunner', () => {
     expect(harness.store.job.status).toBe('FAILED');
   });
 
-  it.each([
-    'MODEL_CREDENTIAL_INVALID',
-    'MODEL_CONTENT_REJECTED',
-    'MODEL_CONTEXT_LIMIT',
-    'MODEL_TIMEOUT',
-  ] as const)('%s—不可重试—直接 FAILED', async (code) => {
-    const harness = createHarness([modelError(code)]);
-    await expect(harness.runner.run('job_1')).resolves.toEqual({
-      errorCode: code,
-      status: 'FAILED',
-    });
-    expect(harness.store.invocations).toHaveLength(1);
-    expect(harness.store.job.status).toBe('FAILED');
-    const finish = harness.events.indexOf('finish:FAILED');
-    expect(harness.events.slice(finish - 1, finish + 3)).toEqual([
-      'tx:begin',
-      'finish:FAILED',
-      'transition:FAILED',
-      'tx:commit',
-    ]);
-  });
+  it.each(['MODEL_CREDENTIAL_INVALID', 'MODEL_CONTENT_REJECTED', 'MODEL_CONTEXT_LIMIT'] as const)(
+    '%s—不可重试—直接 FAILED',
+    async (code) => {
+      const harness = createHarness([modelError(code)]);
+      await expect(harness.runner.run('job_1')).resolves.toEqual({
+        errorCode: code,
+        status: 'FAILED',
+      });
+      expect(harness.store.invocations).toHaveLength(1);
+      expect(harness.store.job.status).toBe('FAILED');
+      const finish = harness.events.indexOf('finish:FAILED');
+      expect(harness.events.slice(finish - 1, finish + 3)).toEqual([
+        'tx:begin',
+        'finish:FAILED',
+        'transition:FAILED',
+        'tx:commit',
+      ]);
+    },
+  );
 
   it('候选结构失败—只修一次并重新注入系统字段—第二次仍失败不写版本', async () => {
     const harness = createHarness([result('{'), result('{}')]);
@@ -520,4 +521,50 @@ describe('JobRunner', () => {
     expect(harness.store.job.status).toBe('CANCELLED');
     expect(harness.store.invocations).toHaveLength(1);
   });
+
+  it('MODEL_TIMEOUT—独立预算重试一次成功—TRANSPORT_RETRY 且 transportAttempts=1（image-credential-management D3）', async () => {
+    const harness = createHarness([modelError('MODEL_TIMEOUT'), result()]);
+    await expect(harness.runner.run('job_1')).resolves.toEqual({ status: 'SUCCEEDED' });
+    expect(harness.store.invocations.map((item) => item.attemptKind)).toEqual([
+      'INITIAL',
+      'TRANSPORT_RETRY',
+    ]);
+    expect(harness.store.job.transportAttempts).toBe(1);
+  });
+
+  it('MODEL_TIMEOUT 连续两次—预算仅一次—第二次不重试直接终态 FAILED', async () => {
+    const harness = createHarness([modelError('MODEL_TIMEOUT'), modelError('MODEL_TIMEOUT')]);
+    await expect(harness.runner.run('job_1')).resolves.toEqual({
+      errorCode: 'MODEL_TIMEOUT',
+      status: 'FAILED',
+    });
+    expect(harness.store.invocations).toHaveLength(2);
+    expect(harness.store.job.transportAttempts).toBe(1);
+  });
+
+  it('剩余墙钟预算不足一次最坏调用—可重试错误也不重试—直接 FAILED', async () => {
+    // NOW+120s 的最坏单次已越界 NOW+60s 的 deadline，重试注定超时。
+    const harness = createHarness([modelError('MODEL_NETWORK_ERROR')], {
+      claimDeadlineAt: '2026-08-12T00:01:00.000Z',
+    });
+    await expect(harness.runner.run('job_1')).resolves.toEqual({
+      errorCode: 'MODEL_NETWORK_ERROR',
+      status: 'FAILED',
+    });
+    expect(harness.store.invocations).toHaveLength(1);
+    expect(harness.store.job.transportAttempts).toBe(0);
+  });
+
+  it.each([
+    ['SHOT_CONTRACT', '2026-08-12T00:16:00.000Z', '2026-08-12T00:05:00.000Z'],
+    ['CONCEPT', '2026-08-12T00:05:00.000Z', '2026-08-12T00:02:00.000Z'],
+  ] as const)(
+    '%s—claim 按阶段落 deadline、发送证据按阶段落 timeout_at',
+    async (stage, deadlineAt, timeoutAt) => {
+      const harness = createHarness([result()], { stage });
+      await expect(harness.runner.run('job_1')).resolves.toEqual({ status: 'SUCCEEDED' });
+      expect(harness.store.job.deadlineAt).toBe(deadlineAt);
+      expect(harness.store.invocations[0]?.timeoutAt).toBe(timeoutAt);
+    },
+  );
 });

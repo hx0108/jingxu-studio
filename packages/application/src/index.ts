@@ -14,6 +14,7 @@ export * from './media/index';
 export type * from './ports/schema-registry/index';
 export type * from './ports/script/index';
 export type * from './ports/text-model/index';
+export { STAGE_DEADLINE_MS, STAGE_INVOCATION_TIMEOUT_MS } from './ports/text-model/index';
 export * from './jobs/index';
 export { SchemaRegistryOperationError } from './ports/schema-registry/index';
 export { createProjectService, type ProjectService } from './project/project-service';

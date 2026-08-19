@@ -7,6 +7,9 @@ export interface ProviderProfileConfig {
   readonly lastValidatedAt: string | null;
 }
 
+/** Provider 档位（image-credential-management D1）：文本=QWEN，图片=火山方舟 Seedream。 */
+export type ProviderProfileKind = 'QWEN' | 'VOLCARK_SEEDREAM';
+
 export interface ProviderProfile {
   readonly baseUrl: string;
   readonly config: ProviderProfileConfig;
@@ -20,7 +23,7 @@ export interface ProviderProfile {
   readonly id: string;
   readonly modelId: string;
   readonly modelSnapshotDate: string;
-  readonly provider: 'QWEN';
+  readonly provider: ProviderProfileKind;
   readonly region: 'cn-beijing';
   readonly workspaceId: string;
 }
@@ -32,7 +35,7 @@ export interface ProviderProfileView {
   readonly lastValidatedAt: string | null;
   readonly modelId: string;
   readonly modelSnapshotDate: string;
-  readonly provider: 'QWEN';
+  readonly provider: ProviderProfileKind;
   readonly region: 'cn-beijing';
   /** 乐观并发令牌；当前等价于 profile id（行存在即配置即凭据三者同生命周期）。 */
   readonly versionId: string;
@@ -47,6 +50,7 @@ export interface ProviderProfileDefaults {
   readonly baseUrl: string;
   readonly modelId: string;
   readonly modelSnapshotDate: string;
+  readonly provider: ProviderProfileKind;
   readonly workspaceId: string;
 }
 

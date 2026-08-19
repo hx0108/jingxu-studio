@@ -139,4 +139,23 @@ describe('Job Provider Events IPC Contract', () => {
       providerProfileSchema.safeParse({ ...view, authorization: 'Bearer secret' }).success,
     ).toBe(false);
   });
+
+  it('Provider 输出—图片档（VOLCARK_SEEDREAM）round-trip 与未知 provider 拒绝', () => {
+    // DB workspace_id NOT NULL 决定图片档沿用非空占位（design D1 Apply 期修订）。
+    const view = {
+      configured: false,
+      enabled: true,
+      last4: null,
+      modelId: 'doubao-seedream-5-0-lite-260128',
+      provider: 'VOLCARK_SEEDREAM',
+      region: 'cn-beijing',
+      validated: false,
+      versionId: 'version_12345678',
+      workspaceId: 'ark',
+    };
+    expect(providerProfileSchema.safeParse(view).success).toBe(true);
+    expect(providerProfileSchema.parse(view).provider).toBe('VOLCARK_SEEDREAM');
+    expect(providerProfileSchema.safeParse({ ...view, provider: 'OPENAI' }).success).toBe(false);
+    expect(providerProfileSchema.safeParse({ ...view, apiKey: 'secret' }).success).toBe(false);
+  });
 });

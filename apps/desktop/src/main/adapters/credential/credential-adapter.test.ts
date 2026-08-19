@@ -74,6 +74,36 @@ describe('CredentialAdapter', () => {
     expect(await readdir(root)).toEqual([]);
   });
 
+  it('固定 id 轮换矩阵—默认 wx 已存在即失败，overwriteExisting 覆写为新密文且不留孤儿', async () => {
+    const root = await createRoot();
+    const make = (overwriteExisting: boolean) =>
+      new CredentialAdapter({
+        createId: () => 'profile-image-primary',
+        overwriteExisting,
+        safeStorage: {
+          decryptString: (bytes) => `decrypted:${new TextDecoder().decode(bytes)}`,
+          encryptString: (value) => new TextEncoder().encode(`enc:${value}`),
+          isEncryptionAvailable: () => true,
+        },
+        secretsDirectory: root,
+      });
+    const exclusive = make(false);
+    await exclusive.saveCredential('ark-key-old');
+    // wx 独占：同 id 再存即失败（引导路径「已存在不覆盖」语义的底座）。
+    await expect(exclusive.saveCredential('ark-key-new')).rejects.toEqual(
+      new CredentialStorageError('CREDENTIAL_STORAGE_FAILED'),
+    );
+    // UI 轮换路径：覆写同一固定引用并读到新值。
+    const overwrite = make(true);
+    const ref = await overwrite.saveCredential('ark-key-new-9999');
+    expect(ref.id).toBe('profile-image-primary');
+    expect(ref.last4).toBe('9999');
+    await expect(overwrite.loadCredential('profile-image-primary')).resolves.toBe(
+      'decrypted:enc:ark-key-new-9999',
+    );
+    expect(await readdir(root)).toEqual(['profile-image-primary.bin']);
+  });
+
   it('凭据流期间—console 与 stderr 零明文 Key（日志白名单守卫）', async () => {
     const root = await createRoot();
     const plaintext = 'fake-credential-value-7890';

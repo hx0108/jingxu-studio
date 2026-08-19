@@ -6,10 +6,12 @@ import type {
   TextGenerationResult,
   TextModelPort,
 } from '@jingxu/application';
+import { STAGE_INVOCATION_TIMEOUT_MS } from '@jingxu/application';
 
 export const QWEN_MODEL_ID = 'qwen3.7-plus-2026-05-26';
 export const QWEN_INPUT_TOKEN_LIMIT = 64_000;
-export const QWEN_INVOCATION_TIMEOUT_MS = 120_000;
+/** 兼容导出：常规阶段（非 SHOT_CONTRACT）单次调用超时；实际按阶段取 STAGE_INVOCATION_TIMEOUT_MS。 */
+export const QWEN_INVOCATION_TIMEOUT_MS = STAGE_INVOCATION_TIMEOUT_MS.CONCEPT;
 const WORKSPACE_ID = /^[A-Za-z0-9-]+$/u;
 
 /** 百炼公共兼容端点（业务空间专属端点需账号单独开通，V1 不依赖）；workspaceId 仅做配置合法性校验。 */
@@ -116,9 +118,10 @@ export class QwenTextModelAdapter implements TextModelPort {
     try {
       const temperature = request.parameters.temperature;
       const topP = request.parameters.top_p;
+      // D3：按阶段取超时（SHOT_CONTRACT 300s，其余 120s），与 JobRunner 的 timeout_at 同源。
       const invocationSignal = AbortSignal.any([
         signal,
-        this.#timeoutSignal(QWEN_INVOCATION_TIMEOUT_MS),
+        this.#timeoutSignal(STAGE_INVOCATION_TIMEOUT_MS[request.stage]),
       ]);
       if (invocationSignal.aborted) throw invocationSignal.reason;
       const response = await this.#fetch(`${this.#baseUrl}/chat/completions`, {

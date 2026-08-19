@@ -13,7 +13,10 @@ export interface ProviderServiceDependencies {
   readonly credentials: CredentialPort;
   readonly defaults: ProviderProfileDefaults;
   readonly profiles: ProviderProfileRepositoryPort;
-  readonly textModelFactory: (profile: ProviderProfile) => TextModelPort;
+  /** 仅用于 testCredential；图片档注入解密校验替身即可（D2：零计费请求）。 */
+  readonly textModelFactory: (
+    profile: ProviderProfile,
+  ) => Pick<TextModelPort, 'validateCredential'>;
   readonly unitOfWork: ProviderUnitOfWorkPort;
 }
 
@@ -146,7 +149,7 @@ export class ProviderService {
       id: profileId,
       modelId: defaults.modelId,
       modelSnapshotDate: defaults.modelSnapshotDate,
-      provider: 'QWEN',
+      provider: defaults.provider,
       region: 'cn-beijing',
       workspaceId: defaults.workspaceId,
     };

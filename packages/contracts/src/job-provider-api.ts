@@ -66,7 +66,7 @@ export const providerProfileSchema = z
     enabled: z.boolean(),
     last4: z.string().length(4).nullable(),
     modelId: z.string().min(1).max(128),
-    provider: z.literal('QWEN'),
+    provider: z.enum(['QWEN', 'VOLCARK_SEEDREAM']),
     region: z.literal('cn-beijing'),
     validated: z.boolean(),
     versionId: idSchema,

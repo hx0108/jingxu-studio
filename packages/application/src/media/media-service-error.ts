@@ -5,9 +5,10 @@ export const mediaFailure = <T>(
   message: string,
   traceId: string,
   retryable = false,
+  userAction: string | null = null,
 ): AppResultDto<T> => ({
   ok: false,
-  error: { code, fieldErrors: null, message, retryable, traceId, userAction: null },
+  error: { code, fieldErrors: null, message, retryable, traceId, userAction },
 });
 
 export const mediaPersistenceFailure = <T>(traceId: string): AppResultDto<T> =>
