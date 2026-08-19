@@ -20,4 +20,4 @@
 - [x] 4.1 README 当前已实现 + 最近验证证据补记（2026-08-20 漂移实录 → 修复口径）
 - [x] 4.2 `openspec validate shot-speaker-id-repair --strict` + `--all --strict` 通过
 - [ ] 4.3 真实复测（可选，按 D5：Qwen 漂移为当日性现象无法按需复现，离线等价形态已覆盖即闭环；若后续真实联调再现 speaker 违规，复盘修复轮触发率）
-- [ ] 4.4 归档 change、更新 main
+- [x] 4.4 归档 change、更新 main（2026-08-20 归档为 2026-08-20-shot-speaker-id-repair）

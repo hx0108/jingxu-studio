@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前无 Active Change。最近归档的 Change 为 `media-invocation-evidence`（2026-08-20，媒体域调用证据链：`media_model_invocations` 两段式留证、候选终态同事务收尾、SYNC raw + evidenceOf main-only、真实联调 SQL 断言零违规）。次近为 `batch-first-frame-generation`（2026-08-19，V2 图片切片第二步：整集批量首帧——惰性逐镜头建档、失败隔离与重试新批次、取消剩余、重启恢复不重发、批次进度与镜头徽标）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前无 Active Change。最近归档的 Change 为 `shot-speaker-id-repair`（2026-08-20，spoken 非旁白镜头 speaker_id 空值漂移修复：多角色候选层跨字段值校验接入修复轮 + 单角色确定性派生，零迁移零接口改动）。次近为 `media-invocation-evidence`（2026-08-20，媒体域调用证据链：`media_model_invocations` 两段式留证、候选终态同事务收尾、SYNC raw + evidenceOf main-only、真实联调 SQL 断言零违规）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 
@@ -112,6 +112,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - 方案（一条产品规则两半实现）：多角色/异形镜头——`validateModelShotSetCandidate` 增跨字段值校验（非空 string + ShotContract 1.1.0 同款 pattern，稳定错误码 `CANDIDATE_DIALOGUE_SPEAKER_INVALID`，明细定位 `shots[i].dialogue.speaker_id`），落在可修复的 CANDIDATE 层接入既有 STRUCTURE_REPAIR 修复轮（960s 预算已覆盖，零管线改动）；单角色镜头——候选层豁免，`injectShotSystemFields` 确定性派生唯一角色为说话人（与 narrator/无台词推导同族）。
 - 边界钉（测试断言）：多角色空值透传不越权派生（候选层责任）；单角色空值候选豁免⇔注入派生同谓词；NARRATION_FIRST/无台词/SUBTITLE_ONLY 不触发；修复后非 bible 键仍走 COLLECTION 如实终态（D3 显式接受，不扩 isRepairable）。
 - 全量门禁（重建三 bundle）：format:check、eslint --max-warnings=0、tsc -b 零错误；unit **703**（+10）、contract 109、integration 201；E2E 离线 16 passed + 3 skipped（T5 MEDIA_EVIDENCE_OK 不回归）。真实复测按 D5 不做（Qwen 漂移当日性无法按需复现，离线等价形态已覆盖）。
+- `openspec validate shot-speaker-id-repair --strict` 通过后归档为 `2026-08-20-shot-speaker-id-repair`（shot-contract-generation spec 1 条修改：spoken 非旁白 speaker 校验含多角色修复轮与单角色派生两场景）。
 
 2026-08-20 `media-invocation-evidence` 收尾记录（媒体域调用证据链，离线门禁 + 真实 Seedream 续跑联调）：
 
