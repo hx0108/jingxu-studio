@@ -102,9 +102,7 @@ describe('SeedreamImageModelAdapter', () => {
 
   it('submit—官方 size 为 "WxH" 字符串时解析宽高—畸形字符串降级 null', async () => {
     const stringSizeFetch = vi.fn<typeof globalThis.fetch>(() =>
-      Promise.resolve(
-        jsonResponse({ ...okBody, data: [{ size: '2560x1440', url: RESULT_URL }] }),
-      ),
+      Promise.resolve(jsonResponse({ ...okBody, data: [{ size: '2560x1440', url: RESULT_URL }] })),
     );
     const adapter = new SeedreamImageModelAdapter({
       credentialId: 'cred_ark',

@@ -375,10 +375,13 @@ describe('AC-V1-04 Provider 全矩阵 — 真实 MockTextModelAdapter × createJ
     assertInputPreserved(h.store);
   });
 
-  it('120 秒超时 MODEL_TIMEOUT — 不可重试 → FAILED，注入等待器不真实等待', async () => {
+  it('120 秒超时 MODEL_TIMEOUT — D3 独立预算重试一次仍超时 → FAILED，注入等待器不真实等待', async () => {
     const wait = vi.fn(() => Promise.resolve());
     const h = createMatrixHarness({
-      steps: [{ kind: 'timeout', afterMs: 120_000 }],
+      steps: [
+        { kind: 'timeout', afterMs: 120_000 },
+        { kind: 'timeout', afterMs: 120_000 },
+      ],
       wait,
     });
     await expect(h.runner.run('job_1')).resolves.toEqual({
@@ -386,7 +389,11 @@ describe('AC-V1-04 Provider 全矩阵 — 真实 MockTextModelAdapter × createJ
       status: 'FAILED',
     });
     expect(wait).toHaveBeenCalledWith(120_000, expect.any(AbortSignal));
-    expect(h.store.invocations).toHaveLength(1);
+    expect(h.store.invocations.map((item) => item.attemptKind)).toEqual([
+      'INITIAL',
+      'TRANSPORT_RETRY',
+    ]);
+    expect(h.store.job.transportAttempts).toBe(1);
     expect(h.store.versions).toHaveLength(0);
     assertInputPreserved(h.store);
   });

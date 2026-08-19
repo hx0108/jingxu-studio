@@ -21,11 +21,7 @@ const executablePath =
     'jingxu-studio.exe',
   );
 const productionData = path.join(process.env.LOCALAPPDATA ?? '', 'JingxuStudio', 'data');
-const productionBackups = path.join(
-  process.env.LOCALAPPDATA ?? '',
-  'JingxuStudio',
-  'backups',
-);
+const productionBackups = path.join(process.env.LOCALAPPDATA ?? '', 'JingxuStudio', 'backups');
 const databasePath = path.join(productionData, 'jingxu.sqlite');
 
 const headOf = (file) => {
@@ -60,9 +56,7 @@ try {
   await page
     .getByRole('heading', { name: '镜序 Studio', exact: true })
     .waitFor({ timeout: 30_000 });
-  const startup = await page.evaluate(() =>
-    window.jingxu?.runtime?.getStartupStatus?.() ?? null,
-  );
+  const startup = await page.evaluate(() => window.jingxu?.runtime?.getStartupStatus?.() ?? null);
   const writeEnabled = startup === null ? null : startup.writeEnabled;
   if (writeEnabled !== true) {
     throw new Error(`STARTUP_NOT_WRITABLE:${JSON.stringify(startup)}`);

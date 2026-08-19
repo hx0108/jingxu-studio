@@ -33,8 +33,9 @@
 - [x] 3.1 `ProviderSettings` 新增图片 Provider 卡片（保存后清空输入、测试/删除、末 4 位、model id 只读展示、验证范围如实文案）；首帧面板对 MODEL_CREDENTIAL_INVALID 给出配置入口提示
       — 验证：组件测试（renderToStaticMarkup 基线）+ E2E：Mock 档下 UI 保存→测试→删除闭环，页面无完整 Key 长期状态
   - 2026-08-19：ImageProviderCard（展示组件+自取数 wrapper）挂载于 ProviderSettings；组件测试 5/5（末 4 位/只读 model id/如实文案/错误展示/pending 禁用）；首帧面板零改动（userAction 透传，见 design.md 修订 #4）；E2E 闭环部分随 3.2 执行
-- [ ] 3.2 E2E 回归：既有 first-frame happy path 与 bootstrap 用例零回归（图片档未配置时首帧面板呈现引导而非静默失败）
+- [x] 3.2 E2E 回归：既有 first-frame happy path 与 bootstrap 用例零回归（图片档未配置时首帧面板呈现引导而非静默失败）
       — 验证：Playwright Electron E2E
+  - 2026-08-19：新增 image-credential-ui E2E（UI 保存→解密测试→删除闭环：密文固定 id 落盘非明文/删除清理/页面无 Key 泄漏/末 4 位/只读 model id/如实文案）13.2s 绿；全量 e2e 11 passed + 2 skipped（真实探针无凭据正确跳过）；未配置前置失败在 Mock 档被闸门豁免（按设计），其行为由 unit 12/12 与 6.1 真实联调覆盖
 
 ## 4. SHOT_CONTRACT 超时与重试（D3 方案一；拍板后按 0.2 修订）
 
@@ -44,12 +45,14 @@
 - [x] 4.2 JobRunner：MODEL_TIMEOUT 纳入 transport retry（独立预算至多 1 次，`transport_attempts` 0–3 CHECK 不变）；重试前复核剩余 deadline 预算；`deadline_at` 按阶段推导（SHOT_CONTRACT 960 秒、其余 300 秒）
       — 验证：unit/integration（超时→1 次重试→成功；预算不足直接终态；5xx 路径最多 2 次不变；崩溃恢复矩阵零回归）
   - 2026-08-19：run 作用域 TimeoutRetryBudget（initial 与结构修复共用）；重试闸三类判定（超时预算/可重试传输/墙钟余量）；claim 前 findById 按阶段落 deadline（缺失兜底 300s）；单测覆盖超时 1 次重试成功、连续超时终态、墙钟不足不重试、分阶段 deadline/timeout_at；崩溃恢复矩阵随 4.3/5.1 全量门禁复核
-- [ ] 4.3 既有测试基线同步（120 秒/300 秒断言、恢复矩阵）与 spec delta 数值一致性复核
+- [x] 4.3 既有测试基线同步（120 秒/300 秒断言、恢复矩阵）与 spec delta 数值一致性复核
       — 验证：全量门禁零回归
+  - 2026-08-19：ac-v1-04 超时矩阵基线改为 D3 语义（两次超时→预算 1 次重试→终态，attemptKind/transportAttempts 断言）；integration 197/197（含崩溃恢复矩阵）、unit 667/667、contract 107/107 全绿
 
 ## 5. 门禁与打包
 
-- [ ] 5.1 全量门禁：format / lint / typecheck / unit / contract / integration / e2e（离线 Mock）
+- [x] 5.1 全量门禁：format / lint / typecheck / unit / contract / integration / e2e（离线 Mock）
+  - 2026-08-19：全绿——format:check ✅、eslint --max-warnings=0 ✅、tsc -b ✅、unit 667/667、contract 107/107、integration 197/197、e2e 11 passed/2 skipped（真实探针门控跳过）；顺带修复仓内 3 个已提交未格式化文件（real-seedream-probe/seedream adapter 测试/verify-production-migration-0009 脚本）
 - [ ] 5.2 Windows x64 packaged smoke 复跑：clean smoke（图片凭据哨兵泄漏扫描含 UI 保存路径）+ 既有升级 smoke 零回归
 
 ## 6. 真实联调与归档

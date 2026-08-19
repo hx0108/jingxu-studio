@@ -250,9 +250,12 @@ export const createJobProviderIpcService = (
   const newTraceId = dependencies.newTraceId ?? randomUUID;
   const newSubscriptionId = dependencies.newSubscriptionId ?? randomUUID;
   const isImageProfile = (profileId: string): boolean =>
-    dependencies.image !== undefined && profileId === dependencies.image.profileId;
-  const providerFor = (profileId: string): ProviderService =>
-    isImageProfile(profileId) ? dependencies.image!.service : dependencies.provider;
+    dependencies.image?.profileId === profileId;
+  const providerFor = (profileId: string): ProviderService => {
+    const image = dependencies.image;
+    if (image === undefined) return dependencies.provider;
+    return image.profileId === profileId ? image.service : dependencies.provider;
+  };
 
   const mutate = <T>(
     input: MutationInput,

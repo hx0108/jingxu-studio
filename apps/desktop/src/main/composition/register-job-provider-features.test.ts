@@ -224,20 +224,23 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     const auditEvents: string[] = [];
     const units = configuredUnits();
     units.providerProfileRepository = {
-      delete: async (id: string) => {
+      delete: (id: string) => {
         profiles.delete(id);
+        return Promise.resolve();
       },
-      findById: async (id: string) => profiles.get(id) ?? null,
-      save: async (profile: ProviderProfile) => {
+      findById: (id: string) => Promise.resolve(profiles.get(id) ?? null),
+      save: (profile: ProviderProfile) => {
         profiles.set(profile.id, profile);
+        return Promise.resolve();
       },
-    } as unknown as ProviderProfileRepositoryPort;
+    };
     units.providerUnitOfWork = {
       run: (work: (repositories: never) => Promise<unknown>) =>
         work({
           audit: {
-            recordCredentialDeleted: async (id: string) => {
+            recordCredentialDeleted: (id: string) => {
               auditEvents.push(id);
+              return Promise.resolve();
             },
           },
           profiles: units.providerProfileRepository,

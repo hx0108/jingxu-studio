@@ -171,13 +171,10 @@ describe('createImageApiService', () => {
 
   it('凭据闸抛错—generateCandidates 前置稳定失败—不触发生成、kick 与其余五方法', async () => {
     let gateCalls = 0;
-    const fixture = buildFixture(
-      generationStub({ id: 'task_1', projectId: 'project_1' }),
-      async () => {
-        gateCalls += 1;
-        throw new Error('CREDENTIAL_NOT_FOUND');
-      },
-    );
+    const fixture = buildFixture(generationStub({ id: 'task_1', projectId: 'project_1' }), () => {
+      gateCalls += 1;
+      return Promise.reject(new Error('CREDENTIAL_NOT_FOUND'));
+    });
 
     const result = await fixture.service.generateCandidates(
       { projectId: 'project_1', requestId: 'request_12345678', shotId: 'shot_1' },

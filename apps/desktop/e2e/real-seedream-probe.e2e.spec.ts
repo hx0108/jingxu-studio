@@ -485,7 +485,9 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
         if (!staleRound2.some((candidate) => candidate.id === chosen.id)) {
           throw new Error('stale:selected-not-included');
         }
-        if (!fresh.some((candidate) => candidate.id === chosen.id && candidate.selectedAt !== null)) {
+        if (
+          !fresh.some((candidate) => candidate.id === chosen.id && candidate.selectedAt !== null)
+        ) {
           throw new Error('stale:selected-pointer-lost');
         }
         return {
