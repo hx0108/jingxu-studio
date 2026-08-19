@@ -9,8 +9,12 @@ export interface ModelShotSetCandidate {
 export interface ShotCandidateValidationResult {
   readonly ok: boolean;
   readonly errorCode:
-    'CANDIDATE_NOT_OBJECT' | 'CANDIDATE_UNKNOWN_FIELD' | 'CANDIDATE_DATA_INVALID' | null;
-  /** 缺失键定位（shots[i].group.key）；明细截断由候选契约管线统一执行。 */
+    | 'CANDIDATE_NOT_OBJECT'
+    | 'CANDIDATE_UNKNOWN_FIELD'
+    | 'CANDIDATE_DATA_INVALID'
+    | 'CANDIDATE_DIALOGUE_SPEAKER_INVALID'
+    | null;
+  /** 缺失键/违规键定位（shots[i].group.key）；明细截断由候选契约管线统一执行。 */
   readonly details?: readonly string[];
 }
 
@@ -49,9 +53,14 @@ const SHOT_CREATIVE_GROUP_KEYS: Readonly<Record<string, readonly string[]>> = {
   ],
 };
 
+/** ShotContract 1.1.0 speaker_id 形态（与 schema pattern 同源；application 侧注入
+ *  派生用同款判定，见 shot-system-fields.ts——两包无依赖关系，各留一处）。 */
+const SPEAKER_ID_PATTERN = /^(narrator|char_[A-Za-z0-9_-]+)$/;
+
 /**
- * 校验 SHOT_CONTRACT 模型候选信封与逐镜头创意键存在性。键缺失属可修复失败
- * （CANDIDATE_SCHEMA 层）；取值与跨字段语义仍由注入后的 ShotContract 1.1.0 正式校验约束。
+ * 校验 SHOT_CONTRACT 模型候选信封与逐镜头创意键存在性，以及 spoken 非旁白镜头
+ * speaker_id 的值形态。两者均属可修复失败（CANDIDATE_SCHEMA 层，进一次结构修复轮）；
+ * 其余取值与跨字段语义仍由注入后的 ShotContract 1.1.0 正式校验约束。
  */
 export const validateModelShotSetCandidate = (value: unknown): ShotCandidateValidationResult => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -71,6 +80,7 @@ export const validateModelShotSetCandidate = (value: unknown): ShotCandidateVali
   }
 
   const missing: string[] = [];
+  const speakerInvalid: string[] = [];
   shots.forEach((shot, index) => {
     if (typeof shot !== 'object' || shot === null || Array.isArray(shot)) {
       missing.push(`shots[${String(index)}]`);
@@ -89,9 +99,38 @@ export const validateModelShotSetCandidate = (value: unknown): ShotCandidateVali
         }
       }
     }
+    // spoken 非旁白镜头 speaker_id 空值/形态违规（2026-08-20 Qwen 漂移实录：此前漏至
+    // FINAL 层不可修复终态整代失败）。空值语义完全由创意字段决定，属模型可自纠责任，
+    // 落在可修复的候选层；单角色镜头豁免——注入层确定性派生唯一角色为说话人。
+    const content = fields.content as Readonly<Record<string, unknown>> | undefined;
+    const dialogue = fields.dialogue as Readonly<Record<string, unknown>> | undefined;
+    const spokenText = content?.spoken_text;
+    const renderMode = dialogue?.dialogue_render_mode;
+    if (
+      typeof spokenText === 'string' &&
+      spokenText.length > 0 &&
+      (renderMode === 'WEAK_LIP_SYNC' || renderMode === 'PRECISE_LIP_SYNC')
+    ) {
+      const speaker = dialogue?.speaker_id;
+      const speakerValid =
+        typeof speaker === 'string' && speaker.length > 0 && SPEAKER_ID_PATTERN.test(speaker);
+      if (!speakerValid) {
+        const characterIds = content?.character_ids;
+        const soleCharacter =
+          Array.isArray(characterIds) &&
+          characterIds.length === 1 &&
+          typeof characterIds[0] === 'string';
+        if (!soleCharacter) {
+          speakerInvalid.push(`shots[${String(index)}].dialogue.speaker_id`);
+        }
+      }
+    }
   });
   if (missing.length > 0) {
     return { errorCode: 'CANDIDATE_DATA_INVALID', details: missing, ok: false };
+  }
+  if (speakerInvalid.length > 0) {
+    return { errorCode: 'CANDIDATE_DIALOGUE_SPEAKER_INVALID', details: speakerInvalid, ok: false };
   }
   return { errorCode: null, ok: true };
 };

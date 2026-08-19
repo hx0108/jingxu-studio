@@ -184,6 +184,71 @@ describe('injectShotSystemFields', () => {
     });
   });
 
+  it('条件—spoken 非旁白 speaker 空值/形态违规且恰一角色—系统派生唯一角色为说话人', () => {
+    // 2026-08-20 Qwen 漂移回归钉：WEAK_LIP_SYNC 有台词镜头输出 speaker_id null，
+    // 此前透传漏至 FINAL 层不可修复终态整代失败；单角色镜头说话人逻辑唯一，
+    // 由系统确定性派生（候选层对该形态豁免，见 model-shot-set-candidate.ts）。
+    for (const speakerId of [null, 42, '乱码']) {
+      const spokenContent = creativeShot().content as Record<string, unknown>;
+      const shot = creativeShot({
+        content: { ...spokenContent, character_ids: ['char_lin'] },
+        dialogue: {
+          dialogue_render_mode: 'WEAK_LIP_SYNC',
+          estimated_speech_duration_sec: 3,
+          speaker_id: speakerId,
+        },
+      });
+
+      const documents = injectShotSystemFields({ data: { shots: [shot] } }, context);
+      const dialogue = documents[0]?.dialogue as Record<string, unknown> | undefined;
+
+      expect(dialogue).toMatchObject({ audio_required: true, speaker_id: 'char_lin' });
+    }
+  });
+
+  it('条件—spoken 非旁白模型值形态合法—透传不派生（含多角色镜头合法 speaker）', () => {
+    const spokenContent = creativeShot().content as Record<string, unknown>;
+    const single = creativeShot({
+      content: { ...spokenContent, character_ids: ['char_lin'] },
+      dialogue: {
+        dialogue_render_mode: 'PRECISE_LIP_SYNC',
+        estimated_speech_duration_sec: 3,
+        speaker_id: 'narrator',
+      },
+    });
+    const multi = creativeShot({
+      content: { ...spokenContent, character_ids: ['char_lin', 'char_su'] },
+      dialogue: {
+        dialogue_render_mode: 'WEAK_LIP_SYNC',
+        estimated_speech_duration_sec: 4,
+        speaker_id: 'char_su',
+      },
+    });
+
+    const documents = injectShotSystemFields({ data: { shots: [single, multi] } }, context);
+
+    expect(documents[0]?.dialogue).toMatchObject({ speaker_id: 'narrator' });
+    expect(documents[1]?.dialogue).toMatchObject({ speaker_id: 'char_su' });
+  });
+
+  it('条件—多角色镜头 speaker 空值—透传违规值不越权派生（候选层修复轮责任）', () => {
+    const spokenContent = creativeShot().content as Record<string, unknown>;
+    const shot = creativeShot({
+      content: { ...spokenContent, character_ids: ['char_lin', 'char_su'] },
+      dialogue: {
+        dialogue_render_mode: 'WEAK_LIP_SYNC',
+        estimated_speech_duration_sec: 3,
+        speaker_id: null,
+      },
+    });
+
+    const documents = injectShotSystemFields({ data: { shots: [shot] } }, context);
+
+    // 多角色说话人非系统可判定值：透传 null（该形态在候选层被拦进修复轮，
+    // 注入仅在候选层豁免的单角色形态下派生——两半规则的边界钉）。
+    expect(documents[0]?.dialogue).toMatchObject({ speaker_id: null });
+  });
+
   it('条件—工厂产生真实唯一 id（非 index 决定）—每镜头恰好调用一次且 previous_shot_id 引用真实 shot_id', () => {
     let shotIdCalls = 0;
     const uniqueIds = new Map<number, string>();

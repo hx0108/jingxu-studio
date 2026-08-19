@@ -43,6 +43,18 @@ export const VALID_MODEL_SHOT_SET_CANDIDATE_FIXTURES: Readonly<Record<string, un
   多镜头完整创意: {
     data: { shots: [creativeShot(), creativeShot(), creativeShot()] },
   },
+  '单角色 spoken 非旁白 speaker null（注入层派生豁免）': {
+    data: {
+      shots: [
+        (() => {
+          const shot = creativeShot();
+          (shot.dialogue as Record<string, unknown>).dialogue_render_mode = 'WEAK_LIP_SYNC';
+          (shot.dialogue as Record<string, unknown>).speaker_id = null;
+          return shot;
+        })(),
+      ],
+    },
+  },
 };
 
 export const INVALID_MODEL_SHOT_SET_CANDIDATE_FIXTURES: Readonly<Record<string, unknown>> = {
@@ -92,6 +104,19 @@ export const INVALID_MODEL_SHOT_SET_CANDIDATE_FIXTURES: Readonly<Record<string, 
         (() => {
           const shot = creativeShot();
           delete shot.target_duration_sec;
+          return shot;
+        })(),
+      ],
+    },
+  },
+  '多角色 spoken 非旁白 speaker null（候选层可修复违规）': {
+    data: {
+      shots: [
+        (() => {
+          const shot = creativeShot();
+          (shot.content as Record<string, unknown>).character_ids = ['char_lin', 'char_su'];
+          (shot.dialogue as Record<string, unknown>).dialogue_render_mode = 'WEAK_LIP_SYNC';
+          (shot.dialogue as Record<string, unknown>).speaker_id = null;
           return shot;
         })(),
       ],

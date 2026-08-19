@@ -80,6 +80,14 @@ const pick = (
   return picked;
 };
 
+/** ShotContract 1.1.0 speaker_id 形态（与 schema pattern 同源；候选层校验用同款
+ *  判定，见 model-shot-set-candidate.ts——两包无依赖关系，各留一处）。 */
+const SPEAKER_ID_PATTERN = /^(narrator|char_[A-Za-z0-9_-]+)$/;
+
+/** 唯一角色判定：character_ids 恰一员 string 时返回该角色，否则 null。 */
+const soleCharacterIdOf = (value: unknown): string | null =>
+  Array.isArray(value) && value.length === 1 && typeof value[0] === 'string' ? value[0] : null;
+
 /**
  * 将候选集合 `{data:{shots:[...]}}` 注入为逐镜头 ShotContract 文档数组。
  * 任一镜头缺创意键或 render mode 不可推导时抛错（属 SYSTEM_FIELDS 层失败，
@@ -185,10 +193,17 @@ export const injectShotSystemFields = (
         // （spoken_text 为空）时 speaker_id 恒为 null、estimated_speech_duration_sec 恒为 0。
         // 这些精确值由系统直接推导，不信任模型该字段（真实联调曾因模型给非空值被
         // FINAL 层以 SCHEMA_VALIDATION_CONST/TYPE 拒绝）。
+        // spoken 非旁白（2026-08-20 Qwen 漂移实录扩充）：模型值形态合法则透传；
+        // 空值/形态违规且镜头恰一角色时系统派生该唯一角色为说话人（单角色有台词
+        // 镜头说话人逻辑唯一，与 narrator/无台词推导同族；候选层对该形态豁免，
+        // 多角色违规在候选层进修复轮——见 model-shot-set-candidate.ts）。
         speaker_id: spoken
           ? renderMode === 'NARRATION_FIRST'
             ? 'narrator'
-            : dialogue.speaker_id
+            : typeof dialogue.speaker_id === 'string' &&
+                SPEAKER_ID_PATTERN.test(dialogue.speaker_id)
+              ? dialogue.speaker_id
+              : (soleCharacterIdOf(content.character_ids) ?? dialogue.speaker_id)
           : null,
         estimated_speech_duration_sec: spoken ? dialogue.estimated_speech_duration_sec : 0,
         lip_sync_required: flags.lipSyncRequired,
