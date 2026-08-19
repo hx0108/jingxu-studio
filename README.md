@@ -104,7 +104,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 ## 最近验证证据
 
-2026-08-19 `batch-first-frame-generation` 收尾记录（整集批量首帧，离线门禁）：
+2026-08-19 `batch-first-frame-generation` 收尾记录（整集批量首帧，离线门禁 + 真实 Seedream 联调）：
 
 - 拍板 D1–D6 全按推荐：批次表+惰性逐镜头建档（迁移 0010，head 9→10）、批次只汇总/重试失败镜头=新批次、服务端当前世代跳过无 force、同项目串行沿用、`listStoryboardImageStates` + 1s 有界轮询、取消仅未建档镜头。
 - 失败成员统一口径（Apply 期 spec 增补）：任务相位 `FAILED`，或任务 `COMPLETED` 但该镜头同轮零 `SUCCEEDED` 候选（Provider 候选级全败时任务相位仍 COMPLETED）；批次视图按 `FAILED` 呈报并携带候选错误码。SQLite 收尾 SQL、内存仓、服务层 `failureErrorCodeOf` 三处同一口径，`openspec validate --strict` 过后归档。
@@ -112,7 +112,11 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - 仓库约定新证：新增迁移须同步旧迁移测试的硬编码版本断言（4 文件 9 处：版本清单/计数/TOO_NEW 假版本/备份基线），本次全量集成首跑揪出 9 处失败后补齐。
 - 全量门禁：format:check、eslint --max-warnings=0、tsc -b 零错误；unit 687、contract 109、integration 198；Playwright Electron E2E 离线 15 passed + 2 skipped（真实探针门控跳过）。
 - `openspec validate batch-first-frame-generation --strict` 通过后归档为 `2026-08-19-batch-first-frame-generation`（shot-first-frame-image-generation spec +5 能力）。
-- 真实 Seedream 整集批量联调与真实用户使用验收仍待人工核验。
+- 真实 Seedream 整集批量联调完成（`real-batch-seedream-probe.e2e.spec.ts`，`JINGXU_REAL_*` 三 env 门控、`JINGXU_REAL_BATCH_PROJECT_ID` 续跑复用项目；五轮实录，前四轮败因均为探针侧——断言过严/竞态/口径误读/弹窗卡住——产品零缺陷）：
+- run-1（19.1m，真实 Qwen 播种 7 镜头）：批次一 UI 取消 → CANCELLED 且在飞首镜头自然跑完 4 张、其余镜头零建档零候选；驱动批服务端跳过清单恰为已就绪镜头；真实限流实录（火山方舟安心体验模式 `SetLimitExceeded` → 候选 `MODEL_RATE_LIMITED`）致 PARTIAL_COMPLETED，失败成员携带候选错误码实证。账号侧恢复：调限额 → 404 `ModelNotOpen` → 控制台开通 doubao-seedream-5-0（直连探针另核验 9:16 最小 3,686,400px = 恰 1440×2560）。
+- 续跑收敛：重试新批次 rounds 2–4 全败留痕（~1.2s 快败 = 真实 429 往返）→ round 5 批 6871e46f 干净收敛 COMPLETED。期间揪出探针三缺陷并修复：历史终态批误判新批（改已知集合起判）、批行 PENDING 窗口误判终态（终态收敛为显式 COMPLETED/PARTIAL_COMPLETED）、收敛口径与应用待生成口径不符（当前世代 ≥1 张即「已有首帧」：1/4 镜头被新批跳过、整集按钮空目标不建批为铁证 → 续跑收敛线对齐 ≥1，严格 4 张断言仅全新跑强制）。
+- 终轮全绿（14.0s，零新图）：finalCounts [4,4,4,4,4,1,4]；空目标幂等 `MEDIA_BATCH_NO_PENDING_SHOTS`；7 镜头 featured 轮全 `jingxu://` 真实 JPEG 1440×2560、167–637KB、同轮 generationInputHash 一致（f1a38ed1 rounds 1–4 全败 → round 5 干净 4 张留痕；4163dc50 一成三败如实 1 张）；非首镜头选择回填 selectedAt；UI 徽标逐镜头断言 + 镜头 #1 候选 4 张真实解码。另：ARK 凭据末四位一致时复用免删存（删除确认框曾需人工应答卡住一轮，续跑路径不再触发）。
+- 真实用户使用验收仍待人工核验。
 
 2026-08-19 `image-credential-management` 收尾记录（图片凭据 UI + SHOT_CONTRACT 超时/重试稳健化）：
 
