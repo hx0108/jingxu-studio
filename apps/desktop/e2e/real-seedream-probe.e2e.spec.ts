@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -8,10 +8,14 @@ import { _electron as electron, test, type ElectronApplication } from '@playwrig
 
 // 真实火山方舟 Seedream 联调探针（临时文件，测完删除）：
 // - 不设 JINGXU_E2E → 文本走真实 QwenTextModelAdapter、图片走真实 SeedreamImageModelAdapter + 生产数据根
-// - ARK Key 只经 JINGXU_REAL_ARK_KEY_FILE 传文件路径，由主进程门控接线（JINGXU_IMAGE_CREDENTIAL_FILE）
-//   safeStorage 加密写入 secrets 固定凭据；探针全程不读取、不回显 Key
+// - 文本凭据经 provider IPC 重存（JINGXU_REAL_REFRESH_CREDENTIAL=1）；ARK Key 走 UI 路径
+//   （image-credential-management 6.1）：真实页面 ImageProviderCard 保存→解密测试，替代 env 引导；
+//   Key 只经 page.fill 进入输入框，探针全程不回显、不落日志
 // - 文生图与参考图生图各一轮：轮1（未传资产，纯文生图）→ 上传资产 → 轮2（绑定资产，
 //   generationInputHash 变化实证参考图进入生成输入）→ 人工选择 → 资产升版 v2 触发 STALE
+// - D3 留证：关进程后由 scripts/print-real-probe-invocations.mjs（纯 node，loader 不支持
+//   node:sqlite 故不走 spec）只读查询 model_invocations × script_stage_jobs，对比 2026-08-17
+//   基线（SHOT_CONTRACT 120s 超时 5/8）
 // - 门控：未设 JINGXU_REAL_KEY_FILE / JINGXU_REAL_WORKSPACE_ID / JINGXU_REAL_ARK_KEY_FILE 时 skip
 const desktopRoot = path.resolve(__dirname, '..');
 const keyFile = process.env.JINGXU_REAL_KEY_FILE ?? '';
@@ -37,20 +41,10 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
     '需要 JINGXU_REAL_KEY_FILE、JINGXU_REAL_WORKSPACE_ID 与 JINGXU_REAL_ARK_KEY_FILE',
   );
   const apiKey = (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
-
-  // safeStorage v10 密钥随 userData 目录隔离：临时 user-data-dir 的进程解不开其他目录
-  // 加密的旧密文（联调实录：表现为 27ms MODEL_UNKNOWN）。删除引导密文，让本进程以
-  // 当前目录密钥重加密 ARK Key；文本凭据同理，由 JINGXU_REAL_REFRESH_CREDENTIAL=1
+  const arkApiKey = (await readFile(arkKeyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
+  // 图片凭据不再经 env 引导：UI 保存按固定 id 覆盖轮换（任务 2.2），旧密文/旧 userData
+  // 密钥不匹配的残留由「先删后存」的 UI 闭环清理；文本凭据由 JINGXU_REAL_REFRESH_CREDENTIAL=1
   // 在进程内走 saveCredential 重存。
-  rmSync(
-    path.join(
-      process.env.LOCALAPPDATA ?? '',
-      'JingxuStudio',
-      'secrets',
-      'profile-image-primary.bin',
-    ),
-    { force: true },
-  );
 
   let application: ElectronApplication | undefined;
   try {
@@ -67,7 +61,7 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
               `--user-data-dir=${path.join(mkdtempSync(path.join(tmpdir(), 'jingxu-probe-')))}`,
               '--no-proxy-server',
             ],
-      env: { ...environment(), JINGXU_IMAGE_CREDENTIAL_FILE: arkKeyFile },
+      env: environment(),
       ...(probeExecutable === '' ? {} : { executablePath: probeExecutable }),
     });
     const page = await application.firstWindow();
@@ -136,6 +130,7 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
         }
 
         const readyIds: Record<string, string> = {};
+        const jobIds: string[] = [];
         const stageResults: unknown[] = [];
         for (const stage of orderedStages) {
           const expectedInputVersionId =
@@ -165,6 +160,7 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
             stageResults.push({ stage, errorCode: queued.error.code });
             break;
           }
+          jobIds.push(queued.data.id);
           let finalStatus = 'TIMEOUT_POLL';
           let errorCode: string | undefined;
           for (let attempt = 0; attempt < 400; attempt += 1) {
@@ -248,6 +244,7 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
               errorCode: queuedShot.error.code,
             };
           }
+          jobIds.push(queuedShot.data.id);
           shotStatus = 'TIMEOUT_POLL';
           shotError = undefined;
           for (let attempt = 0; attempt < 400; attempt += 1) {
@@ -298,6 +295,7 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
         }
         const afterShot = await window.jingxu.script.getWorkspace({ projectId });
         return {
+          jobIds,
           projectId,
           readyStatus: afterShot.ok ? (afterShot.data.storyboard.current?.status ?? null) : null,
           shotId: afterShot.ok ? (afterShot.data.storyboard.shots[0]?.shotId ?? null) : null,
@@ -323,6 +321,34 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
     if (seedFailure.step !== undefined || seedOk.shotId === null) {
       throw new Error(`REAL_SEEDREAM_SEED_FAILED ${JSON.stringify(seeded)}`);
     }
+
+    // ARK Key 走 UI 路径（6.1）：真实页面 ImageProviderCard「保存→解密测试」，替代 env 引导。
+    await page.reload();
+    await page
+      .getByRole('heading', { name: '镜序 Studio', exact: true })
+      .waitFor({ timeout: 30_000 });
+    await page.locator('.project-card-main', { hasText: projectName }).click();
+    await page.getByRole('button', { name: '进入剧本工作区' }).click();
+    await page.getByRole('heading', { name: '分镜工作台' }).waitFor();
+    const imageCard = page.locator('section[aria-labelledby="image-provider-title"]');
+    await imageCard
+      .getByRole('heading', { name: '图片 Provider 设置（火山方舟 ARK）' })
+      .waitFor({ timeout: 30_000 });
+    // 生产档可能残留旧配置：先走 UI 删除，再完整复刻「保存→测试」闭环。
+    if ((await imageCard.getByText(/已配置/).count()) > 0) {
+      page.once('dialog', (dialog) => {
+        void dialog.accept();
+      });
+      await imageCard.getByRole('button', { name: '删除凭据' }).click();
+      await imageCard.getByText('凭据已删除').waitFor({ timeout: 15_000 });
+    }
+    await imageCard.getByLabel('ARK API Key').fill(arkApiKey);
+    await imageCard.getByRole('button', { name: '保存凭据' }).click();
+    await imageCard
+      .getByText(`已配置（末四位 ${arkApiKey.slice(-4)}）`)
+      .waitFor({ timeout: 15_000 });
+    await imageCard.getByRole('button', { name: '测试凭据' }).click();
+    await imageCard.getByText(/· 密文可解密读取/).waitFor({ timeout: 15_000 });
 
     // 阶段二：真实 Seedream 两轮候选 + 选择 + 升版 STALE。
     const referenceV1 = encodeMockPng('seedream-probe-ref-v1', 256, 256);
@@ -533,6 +559,12 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
           document.querySelectorAll<HTMLImageElement>('#first-frame-panel .candidate-grid img'),
         ).filter((image) => image.naturalWidth > 0).length,
     );
+
+    // D3 留证：先关进程释放库句柄。Playwright runner 的 loader 不支持 node:sqlite
+    // （2026-08-16 实录），调用行证据由 scripts/print-real-probe-invocations.mjs
+    // --project <projectId> 以纯 node 只读查询生产库（model_invocations × script_stage_jobs）。
+    await application.close();
+    application = undefined;
 
     console.log(
       `REAL_SEEDREAM_PROBE_RESULT ${JSON.stringify({

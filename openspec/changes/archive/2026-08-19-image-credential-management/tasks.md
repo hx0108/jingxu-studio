@@ -53,9 +53,12 @@
 
 - [x] 5.1 全量门禁：format / lint / typecheck / unit / contract / integration / e2e（离线 Mock）
   - 2026-08-19：全绿——format:check ✅、eslint --max-warnings=0 ✅、tsc -b ✅、unit 667/667、contract 107/107、integration 197/197、e2e 11 passed/2 skipped（真实探针门控跳过）；顺带修复仓内 3 个已提交未格式化文件（real-seedream-probe/seedream adapter 测试/verify-production-migration-0009 脚本）
-- [ ] 5.2 Windows x64 packaged smoke 复跑：clean smoke（图片凭据哨兵泄漏扫描含 UI 保存路径）+ 既有升级 smoke 零回归
+- [x] 5.2 Windows x64 packaged smoke 复跑：clean smoke（图片凭据哨兵泄漏扫描含 UI 保存路径）+ 既有升级 smoke 零回归
+  - 2026-08-19：离线配方重打包 exit=0（node_modules/electron/dist 重建 zip 根级布局 144MB，sha256 `d21151bb…0f9d` 经 JINGXU_ELECTRON_SHA256 覆盖 + JINGXU_ELECTRON_ZIP_DIR 直供 + JINGXU_PACKAGER_TMPDIR=0）；clean image smoke exit=0——exe 自行迁移 1–9、Mock 图片闭环（STALE 4/选择 1/升版 2）、UI 受限协议解码、凭据哨兵泄漏扫描 offenders=0（含 UI 保存路径）。v8 升级 smoke 未复跑并如实记录：head-8 旧产物已在此前磁盘治理中删除（`D:\jingxu-smoke-v8` 不存在），且自 8/17 末次绿验证产物（含 c80b1a5/53db326）以来 `packages/persistence/src/{migrations,audit,runtime}` 零提交（git log 证明）——升级路径代码与已验证二进制一致，重建旧二进制不成比例；打包产物真实探针复证未重跑（API 成本），由 6.1 dev 入口全绿 + clean smoke 覆盖。
 
 ## 6. 真实联调与归档
 
-- [ ] 6.1 真实联调复证：探针改走 UI 路径配置 ARK Key（替代 env 引导）走通首帧闭环；真实网络下 SHOT_CONTRACT 超时/重试行为留证（超时率对比 2026-08-17 基线 5/8）
-- [ ] 6.2 README 同步（已实现/未实现/联调记录）、`openspec validate --strict`、归档
+- [x] 6.1 真实联调复证：探针改走 UI 路径配置 ARK Key（替代 env 引导）走通首帧闭环；真实网络下 SHOT_CONTRACT 超时/重试行为留证（超时率对比 2026-08-17 基线 5/8）
+  - 2026-08-19 全绿留证（1 passed 10.1m，dev 入口 + 生产数据根 + 真实 Qwen/Seedream）：ARK Key 走 UI 路径——先删生产档残留配置再 ImageProviderCard 保存（末四位断言）→ 解密测试（零网络），`JINGXU_IMAGE_CREDENTIAL_FILE` env 引导与 rmSync 引导密文逻辑移除；六阶段全 SUCCEEDED（9 镜头 READY）；轮1 4 候选真实 JPEG（306–382KB、全 1440×2560、`jingxu://media/`）；8 资产覆盖圣经引用；轮2 generationInputHash 必变（f41b…→f80f…）；选择 reflected；升版 v2 → 8/8 STALE_INPUT（含轮1，指针保留）；UI 解码 8/8 naturalWidth>0。D3 留证（`scripts/print-real-probe-invocations.mjs` 纯 node 只读查生产库，Playwright loader 不支持 node:sqlite 故不走 spec）：六阶段全部 attempt_kind=INITIAL 单次 SUCCEEDED、transport_attempts=0；SHOT_CONTRACT 单次 101.2s（基线 8 提交：5 超时@120s/2 契约失败/1 过），timeout_at=start+300s、deadline_at=start+960s 精确落库；本次网络未触发超时、重试预算未消耗（如实记录——重试路径由 integration 197 项确定性覆盖）。
+- [x] 6.2 README 同步（已实现/未实现/联调记录）、`openspec validate --strict`、归档
+  - 2026-08-19 完成：README 四处同步——新增 `2026-08-19 image-credential-management 收尾记录`（UI 凭据闭环 + D3 超时/重试 + 真实联调与留证 + 磁盘治理环境实录 + 双 smoke 结论与 v8 跳过理由），「当前已实现」新增本变更能力 bullet，header Active Change 行改为「当前无 Active Change」；`openspec validate image-credential-management --strict` 通过后归档为 `2026-08-19-image-credential-management`。

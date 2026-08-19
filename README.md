@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前 Active Change 为 `image-credential-management`（真实用户可用性收尾：图片 Provider 凭据配置 UI + SHOT_CONTRACT 调用超时/重试稳健化；提案已登记，待产品负责人拍板 design.md D1–D4 后 Apply）。最近归档的 Change 为 `shot-first-frame-image-generation`（2026-08-17，V2 图片切片第一步：逐镜头首帧候选生成、资产版本与参考图、人工选择，Provider 为火山方舟豆包 Seedream）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前无 Active Change。最近归档的 Change 为 `image-credential-management`（2026-08-19，真实用户可用性收尾：图片 Provider 凭据配置 UI + SHOT_CONTRACT 调用超时/重试稳健化）。次近为 `shot-first-frame-image-generation`（2026-08-17，V2 图片切片第一步：逐镜头首帧候选生成、资产版本与参考图、人工选择，Provider 为火山方舟豆包 Seedream）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 
@@ -99,8 +99,21 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - `staged-script-generation` 已实现 SourceInput/Consent/Episode 初始化、五阶段 ScriptService、不可变 DRAFT/READY/STALE_INPUT 版本链、版本历史与恢复、五阶段 Prompt（v2/story_bible v3）、Script Job 提交/校验/恢复，以及 `script` 五方法白名单和剧本工作区；已通过 `openspec validate --strict`、全量门禁与 clean packaged smoke（离线 Mock），后续经真实 Qwen 全流程联调于 2026-08-15 归档。
 - `shot-contract-generation` 已实现第六阶段 SHOT_CONTRACT：分镜候选契约（ModelShotSetCandidate 键存在性）→ 系统字段注入（含 dialogue allOf 精确值系统派生：audio/lip_sync/speaker/台词时长，不信任模型）→ 集合校验（sequence 连续、previous_shot_id 集合内回指、character/scene ID 源自冻结 STORY_BIBLE、Σ target_duration_sec ∈ [30,180]）→ Registry ShotContract 1.1.0 FINAL → 整集 DRAFT/READY/STALE_INPUT 版本链、历史集合恢复、storyboard 工作区与确认/恢复路径；迁移 0008 种子 `shot_contract/v1` 模板（sha256 三处锁死）。真实 Qwen 六阶段联调于 2026-08-16 全绿。
 - `shot-first-frame-image-generation` 已实现 V2 图片切片第一步——逐镜头首帧候选生成：`ImageModelPort`（submit/poll/download，容忍同步与异步双形态）、迁移 0009（assets/asset_versions/image_candidates/media_generation_tasks + Seedream 能力快照播种）、内容寻址存储（写入复算校验 + 原子 rename + 路径三重防逃逸）、`MediaGenerationService`（冻结输入哈希、幂等键、STALE 按输入世代与资产绑定双传播）、同项目串行调度与崩溃恢复（证据三分支零重发）、`image` 六方法 IPC 白名单（singleflight + 输出脱敏复验）、`jingxu://media` 受限协议与 CSP `img-src jingxu:`、分镜工作区首帧面板（世代分组、候选比较、人工选择、历史世代只读）；Mock 与真实 SeedreamImageModelAdapter（model id 快照锁定、错误归一化、结果字节魔数嗅探）。真实火山方舟 Seedream 联调于 2026-08-17 全绿。
+- `image-credential-management` 已实现图片 Provider 凭据闭环与 SHOT_CONTRACT 超时稳健化：ProviderSettings 内 ImageProviderCard（保存即清空输入、末 4 位回显、model id 只读、测试仅验证密文可解密的如实文案、删除带确认）、图片档固定凭据 id `profile-image-primary` + UI 覆盖轮换（env 引导语义不变）、`generateCandidates` 未配置前置稳定失败 `MODEL_CREDENTIAL_INVALID`（userAction 指向配置入口，其余五个 image 方法不受影响）；分阶段调用超时（SHOT_CONTRACT 300s、其余 120s，application ports 双 barrel 同源）+ JobRunner MODEL_TIMEOUT 传输重试预算 1 次（重试前复核墙钟）+ 按阶段 `deadline_at` 落库（SHOT_CONTRACT 960s、其余 300s）。真实联调（UI 路径配 ARK Key）于 2026-08-19 全绿。
 
 ## 最近验证证据
+
+2026-08-19 `image-credential-management` 收尾记录（图片凭据 UI + SHOT_CONTRACT 超时/重试稳健化）：
+
+- 图片 Provider 凭据走 UI 路径全链路落地：ImageProviderCard（保存即清空输入、末 4 位回显、model id 只读、测试仅验证密文可解密读取的如实文案、删除带确认）；密文按固定 id `profile-image-primary` 落盘，UI 保存支持覆盖轮换（CredentialAdapter `overwriteExisting`；env 引导路径语义不变）；文本/图片两档凭据互不干扰。契约 provider 枚举扩 `VOLCARK_SEEDREAM`，`workspace_id` 保非空 + 图片档惰性占位 `'ark'`（DDL 证实列 NOT NULL，design.md Apply 期修订 #1）。
+- 凭据未配置/不可解时 `generateCandidates` 前置稳定失败 `MODEL_CREDENTIAL_INVALID`（userAction 指向配置入口），替代适配器内 `MODEL_UNKNOWN` 兜底；其余五个 image 方法不受影响；首帧面板零改动经 userAction 透传呈现引导。
+- SHOT_CONTRACT 超时/重试稳健化（D3 方案一，2026-08-17 拍板）：分阶段调用超时（SHOT_CONTRACT 300s、其余 120s，常量落 application ports 双 barrel 同源防漂移）+ JobRunner `TimeoutRetryBudget`（MODEL_TIMEOUT 纳入 transport retry、独立预算至多 1 次、重试前复核墙钟余量）+ `deadline_at` 按阶段落库（SHOT_CONTRACT 960s、其余 300s）。
+- 真实联调复证全绿（2026-08-19，dev 入口 + 生产数据根 + 真实 Qwen/Seedream，探针 1 passed 10.1m）：ARK Key 改走 UI 路径（先删生产档残留配置 → 保存末四位断言 → 解密测试，替代 env 引导）；六阶段全 SUCCEEDED（9 镜头 READY）；轮1 4 候选真实 JPEG（306–382KB、全 1440×2560）；8 资产覆盖圣经全部引用；轮2 generationInputHash 必变（f41b…→f80f…，绑定实证）；升版 v2 → 8/8 候选 STALE_INPUT、选择指针保留；UI 解码 8/8 naturalWidth>0。
+- D3 超时/重试留证（`scripts/print-real-probe-invocations.mjs` 纯 node 只读查生产库——Playwright runner loader 不支持 node:sqlite，不走 spec）：六阶段全部 attempt_kind=INITIAL 单次 SUCCEEDED；SHOT_CONTRACT 单次 101.2s（2026-08-17 基线：8 提交 5 超时@120s、2 契约失败、1 过）；`timeout_at`=start+300s、`deadline_at`=start+960s 精确落库；本次网络未触发超时、重试预算未消耗（如实记录：重试路径由 197 项 integration 确定性覆盖）。
+- 环境实录（开发机磁盘治理）：三盘同时告急（C: 剩 25MB、E: 0、D: 455MB）→ 页面文件无法扩展 → Node 在 ~140MB 小堆 OOM（`NewSpace::EnsureCurrentCapacity`，exit 134）、bsdtar 写 zip 中途 Write error；清理 npm 缓存 2.4G + pnpm store 678M + 剪映数据 12.4G 后 C: 恢复 22G。另：bash 管道 `| tail` 会吞 playwright 退出码造成假绿，门禁命令不加管道。
+- 全量门禁：format:check、eslint --max-warnings=0、tsc -b 零错误；unit 667、contract 107、integration 197；e2e 11 passed + 2 skipped（真实探针门控跳过）。Windows x64 重打包（离线 zip 直供配方，sha256 `d21151bb…0f9d`）后 clean image smoke 通过（迁移 1–9、Mock 图片闭环、凭据哨兵泄漏扫描 offenders=0 含 UI 保存路径）；v8 升级 smoke 未复跑——head-8 旧产物已在此前磁盘治理中删除，且自 8/17 末次绿验证以来 `packages/persistence/src/{migrations,audit,runtime}` 零提交（git log 证明，升级路径代码与已验证二进制一致，重建旧二进制不成比例）。
+- `openspec validate image-credential-management --strict` 通过后归档为 `2026-08-19-image-credential-management`。
+- 真实用户使用与 AC-V1-01 至 AC-V1-06 验收仍待人工核验。
 
 2026-08-17 `shot-first-frame-image-generation` 收尾记录（V2 图片切片第一步 + 真实 Seedream 联调）：
 
