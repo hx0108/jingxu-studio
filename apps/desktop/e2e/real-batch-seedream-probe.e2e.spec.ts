@@ -254,7 +254,9 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
         page,
         projectId,
         (states) => states.batches.some(isNewTerminalBatch),
-        900_000,
+        // 2026-08-20 实录：10 镜头题材整集串行（9 任务 × 4 候选）约 16 分钟，900s 窗口
+        // 在末任务建档后 8s 假超时（POLL_TIMEOUT 时批次仍在正常推进）；放宽至 25 分钟。
+        1_500_000,
       );
       const newBatch = terminal.batches.find(isNewTerminalBatch) ?? null;
       expect(newBatch, `驱动批 ${String(attempt)} 未出现终态新批`).not.toBeNull();

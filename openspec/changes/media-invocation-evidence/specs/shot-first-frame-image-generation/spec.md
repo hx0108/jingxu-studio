@@ -27,13 +27,13 @@ Application/Renderer MUST 只依赖 ImageModelPort 与 NormalizedModelError；Da
 
 ### Requirement: 媒体调用证据必须真实落库且与候选终态原子提交
 
-每段真实 Provider 请求（SUBMIT/DOWNLOAD）MUST 在 `media_model_invocations` 落一条证据行：请求快照（prompt、size、参数指纹与参考图 sha256 清单，MUST NOT 含参考图字节或凭据）、响应全文（含失败原文）及其 sha256、`provider_reported_usage`（图片数与输出 tokens）。终态候选的 `invocation_evidence_ref` MUST 指向真实证据行；证据终态收尾与候选终态 MUST 在同一事务原子提交；中断残留的 STARTED 行 MUST 如实保留且不参与恢复决策。图片字节 MUST NOT 写入证据行（下载段证据只记 sha256 与大小，字节留在内容寻址存储）。
+每段真实 Provider 请求（SUBMIT/DOWNLOAD）MUST 在 `media_model_invocations` 落一条证据行：请求快照（prompt、size、参数指纹与参考图 sha256 清单，MUST NOT 含参考图字节或凭据）、响应全文（含失败原文）及其 sha256、`provider_reported_usage`（图片数与输出 tokens）。终态候选的 `invocation_evidence_ref` MUST 指向真实证据行；证据终态收尾与候选终态 MUST 在同一事务原子提交；中断残留的 STARTED 行 MUST 如实保留且不参与恢复决策。图片字节 MUST NOT 写入证据行（下载段证据只记结果 URL 快照与落盘 sha256，字节留在内容寻址存储）。
 
 #### Scenario: 整集真实生成后证据可 SQL 复盘
 
 - **GIVEN** 一个 4 候选任务经真实 Provider 全部生成成功
 - **WHEN** 任务驱动完成
-- **THEN** `media_model_invocations` SHALL 存在 4 条 SUBMIT 终态行（含 provider_request_id、响应原文、usage 图片数）与对应 DOWNLOAD 行；每条终态候选行的 invocation_evidence_ref SHALL 可 JOIN 到其 SUBMIT 证据行
+- **THEN** `media_model_invocations` SHALL 存在 4 条 SUBMIT 终态行（含响应原文与 usage 图片数；provider_request_id 以 Provider 实际返回为准，Provider 未返回任务 id 时记 null）与对应 DOWNLOAD 行；每条终态候选行的 invocation_evidence_ref SHALL 可 JOIN 到其 SUBMIT 证据行
 
 #### Scenario: 限流失败留档原文且 Renderer 仍只见归一码
 
@@ -46,7 +46,7 @@ Application/Renderer MUST 只依赖 ImageModelPort 与 NormalizedModelError；Da
 
 - **GIVEN** 同步 submit 成功并进入下载段
 - **WHEN** 图片字节落盘内容寻址存储且候选 SUCCEEDED
-- **THEN** SHALL 存在 DOWNLOAD 段证据行（结果 URL 快照、落盘 sha256、大小、耗时）；其 response_body_blob SHALL 为 NULL
+- **THEN** SHALL 存在 DOWNLOAD 段证据行（结果 URL 快照与落盘 sha256，耗时可由 created_at/finished_at 复盘）；其 response_body_blob SHALL 为 NULL
 
 #### Scenario: 崩溃窗口残留 STARTED 且恢复语义不变
 
