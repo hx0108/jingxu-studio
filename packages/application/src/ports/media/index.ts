@@ -1,4 +1,12 @@
 export type {
+  MediaInvocationRepository,
+  MediaInvocationSegment,
+  MediaInvocationStartInput,
+  MediaInvocationStatus,
+  MediaInvocationTerminalEvidence,
+  MediaModelInvocationRecord,
+} from './media-invocation-repository';
+export type {
   MediaAssetProvenance,
   MediaAssetRecord,
   MediaAssetType,

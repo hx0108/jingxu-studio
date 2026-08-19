@@ -25,6 +25,7 @@ export type {
   MediaAssetFileStorePort,
 } from './image-api-service';
 export { InMemoryMediaRepository } from './in-memory-media-repository';
+export { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 export { createMediaRequestBlueprintBuilder } from './media-request-blueprint';
 export type {
   MediaReferenceImageReader,

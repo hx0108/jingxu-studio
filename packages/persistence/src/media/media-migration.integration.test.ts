@@ -191,6 +191,7 @@ describe('0009_media_assets_images.sql', () => {
           { version: 8 },
           { version: 9 },
           { version: 10 },
+          { version: 11 },
         ]);
         const objects = database
           .prepare(
@@ -275,7 +276,7 @@ describe('0009_media_assets_images.sql', () => {
     });
   });
 
-  it('v8 库—升级到 head 10—既有资产图保留且新表可写', async () => {
+  it('v8 库—升级到 head 11—既有资产图保留且新表可写', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const database = await openMigratedDatabase(root, 'media_upgrade.sqlite', 8);
       try {
@@ -283,7 +284,7 @@ describe('0009_media_assets_images.sql', () => {
         applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 10 });
+        ).toEqual({ version: 11 });
         // v8 既有行在升级后原样保留。
         expect(
           database.prepare("SELECT id, lifecycle_status FROM shots WHERE id = 'shot_media'").get(),
@@ -309,7 +310,7 @@ describe('0009_media_assets_images.sql', () => {
     });
   });
 
-  it('v8 受管理库—performManagedMigration 升级—先备份 schema v8 再到 head 10', async () => {
+  it('v8 受管理库—performManagedMigration 升级—先备份 schema v8 再到 head 11', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const migrations = await loadMigrationSet(MIGRATIONS);
       const paths = createManagedPaths(path.join(root, 'managed'));
@@ -333,7 +334,7 @@ describe('0009_media_assets_images.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 10 });
+        ).toEqual({ version: 11 });
       } finally {
         database.close();
       }
