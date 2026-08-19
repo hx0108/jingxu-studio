@@ -29,7 +29,6 @@ export type MockImageSubmitStep =
 export interface MockImageModelAdapterOptions {
   readonly credentialCheck?: CredentialCheck;
   readonly now?: () => number;
-  readonly requestId?: (sequence: number, now: number) => string;
   readonly steps: readonly MockImageSubmitStep[];
   readonly wait?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
 }
@@ -206,16 +205,18 @@ const defaultWait = async (milliseconds: number, signal: AbortSignal): Promise<v
 
 const MOCK_USAGE = Object.freeze({ generatedImages: 1, outputTokens: null });
 
-/** 确定性成功原文：镜像 Seedream 同步响应结构（证据行/E2E 断言可直接 JSON.parse）。 */
+/** 确定性成功原文：镜像真实 Seedream 同步响应结构（2026-08-20 实录 top
+ * keys=model/created/data/usage，无顶层 id → provider_request_id 记 null）。 */
 const mockSyncRawOf = (
   request: ImageGenerationRequest,
   url: string,
-  providerRequestId: string,
+  now: number,
 ): ImageRawResponse =>
   Object.freeze({
     bodyText: JSON.stringify({
+      created: Math.floor(now / 1_000),
       data: [{ size: `${String(request.size.width)}x${String(request.size.height)}`, url }],
-      id: providerRequestId,
+      model: 'mock-image-model',
       usage: { generated_images: 1, output_tokens: null },
     }),
     httpStatus: 200,
@@ -237,7 +238,6 @@ const mockErrorEvidenceOf = (invocationId: string, code: ModelErrorCode): ModelC
 export class MockImageModelAdapter implements ImageModelPort {
   readonly #credentialCheck: CredentialCheck;
   readonly #now: () => number;
-  readonly #requestId: (sequence: number, now: number) => string;
   readonly #steps: readonly MockImageSubmitStep[];
   readonly #wait: (milliseconds: number, signal: AbortSignal) => Promise<void>;
   readonly #pollPlans = new Map<string, MockPollPlan>();
@@ -246,9 +246,6 @@ export class MockImageModelAdapter implements ImageModelPort {
   public constructor(options: MockImageModelAdapterOptions) {
     this.#credentialCheck = options.credentialCheck ?? Object.freeze({ ok: true });
     this.#now = options.now ?? Date.now;
-    this.#requestId =
-      options.requestId ??
-      ((sequence, now) => `mock-image-request-${String(now)}-${String(sequence)}`);
     this.#steps = Object.freeze([...options.steps]);
     this.#wait = options.wait ?? defaultWait;
   }
@@ -282,7 +279,6 @@ export class MockImageModelAdapter implements ImageModelPort {
     if (step.kind === 'TIMEOUT') {
       throw new MockImageModelError(createMockModelError('MODEL_TIMEOUT'));
     }
-    const providerRequestId = this.#requestId(sequence, this.#now());
     const url = `mock-image://${String(request.size.width)}x${String(request.size.height)}/${request.invocationId}`;
     if (step.kind === 'ASYNC') {
       const providerTaskId = `mock-image-task-${String(sequence)}`;
@@ -295,10 +291,12 @@ export class MockImageModelAdapter implements ImageModelPort {
       });
       return Object.freeze({ kind: 'ASYNC', providerTaskId });
     }
+    // 真实 Seedream 同步响应无顶层 id（2026-08-20 实录）→ 引用与证据行
+    // provider_request_id 一致记 null。
     return Object.freeze({
       kind: 'SYNC',
-      raw: mockSyncRawOf(request, url, providerRequestId),
-      result: this.#resultRef(request, url, providerRequestId),
+      raw: mockSyncRawOf(request, url, this.#now()),
+      result: this.#resultRef(request, url),
       usage: MOCK_USAGE,
     });
   }
@@ -336,7 +334,6 @@ export class MockImageModelAdapter implements ImageModelPort {
           size: { height: plan.height, width: plan.width },
         },
         `mock-image://${String(plan.width)}x${String(plan.height)}/${plan.seed}`,
-        null,
       ),
       state: 'SUCCEEDED',
       usage: MOCK_USAGE,
@@ -374,14 +371,11 @@ export class MockImageModelAdapter implements ImageModelPort {
     return error instanceof MockImageModelError ? error.evidence : null;
   }
 
-  #resultRef(
-    request: ImageGenerationRequest,
-    url: string,
-    providerRequestId: string | null,
-  ): ImageResultRef {
+  #resultRef(request: ImageGenerationRequest, url: string): ImageResultRef {
     return Object.freeze({
       height: request.size.height,
-      providerRequestId,
+      // 真实同步/轮询响应均不携带请求级 id → 引用恒 null（与证据行一致）。
+      providerRequestId: null,
       url,
       width: request.size.width,
     });

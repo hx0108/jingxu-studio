@@ -53,7 +53,7 @@ describe('MockImageModelAdapter', () => {
     expect(submission.usage).toEqual({ generatedImages: 1, outputTokens: null });
     expect(submission.result).toMatchObject({
       height: 8,
-      providerRequestId: 'mock-image-request-1000-1',
+      providerRequestId: null,
       url: 'mock-image://12x8/invocation_sync',
       width: 12,
     });
@@ -90,13 +90,15 @@ describe('MockImageModelAdapter', () => {
     expect(submission.raw.httpStatus).toBe(200);
     expect(submission.raw.truncated).toBe(false);
     const parsed = JSON.parse(submission.raw.bodyText) as {
+      created: number;
       data: { size: string; url: string }[];
-      id: string;
+      model: string;
       usage: { generated_images: number; output_tokens: null };
     };
     expect(parsed).toEqual({
+      created: 1,
       data: [{ size: '12x8', url: 'mock-image://12x8/invocation_evidence' }],
-      id: 'mock-image-request-1000-1',
+      model: 'mock-image-model',
       usage: { generated_images: 1, output_tokens: null },
     });
 
