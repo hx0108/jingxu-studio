@@ -3,27 +3,37 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   appResultSchema,
   assetViewSchema,
+  cancelBatchInputSchema,
+  generateCandidatesForShotsInputSchema,
   generateCandidatesInputSchema,
   getMediaTaskInputSchema,
   IMAGE_IPC_CHANNELS,
   imageCandidateViewSchema,
   listAssetsInputSchema,
   listCandidatesInputSchema,
+  listStoryboardImageStatesInputSchema,
+  mediaBatchViewSchema,
   mediaTaskViewSchema,
   selectCandidateInputSchema,
+  storyboardImageStatesSchema,
   uploadAssetReferenceInputSchema,
   uploadAssetReferenceResultSchema,
 } from '@jingxu/contracts';
 import type {
   AppResultDto,
   AssetViewDto,
+  CancelBatchInputDto,
+  GenerateCandidatesForShotsInputDto,
   GenerateCandidatesInputDto,
   GetMediaTaskInputDto,
   ImageCandidateViewDto,
   ListAssetsInputDto,
   ListCandidatesInputDto,
+  ListStoryboardImageStatesInputDto,
+  MediaBatchViewDto,
   MediaTaskViewDto,
   SelectCandidateInputDto,
+  StoryboardImageStatesDto,
   UploadAssetReferenceInputDto,
   UploadAssetReferenceResultDto,
 } from '@jingxu/contracts';
@@ -40,7 +50,7 @@ export interface ImageIpcRegistrar {
   ): void;
 }
 
-/** Main 注入的 Image 用例（六方法白名单）；IPC Host 不接触 Repository、字节存储或 SQL。 */
+/** Main 注入的 Image 用例（九方法白名单）；IPC Host 不接触 Repository、字节存储或 SQL。 */
 export interface ImageIpcService {
   readonly generateCandidates: (
     input: GenerateCandidatesInputDto,
@@ -66,6 +76,18 @@ export interface ImageIpcService {
     input: GetMediaTaskInputDto,
     traceId: string,
   ) => Promise<AppResultDto<MediaTaskViewDto>>;
+  readonly generateCandidatesForShots: (
+    input: GenerateCandidatesForShotsInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<MediaBatchViewDto>>;
+  readonly cancelBatch: (
+    input: CancelBatchInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<MediaBatchViewDto>>;
+  readonly listStoryboardImageStates: (
+    input: ListStoryboardImageStatesInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<StoryboardImageStatesDto>>;
 }
 
 export interface ImageStartupWriteGate {
@@ -143,8 +165,8 @@ const parseOutput = async <T>(
 };
 
 /**
- * 注册六个固定 image channel，并按 sender、DTO、启动门、Application、输出依次校验。
- * 六方法（含只读查询）全部受启动写门约束——故障态下媒体面板统一不可用。
+ * 注册九个固定 image channel，并按 sender、DTO、启动门、Application、输出依次校验。
+ * 九方法（含只读查询）全部受启动写门约束——故障态下媒体面板统一不可用。
  */
 export const registerImageIpc = (
   registrar: ImageIpcRegistrar,
@@ -158,6 +180,8 @@ export const registerImageIpc = (
   const candidatesResult = appResultSchema(z.array(imageCandidateViewSchema));
   const assetsResult = appResultSchema(z.array(assetViewSchema));
   const uploadResult = appResultSchema(uploadAssetReferenceResultSchema);
+  const batchResult = appResultSchema(mediaBatchViewSchema);
+  const storyboardStatesResult = appResultSchema(storyboardImageStatesSchema);
 
   const registerQuery = <TInput, TOutput>(
     channel: string,
@@ -239,5 +263,28 @@ export const registerImageIpc = (
   );
   registerQuery(IMAGE_IPC_CHANNELS.getTask, getMediaTaskInputSchema, taskResult, (input, traceId) =>
     service.getMediaTask(input, traceId),
+  );
+
+  // 批量首帧（batch-first-frame-generation）：排队与取消均为带 requestId 的幂等命令，
+  // 状态聚合为只读查询（Renderer 1s 有界轮询，design D5）。
+  registerCommand(
+    IMAGE_IPC_CHANNELS.generateCandidatesForShots,
+    generateCandidatesForShotsInputSchema,
+    batchResult,
+    (input, traceId) => service.generateCandidatesForShots(input, traceId),
+    (input) => `image.generateCandidatesForShots:${JSON.stringify(input)}`,
+  );
+  registerCommand(
+    IMAGE_IPC_CHANNELS.cancelBatch,
+    cancelBatchInputSchema,
+    batchResult,
+    (input, traceId) => service.cancelBatch(input, traceId),
+    (input) => `image.cancelBatch:${JSON.stringify(input)}`,
+  );
+  registerQuery(
+    IMAGE_IPC_CHANNELS.listStoryboardImageStates,
+    listStoryboardImageStatesInputSchema,
+    storyboardStatesResult,
+    (input, traceId) => service.listStoryboardImageStates(input, traceId),
   );
 };

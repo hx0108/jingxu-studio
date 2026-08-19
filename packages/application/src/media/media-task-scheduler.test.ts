@@ -187,7 +187,11 @@ interface SeedOptions {
   readonly taskId?: string;
 }
 
-const buildFixture = (portOptions: FakePortOptions = {}, segmentTimeoutMs = 5_000): Fixture => {
+const buildFixture = (
+  portOptions: FakePortOptions = {},
+  segmentTimeoutMs = 5_000,
+  onProjectIdle?: (projectId: string) => Promise<boolean>,
+): Fixture => {
   const repository = new InMemoryMediaRepository();
   const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
   const port = new FakeImageModel(portOptions);
@@ -211,6 +215,7 @@ const buildFixture = (portOptions: FakePortOptions = {}, segmentTimeoutMs = 5_00
     fileStore,
     imageModel: port,
     mediaUnitOfWork: unitOfWork,
+    ...(onProjectIdle === undefined ? {} : { onProjectIdle }),
     newId: (() => {
       let counter = 0;
       return () => `inv_${String((counter += 1))}`;
@@ -561,5 +566,25 @@ describe('MediaTaskScheduler 队列语义', () => {
     await fixture.scheduler.whenIdle('project_1');
     expect(fixture.repository.tasks.every((task) => task.phase === 'COMPLETED')).toBe(true);
     expect(fixture.port.submitCount()).toBe(8);
+  });
+
+  it('排空钩子—队列空时消费批次建档继续排空；无批次可推进即收尾退出', async () => {
+    const idleCalls: string[] = [];
+    // 第一次 idle：模拟批次推进钩子为下一镜头建档（返回 true → 排空循环继续）；
+    // 第二次 idle：批次队列已耗尽（返回 false → 排空退出）。
+    const fixture = buildFixture({}, 5_000, async (projectId) => {
+      idleCalls.push(projectId);
+      if (idleCalls.length === 1) {
+        await seedTask(fixture.repository, { shotId: 'shot_batch', taskId: 'task_lazy' });
+        return true;
+      }
+      return false;
+    });
+    await fixture.scheduler.run('project_1');
+    expect(idleCalls).toEqual(['project_1', 'project_1']);
+    // 钩子建档的成员任务被同一排空循环驱动至终态（惰性建档不漏驱动）。
+    const lazy = fixture.repository.tasks.find((task) => task.id === 'task_lazy');
+    expect(lazy?.phase).toBe('COMPLETED');
+    expect(fixture.port.submitCount()).toBe(4);
   });
 });

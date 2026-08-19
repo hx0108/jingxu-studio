@@ -1,7 +1,9 @@
 import {
   appResultSchema,
   assetViewSchema,
+  cancelBatchInputSchema,
   EVENTS_IPC_CHANNELS,
+  generateCandidatesForShotsInputSchema,
   generateCandidatesInputSchema,
   getMediaTaskInputSchema,
   IMAGE_IPC_CHANNELS,
@@ -15,6 +17,8 @@ import {
   jobUpdatesSubscriptionSchema,
   listAssetsInputSchema,
   listCandidatesInputSchema,
+  listStoryboardImageStatesInputSchema,
+  mediaBatchViewSchema,
   mediaTaskViewSchema,
   createProjectInputSchema,
   deleteProjectInputSchema,
@@ -42,11 +46,13 @@ import {
   scriptVersionSchema,
   scriptWorkspaceSchema,
   startupStatusSchema,
+  storyboardImageStatesSchema,
   subscriptionResultSchema,
   updateProjectInputSchema,
   uploadAssetReferenceInputSchema,
   uploadAssetReferenceResultSchema,
   type CreateProjectInputDto,
+  type GenerateCandidatesForShotsInputDto,
   type GenerateCandidatesInputDto,
   type GetMediaTaskInputDto,
   type JobCreateInputDto,
@@ -54,6 +60,7 @@ import {
   type JobListInputDto,
   type JobMutationInputDto,
   type JobUpdatesSubscriptionDto,
+  type CancelBatchInputDto,
   type DeleteProjectInputDto,
   type JingxuApi,
   type ConfirmScriptVersionInputDto,
@@ -61,6 +68,7 @@ import {
   type InitializeOriginalInputDto,
   type ListAssetsInputDto,
   type ListCandidatesInputDto,
+  type ListStoryboardImageStatesInputDto,
   type ProjectGetInputDto,
   type ProjectListInputDto,
   type ProviderCredentialCommandDto,
@@ -129,6 +137,24 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
       getMediaTask: async (input: GetMediaTaskInputDto) =>
         appResultSchema(mediaTaskViewSchema).parse(
           await invoke(IMAGE_IPC_CHANNELS.getTask, getMediaTaskInputSchema.parse(input)),
+        ),
+      generateCandidatesForShots: async (input: GenerateCandidatesForShotsInputDto) =>
+        appResultSchema(mediaBatchViewSchema).parse(
+          await invoke(
+            IMAGE_IPC_CHANNELS.generateCandidatesForShots,
+            generateCandidatesForShotsInputSchema.parse(input),
+          ),
+        ),
+      cancelBatch: async (input: CancelBatchInputDto) =>
+        appResultSchema(mediaBatchViewSchema).parse(
+          await invoke(IMAGE_IPC_CHANNELS.cancelBatch, cancelBatchInputSchema.parse(input)),
+        ),
+      listStoryboardImageStates: async (input: ListStoryboardImageStatesInputDto) =>
+        appResultSchema(storyboardImageStatesSchema).parse(
+          await invoke(
+            IMAGE_IPC_CHANNELS.listStoryboardImageStates,
+            listStoryboardImageStatesInputSchema.parse(input),
+          ),
         ),
     }),
     job: Object.freeze({

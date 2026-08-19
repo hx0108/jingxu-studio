@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import {
   createImageApiService,
+  createMediaBatchService,
   createMediaGenerationService,
   createMediaRequestBlueprintBuilder,
   createMediaTaskScheduler,
@@ -12,14 +13,18 @@ import type {
   FormatProfileRepository,
   ImageModelPort,
   MediaGenerationService,
+  ModelErrorCode,
 } from '@jingxu/application';
 import type { AppResultDto } from '@jingxu/contracts';
+import { MEDIA_BATCH_MAX_SHOTS } from '@jingxu/contracts';
 import {
   MockImageModelAdapter,
   SEEDREAM_INVOCATION_TIMEOUT_MS,
   SEEDREAM_MODEL_ID,
   SeedreamImageModelAdapter,
+  createMockModelError,
 } from '@jingxu/model-adapters';
+import type { MockImageSubmitStep } from '@jingxu/model-adapters';
 import { createContentAddressedStore, deriveMediaStorageRelPath } from '@jingxu/persistence';
 
 import { CredentialAdapter, type SafeStorageFacade } from '../adapters/credential';
@@ -47,7 +52,7 @@ export interface RegisterImageFeaturesOptions {
 }
 
 export interface ImageFeatureRegistration {
-  /** Registers the six image IPC channels exactly once after persistence is writable. */
+  /** Registers the nine image IPC channels exactly once after persistence is writable. */
   ensureRegistered(): boolean;
   /** App shutdown: aborts in-flight provider segments without writing terminal phases. */
   stop(): Promise<void>;
@@ -57,7 +62,36 @@ const hashPayload = (value: Readonly<Record<string, unknown>>): string =>
   createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
 
 /**
- * Pure image composition boundary. Registers the frozen six-method IPC surface immediately
+ * E2E 图片 Mock 步骤脚本化（仅 useE2eMock 下消费）：JINGXU_E2E_IMAGE_STEPS 为逗号
+ * 分隔令牌——`S`=SYNC、`S:800`=SYNC 延迟 800ms（慢步骤制造在飞窗口，供取消/重启
+ * 场景抢占）、`E:MODEL_TIMEOUT`=ERROR 候选级失败。缺省回落全 SYNC 预算（单批上限
+ * 20 镜头 × 4 候选，兼作失控循环熔断）；非法令牌启动期即抛——失败要响，不带病运行。
+ */
+const parseE2eImageSteps = (): readonly MockImageSubmitStep[] => {
+  const raw = process.env.JINGXU_E2E_IMAGE_STEPS;
+  if (raw === undefined || raw.trim() === '') {
+    return Array.from(
+      { length: IMAGE_CANDIDATE_COUNT * MEDIA_BATCH_MAX_SHOTS },
+      () => ({ kind: 'SYNC' }) as const,
+    );
+  }
+  return raw.split(',').map((token): MockImageSubmitStep => {
+    const trimmed = token.trim();
+    if (trimmed === 'S') return { kind: 'SYNC' };
+    const syncDelay = /^S:(\d+)$/u.exec(trimmed);
+    if (syncDelay !== null) {
+      return { afterMs: Number(syncDelay[1] ?? 0), kind: 'SYNC' };
+    }
+    const failure = /^E:([A-Z][A-Z0-9_]*)$/u.exec(trimmed);
+    if (failure !== null) {
+      return { error: createMockModelError(failure[1] as ModelErrorCode), kind: 'ERROR' };
+    }
+    throw new Error(`JINGXU_E2E_IMAGE_STEPS_INVALID_TOKEN: ${trimmed}`);
+  });
+};
+
+/**
+ * Pure image composition boundary. Registers the frozen nine-method IPC surface immediately
  * (STARTUP_WRITE_BLOCKED until READY) and activates the scheduler + services once after
  * startup reaches writable state, mirroring the Script feature registration lifecycle.
  */
@@ -89,16 +123,22 @@ export const createImageFeatureRegistration = ({
   const facade: ImageIpcService = {
     generateCandidates: (input, traceId) =>
       activeService?.generateCandidates(input, traceId) ?? Promise.resolve(blocked()),
+    generateCandidatesForShots: (input, traceId) =>
+      activeService?.generateCandidatesForShots(input, traceId) ?? Promise.resolve(blocked()),
     getMediaTask: (input, traceId) =>
       activeService?.getMediaTask(input, traceId) ?? Promise.resolve(blocked()),
     listAssets: (input, traceId) =>
       activeService?.listAssets(input, traceId) ?? Promise.resolve(blocked()),
     listCandidates: (input, traceId) =>
       activeService?.listCandidates(input, traceId) ?? Promise.resolve(blocked()),
+    listStoryboardImageStates: (input, traceId) =>
+      activeService?.listStoryboardImageStates(input, traceId) ?? Promise.resolve(blocked()),
     selectCandidate: (input, traceId) =>
       activeService?.selectCandidate(input, traceId) ?? Promise.resolve(blocked()),
     uploadAssetReference: (input, traceId) =>
       activeService?.uploadAssetReference(input, traceId) ?? Promise.resolve(blocked()),
+    cancelBatch: (input, traceId) =>
+      activeService?.cancelBatch(input, traceId) ?? Promise.resolve(blocked()),
   };
   registerImageIpc(
     ipcRegistrar,
@@ -168,8 +208,9 @@ export const createImageFeatureRegistration = ({
       });
       const imageModel: ImageModelPort = useE2eMock
         ? new MockImageModelAdapter({
-            // Mock 适配器逐次消耗声明式步骤：N 候选 = N 次 SYNC submit，耗尽即 MODEL_UNKNOWN。
-            steps: Array.from({ length: IMAGE_CANDIDATE_COUNT }, () => ({ kind: 'SYNC' }) as const),
+            // Mock 适配器逐次消耗声明式步骤且实例应用级共享（预算外提交按
+            // MODEL_UNKNOWN 候选级失败，兼作失控循环的天然熔断）。
+            steps: parseE2eImageSteps(),
           })
         : new SeedreamImageModelAdapter({
             credentialId: IMAGE_CREDENTIAL_ID,
@@ -211,6 +252,22 @@ export const createImageFeatureRegistration = ({
         parametersFingerprint: (size) => `seedream-v1:${String(size.width)}x${String(size.height)}`,
         workspaceQuery,
       });
+      // 批次与调度器循环依赖以晚绑定解开：批次建批后 kick，调度器排空后推进批次。
+      let kickScheduler: ((projectId: string) => void) | null = null;
+      const batch = createMediaBatchService({
+        candidateCount: IMAGE_CANDIDATE_COUNT,
+        formatProfiles,
+        generation,
+        hashPayload,
+        kick: (projectId) => {
+          kickScheduler?.(projectId);
+        },
+        mediaUnitOfWork,
+        modelId: SEEDREAM_MODEL_ID,
+        newId: randomUUID,
+        parametersFingerprint: (size) => `seedream-v1:${String(size.width)}x${String(size.height)}`,
+        workspaceQuery,
+      });
       const scheduler = createMediaTaskScheduler({
         fileStore: {
           writeImage: ({ bytes, mimeType, projectId }) =>
@@ -220,6 +277,7 @@ export const createImageFeatureRegistration = ({
         mediaUnitOfWork,
         newId: randomUUID,
         nowMs: Date.now,
+        onProjectIdle: (projectId) => batch.progressBatch(projectId),
         pollDeadlineMs: MEDIA_POLL_DEADLINE_MS,
         pollIntervalMs: MEDIA_POLL_INTERVAL_MS,
         requestBuilder: createMediaRequestBlueprintBuilder({
@@ -234,6 +292,9 @@ export const createImageFeatureRegistration = ({
             setTimeout(resolve, milliseconds);
           }),
       });
+      kickScheduler = (projectId) => {
+        scheduler.kick(projectId);
+      };
 
       activeService = createImageApiService({
         assertCredentialReady:
@@ -248,6 +309,7 @@ export const createImageFeatureRegistration = ({
           writeAsset: ({ bytes, mimeType, projectId }) =>
             store.write({ bytes, mimeType, namespace: 'assets', projectId }),
         },
+        batch,
         generation,
         mediaUnitOfWork,
         newId: randomUUID,
@@ -256,16 +318,22 @@ export const createImageFeatureRegistration = ({
       registered = true;
       stopScheduler = () => scheduler.stop();
       // 启动恢复：证据齐全的未终态任务续轮询，其余标记待人工；随后按项目后台排空。
+      // 含 RUNNING 批次的项目在 recover 后补 kick——排空钩子继续消费待建档队列
+      // （3.3 批次恢复；已建档成员的重发禁令由 recover 分类保证，批次层不重发）。
       void projectUnitOfWork
         .run(({ projects }) => projects.findActiveNameRefs(null))
-        .then((refs) =>
-          Promise.all(
+        .then(async (refs) => {
+          await Promise.all(
             refs.map(async (ref) => {
               await scheduler.recover(ref.projectId);
               scheduler.kick(ref.projectId);
             }),
-          ),
-        )
+          );
+          const batchProjectIds = await mediaUnitOfWork.run((media) =>
+            media.listRunningBatchProjectIds(),
+          );
+          for (const projectId of batchProjectIds) scheduler.kick(projectId);
+        })
         .catch(() => undefined);
       return true;
     },

@@ -158,15 +158,18 @@ describe('window.jingxu 白名单 Contract', () => {
     },
   );
 
-  it('Image Change—image 恰有冻结的六方法白名单—零路径/SQL/存储入口', () => {
+  it('Image Change—image 恰有冻结的九方法白名单—零路径/SQL/存储入口', () => {
     const api = createJingxuApi(vi.fn());
 
     expect(Object.isFrozen(api.image)).toBe(true);
     expect(Object.keys(api.image).sort()).toEqual([
+      'cancelBatch',
       'generateCandidates',
+      'generateCandidatesForShots',
       'getMediaTask',
       'listAssets',
       'listCandidates',
+      'listStoryboardImageStates',
       'selectCandidate',
       'uploadAssetReference',
     ]);

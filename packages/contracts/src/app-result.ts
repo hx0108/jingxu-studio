@@ -61,6 +61,10 @@ export const projectErrorCodeSchema = z.enum([
   'MEDIA_TASK_NOT_FOUND',
   'MEDIA_CANDIDATE_NOT_FOUND',
   'MEDIA_CANDIDATE_NOT_SELECTABLE',
+  // V2 批量首帧（batch-first-frame-generation §5.1 批次编排稳定码）。
+  'MEDIA_BATCH_NOT_FOUND',
+  'MEDIA_BATCH_ALREADY_RUNNING',
+  'MEDIA_BATCH_NO_PENDING_SHOTS',
 ]);
 export type ProjectErrorCode = z.infer<typeof projectErrorCodeSchema>;
 

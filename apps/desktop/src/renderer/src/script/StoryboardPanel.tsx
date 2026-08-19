@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import type {
   JobSummaryDto,
+  StoryboardImageStatesDto,
   StoryboardShotSummaryDto,
   StoryboardVersionSummaryDto,
   StoryboardWorkspaceDto,
@@ -9,6 +10,11 @@ import type {
 
 import { FirstFramePanel } from './FirstFramePanel';
 import { isTerminalJob } from './script-ui-policy';
+import {
+  MEDIA_BATCH_STATUS_LABELS,
+  batchProgressOf,
+  shotFirstFrameBadge,
+} from './storyboard-image-state-policy';
 
 const SHOT_SIZE_LABELS: Record<StoryboardShotSummaryDto['shotSize'], string> = {
   CLOSE_UP: '近景',
@@ -47,24 +53,36 @@ const STORYBOARD_JOB_ERROR_COPY: Readonly<Record<string, string>> = {
 
 export interface StoryboardPanelProps {
   readonly episodeTargetDurationSec: number;
+  /** 列表级首帧状态底座（design D5）；null 表示尚未载入，不渲染徽标。 */
+  readonly imageStates: StoryboardImageStatesDto | null;
   /** 首帧面板按 projectId 定界媒体通道调用。 */
   readonly projectId: string;
   /** null 表示当前可生成；否则为不可生成的原因（同时禁用按钮）。 */
   readonly generateHint: string | null;
   readonly job: JobSummaryDto | null;
+  /** 批次命令（发起/取消/重试）在飞时禁用相关入口。 */
+  readonly batchBusy: boolean;
+  readonly onBatchCancel: (batchId: string) => void;
+  readonly onBatchRetryFailed: (shotIds: readonly string[]) => void;
   readonly onConfirm: () => void;
   readonly onGenerate: () => void;
+  readonly onGenerateFirstFrames: () => void;
   readonly onRestore: (version: StoryboardVersionSummaryDto) => void;
   readonly pending: boolean;
   readonly storyboard: StoryboardWorkspaceDto;
 }
 
 export const StoryboardPanel = ({
+  batchBusy,
   episodeTargetDurationSec,
   generateHint,
+  imageStates,
   job,
+  onBatchCancel,
+  onBatchRetryFailed,
   onConfirm,
   onGenerate,
+  onGenerateFirstFrames,
   onRestore,
   pending,
   projectId,
@@ -77,6 +95,13 @@ export const StoryboardPanel = ({
   const totalDurationSec = storyboard.totalDurationSec;
   const durationOverLimit = totalDurationSec > episodeTargetDurationSec;
   const jobActive = job !== null && !isTerminalJob(job);
+
+  // 批次视图派生：RUNNING 批次优先展示，否则回落到最近批次（进度与重试入口）。
+  const runningBatch = imageStates?.batches.find((batch) => batch.status === 'RUNNING') ?? null;
+  const latestBatch = runningBatch ?? imageStates?.batches[0] ?? null;
+  const latestProgress = latestBatch === null ? null : batchProgressOf(latestBatch);
+  const shotStates = new Map((imageStates?.shots ?? []).map((state) => [state.shotId, state]));
+  const batchReady = current?.status === 'READY' && storyboard.shots.length > 0;
 
   return (
     <section className="script-card" id="storyboard-panel">
@@ -129,8 +154,61 @@ export const StoryboardPanel = ({
         >
           确认为 READY
         </button>
+        {/* 整集首帧（batch-first-frame 5.2）：READY 才可用；发起全量镜头，服务端按当前世代跳过。 */}
+        <button
+          disabled={!batchReady || runningBatch !== null || batchBusy}
+          name="generate-first-frames-batch"
+          onClick={onGenerateFirstFrames}
+          type="button"
+        >
+          为整集生成首帧
+        </button>
       </div>
       {generateHint !== null && <p className="action-hint">{generateHint}</p>}
+      {current !== null && current.status !== 'READY' && (
+        <p className="action-hint">分镜整集确认 READY 后可为整集批量生成首帧。</p>
+      )}
+      {latestBatch !== null && latestProgress !== null && (
+        <div aria-live="polite" className="batch-progress" id="batch-progress">
+          <p>
+            首帧批次{MEDIA_BATCH_STATUS_LABELS[latestBatch.status]} · 进度{' '}
+            {String(latestProgress.settled)}/{String(latestProgress.total)}
+            {latestProgress.failedShotIds.length > 0
+              ? ` · 失败 ${String(latestProgress.failedShotIds.length)}`
+              : ''}
+            {latestBatch.skippedShotIds.length > 0
+              ? ` · 跳过 ${String(latestBatch.skippedShotIds.length)}（当前世代已有首帧）`
+              : ''}
+            {latestBatch.errorCode === null ? '' : ` · ${latestBatch.errorCode}`}
+          </p>
+          {runningBatch !== null ? (
+            <button
+              className="danger-button"
+              disabled={batchBusy}
+              name="cancel-batch"
+              onClick={() => {
+                onBatchCancel(latestBatch.batchId);
+              }}
+              type="button"
+            >
+              取消剩余镜头
+            </button>
+          ) : (
+            latestProgress.failedShotIds.length > 0 && (
+              <button
+                disabled={batchBusy}
+                name="retry-failed-shots"
+                onClick={() => {
+                  onBatchRetryFailed(latestProgress.failedShotIds);
+                }}
+                type="button"
+              >
+                重试失败镜头（新批次）
+              </button>
+            )
+          )}
+        </div>
+      )}
       {job !== null && (
         <p aria-live="polite">
           任务状态：{job.status}
@@ -146,29 +224,38 @@ export const StoryboardPanel = ({
         <p>尚未生成分镜。上游场景剧本确认 READY 后可生成整集分镜。</p>
       ) : (
         <ul className="shot-card-list">
-          {storyboard.shots.map((shot) => (
-            <li key={shot.shotId}>
-              <button
-                aria-current={selectedShot?.shotId === shot.shotId ? 'true' : undefined}
-                className={
-                  selectedShot?.shotId === shot.shotId ? 'active-tab shot-card' : 'shot-card'
-                }
-                onClick={() => {
-                  setSelectedShotId(shot.shotId);
-                }}
-                type="button"
-              >
-                <span>#{String(shot.sequence)}</span>
-                <span>
-                  {SHOT_SIZE_LABELS[shot.shotSize]} · {CAMERA_MOTION_LABELS[shot.cameraMotion]}
-                </span>
-                <span>
-                  {String(shot.targetDurationSec)}s ·{' '}
-                  {DIALOGUE_RENDER_LABELS[shot.dialogueRenderMode]}
-                </span>
-              </button>
-            </li>
-          ))}
+          {storyboard.shots.map((shot) => {
+            const imageState = shotStates.get(shot.shotId) ?? null;
+            const badge = imageState === null ? null : shotFirstFrameBadge(imageState);
+            return (
+              <li key={shot.shotId}>
+                <button
+                  aria-current={selectedShot?.shotId === shot.shotId ? 'true' : undefined}
+                  className={
+                    selectedShot?.shotId === shot.shotId ? 'active-tab shot-card' : 'shot-card'
+                  }
+                  onClick={() => {
+                    setSelectedShotId(shot.shotId);
+                  }}
+                  type="button"
+                >
+                  <span>#{String(shot.sequence)}</span>
+                  <span>
+                    {SHOT_SIZE_LABELS[shot.shotSize]} · {CAMERA_MOTION_LABELS[shot.cameraMotion]}
+                  </span>
+                  <span>
+                    {String(shot.targetDurationSec)}s ·{' '}
+                    {DIALOGUE_RENDER_LABELS[shot.dialogueRenderMode]}
+                  </span>
+                  {badge !== null && (
+                    <span className={`shot-first-frame-badge status-badge ${badge.className}`}>
+                      {badge.label}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
       {selectedShot !== null && (
@@ -212,6 +299,7 @@ export const StoryboardPanel = ({
             </div>
           </dl>
           <FirstFramePanel
+            imageState={shotStates.get(selectedShot.shotId) ?? null}
             key={selectedShot.shotId}
             projectId={projectId}
             shot={selectedShot}

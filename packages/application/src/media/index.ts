@@ -10,10 +10,14 @@ export type {
   ShotCreativeFields,
 } from './media-generation-prompt';
 export { createMediaGenerationService } from './media-generation-service';
+export { resolveGenerationInput } from './media-generation-service';
 export type {
   MediaGenerationService,
   MediaGenerationServiceDependencies,
+  ResolvedGenerationInput,
 } from './media-generation-service';
+export { createMediaBatchService } from './media-batch-service';
+export type { MediaBatchService, MediaBatchServiceDependencies } from './media-batch-service';
 export { createImageApiService } from './image-api-service';
 export type {
   ImageApiService,

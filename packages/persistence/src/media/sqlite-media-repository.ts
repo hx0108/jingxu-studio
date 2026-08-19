@@ -3,10 +3,13 @@ import type {
   MediaAssetType,
   MediaAssetVersionRecord,
   MediaAssetWithVersions,
+  MediaBatchRecord,
+  MediaBatchStatus,
   MediaCandidateRecord,
   MediaRepository,
   MediaStaleAffectedShot,
   MediaStoredFileRef,
+  MediaSucceededShotHash,
   MediaTaskPhase,
   MediaTaskRecord,
 } from '@jingxu/application';
@@ -115,6 +118,32 @@ const mapTaskRow = (row: Row): MediaTaskRecord => ({
   roundNo: requiredNumber(row, 'round_no'),
   shotId: requiredString(row, 'shot_id'),
   shotVersionId: requiredString(row, 'shot_version_id'),
+  updatedAt: requiredString(row, 'updated_at'),
+});
+
+const parseShotIdsJson = (row: Row, column: string): readonly string[] => {
+  const raw = requiredString(row, column);
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.some((entry) => typeof entry !== 'string')) {
+      throw new Error('not a string array');
+    }
+    return parsed as readonly string[];
+  } catch {
+    return corrupt();
+  }
+};
+
+const mapBatchRow = (row: Row): MediaBatchRecord => ({
+  createdAt: requiredString(row, 'created_at'),
+  errorCode: nullableString(row, 'error_code'),
+  id: requiredString(row, 'id'),
+  idempotencyKey: requiredString(row, 'idempotency_key'),
+  pendingShotIds: parseShotIdsJson(row, 'pending_shot_ids_json'),
+  projectId: requiredString(row, 'project_id'),
+  skippedShotIds: parseShotIdsJson(row, 'skipped_shot_ids_json'),
+  status: requiredString(row, 'status') as MediaBatchStatus,
+  targetShotIds: parseShotIdsJson(row, 'target_shot_ids_json'),
   updatedAt: requiredString(row, 'updated_at'),
 });
 
@@ -599,6 +628,7 @@ export class SqliteMediaRepository implements MediaRepository {
   }
 
   public insertTask(input: {
+    batchId?: string | null;
     candidateCount: number;
     generationInputHash: string;
     id: string;
@@ -622,8 +652,8 @@ export class SqliteMediaRepository implements MediaRepository {
             `INSERT INTO media_generation_tasks
              (id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
               phase, generation_input_hash, candidate_count, round_no, error_code,
-              created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, NULL, 'SUBMITTED', ?, ?, ?, NULL, ?, ?)`,
+              batch_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, NULL, 'SUBMITTED', ?, ?, ?, NULL, ?, ?, ?)`,
           )
           .run(
             input.id,
@@ -634,6 +664,7 @@ export class SqliteMediaRepository implements MediaRepository {
             input.generationInputHash,
             input.candidateCount,
             roundNo,
+            input.batchId ?? null,
             now,
             now,
           );
@@ -696,6 +727,252 @@ export class SqliteMediaRepository implements MediaRepository {
            ORDER BY created_at, id`,
         )
         .all(projectId)
+        .map(mapTaskRow),
+    );
+  }
+
+  private selectBatchWhere(whereClause: string, ...params: readonly string[]): Row | undefined {
+    return this.database
+      .prepare(
+        `SELECT id, project_id, idempotency_key, status, error_code, target_shot_ids_json, pending_shot_ids_json,
+                skipped_shot_ids_json, created_at, updated_at
+         FROM media_generation_batches ${whereClause}`,
+      )
+      .get(...params);
+  }
+
+  private requireBatchRow(batchId: string): Row {
+    const row = this.selectBatchWhere('WHERE id = ?', batchId);
+    if (row === undefined) {
+      throw new PersistenceRuntimeError('MEDIA_BATCH_NOT_FOUND');
+    }
+    return row;
+  }
+
+  public findBatchByIdempotencyKey(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<MediaBatchRecord | null> {
+    return syncToPromise(() => {
+      const row = this.selectBatchWhere(
+        'WHERE project_id = ? AND idempotency_key = ?',
+        projectId,
+        idempotencyKey,
+      );
+      return row === undefined ? null : mapBatchRow(row);
+    });
+  }
+
+  public findBatchById(projectId: string, batchId: string): Promise<MediaBatchRecord | null> {
+    return syncToPromise(() => {
+      const row = this.selectBatchWhere('WHERE project_id = ? AND id = ?', projectId, batchId);
+      return row === undefined ? null : mapBatchRow(row);
+    });
+  }
+
+  public insertBatch(input: {
+    id: string;
+    idempotencyKey: string;
+    projectId: string;
+    skippedShotIds: readonly string[];
+    targetShotIds: readonly string[];
+  }): Promise<MediaBatchRecord> {
+    return syncToPromise(() => {
+      const now = this.clock();
+      try {
+        this.database
+          .prepare(
+            `INSERT INTO media_generation_batches
+             (id, project_id, idempotency_key, status, target_shot_ids_json,
+              pending_shot_ids_json, skipped_shot_ids_json, created_at, updated_at)
+             VALUES (?, ?, ?, 'RUNNING', ?, ?, ?, ?, ?)`,
+          )
+          .run(
+            input.id,
+            input.projectId,
+            input.idempotencyKey,
+            JSON.stringify(input.targetShotIds),
+            JSON.stringify(input.targetShotIds),
+            JSON.stringify(input.skippedShotIds),
+            now,
+            now,
+          );
+      } catch {
+        throw new PersistenceRuntimeError('MEDIA_BATCH_IDEMPOTENCY_CONFLICT');
+      }
+      return mapBatchRow(this.requireBatchRow(input.id));
+    });
+  }
+
+  public findRunningBatchByProject(projectId: string): Promise<MediaBatchRecord | null> {
+    return syncToPromise(() => {
+      const row = this.selectBatchWhere(
+        `WHERE project_id = ? AND status = 'RUNNING'
+          ORDER BY created_at, id LIMIT 1`,
+        projectId,
+      );
+      return row === undefined ? null : mapBatchRow(row);
+    });
+  }
+
+  public listRunningBatchProjectIds(): Promise<readonly string[]> {
+    return syncToPromise(() => [
+      ...new Set(
+        this.database
+          .prepare(
+            `SELECT DISTINCT project_id FROM media_generation_batches WHERE status = 'RUNNING'`,
+          )
+          .all()
+          .map((row) => requiredString(row as Row, 'project_id')),
+      ),
+    ]);
+  }
+
+  public takeNextPendingShot(batchId: string): Promise<string | null> {
+    return syncToPromise(() => {
+      const batch = mapBatchRow(this.requireBatchRow(batchId));
+      if (batch.status !== 'RUNNING' || batch.pendingShotIds.length === 0) return null;
+      const head = batch.pendingShotIds[0];
+      if (head === undefined) return null;
+      this.database
+        .prepare(
+          `UPDATE media_generation_batches
+           SET pending_shot_ids_json = ?, updated_at = ? WHERE id = ? AND status = 'RUNNING'`,
+        )
+        .run(JSON.stringify(batch.pendingShotIds.slice(1)), this.clock(), batchId);
+      return head;
+    });
+  }
+
+  public finalizeBatch(batchId: string, errorCode?: string): Promise<MediaBatchRecord> {
+    return syncToPromise(() => {
+      const batch = mapBatchRow(this.requireBatchRow(batchId));
+      if (batch.status !== 'RUNNING') {
+        throw new PersistenceRuntimeError('MEDIA_BATCH_ALREADY_TERMINAL');
+      }
+      // 失败成员定义（与 buildBatchView/latestTaskErrorCode 同一口径）：任务 FAILED，
+      // 或任务 COMPLETED 但同轮零 SUCCEEDED 候选（Provider 错误全败时任务相位仍 COMPLETED）。
+      const failedCount = this.database
+        .prepare(
+          `SELECT COUNT(*) AS failed FROM media_generation_tasks t
+           WHERE t.batch_id = ? AND (
+             t.phase = 'FAILED' OR (
+               t.phase = 'COMPLETED' AND NOT EXISTS (
+                 SELECT 1 FROM image_candidates c
+                 WHERE c.shot_id = t.shot_id AND c.round_no = t.round_no AND c.status = 'SUCCEEDED'
+               )
+             )
+           )`,
+        )
+        .get(batchId) as { readonly failed: SqliteOutputValue };
+      // COMPLETED 仅当队列耗尽且无失败成员；中止（errorCode）或存在失败/剩余队列 → PARTIAL。
+      const status =
+        batch.pendingShotIds.length === 0 &&
+        Number(failedCount.failed) === 0 &&
+        errorCode === undefined
+          ? 'COMPLETED'
+          : 'PARTIAL_COMPLETED';
+      this.database
+        .prepare(
+          `UPDATE media_generation_batches
+           SET status = ?, error_code = ?, updated_at = ? WHERE id = ?`,
+        )
+        .run(status, errorCode ?? null, this.clock(), batchId);
+      return mapBatchRow(this.requireBatchRow(batchId));
+    });
+  }
+
+  public cancelBatch(batchId: string): Promise<MediaBatchRecord> {
+    return syncToPromise(() => {
+      const batch = mapBatchRow(this.requireBatchRow(batchId));
+      if (batch.status !== 'RUNNING') return batch;
+      // 剩余队列保留原序（design D6-A：取消不消费，留待追溯）。
+      this.database
+        .prepare(
+          `UPDATE media_generation_batches SET status = 'CANCELLED', updated_at = ? WHERE id = ?`,
+        )
+        .run(this.clock(), batchId);
+      return mapBatchRow(this.requireBatchRow(batchId));
+    });
+  }
+
+  public listBatchesByProject(
+    projectId: string,
+    limit: number,
+  ): Promise<readonly MediaBatchRecord[]> {
+    return syncToPromise(() =>
+      this.database
+        .prepare(
+          `SELECT id, project_id, idempotency_key, status, error_code, target_shot_ids_json, pending_shot_ids_json,
+                  skipped_shot_ids_json, created_at, updated_at
+           FROM media_generation_batches
+           WHERE project_id = ?
+           ORDER BY created_at DESC, id DESC LIMIT ?`,
+        )
+        .all(projectId, limit)
+        .map(mapBatchRow),
+    );
+  }
+
+  public listBatchMemberTasks(batchId: string): Promise<readonly MediaTaskRecord[]> {
+    return syncToPromise(() =>
+      this.database
+        .prepare(
+          `SELECT id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
+                  phase, generation_input_hash, candidate_count, round_no, error_code,
+                  created_at, updated_at
+           FROM media_generation_tasks WHERE batch_id = ?`,
+        )
+        .all(batchId)
+        .map(mapTaskRow),
+    );
+  }
+
+  public countUnfinishedBatchTasks(batchId: string): Promise<number> {
+    return syncToPromise(() => {
+      const row = this.database
+        .prepare(
+          `SELECT COUNT(*) AS active FROM media_generation_tasks
+           WHERE batch_id = ? AND phase IN ${ACTIVE_TASK_PHASES}`,
+        )
+        .get(batchId) as { readonly active: SqliteOutputValue };
+      return Number(row.active);
+    });
+  }
+
+  public listSucceededCandidateShotHashes(
+    projectId: string,
+  ): Promise<readonly MediaSucceededShotHash[]> {
+    return syncToPromise(() =>
+      this.database
+        .prepare(
+          `SELECT shot_id, generation_input_hash, COUNT(*) AS succeeded_count FROM image_candidates
+           WHERE project_id = ? AND status = 'SUCCEEDED'
+           GROUP BY shot_id, generation_input_hash`,
+        )
+        .all(projectId)
+        .map((row) => ({
+          generationInputHash: requiredString(row as Row, 'generation_input_hash'),
+          succeededCount: requiredNumber(row as Row, 'succeeded_count'),
+          shotId: requiredString(row as Row, 'shot_id'),
+        })),
+    );
+  }
+
+  public listLatestTaskPerShot(projectId: string): Promise<readonly MediaTaskRecord[]> {
+    return syncToPromise(() =>
+      this.database
+        .prepare(
+          `SELECT t.id, t.project_id, t.shot_id, t.shot_version_id, t.idempotency_key,
+                  t.provider_task_id, t.phase, t.generation_input_hash, t.candidate_count,
+                  t.round_no, t.error_code, t.created_at, t.updated_at
+           FROM media_generation_tasks t
+           JOIN (SELECT shot_id, MAX(round_no) AS max_round FROM media_generation_tasks
+                 WHERE project_id = ? GROUP BY shot_id) m
+             ON m.shot_id = t.shot_id AND m.max_round = t.round_no
+           WHERE t.project_id = ?`,
+        )
+        .all(projectId, projectId)
         .map(mapTaskRow),
     );
   }

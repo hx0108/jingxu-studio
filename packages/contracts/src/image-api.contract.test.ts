@@ -5,9 +5,11 @@ import {
   IMAGE_IPC_CHANNELS,
   assetViewSchema,
   candidateMediaUrl,
+  generateCandidatesForShotsInputSchema,
   generateCandidatesInputSchema,
   generationInputDescriptorSchema,
   imageCandidateViewSchema,
+  mediaBatchViewSchema,
   mediaTaskViewSchema,
   uploadAssetReferenceInputSchema,
   uploadAssetReferenceResultSchema,
@@ -205,12 +207,15 @@ describe('image-api contracts', () => {
     ).toBe(false);
   });
 
-  it('IPC 通道—image 前缀六方法与 API 接口一一对应', () => {
+  it('IPC 通道—image 前缀九方法与 API 接口一一对应', () => {
     expect(Object.keys(IMAGE_IPC_CHANNELS).sort()).toEqual([
+      'cancelBatch',
       'generateCandidates',
+      'generateCandidatesForShots',
       'getTask',
       'listAssets',
       'listCandidates',
+      'listStoryboardImageStates',
       'selectCandidate',
       'uploadAssetReference',
     ]);
@@ -227,5 +232,71 @@ describe('image-api contracts', () => {
     expect(
       generateCandidatesInputSchema.safeParse({ extra: 1, projectId, requestId, shotId }).success,
     ).toBe(false);
+  });
+
+  it('generateCandidatesForShots 输入—shotIds 1..20 去重且 strict', () => {
+    expect(
+      generateCandidatesForShotsInputSchema.safeParse({
+        projectId,
+        requestId,
+        shotIds: [shotId],
+      }).success,
+    ).toBe(true);
+    expect(
+      generateCandidatesForShotsInputSchema.safeParse({
+        projectId,
+        requestId,
+        shotIds: [shotId, shotId],
+      }).success,
+    ).toBe(false);
+    expect(
+      generateCandidatesForShotsInputSchema.safeParse({
+        projectId,
+        requestId,
+        shotIds: [],
+      }).success,
+    ).toBe(false);
+    expect(
+      generateCandidatesForShotsInputSchema.safeParse({
+        projectId,
+        requestId,
+        shotIds: Array.from({ length: 21 }, (_, index) => `shot_${String(index).padStart(6, '0')}`),
+      }).success,
+    ).toBe(false);
+  });
+
+  it('mediaBatchView 成员不变式—排队成员无相位、失败才带 errorCode', () => {
+    const base = {
+      batchId: 'batch_00000001',
+      createdAt: '2026-08-19T00:00:00.000Z',
+      errorCode: null,
+      skippedShotIds: [],
+      status: 'RUNNING',
+      updatedAt: '2026-08-19T00:00:00.000Z',
+    };
+    expect(
+      mediaBatchViewSchema.safeParse({
+        ...base,
+        members: [
+          { errorCode: null, phase: 'POLLING', shotId, taskId: 'task_0000001' },
+          { errorCode: null, phase: null, shotId: 'shot_0000002', taskId: null },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      mediaBatchViewSchema.safeParse({
+        ...base,
+        members: [{ errorCode: null, phase: null, shotId, taskId: 'task_0000001' }],
+      }).success,
+    ).toBe(false);
+    expect(
+      mediaBatchViewSchema.safeParse({
+        ...base,
+        members: [
+          { errorCode: 'MODEL_UNKNOWN', phase: 'COMPLETED', shotId, taskId: 'task_0000001' },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(mediaBatchViewSchema.safeParse({ ...base, members: [] }).success).toBe(false);
   });
 });

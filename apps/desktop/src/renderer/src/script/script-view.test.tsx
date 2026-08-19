@@ -2,6 +2,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import type {
+  ShotImageStateDto,
+  StoryboardImageStatesDto,
   StoryboardShotSummaryDto,
   StoryboardVersionSummaryDto,
   StoryboardWorkspaceDto,
@@ -100,7 +102,12 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     };
     const html = renderToStaticMarkup(
       <StoryboardPanel
+        batchBusy={false}
         episodeTargetDurationSec={90}
+        imageStates={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
         generateHint={null}
         job={null}
         onConfirm={vi.fn()}
@@ -143,7 +150,12 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
   it('尚未生成分镜—空态提示、未生成徽标且无镜头卡片', () => {
     const html = renderToStaticMarkup(
       <StoryboardPanel
+        batchBusy={false}
         episodeTargetDurationSec={90}
+        imageStates={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
         generateHint="前置阶段尚未确认 READY：需先确认场景剧本。"
         job={null}
         onConfirm={vi.fn()}
@@ -164,7 +176,12 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
   it('任务 FAILED（集合校验）—展示脱敏稳定文案，不出现明细或模型输出通道', () => {
     const html = renderToStaticMarkup(
       <StoryboardPanel
+        batchBusy={false}
         episodeTargetDurationSec={90}
+        imageStates={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
         generateHint={null}
         job={{
           errorCode: 'CONTRACT_VALIDATION_FAILED',
@@ -191,7 +208,12 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
   it('镜头总时长超出单集目标—汇总条越限告警可见', () => {
     const html = renderToStaticMarkup(
       <StoryboardPanel
+        batchBusy={false}
         episodeTargetDurationSec={90}
+        imageStates={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
         generateHint={null}
         job={null}
         onConfirm={vi.fn()}
@@ -222,5 +244,188 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     expect(html).toContain('合计 100s / 目标 90s');
     expect(html).toContain('已超过单集目标时长');
     expect(html).toContain('duration-over');
+  });
+});
+
+const NOW = '2026-08-18T00:00:00.000Z';
+
+const shotImageState = (overrides: Partial<ShotImageStateDto>): ShotImageStateDto => ({
+  activeTaskPhase: null,
+  currentGenSucceededCount: 0,
+  latestTaskErrorCode: null,
+  queuedInBatchId: null,
+  shotId: 'shot_00000001',
+  ...overrides,
+});
+
+describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () => {
+  const storyboardReady: StoryboardWorkspaceDto = {
+    current: storyboardVersion({
+      id: 'episodever_0004',
+      shotCount: 3,
+      status: 'READY',
+      versionNo: 3,
+    }),
+    history: [],
+    shots: [1, 2, 3].map((sequence) =>
+      shotSummary({
+        narrativePurpose: `批次镜头 ${String(sequence)}`,
+        sequence,
+        shotId: `shot_0000000${String(sequence)}`,
+        targetDurationSec: 10,
+      }),
+    ),
+    totalDurationSec: 30,
+  };
+
+  /** RUNNING 用例：完成/在飞/排队各一（惰性串行下的真实中间态）；PARTIAL 用例：完成/失败/排队。 */
+  const statesWith = (
+    batchStatus: 'RUNNING' | 'PARTIAL_COMPLETED',
+    shots: readonly ShotImageStateDto[],
+  ): StoryboardImageStatesDto => {
+    const failedMember = {
+      errorCode: 'MODEL_TIMEOUT' as const,
+      phase: 'FAILED' as const,
+      shotId: 'shot_00000002',
+      taskId: 'task_00000002',
+    };
+    const activeMember = {
+      errorCode: null,
+      phase: 'SUBMITTED' as const,
+      shotId: 'shot_00000002',
+      taskId: 'task_00000002',
+    };
+    return {
+      batches: [
+        {
+          batchId: 'batch_00000001',
+          createdAt: NOW,
+          errorCode: null,
+          members: [
+            {
+              errorCode: null,
+              phase: 'COMPLETED',
+              shotId: 'shot_00000001',
+              taskId: 'task_00000001',
+            },
+            batchStatus === 'RUNNING' ? activeMember : failedMember,
+            { errorCode: null, phase: null, shotId: 'shot_00000003', taskId: null },
+          ],
+          skippedShotIds: [],
+          status: batchStatus,
+          updatedAt: NOW,
+        },
+      ],
+      shots: [...shots],
+    };
+  };
+
+  it('READY + RUNNING 批次—镜头徽标分档、整集首帧禁用、进度行含取消入口', () => {
+    const html = renderToStaticMarkup(
+      <StoryboardPanel
+        batchBusy={false}
+        episodeTargetDurationSec={90}
+        generateHint={null}
+        imageStates={statesWith('RUNNING', [
+          shotImageState({ currentGenSucceededCount: 4, shotId: 'shot_00000001' }),
+          shotImageState({
+            activeTaskPhase: 'SUBMITTED',
+            shotId: 'shot_00000002',
+          }),
+          shotImageState({ queuedInBatchId: 'batch_00000001', shotId: 'shot_00000003' }),
+        ])}
+        job={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onConfirm={vi.fn()}
+        onGenerate={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
+        onRestore={vi.fn()}
+        pending={false}
+        projectId="project_12345678"
+        storyboard={storyboardReady}
+      />,
+    );
+    // 徽标分档：就绪 / 生成中 / 排队。
+    expect(html).toContain('首帧就绪 4 张');
+    expect(html).toContain('首帧生成中');
+    expect(html).toContain('首帧排队中');
+    // 批次运行中：整集入口禁用，进度行给出取消。
+    expect(html).toContain('为整集生成首帧');
+    const batchButton = /<button[^>]*name="generate-first-frames-batch"[^>]*>/.exec(html)?.[0];
+    expect(batchButton).toContain('disabled=""');
+    expect(html).toContain('首帧批次进行中 · 进度 1/3');
+    expect(html).not.toContain('失败 1');
+    expect(html).toContain('取消剩余镜头');
+    expect(html).not.toContain('重试失败镜头');
+    // 默认选中首个镜头（已就绪）：单镜头面板照旧渲染。
+    expect(html).toContain('首帧候选 · 镜头 #1');
+  });
+
+  it('READY + 部分完成批次—重试失败镜头入口可见、整集首帧恢复可用', () => {
+    const html = renderToStaticMarkup(
+      <StoryboardPanel
+        batchBusy={false}
+        episodeTargetDurationSec={90}
+        generateHint={null}
+        imageStates={statesWith('PARTIAL_COMPLETED', [
+          shotImageState({ currentGenSucceededCount: 4, shotId: 'shot_00000001' }),
+          shotImageState({ latestTaskErrorCode: 'MODEL_TIMEOUT', shotId: 'shot_00000002' }),
+          shotImageState({ shotId: 'shot_00000003' }),
+        ])}
+        job={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onConfirm={vi.fn()}
+        onGenerate={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
+        onRestore={vi.fn()}
+        pending={false}
+        projectId="project_12345678"
+        storyboard={storyboardReady}
+      />,
+    );
+    expect(html).toContain('首帧批次部分完成 · 进度 2/3 · 失败 1');
+    expect(html).toContain('重试失败镜头（新批次）');
+    expect(html).not.toContain('取消剩余镜头');
+    // 失败镜头徽标（无可用首帧时失败才顶替）与空档徽标。
+    expect(html).toContain('首帧失败');
+    expect(html).toContain('未生成首帧');
+    // 无 RUNNING 批次：整集按钮不再因批次禁用（READY 下的禁用项见上一用例）。
+    const batchButton = /<button[^>]*name="generate-first-frames-batch"[^>]*>/.exec(html)?.[0];
+    expect(batchButton).toBeDefined();
+    expect(batchButton?.includes('disabled=""')).toBe(false);
+  });
+
+  it('DRAFT 整集 + 已载入状态—整集首帧禁用并给 READY 提示', () => {
+    const html = renderToStaticMarkup(
+      <StoryboardPanel
+        batchBusy={false}
+        episodeTargetDurationSec={90}
+        generateHint={null}
+        imageStates={{ batches: [], shots: [] }}
+        job={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onConfirm={vi.fn()}
+        onGenerate={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
+        onRestore={vi.fn()}
+        pending={false}
+        projectId="project_12345678"
+        storyboard={{
+          ...storyboardReady,
+          current: storyboardVersion({
+            id: 'episodever_0005',
+            shotCount: 3,
+            status: 'DRAFT',
+            versionNo: 4,
+          }),
+        }}
+      />,
+    );
+    expect(html).toContain('为整集生成首帧');
+    expect(html).toContain('分镜整集确认 READY 后可为整集批量生成首帧。');
+    expect(html).not.toContain('batch-progress');
   });
 });

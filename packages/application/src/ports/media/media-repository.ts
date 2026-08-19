@@ -102,6 +102,41 @@ export interface MediaTaskRecord {
   readonly updatedAt: string;
 }
 
+/**
+ * 批次状态（batch-first-frame-generation design D1-C）：RUNNING 期间惰性消费队列；
+ * 收尾在「队列耗尽且成员任务全部终态」时派生 COMPLETED / PARTIAL_COMPLETED，
+ * 中止（成员建档失败）以 PARTIAL_COMPLETED + error_code 落定；取消即 CANCELLED。
+ */
+export type MediaBatchStatus = 'RUNNING' | 'COMPLETED' | 'PARTIAL_COMPLETED' | 'CANCELLED';
+
+export interface MediaBatchRecord {
+  readonly createdAt: string;
+  readonly errorCode: string | null;
+  readonly id: string;
+  readonly idempotencyKey: string;
+  readonly pendingShotIds: readonly string[];
+  readonly projectId: string;
+  readonly skippedShotIds: readonly string[];
+  readonly status: MediaBatchStatus;
+  readonly targetShotIds: readonly string[];
+  readonly updatedAt: string;
+}
+
+/** 批次成员任务摘要（按 targetShotIds 顺序组合；排队中镜头 taskId/phase 为 null）。 */
+export interface MediaBatchMemberTask {
+  readonly errorCode: string | null;
+  readonly phase: MediaTaskPhase | null;
+  readonly shotId: string;
+  readonly taskId: string | null;
+}
+
+/** 首帧状态底座：项目内 SUCCEEDED 候选按 (shotId, 世代哈希) 聚合的计数对。 */
+export interface MediaSucceededShotHash {
+  readonly generationInputHash: string;
+  readonly succeededCount: number;
+  readonly shotId: string;
+}
+
 export interface MediaRepository {
   /** 按 (projectId, assetType, bibleRefId) 业务键查资产；不存在返回 null。 */
   findAssetByIdentity(
@@ -231,9 +266,10 @@ export interface MediaRepository {
   /**
    * 建任务行（phase=SUBMITTED，provider_task_id 为 null）；round_no 在事务内取该镜头
    * 候选 max+1 派生并返回——调用方随后以同值 insertCandidates（UNIQUE(shot_id, round_no)
-   * 兜底并发）。幂等键冲突抛稳定错误。
+   * 兜底并发）。幂等键冲突抛稳定错误。batchId 可选——批次成员任务归属（单镜头任务缺省 NULL）。
    */
   insertTask(input: {
+    readonly batchId?: string | null;
     readonly candidateCount: number;
     readonly generationInputHash: string;
     readonly id: string;
@@ -272,6 +308,63 @@ export interface MediaRepository {
 
   /** 调度与恢复扫描（4.2）：非终态任务按创建序返回。 */
   listUnfinishedTasks(projectId: string): Promise<readonly MediaTaskRecord[]>;
+
+  /**
+   * 批次幂等重放查询：UNIQUE(project_id, idempotency_key) 的读侧入口
+   * （idempotency_key = IPC 批级 requestId）。
+   */
+  findBatchByIdempotencyKey(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<MediaBatchRecord | null>;
+
+  /** 按批次 id 且限定项目查批次行（取消/视图组装的项目归属校验入口）。 */
+  findBatchById(projectId: string, batchId: string): Promise<MediaBatchRecord | null>;
+
+  /** 建批次行（status=RUNNING，pending=target 原序）；幂等键冲突抛稳定错误。 */
+  insertBatch(input: {
+    readonly id: string;
+    readonly idempotencyKey: string;
+    readonly projectId: string;
+    readonly skippedShotIds: readonly string[];
+    readonly targetShotIds: readonly string[];
+  }): Promise<MediaBatchRecord>;
+
+  /** 项目内活跃（RUNNING）批次，建批守卫「同项目至多一个活跃批次」。 */
+  findRunningBatchByProject(projectId: string): Promise<MediaBatchRecord | null>;
+
+  /** 全库 RUNNING 批次的 projectId 去重清单（启动恢复时对含批次项目补 kick）。 */
+  listRunningBatchProjectIds(): Promise<readonly string[]>;
+
+  /**
+   * 消费队首：仅 RUNNING 批次生效——事务内移除队首并返回该 shotId；
+   * 队列空或批次非 RUNNING 返回 null（收尾判定的信号）。
+   */
+  takeNextPendingShot(batchId: string): Promise<string | null>;
+
+  /**
+   * 收尾：仅 RUNNING 可收。队列耗尽且无 FAILED 成员 → COMPLETED，否则 →
+   * PARTIAL_COMPLETED（含中止场景：errorCode 落批次行）。中止时剩余队列保留原序可追溯。
+   */
+  finalizeBatch(batchId: string, errorCode?: string): Promise<MediaBatchRecord>;
+
+  /** 取消：RUNNING→CANCELLED（剩余队列保留原序可追溯）；已终态幂等返回现状。 */
+  cancelBatch(batchId: string): Promise<MediaBatchRecord>;
+
+  /** 项目内批次按创建序倒序（近期优先），供列表级进度查询。 */
+  listBatchesByProject(projectId: string, limit: number): Promise<readonly MediaBatchRecord[]>;
+
+  /** 批次已建档成员任务（任意相位），顺序不保证——按 targetShotIds 组合由上层完成。 */
+  listBatchMemberTasks(batchId: string): Promise<readonly MediaTaskRecord[]>;
+
+  /** 收尾判定辅助：该批次非终态成员任务数。 */
+  countUnfinishedBatchTasks(batchId: string): Promise<number>;
+
+  /** 首帧状态底座：项目内 SUCCEEDED 候选按 (shotId, 世代哈希) 聚合计数。 */
+  listSucceededCandidateShotHashes(projectId: string): Promise<readonly MediaSucceededShotHash[]>;
+
+  /** 首帧状态底座：项目内每镜头最新一轮任务（round_no 最大者）。 */
+  listLatestTaskPerShot(projectId: string): Promise<readonly MediaTaskRecord[]>;
 }
 
 /** 媒体读写事务边界：单一 `BEGIN IMMEDIATE`，work 抛出即回滚（沿 ProjectUnitOfWorkPort 语义）。 */

@@ -10,13 +10,18 @@ import type {
   AppResultDto,
   AssetVersionViewDto,
   AssetViewDto,
+  CancelBatchInputDto,
+  GenerateCandidatesForShotsInputDto,
   GenerateCandidatesInputDto,
   GetMediaTaskInputDto,
   ImageCandidateViewDto,
   ListAssetsInputDto,
   ListCandidatesInputDto,
+  ListStoryboardImageStatesInputDto,
+  MediaBatchViewDto,
   MediaTaskViewDto,
   SelectCandidateInputDto,
+  StoryboardImageStatesDto,
   UploadAssetReferenceInputDto,
   UploadAssetReferenceResultDto,
 } from '@jingxu/contracts';
@@ -29,6 +34,7 @@ import type {
   MediaTaskRecord,
   MediaUnitOfWorkPort,
 } from '../ports/media/media-repository';
+import type { MediaBatchService } from './media-batch-service';
 import type { MediaGenerationService } from './media-generation-service';
 import { mediaFailure, mediaPersistenceFailure } from './media-service-error';
 
@@ -68,12 +74,29 @@ export interface ImageApiService {
     input: GetMediaTaskInputDto,
     traceId: string,
   ): Promise<AppResultDto<MediaTaskViewDto>>;
+  /** 批量排队（batch-first-frame-generation）：批次视图含跳过回告与成员相位。 */
+  generateCandidatesForShots(
+    input: GenerateCandidatesForShotsInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<MediaBatchViewDto>>;
+  /** 取消批次：仅停止消费剩余队列，在飞成员照常跑完（design D6-A）。 */
+  cancelBatch(
+    input: CancelBatchInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<MediaBatchViewDto>>;
+  /** 列表级聚合：批次 + 全部 READY 镜头首帧状态底座（D5 轮询查询）。 */
+  listStoryboardImageStates(
+    input: ListStoryboardImageStatesInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<StoryboardImageStatesDto>>;
 }
 
 export interface ImageApiServiceDependencies {
   /** 生成前置凭据闸：抛错即以稳定 MODEL_CREDENTIAL_INVALID 拒绝（Mock 档不注入；design D2）。 */
   readonly assertCredentialReady?: (() => Promise<void>) | undefined;
   readonly assetFileStore: MediaAssetFileStorePort;
+  /** 批量首帧编排（batch-first-frame-generation；progressBatch 由调度器钩子驱动）。 */
+  readonly batch: MediaBatchService;
   readonly generation: MediaGenerationService;
   readonly mediaUnitOfWork: MediaUnitOfWorkPort;
   readonly newId: () => string;
@@ -282,5 +305,28 @@ export const createImageApiService = (
         return mediaPersistenceFailure(traceId);
       }
     },
+
+    generateCandidatesForShots: async (input, traceId) => {
+      // 批量与单镜头同源凭据闸（D2）：未配置/不可解密先于建批稳定失败。
+      if (dependencies.assertCredentialReady !== undefined) {
+        try {
+          await dependencies.assertCredentialReady();
+        } catch {
+          return mediaFailure(
+            'MODEL_CREDENTIAL_INVALID',
+            '图片 Provider 凭据未配置或密文不可解密。',
+            traceId,
+            false,
+            '在剧本工作区「Provider 设置」的图片卡片中保存 ARK API Key 后重试。',
+          );
+        }
+      }
+      return dependencies.batch.createBatch(input, traceId);
+    },
+
+    cancelBatch: (input, traceId) => dependencies.batch.cancelBatch(input, traceId),
+
+    listStoryboardImageStates: (input, traceId) =>
+      dependencies.batch.listStoryboardImageStates(input, traceId),
   };
 };

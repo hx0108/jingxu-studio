@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前无 Active Change。最近归档的 Change 为 `image-credential-management`（2026-08-19，真实用户可用性收尾：图片 Provider 凭据配置 UI + SHOT_CONTRACT 调用超时/重试稳健化）。次近为 `shot-first-frame-image-generation`（2026-08-17，V2 图片切片第一步：逐镜头首帧候选生成、资产版本与参考图、人工选择，Provider 为火山方舟豆包 Seedream）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前无 Active Change。最近归档的 Change 为 `batch-first-frame-generation`（2026-08-19，V2 图片切片第二步：整集批量首帧——惰性逐镜头建档、失败隔离与重试新批次、取消剩余、重启恢复不重发、批次进度与镜头徽标）。次近为 `image-credential-management`（2026-08-19，真实用户可用性收尾：图片 Provider 凭据配置 UI + SHOT_CONTRACT 调用超时/重试稳健化）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 
@@ -100,8 +100,19 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - `shot-contract-generation` 已实现第六阶段 SHOT_CONTRACT：分镜候选契约（ModelShotSetCandidate 键存在性）→ 系统字段注入（含 dialogue allOf 精确值系统派生：audio/lip_sync/speaker/台词时长，不信任模型）→ 集合校验（sequence 连续、previous_shot_id 集合内回指、character/scene ID 源自冻结 STORY_BIBLE、Σ target_duration_sec ∈ [30,180]）→ Registry ShotContract 1.1.0 FINAL → 整集 DRAFT/READY/STALE_INPUT 版本链、历史集合恢复、storyboard 工作区与确认/恢复路径；迁移 0008 种子 `shot_contract/v1` 模板（sha256 三处锁死）。真实 Qwen 六阶段联调于 2026-08-16 全绿。
 - `shot-first-frame-image-generation` 已实现 V2 图片切片第一步——逐镜头首帧候选生成：`ImageModelPort`（submit/poll/download，容忍同步与异步双形态）、迁移 0009（assets/asset_versions/image_candidates/media_generation_tasks + Seedream 能力快照播种）、内容寻址存储（写入复算校验 + 原子 rename + 路径三重防逃逸）、`MediaGenerationService`（冻结输入哈希、幂等键、STALE 按输入世代与资产绑定双传播）、同项目串行调度与崩溃恢复（证据三分支零重发）、`image` 六方法 IPC 白名单（singleflight + 输出脱敏复验）、`jingxu://media` 受限协议与 CSP `img-src jingxu:`、分镜工作区首帧面板（世代分组、候选比较、人工选择、历史世代只读）；Mock 与真实 SeedreamImageModelAdapter（model id 快照锁定、错误归一化、结果字节魔数嗅探）。真实火山方舟 Seedream 联调于 2026-08-17 全绿。
 - `image-credential-management` 已实现图片 Provider 凭据闭环与 SHOT_CONTRACT 超时稳健化：ProviderSettings 内 ImageProviderCard（保存即清空输入、末 4 位回显、model id 只读、测试仅验证密文可解密的如实文案、删除带确认）、图片档固定凭据 id `profile-image-primary` + UI 覆盖轮换（env 引导语义不变）、`generateCandidates` 未配置前置稳定失败 `MODEL_CREDENTIAL_INVALID`（userAction 指向配置入口，其余五个 image 方法不受影响）；分阶段调用超时（SHOT_CONTRACT 300s、其余 120s，application ports 双 barrel 同源）+ JobRunner MODEL_TIMEOUT 传输重试预算 1 次（重试前复核墙钟）+ 按阶段 `deadline_at` 落库（SHOT_CONTRACT 960s、其余 300s）。真实联调（UI 路径配 ARK Key）于 2026-08-19 全绿。
+- `batch-first-frame-generation` 已实现 V2 图片切片第二步——整集批量首帧：迁移 0010（`media_generation_batches` + 任务 `batch_id` 溯源列，head=10）、`MediaBatchService`（显式动作建批、当前世代 SUCCEEDED 服务端跳过并回告、空目标 `MEDIA_BATCH_NO_PENDING_SHOTS`、requestId 幂等重放）、惰性逐镜头建档（前一成员终态才提交下一镜头，任意时刻每批次至多一个在飞任务；成员复用既有单镜头粒度与派生 requestId `image-generate_<batch>_<shot>`）、失败隔离与统一失败口径（任务 FAILED 或 COMPLETED 而同轮零 SUCCEEDED 候选均计失败并携带候选错误码）、收尾 COMPLETED/PARTIAL_COMPLETED 派生、重试失败镜头=仅含失败镜头的新批次（不复活旧任务行）、取消仅作用未建档镜头（在飞自然终态、幂等）、重启恢复（pending 队列继续全新提交、在飞任务沿用既有零重发规则）；`image` 九方法 IPC 白名单（`generateCandidatesForShots`/`cancelBatch`/`listStoryboardImageStates`）+ 分镜工作台镜头首帧徽标、批次进度行与 1s 有界轮询（可见性守卫、无活跃批次即停）；E2E Mock 步骤脚本化（`JINGXU_E2E_IMAGE_STEPS`）支撑失败注入/取消/重启四场景。离线全量门禁于 2026-08-19 全绿。
 
 ## 最近验证证据
+
+2026-08-19 `batch-first-frame-generation` 收尾记录（整集批量首帧，离线门禁）：
+
+- 拍板 D1–D6 全按推荐：批次表+惰性逐镜头建档（迁移 0010，head 9→10）、批次只汇总/重试失败镜头=新批次、服务端当前世代跳过无 force、同项目串行沿用、`listStoryboardImageStates` + 1s 有界轮询、取消仅未建档镜头。
+- 失败成员统一口径（Apply 期 spec 增补）：任务相位 `FAILED`，或任务 `COMPLETED` 但该镜头同轮零 `SUCCEEDED` 候选（Provider 候选级全败时任务相位仍 COMPLETED）；批次视图按 `FAILED` 呈报并携带候选错误码。SQLite 收尾 SQL、内存仓、服务层 `failureErrorCodeOf` 三处同一口径，`openspec validate --strict` 过后归档。
+- E2E Mock 步骤脚本化：`JINGXU_E2E_IMAGE_STEPS` 逗号令牌（`S`=SYNC、`S:800`=慢同步制造在飞窗口、`E:MODEL_TIMEOUT`=候选级失败注入；缺省 80 步全 SYNC 兼作失控熔断，非法令牌启动即抛）。四场景全绿：T1 排队/生成中徽标流转至 COMPLETED 6/6、T2 失败注入→PARTIAL+重试新批次、T3 取消剩余→CANCELLED 且在飞跑完、T4 重启→在飞 INTERRUPTED 待人工且 PENDING 候选原地不动（不重发红线）+ pending 队列继续至 PARTIAL。
+- 仓库约定新证：新增迁移须同步旧迁移测试的硬编码版本断言（4 文件 9 处：版本清单/计数/TOO_NEW 假版本/备份基线），本次全量集成首跑揪出 9 处失败后补齐。
+- 全量门禁：format:check、eslint --max-warnings=0、tsc -b 零错误；unit 687、contract 109、integration 198；Playwright Electron E2E 离线 15 passed + 2 skipped（真实探针门控跳过）。
+- `openspec validate batch-first-frame-generation --strict` 通过后归档为 `2026-08-19-batch-first-frame-generation`（shot-first-frame-image-generation spec +5 能力）。
+- 真实 Seedream 整集批量联调与真实用户使用验收仍待人工核验。
 
 2026-08-19 `image-credential-management` 收尾记录（图片凭据 UI + SHOT_CONTRACT 超时/重试稳健化）：
 
@@ -175,7 +186,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 - 分镜逐镜头人工编辑与锁定（locked_paths 目前恒为空）、导入导出和评测业务用例
 - 真实用户使用和发布验收（真实 Qwen 六阶段与真实 Seedream 首帧生成连通性已分别于 2026-08-16、2026-08-17 通过开发者环境全流程联调）
-- 视频、TTS、口型、成片和其他 V2/V3 能力（V2 图片切片第一步——逐镜头首帧候选——已随 `shot-first-frame-image-generation` 于 2026-08-17 落地；多镜头批量生成、首帧外后帧等在后续 Change）
+- 视频、TTS、口型、成片和其他 V2/V3 能力（V2 图片切片第一、二步——逐镜头首帧候选与整集批量首帧——已分别随 `shot-first-frame-image-generation`（2026-08-17）、`batch-first-frame-generation`（2026-08-19）落地；首帧外后帧等在后续 Change）
 - AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 目前具备可重复的 Mock 自动化证据与一次真实 Qwen 开发者环境全流程运行，仍不能据此声称真实用户使用或 V1 发布验收已经完成
 
 这些能力将分别进入后续 OpenSpec Change。`0001_initial.sql` 中存在对应表结构不等于业务方法、页面、Schema 校验或验收链路已经实现。

@@ -4,6 +4,7 @@ import type {
   AppErrorDto,
   ImageCandidateViewDto,
   MediaTaskViewDto,
+  ShotImageStateDto,
   StaleAffectedShotDto,
   StoryboardShotSummaryDto,
   StoryboardVersionSummaryDto,
@@ -19,6 +20,7 @@ import {
   validateReferenceFile,
 } from './first-frame-policy';
 import { createScriptRequestId, getImageClient, rendererTransportError } from './script-api';
+import { shotGenerationBusy } from './storyboard-image-state-policy';
 
 /**
  * 分镜工作区逐镜头首帧面板（shot-first-frame-image-generation 任务 5.3）。
@@ -29,6 +31,8 @@ import { createScriptRequestId, getImageClient, rendererTransportError } from '.
  */
 
 export interface FirstFramePanelProps {
+  /** 列表级状态底座中该镜头的条目（batch-first-frame 5.3 一致性）；null 同未载入。 */
+  readonly imageState: ShotImageStateDto | null;
   readonly projectId: string;
   readonly shot: StoryboardShotSummaryDto;
   /** 分镜当前整集状态；仅 READY 集合内的镜头可发起生成。 */
@@ -219,7 +223,12 @@ export const FirstFrameUploadForm = ({ busy, onSubmit }: FirstFrameUploadFormPro
   );
 };
 
-export const FirstFramePanel = ({ projectId, shot, storyboardStatus }: FirstFramePanelProps) => {
+export const FirstFramePanel = ({
+  imageState,
+  projectId,
+  shot,
+  storyboardStatus,
+}: FirstFramePanelProps) => {
   const [candidates, setCandidates] = useState<readonly ImageCandidateViewDto[] | null>(null);
   const [task, setTask] = useState<MediaTaskViewDto | null>(null);
   const [error, setError] = useState<AppErrorDto | null>(null);
@@ -250,6 +259,8 @@ export const FirstFramePanel = ({ projectId, shot, storyboardStatus }: FirstFram
   }, []);
 
   const taskActive = task !== null && !isTerminalMediaTaskPhase(task.phase);
+  // 批次视图一致性（5.3）：列表底座显示排队/在飞时，单镜头入口不再重复发起。
+  const shotBusy = taskActive || shotGenerationBusy(imageState);
 
   // 媒体任务轮询：终态即刷新候选（沿用剧本任务轮询节奏与可见性守卫）。
   useEffect(() => {
@@ -280,8 +291,20 @@ export const FirstFramePanel = ({ projectId, shot, storyboardStatus }: FirstFram
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, task]);
 
+  // 批次/他端任务落成新候选（当前世代计数增长）即刷新看板，保持与列表徽标一致（5.3）。
+  const succeededSeen = useRef<number | null>(null);
+  const succeededCount = imageState?.currentGenSucceededCount ?? null;
+  useEffect(() => {
+    if (succeededCount === null) return;
+    if (succeededSeen.current !== null && succeededCount > succeededSeen.current) {
+      void loadCandidates();
+    }
+    succeededSeen.current = succeededCount;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [succeededCount]);
+
   const generate = (): void => {
-    if (taskActive) return;
+    if (shotBusy) return;
     setError(null);
     void getImageClient()
       .generateCandidates({
@@ -359,15 +382,17 @@ export const FirstFramePanel = ({ projectId, shot, storyboardStatus }: FirstFram
       });
   };
 
-  const generateDisabled = storyboardStatus !== 'READY' || taskActive;
+  const generateDisabled = storyboardStatus !== 'READY' || shotBusy;
   const generateHint =
     storyboardStatus === null
       ? '分镜尚未生成；生成整集分镜并确认 READY 后可生成首帧。'
       : storyboardStatus !== 'READY'
         ? '分镜整集未确认 READY；确认后才能为镜头生成首帧。'
-        : taskActive
-          ? '媒体任务运行中，完成后可再次生成新一轮。'
-          : null;
+        : imageState?.queuedInBatchId != null
+          ? '该镜头已在首帧批次队列中，将按顺序自动生成。'
+          : shotBusy
+            ? '媒体任务运行中，完成后可再次生成新一轮。'
+            : null;
   const errorView = error === null ? null : describeProjectError(error);
 
   return (

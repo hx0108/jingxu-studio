@@ -78,6 +78,13 @@ const buildFixture = (
   let counter = 0;
   const service = createImageApiService({
     ...(assertCredentialReady === undefined ? {} : { assertCredentialReady }),
+    // 六方法用例不触批次路径：占位实现一旦被调用即失败暴露接线错误。
+    batch: {
+      cancelBatch: () => Promise.reject(new Error('batch not under test')),
+      createBatch: () => Promise.reject(new Error('batch not under test')),
+      listStoryboardImageStates: () => Promise.reject(new Error('batch not under test')),
+      progressBatch: () => Promise.reject(new Error('batch not under test')),
+    },
     assetFileStore: {
       writeAsset: ({ bytes, projectId }) => {
         counter += 1;

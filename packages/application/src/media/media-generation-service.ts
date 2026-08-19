@@ -41,8 +41,12 @@ export interface MediaGenerationServiceDependencies {
 }
 
 export interface MediaGenerationService {
+  /**
+   * 单镜头建档（幂等）。batchId 仅由批次推进钩子携带（成员任务归属，
+   * batch-first-frame-generation design D1-C）；IPC 单镜头路径不传。
+   */
   generateCandidates(
-    input: GenerateCandidatesInputDto,
+    input: GenerateCandidatesInputDto & { readonly batchId?: string },
     traceId: string,
   ): Promise<AppResultDto<MediaTaskRecord>>;
   /** 新 ShotContract READY 确认后的 STALE 传播（按旧镜头版本定位）。 */
@@ -58,13 +62,17 @@ export interface MediaGenerationService {
 }
 
 /** 单镜头的解析结果：创意字段 + 当前世代描述符输入。 */
-interface ResolvedGenerationInput {
+export interface ResolvedGenerationInput {
   readonly boundAssetVersionIds: readonly string[];
   readonly creative: ShotCreativeFields;
   readonly generationInputHash: string;
 }
 
-const resolveGenerationInput = async (
+/**
+ * 单镜头当前世代解析（冻结镜头版本 → 资产绑定 → 世代哈希）。
+ * 批次跳过过滤与镜头状态视图复用同一函数——「当前世代」定义与单镜头建档一致。
+ */
+export const resolveGenerationInput = async (
   media: MediaRepository,
   dependencies: MediaGenerationServiceDependencies,
   projectId: string,
@@ -158,6 +166,7 @@ export const createMediaGenerationService = (
         }
         const resolved = await resolveGenerationInput(media, dependencies, input.projectId, shot);
         const inserted = await media.insertTask({
+          batchId: input.batchId ?? null,
           candidateCount: dependencies.candidateCount,
           generationInputHash: resolved.generationInputHash,
           id: dependencies.newId(),

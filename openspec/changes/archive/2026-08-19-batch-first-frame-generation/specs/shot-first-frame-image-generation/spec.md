@@ -42,14 +42,14 @@
 
 ### Requirement: 单镜头失败不得阻断批次且收尾状态如实派生
 
-成员任务失败 MUST NOT 阻断同批次后续镜头的建档与提交；候选级失败沿用既有「兄弟候选继续」语义。当队列耗尽且全部成员任务到达终态时，批次 MUST 收尾：全部 COMPLETED 则 `COMPLETED`，任一 FAILED 则 `PARTIAL_COMPLETED`。「重试失败镜头」MUST 表达为仅含失败镜头的新批次，MUST NOT 复活或复用失败任务行。
+成员任务失败 MUST NOT 阻断同批次后续镜头的建档与提交；候选级失败沿用既有「兄弟候选继续」语义。当队列耗尽且全部成员任务到达终态时，批次 MUST 收尾：全部 COMPLETED 则 `COMPLETED`，任一 FAILED 则 `PARTIAL_COMPLETED`。失败成员 MUST 按统一口径判定：任务相位为 `FAILED`，或任务相位为 `COMPLETED` 但该镜头同轮零 `SUCCEEDED` 候选（Provider 错误候选级全败时任务相位仍为 COMPLETED）；候选级全败成员在批次视图中 SHALL 按 `FAILED` 呈报并携带候选错误码。「重试失败镜头」MUST 表达为仅含失败镜头的新批次，MUST NOT 复活或复用失败任务行。
 
 #### Scenario: 失败隔离
 
-- **GIVEN** 批次推进至镜头 L3，L3 的任务因 Provider 错误到达 FAILED
+- **GIVEN** 批次推进至镜头 L3，L3 的任务因 Provider 错误候选级全败（任务相位 COMPLETED、同轮零 SUCCEEDED）
 - **WHEN** 批次继续推进
 - **THEN** 系统 SHALL 继续为 L4 及后续镜头建档提交
-- **THEN** 批次视图 SHALL 将 L3 计入失败清单
+- **THEN** 批次视图 SHALL 将 L3 按 FAILED 计入失败清单并携带候选错误码
 
 #### Scenario: 收尾派生与重试边界
 

@@ -356,6 +356,38 @@ textarea {
   color: #ffd18a;
 }
 
+.status-first_frame_ready {
+  color: #8de7ae;
+}
+
+.status-first_frame_active,
+.status-first_frame_queued {
+  color: #9fc6ff;
+}
+
+.status-first_frame_failed {
+  color: #ff8f82;
+}
+
+.shot-first-frame-badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.batch-progress {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid #52617f;
+  border-radius: 10px;
+}
+
+.batch-progress p {
+  margin: 0;
+}
+
 .version-list {
   display: grid;
   gap: 8px;

@@ -690,6 +690,129 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
     });
   });
 
+  it('批次收尾派生—候选级全败（任务 COMPLETED、同轮零成功）按失败成员计 PARTIAL，全成功计 COMPLETED', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await setup(root, 'media_repo_batch_finalize.sqlite');
+      try {
+        const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
+        const memberTask = (input: {
+          readonly batchId: string;
+          readonly generationInputHash: string;
+          readonly id: string;
+          readonly idempotencyKey: string;
+          readonly shotId: string;
+          readonly shotVersionId: string;
+        }) =>
+          unitOfWork.run((media) =>
+            media.insertTask({
+              batchId: input.batchId,
+              candidateCount: 4,
+              generationInputHash: input.generationInputHash,
+              id: input.id,
+              idempotencyKey: input.idempotencyKey,
+              projectId: 'project_media',
+              shotId: input.shotId,
+              shotVersionId: input.shotVersionId,
+            }),
+          );
+        insertShot(database, 'shot_second', 'shotv_second');
+        const batch = await unitOfWork.run((media) =>
+          media.insertBatch({
+            id: 'batch_1',
+            idempotencyKey: 'batch_req_1',
+            projectId: 'project_media',
+            skippedShotIds: [],
+            targetShotIds: ['shot_media', 'shot_second'],
+          }),
+        );
+        expect(batch.status).toBe('RUNNING');
+
+        // 成员一：Provider 错误候选级全败——任务 COMPLETED 但同轮零 SUCCEEDED。
+        await memberTask({
+          batchId: 'batch_1',
+          generationInputHash: hash64('gen_b1'),
+          id: 'task_b1',
+          idempotencyKey: 'req_b1',
+          shotId: 'shot_media',
+          shotVersionId: 'shotv_media',
+        });
+        await unitOfWork.run(async (media) => {
+          await media.insertCandidates({
+            candidateIds: ['cand_b1'],
+            generationInputHash: hash64('gen_b1'),
+            modelId: MODEL_ID,
+            projectId: 'project_media',
+            roundNo: 1,
+            shotId: 'shot_media',
+            shotVersionId: 'shotv_media',
+          });
+          await media.completeCandidateFailed('cand_b1', {
+            errorCode: 'MODEL_TIMEOUT',
+            invocationEvidenceRef: 'inv_b1',
+          });
+          await media.completeTask('task_b1');
+        });
+        // 成员二：成功。
+        await memberTask({
+          batchId: 'batch_1',
+          generationInputHash: hash64('gen_b2'),
+          id: 'task_b2',
+          idempotencyKey: 'req_b2',
+          shotId: 'shot_second',
+          shotVersionId: 'shotv_second',
+        });
+        await seedSucceededCandidate(
+          unitOfWork,
+          'cand_b2',
+          hash64('gen_b2'),
+          'shot_second',
+          'shotv_second',
+          1,
+        );
+        await unitOfWork.run((media) => media.completeTask('task_b2'));
+
+        // 队列排空后收尾：存在候选级失败成员 → PARTIAL_COMPLETED。
+        await unitOfWork.run((media) => media.takeNextPendingShot('batch_1'));
+        await unitOfWork.run((media) => media.takeNextPendingShot('batch_1'));
+        const finalized = await unitOfWork.run((media) => media.finalizeBatch('batch_1'));
+        expect(finalized).toMatchObject({ status: 'PARTIAL_COMPLETED' });
+
+        // 对照批次：全成功成员（复用 shot_second 的成功轮）→ COMPLETED。
+        await unitOfWork.run((media) =>
+          media.insertBatch({
+            id: 'batch_2',
+            idempotencyKey: 'batch_req_2',
+            projectId: 'project_media',
+            skippedShotIds: [],
+            targetShotIds: ['shot_second'],
+          }),
+        );
+        await memberTask({
+          batchId: 'batch_2',
+          generationInputHash: hash64('gen_b3'),
+          id: 'task_b3',
+          idempotencyKey: 'req_b3',
+          shotId: 'shot_second',
+          shotVersionId: 'shotv_second',
+        });
+        await seedSucceededCandidate(
+          unitOfWork,
+          'cand_b3',
+          hash64('gen_b3'),
+          'shot_second',
+          'shotv_second',
+          2,
+        );
+        await unitOfWork.run((media) => media.completeTask('task_b3'));
+        await unitOfWork.run((media) => media.takeNextPendingShot('batch_2'));
+        const allSucceeded = await unitOfWork.run((media) => media.finalizeBatch('batch_2'));
+        expect(allSucceeded).toMatchObject({ status: 'COMPLETED' });
+      } finally {
+        database.close();
+      }
+    });
+  });
+
   it('取图协议反查—候选仅落盘行命中—资产版本路径按内容寻址派生', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const database = await setup(root, 'media_repo_media_lookup.sqlite');

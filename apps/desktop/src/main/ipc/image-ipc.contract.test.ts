@@ -6,7 +6,9 @@ import type {
   AssetVersionViewDto,
   AssetViewDto,
   ImageCandidateViewDto,
+  MediaBatchViewDto,
   MediaTaskViewDto,
+  StoryboardImageStatesDto,
   UploadAssetReferenceResultDto,
 } from '@jingxu/contracts';
 import type { ImageIpcService } from './image-ipc';
@@ -85,6 +87,40 @@ const okUpload: AppResultDto<UploadAssetReferenceResultDto> = {
   ok: true,
 };
 
+const batchView: MediaBatchViewDto = {
+  batchId: 'batch_12345678',
+  createdAt: NOW,
+  errorCode: null,
+  members: [
+    { errorCode: null, phase: null, shotId: 'shot_12345678', taskId: null },
+    {
+      errorCode: null,
+      phase: 'COMPLETED',
+      shotId: 'shot_87654321',
+      taskId: 'task_87654321',
+    },
+  ],
+  skippedShotIds: [],
+  status: 'RUNNING',
+  updatedAt: NOW,
+};
+const okBatch: AppResultDto<MediaBatchViewDto> = { data: batchView, ok: true };
+const okStates: AppResultDto<StoryboardImageStatesDto> = {
+  data: {
+    batches: [batchView],
+    shots: [
+      {
+        activeTaskPhase: null,
+        currentGenSucceededCount: 0,
+        latestTaskErrorCode: null,
+        queuedInBatchId: 'batch_12345678',
+        shotId: 'shot_12345678',
+      },
+    ],
+  },
+  ok: true,
+};
+
 const generateInput = {
   projectId: 'project_12345678',
   requestId: 'request_generate_1',
@@ -114,6 +150,9 @@ const createHarness = (ready = true) => {
   >();
   const service: ImageIpcService = {
     generateCandidates: vi.fn(() => Promise.resolve(okTask)),
+    generateCandidatesForShots: vi.fn(() => Promise.resolve(okBatch)),
+    cancelBatch: vi.fn(() => Promise.resolve(okBatch)),
+    listStoryboardImageStates: vi.fn(() => Promise.resolve(okStates)),
     getMediaTask: vi.fn(() => Promise.resolve(okTask)),
     listAssets: vi.fn(() => Promise.resolve(okAssets)),
     listCandidates: vi.fn(() => Promise.resolve(okCandidates)),
@@ -131,7 +170,7 @@ const createHarness = (ready = true) => {
 };
 
 describe('Image Main IPC Contract', () => {
-  it('注册边界—固定六方法—可信 sender 与 strict DTO 后委托 Application', async () => {
+  it('注册边界—固定九方法—可信 sender 与 strict DTO 后委托 Application', async () => {
     const { handlers, service } = createHarness();
     expect([...handlers.keys()].sort()).toEqual(Object.values(IMAGE_IPC_CHANNELS).sort());
 
@@ -144,10 +183,35 @@ describe('Image Main IPC Contract', () => {
         shotId: 'shot_12345678',
       }),
     ).resolves.toEqual(okCandidates);
+    // 批量三通道（batch-first-frame-generation）：命令走 singleflight、聚合走查询。
+    await expect(
+      handlers.get(IMAGE_IPC_CHANNELS.generateCandidatesForShots)?.(trustedEvent(), {
+        projectId: 'project_12345678',
+        requestId: 'request_batch_1',
+        shotIds: ['shot_12345678', 'shot_87654321'],
+      }),
+    ).resolves.toEqual(okBatch);
+    await expect(
+      handlers.get(IMAGE_IPC_CHANNELS.listStoryboardImageStates)?.(trustedEvent(), {
+        projectId: 'project_12345678',
+      }),
+    ).resolves.toEqual(okStates);
     expect(service.generateCandidates).toHaveBeenCalledWith(generateInput, 'trace_image_12345678');
+    expect(service.generateCandidatesForShots).toHaveBeenCalledWith(
+      {
+        projectId: 'project_12345678',
+        requestId: 'request_batch_1',
+        shotIds: ['shot_12345678', 'shot_87654321'],
+      },
+      'trace_image_12345678',
+    );
+    expect(service.listStoryboardImageStates).toHaveBeenCalledWith(
+      { projectId: 'project_12345678' },
+      'trace_image_12345678',
+    );
   });
 
-  it('非 READY—六方法（含只读查询）统一阻断—Service 零调用', async () => {
+  it('非 READY—九方法（含只读查询）统一阻断—Service 零调用', async () => {
     const { handlers, service } = createHarness(false);
     const inputs: readonly [string, unknown][] = [
       [IMAGE_IPC_CHANNELS.generateCandidates, generateInput],
@@ -159,6 +223,19 @@ describe('Image Main IPC Contract', () => {
       ],
       [IMAGE_IPC_CHANNELS.listAssets, { projectId: 'project_12345678' }],
       [IMAGE_IPC_CHANNELS.getTask, { projectId: 'project_12345678', taskId: 'task_12345678' }],
+      [
+        IMAGE_IPC_CHANNELS.generateCandidatesForShots,
+        {
+          projectId: 'project_12345678',
+          requestId: 'request_batch_1',
+          shotIds: ['shot_12345678', 'shot_87654321'],
+        },
+      ],
+      [
+        IMAGE_IPC_CHANNELS.cancelBatch,
+        { batchId: 'batch_12345678', projectId: 'project_12345678', requestId: 'request_cancel_1' },
+      ],
+      [IMAGE_IPC_CHANNELS.listStoryboardImageStates, { projectId: 'project_12345678' }],
     ];
     for (const [channel, input] of inputs) {
       await expect(handlers.get(channel)?.(trustedEvent(), input)).resolves.toMatchObject({
@@ -169,6 +246,9 @@ describe('Image Main IPC Contract', () => {
     expect(service.generateCandidates).not.toHaveBeenCalled();
     expect(service.listCandidates).not.toHaveBeenCalled();
     expect(service.getMediaTask).not.toHaveBeenCalled();
+    expect(service.generateCandidatesForShots).not.toHaveBeenCalled();
+    expect(service.cancelBatch).not.toHaveBeenCalled();
+    expect(service.listStoryboardImageStates).not.toHaveBeenCalled();
   });
 
   it('未知字段、额外参数与超限字节—输入拒绝—Service 零调用', async () => {

@@ -2,10 +2,12 @@ import type {
   MediaAssetRecord,
   MediaAssetType,
   MediaAssetVersionRecord,
+  MediaBatchRecord,
   MediaCandidateRecord,
   MediaRepository,
   MediaStaleAffectedShot,
   MediaStoredFileRef,
+  MediaSucceededShotHash,
   MediaTaskRecord,
 } from '../ports/media/media-repository';
 
@@ -28,8 +30,12 @@ export class InMemoryMediaRepository implements MediaRepository {
   public readonly versions: MediaAssetVersionRecord[] = [];
   public readonly candidates: MediaCandidateRecord[] = [];
   public readonly tasks: MediaTaskRecord[] = [];
+  public readonly batches: MediaBatchRecord[] = [];
   /** 候选行不含 projectId 字段；insert 时旁路登记供 findCandidateById 过滤。 */
   private readonly candidateProjectIds = new Map<string, string>();
+  /** 任务行不含 batchId 字段；insertTask 时旁路登记供成员查询过滤。 */
+  /** 任务→批次归属（batch_id 列的内存镜像；测试断言成员归属用）。 */
+  readonly taskBatchIds = new Map<string, string>();
 
   public findAssetByIdentity(
     projectId: string,
@@ -321,6 +327,7 @@ export class InMemoryMediaRepository implements MediaRepository {
   }
 
   public insertTask(input: {
+    batchId?: string | null;
     candidateCount: number;
     generationInputHash: string;
     id: string;
@@ -346,6 +353,7 @@ export class InMemoryMediaRepository implements MediaRepository {
       updatedAt: NOW,
     };
     this.tasks.push(record);
+    if (input.batchId != null) this.taskBatchIds.set(input.id, input.batchId);
     return Promise.resolve(record);
   }
 
@@ -391,6 +399,172 @@ export class InMemoryMediaRepository implements MediaRepository {
           task.phase !== 'CANCELLED',
       ),
     );
+  }
+
+  public findBatchByIdempotencyKey(
+    projectId: string,
+    idempotencyKey: string,
+  ): Promise<MediaBatchRecord | null> {
+    return Promise.resolve(
+      this.batches.find(
+        (batch) => batch.projectId === projectId && batch.idempotencyKey === idempotencyKey,
+      ) ?? null,
+    );
+  }
+
+  public findBatchById(projectId: string, batchId: string): Promise<MediaBatchRecord | null> {
+    return Promise.resolve(
+      this.batches.find((batch) => batch.projectId === projectId && batch.id === batchId) ?? null,
+    );
+  }
+
+  public insertBatch(input: {
+    id: string;
+    idempotencyKey: string;
+    projectId: string;
+    skippedShotIds: readonly string[];
+    targetShotIds: readonly string[];
+  }): Promise<MediaBatchRecord> {
+    const conflict = this.batches.some(
+      (batch) =>
+        batch.projectId === input.projectId && batch.idempotencyKey === input.idempotencyKey,
+    );
+    if (conflict) throw new Error('MEDIA_BATCH_IDEMPOTENCY_CONFLICT');
+    const record: MediaBatchRecord = {
+      ...input,
+      createdAt: NOW,
+      errorCode: null,
+      pendingShotIds: [...input.targetShotIds],
+      status: 'RUNNING',
+      updatedAt: NOW,
+    };
+    this.batches.push(record);
+    return Promise.resolve(record);
+  }
+
+  public findRunningBatchByProject(projectId: string): Promise<MediaBatchRecord | null> {
+    return Promise.resolve(
+      this.batches.find((batch) => batch.projectId === projectId && batch.status === 'RUNNING') ??
+        null,
+    );
+  }
+
+  public listRunningBatchProjectIds(): Promise<readonly string[]> {
+    return Promise.resolve([
+      ...new Set(
+        this.batches.filter((batch) => batch.status === 'RUNNING').map((batch) => batch.projectId),
+      ),
+    ]);
+  }
+
+  public takeNextPendingShot(batchId: string): Promise<string | null> {
+    const batch = this.requireBatch(batchId);
+    if (batch.status !== 'RUNNING' || batch.pendingShotIds.length === 0)
+      return Promise.resolve(null);
+    const head = batch.pendingShotIds[0];
+    if (head === undefined) return Promise.resolve(null);
+    this.patchBatch(batchId, { pendingShotIds: batch.pendingShotIds.slice(1) });
+    return Promise.resolve(head);
+  }
+
+  public finalizeBatch(batchId: string, errorCode?: string): Promise<MediaBatchRecord> {
+    const batch = this.requireBatch(batchId);
+    if (batch.status !== 'RUNNING') throw new Error('MEDIA_BATCH_ALREADY_TERMINAL');
+    // 失败成员定义（与 SQLite finalizeBatch/buildBatchView 同一口径）：任务 FAILED，
+    // 或任务 COMPLETED 但同轮零 SUCCEEDED 候选（Provider 错误全败时任务相位仍 COMPLETED）。
+    const hasFailed = this.tasks.some((task) => {
+      if (this.taskBatchIds.get(task.id) !== batchId) return false;
+      if (task.phase === 'FAILED') return true;
+      if (task.phase !== 'COMPLETED') return false;
+      return !this.candidates.some(
+        (candidate) =>
+          candidate.shotId === task.shotId &&
+          candidate.roundNo === task.roundNo &&
+          candidate.status === 'SUCCEEDED',
+      );
+    });
+    const status =
+      batch.pendingShotIds.length === 0 && !hasFailed && errorCode === undefined
+        ? 'COMPLETED'
+        : 'PARTIAL_COMPLETED';
+    return Promise.resolve(this.patchBatch(batchId, { errorCode: errorCode ?? null, status }));
+  }
+
+  public cancelBatch(batchId: string): Promise<MediaBatchRecord> {
+    const batch = this.requireBatch(batchId);
+    if (batch.status !== 'RUNNING') return Promise.resolve(batch);
+    return Promise.resolve(this.patchBatch(batchId, { status: 'CANCELLED' }));
+  }
+
+  public listBatchesByProject(
+    projectId: string,
+    limit: number,
+  ): Promise<readonly MediaBatchRecord[]> {
+    return Promise.resolve(
+      [...this.batches]
+        .filter((batch) => batch.projectId === projectId)
+        .reverse()
+        .slice(0, limit),
+    );
+  }
+
+  public listBatchMemberTasks(batchId: string): Promise<readonly MediaTaskRecord[]> {
+    return Promise.resolve(this.tasks.filter((task) => this.taskBatchIds.get(task.id) === batchId));
+  }
+
+  public countUnfinishedBatchTasks(batchId: string): Promise<number> {
+    return Promise.resolve(
+      this.tasks.filter(
+        (task) =>
+          this.taskBatchIds.get(task.id) === batchId &&
+          task.phase !== 'COMPLETED' &&
+          task.phase !== 'FAILED' &&
+          task.phase !== 'CANCELLED',
+      ).length,
+    );
+  }
+
+  public listSucceededCandidateShotHashes(
+    projectId: string,
+  ): Promise<readonly MediaSucceededShotHash[]> {
+    const counts = new Map<string, MediaSucceededShotHash>();
+    for (const candidate of this.candidates) {
+      if (candidate.status !== 'SUCCEEDED') continue;
+      if (this.candidateProjectIds.get(candidate.id) !== projectId) continue;
+      const key = `${candidate.shotId}:${candidate.generationInputHash}`;
+      const prior = counts.get(key);
+      counts.set(key, {
+        generationInputHash: candidate.generationInputHash,
+        succeededCount: (prior?.succeededCount ?? 0) + 1,
+        shotId: candidate.shotId,
+      });
+    }
+    return Promise.resolve([...counts.values()]);
+  }
+
+  public listLatestTaskPerShot(projectId: string): Promise<readonly MediaTaskRecord[]> {
+    const latest = new Map<string, MediaTaskRecord>();
+    for (const task of this.tasks) {
+      if (task.projectId !== projectId) continue;
+      const current = latest.get(task.shotId);
+      if (current === undefined || task.roundNo > current.roundNo) latest.set(task.shotId, task);
+    }
+    return Promise.resolve([...latest.values()]);
+  }
+
+  private requireBatch(batchId: string): MediaBatchRecord {
+    const batch = this.batches.find((entry) => entry.id === batchId);
+    if (batch === undefined) throw new Error('MEDIA_BATCH_NOT_FOUND');
+    return batch;
+  }
+
+  private patchBatch(batchId: string, patch: Partial<MediaBatchRecord>): MediaBatchRecord {
+    const index = this.batches.findIndex((entry) => entry.id === batchId);
+    const current = this.batches[index];
+    if (current === undefined) throw new Error('MEDIA_BATCH_NOT_FOUND');
+    const next = { ...current, ...patch, updatedAt: NOW };
+    this.batches[index] = next;
+    return next;
   }
 
   private completeCandidate(

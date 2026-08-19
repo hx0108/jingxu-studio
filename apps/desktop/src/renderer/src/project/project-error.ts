@@ -61,6 +61,12 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   MEDIA_TASK_NOT_FOUND: ['找不到这个生成任务', '刷新首帧面板后重试。'],
   MEDIA_CANDIDATE_NOT_FOUND: ['找不到这个候选图', '刷新首帧面板后重选。'],
   MEDIA_CANDIDATE_NOT_SELECTABLE: ['该候选不可设为当前首帧', '刷新后选择最新成功的候选。'],
+  MEDIA_BATCH_NOT_FOUND: ['找不到这个批量任务', '刷新分镜列表后重试。'],
+  MEDIA_BATCH_ALREADY_RUNNING: ['已有批量首帧任务进行中', '等待完成或先取消后再发起新批次。'],
+  MEDIA_BATCH_NO_PENDING_SHOTS: [
+    '所选镜头当前世代均已有首帧',
+    '如需重新生成，请在镜头详情中单独发起。',
+  ],
 };
 
 /** 只按稳定 code 映射文案，绝不展示来自基础设施的 message。 */

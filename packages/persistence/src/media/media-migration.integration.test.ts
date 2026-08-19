@@ -174,7 +174,7 @@ const insertCandidate = (
 };
 
 describe('0009_media_assets_images.sql', () => {
-  it('空库—执行完整 migration—head 9 且四表/索引/trigger 登记', async () => {
+  it('空库—执行完整 migration—head 10 且五表/索引/trigger 登记', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const database = await openMigratedDatabase(root, 'media_clean.sqlite');
       try {
@@ -190,6 +190,7 @@ describe('0009_media_assets_images.sql', () => {
           { version: 7 },
           { version: 8 },
           { version: 9 },
+          { version: 10 },
         ]);
         const objects = database
           .prepare(
@@ -203,6 +204,7 @@ describe('0009_media_assets_images.sql', () => {
             'assets',
             'asset_versions',
             'image_candidates',
+            'media_generation_batches',
             'media_generation_tasks',
           ]),
         );
@@ -211,6 +213,8 @@ describe('0009_media_assets_images.sql', () => {
             'ix_asset_versions_asset',
             'ix_image_candidates_shot',
             'ix_image_candidates_generation',
+            'ix_media_batches_project_status',
+            'ix_media_tasks_batch',
             'ix_media_tasks_project_phase',
             'ux_image_candidate_selected',
           ]),
@@ -271,7 +275,7 @@ describe('0009_media_assets_images.sql', () => {
     });
   });
 
-  it('v8 库—升级到 9—既有资产图保留且新表可写', async () => {
+  it('v8 库—升级到 head 10—既有资产图保留且新表可写', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const database = await openMigratedDatabase(root, 'media_upgrade.sqlite', 8);
       try {
@@ -279,7 +283,7 @@ describe('0009_media_assets_images.sql', () => {
         applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 9 });
+        ).toEqual({ version: 10 });
         // v8 既有行在升级后原样保留。
         expect(
           database.prepare("SELECT id, lifecycle_status FROM shots WHERE id = 'shot_media'").get(),
@@ -287,6 +291,17 @@ describe('0009_media_assets_images.sql', () => {
         insertAsset(database, 'asset_upgrade');
         insertAssetVersion(database, 'assetv_upgrade', 'asset_upgrade', 1);
         insertCandidate(database, 'candidate_upgrade');
+        // 0010 新表可写：批次行落库 + 既有任务行 batch_id 保持 NULL 语义。
+        database
+          .prepare(
+            `INSERT INTO media_generation_batches
+             (id, project_id, idempotency_key, status, target_shot_ids_json,
+              pending_shot_ids_json, skipped_shot_ids_json, created_at, updated_at)
+             VALUES ('batch_upgrade', 'project_media', 'image-batch_u1', 'RUNNING',
+                     '["shot_media"]', '["shot_media"]', '[]', ?, ?)`,
+          )
+          .run(NOW, NOW);
+        expect(database.prepare('SELECT batch_id FROM media_generation_tasks').all()).toEqual([]);
         expect(database.pragma('foreign_key_check')).toEqual([]);
       } finally {
         database.close();
@@ -294,7 +309,7 @@ describe('0009_media_assets_images.sql', () => {
     });
   });
 
-  it('v8 受管理库—performManagedMigration 升级—先备份 schema v8 再到 head 9', async () => {
+  it('v8 受管理库—performManagedMigration 升级—先备份 schema v8 再到 head 10', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const migrations = await loadMigrationSet(MIGRATIONS);
       const paths = createManagedPaths(path.join(root, 'managed'));
@@ -318,7 +333,7 @@ describe('0009_media_assets_images.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 9 });
+        ).toEqual({ version: 10 });
       } finally {
         database.close();
       }

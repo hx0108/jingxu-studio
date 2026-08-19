@@ -64,6 +64,11 @@ export interface MediaTaskSchedulerDependencies {
   /** 候选图字节落盘（内容寻址，sha256 校验后才登记）。 */
   readonly fileStore: MediaFileStorePort;
   readonly imageModel: ImageModelPort;
+  /**
+   * 项目队列排空后的批次推进钩子（batch-first-frame-generation 任务 3.2）：
+   * 返回 true = 已为批次下一镜头建档（新任务已入列），排空循环继续。
+   */
+  readonly onProjectIdle?: (projectId: string) => Promise<boolean>;
   readonly mediaUnitOfWork: MediaUnitOfWorkPort;
   readonly newId: () => string;
   readonly nowMs: () => number;
@@ -469,7 +474,12 @@ export const createMediaTaskScheduler = (
       const tasks = await mediaUnitOfWork.run((media) => media.listUnfinishedTasks(projectId));
       if (stopped) return;
       const next = tasks[0];
-      if (next === undefined) return;
+      if (next === undefined) {
+        // 队列排空 ≠ 项目无事可做：RUNNING 批次在此惰性建档下一镜头（design D1-C）。
+        const progressed = await dependencies.onProjectIdle?.(projectId);
+        if (progressed === true) continue;
+        return;
+      }
       // 停滞护栏：同一任务连续驱动仍不清空即抛出（任务应总被推向终态）。
       if (next.id === lastTaskId) {
         repeats += 1;

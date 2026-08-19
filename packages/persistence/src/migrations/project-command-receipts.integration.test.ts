@@ -141,6 +141,7 @@ describe('0002 migration 资源集合', () => {
       { name: '0007_snapshot_tables_profile_ref.sql', version: 7 },
       { name: '0008_prompt_templates_shot_contract.sql', version: 8 },
       { name: '0009_media_assets_images.sql', version: 9 },
+      { name: '0010_media_generation_batches.sql', version: 10 },
     ]);
     expect(migrations[0]?.sha256).toBe(FROZEN_0001_SHA256);
     expect(migrations[1]?.sha256).toMatch(/^[a-f0-9]{64}$/u);
@@ -157,11 +158,12 @@ describe('0002 migration 资源集合', () => {
         '0007_snapshot_tables_profile_ref.sql',
         '0008_prompt_templates_shot_contract.sql',
         '0009_media_assets_images.sql',
+        '0010_media_generation_batches.sql',
       ]),
     );
   });
 
-  it('空库—应用完整集合—终态版本 9 且 command_receipts 登记对象存在', async () => {
+  it('空库—应用完整集合—终态版本 10 且 command_receipts 登记对象存在', async () => {
     await withMigratedDatabase((database) => {
       expect(
         database.prepare('SELECT version FROM schema_migrations ORDER BY version').all(),
@@ -175,6 +177,7 @@ describe('0002 migration 资源集合', () => {
         { version: 7 },
         { version: 8 },
         { version: 9 },
+        { version: 10 },
       ]);
       const objects = database
         .prepare(
@@ -205,7 +208,7 @@ describe('0002 migration 资源集合', () => {
         .all();
       expect(after).toEqual(before);
       expect(database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get()).toEqual({
-        count: 9,
+        count: 10,
       });
       database.close();
     });
@@ -404,7 +407,7 @@ describe('0002 受管理升级、备份与回滚', () => {
         .prepare(
           'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
         )
-        .run(10, '0010_future.sql', 'b'.repeat(64), NOW);
+        .run(11, '0011_future.sql', 'b'.repeat(64), NOW);
 
       const before = database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get();
       expect(() => inspectMigrationPlan(database, migrations)).toThrow('DATABASE_VERSION_TOO_NEW');

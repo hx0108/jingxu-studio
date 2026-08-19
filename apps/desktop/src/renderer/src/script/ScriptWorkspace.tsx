@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import type {
   AppErrorDto,
+  AppResultDto,
   JobSummaryDto,
+  MediaBatchViewDto,
   ScriptVersionDto,
   ScriptWorkspaceDto,
   StoryboardVersionSummaryDto,
@@ -14,11 +16,13 @@ import { ProviderSettings } from './ProviderSettings';
 import { DirtyLeaveDialog } from '../project/DirtyLeaveDialog';
 import {
   createScriptRequestId,
+  getImageClient,
   getJobClient,
   getScriptClient,
   rendererTransportError,
 } from './script-api';
 import { episodeScopeForStage, isTerminalJob } from './script-ui-policy';
+import { useStoryboardImageStates } from './use-storyboard-image-states';
 
 const STAGES = [
   ['CONCEPT', '故事概念'],
@@ -50,6 +54,61 @@ export const ScriptWorkspaceView = ({
   const [pending, setPending] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [pendingStage, setPendingStage] = useState<Stage | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
+  const imageStates = useStoryboardImageStates(projectId);
+
+  // 整集首帧批次命令（batch-first-frame 5.2）：发起=全量镜头（服务端当前世代跳过，
+  // design D3）；取消=仅未建档镜头（D6）；重试失败镜头=失败清单发起新批次（D2）。
+  const runBatchCommand = (run: () => Promise<AppResultDto<MediaBatchViewDto>>): void => {
+    if (batchBusy) return;
+    setBatchBusy(true);
+    setError(null);
+    void run()
+      .then((result) => {
+        if (result.ok) return imageStates.refresh();
+        setError(result.error);
+        return undefined;
+      })
+      .catch(() => {
+        setError(rendererTransportError());
+      })
+      .finally(() => {
+        setBatchBusy(false);
+      });
+  };
+
+  const generateFirstFrames = (): void => {
+    const shotIds = workspace?.storyboard.shots.map((shot) => shot.shotId) ?? [];
+    if (shotIds.length === 0) return;
+    runBatchCommand(() =>
+      getImageClient().generateCandidatesForShots({
+        projectId,
+        requestId: createScriptRequestId('image-batch-create'),
+        shotIds,
+      }),
+    );
+  };
+
+  const cancelBatch = (batchId: string): void => {
+    runBatchCommand(() =>
+      getImageClient().cancelBatch({
+        batchId,
+        projectId,
+        requestId: createScriptRequestId('image-batch-cancel'),
+      }),
+    );
+  };
+
+  const retryFailedShots = (shotIds: readonly string[]): void => {
+    if (shotIds.length === 0) return;
+    runBatchCommand(() =>
+      getImageClient().generateCandidatesForShots({
+        projectId,
+        requestId: createScriptRequestId('image-batch-retry'),
+        shotIds: [...shotIds],
+      }),
+    );
+  };
 
   const updateDirty = (next: boolean): void => {
     setDirty(next);
@@ -492,10 +551,13 @@ export const ScriptWorkspaceView = ({
         </section>
       </section>
       <StoryboardPanel
+        batchBusy={batchBusy}
         episodeTargetDurationSec={workspace.episode.targetDurationSec}
         generateHint={storyboardGenerateHint}
+        imageStates={imageStates.states}
         job={job}
-        projectId={projectId}
+        onBatchCancel={cancelBatch}
+        onBatchRetryFailed={retryFailedShots}
         onConfirm={() => {
           if (globalThis.confirm('确认当前整集分镜为 READY？')) {
             const currentStoryboard = workspace.storyboard.current;
@@ -522,12 +584,14 @@ export const ScriptWorkspaceView = ({
               else setError(result.error);
             });
         }}
+        onGenerateFirstFrames={generateFirstFrames}
         onRestore={(version) => {
           if (globalThis.confirm(`基于 v${String(version.versionNo)} 创建新的 DRAFT 整集？`)) {
             void performStoryboardCommand('restore', version);
           }
         }}
         pending={pending}
+        projectId={projectId}
         storyboard={workspace.storyboard}
       />
       <DirtyLeaveDialog

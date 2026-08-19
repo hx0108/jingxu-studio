@@ -44,7 +44,29 @@ const shotDocument = JSON.stringify({
   generation_constraints: { image_prompt: '雨巷中的少女' },
 });
 
-const workspaceSnapshot = {
+const shotOf = (index: number) => ({
+  sequence: index,
+  shotId: `shot_0000000${String(index)}`,
+  version: {
+    createdAt: NOW,
+    dialogueRenderMode: 'NARRATION_FIRST' as const,
+    document: shotDocument,
+    documentSha256: hash64(`doc_${String(index)}`),
+    externalParentVersionId: null,
+    formatProfileId: 'fp_1',
+    id: `scv_0000000${String(index)}`,
+    lineageResolutionStatus: 'LOCAL_VERIFIED' as const,
+    parentId: null,
+    sequence: index,
+    shotId: `shot_0000000${String(index)}`,
+    sourceInvocationId: null,
+    targetDurationSec: 8,
+    versionNo: 1,
+    versionStatus: 'READY' as const,
+  },
+});
+
+const workspaceOf = (shotCount: number) => ({
   episode: null,
   projectId: 'project_00000001',
   sourceInput: null,
@@ -62,33 +84,11 @@ const workspaceSnapshot = {
       targetDurationSec: 90,
       versionNo: 1,
     },
-    currentShots: [
-      {
-        sequence: 1,
-        shotId: 'shot_00000001',
-        version: {
-          createdAt: NOW,
-          dialogueRenderMode: 'NARRATION_FIRST' as const,
-          document: shotDocument,
-          documentSha256: hash64('doc'),
-          externalParentVersionId: null,
-          formatProfileId: 'fp_1',
-          id: 'scv_00000001',
-          lineageResolutionStatus: 'LOCAL_VERIFIED' as const,
-          parentId: null,
-          sequence: 1,
-          shotId: 'shot_00000001',
-          sourceInvocationId: null,
-          targetDurationSec: 8,
-          versionNo: 1,
-          versionStatus: 'READY' as const,
-        },
-      },
-    ],
+    currentShots: Array.from({ length: shotCount }, (_, i) => shotOf(i + 1)),
     history: [],
     historyTruncated: false,
   },
-};
+});
 
 const safeStorageFacade = {
   decryptString: (encrypted: Uint8Array) => String.fromCharCode(...encrypted),
@@ -116,14 +116,14 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const buildHarness = (writeEnabled = true): Harness => {
+const buildHarness = (writeEnabled = true, shotCount = 1): Harness => {
   const handlers = new Map<
     string,
     (event: IpcEvent, ...arguments_: readonly unknown[]) => Promise<unknown>
   >();
   const mediaRepository = new InMemoryMediaRepository();
   const workspaceQuery = {
-    getWorkspace: vi.fn(() => Promise.resolve(workspaceSnapshot)),
+    getWorkspace: vi.fn(() => Promise.resolve(workspaceOf(shotCount))),
     getVersionDocument: vi.fn(() => Promise.resolve(null)),
   };
   const repositories = {
@@ -170,10 +170,10 @@ const buildHarness = (writeEnabled = true): Harness => {
 };
 
 describe('createImageFeatureRegistration', () => {
-  it('注册边界—固定六 image 频道—READY 前统一 STARTUP_WRITE_BLOCKED', () => {
+  it('注册边界—固定九 image 频道—READY 前统一 STARTUP_WRITE_BLOCKED', () => {
     const harness = buildHarness(false);
     expect([...harness.handlers.keys()].sort()).toEqual(Object.values(IMAGE_IPC_CHANNELS).sort());
-    expect(harness.handlers.size).toBe(6);
+    expect(harness.handlers.size).toBe(9);
     expect(harness.registration.ensureRegistered()).toBe(false);
   });
 
@@ -278,4 +278,65 @@ describe('createImageFeatureRegistration', () => {
     ]);
     await harness.registration.stop();
   });
+
+  it(
+    '批次集成—整集排队两镜头—惰性串行建档至全部 COMPLETED—聚合视图收尾派生',
+    { timeout: 20_000 },
+    async () => {
+      const harness = buildHarness(true, 2);
+      expect(harness.registration.ensureRegistered()).toBe(true);
+
+      const created = (await harness.invoke(IMAGE_IPC_CHANNELS.generateCandidatesForShots, {
+        projectId: 'project_00000001',
+        requestId: 'request_batch_0001',
+        shotIds: ['shot_00000001', 'shot_00000002'],
+      })) as {
+        data: { batchId: string; members: unknown[]; status: string };
+        ok: boolean;
+      };
+      expect(created.ok).toBe(true);
+      expect(created.data.status).toBe('RUNNING');
+      expect(created.data.members.map((member) => (member as { shotId: string }).shotId)).toEqual([
+        'shot_00000001',
+        'shot_00000002',
+      ]);
+
+      // 排空钩子惰性建档：同批成员串行，最终批次收尾派生 COMPLETED。
+      await vi.waitFor(
+        () => {
+          expect(harness.mediaRepository.batches[0]?.status).toBe('COMPLETED');
+          expect(harness.mediaRepository.batches[0]?.pendingShotIds).toEqual([]);
+        },
+        { interval: 50, timeout: 15_000 },
+      );
+      // 两成员各 4 候选全部落 SUCCEEDED（Mock 档 SYNC 即成）。
+      expect(harness.mediaRepository.tasks).toHaveLength(2);
+      expect(harness.mediaRepository.tasks.every((task) => task.phase === 'COMPLETED')).toBe(true);
+      expect(harness.mediaRepository.candidates).toHaveLength(8);
+      expect(
+        harness.mediaRepository.candidates.every((candidate) => candidate.status === 'SUCCEEDED'),
+      ).toBe(true);
+
+      const states = (await harness.invoke(IMAGE_IPC_CHANNELS.listStoryboardImageStates, {
+        projectId: 'project_00000001',
+      })) as {
+        data: {
+          batches: { members: { phase: string | null; taskId: string | null }[]; status: string }[];
+          shots: { currentGenSucceededCount: number; shotId: string }[];
+        };
+        ok: boolean;
+      };
+      expect(states.ok).toBe(true);
+      const view = states.data.batches[0];
+      if (view === undefined) throw new Error('batch view missing');
+      expect(view.status).toBe('COMPLETED');
+      expect(view.members.every((member) => member.phase === 'COMPLETED' && member.taskId)).toBe(
+        true,
+      );
+      const counts = new Map(states.data.shots.map((shot) => [shot.shotId, shot]));
+      expect(counts.get('shot_00000001')?.currentGenSucceededCount).toBe(4);
+      expect(counts.get('shot_00000002')?.currentGenSucceededCount).toBe(4);
+      await harness.registration.stop();
+    },
+  );
 });
