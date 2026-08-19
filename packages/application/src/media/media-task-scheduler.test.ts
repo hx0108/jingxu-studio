@@ -30,7 +30,11 @@ type SubmitStep =
   | Readonly<{ kind: 'HANG' }>;
 
 class FakeModelError extends Error {
-  public readonly evidence: Readonly<{ bodyText: string; httpStatus: number; truncated: boolean }> | null;
+  public readonly evidence: Readonly<{
+    bodyText: string;
+    httpStatus: number;
+    truncated: boolean;
+  }> | null;
   public readonly normalized: NormalizedModelError;
 
   public constructor(
@@ -466,8 +470,8 @@ describe('MediaTaskScheduler 调用证据（media-invocation-evidence）', () =>
       expect(row.rawResponseSha256).toBe(
         hash64(`{"id":"${invocationId}","usage":{"generated_images":1}}`),
       );
+      expect(typeof row.finishedAt).toBe('string');
       expect(row).toMatchObject({
-        finishedAt: expect.any(String),
         providerRequestId: invocationId,
         providerReportedGeneratedImages: 1,
         responseHttpStatus: 200,

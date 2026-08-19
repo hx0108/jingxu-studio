@@ -382,14 +382,11 @@ export const createMediaTaskScheduler = (
         return !stop;
       }
       if (status.state === 'SUCCEEDED') {
-        return settleDownload(
-          task,
-          candidate,
-          submitRef,
-          status.result,
-          signal,
-          { providerRequestId: providerTaskId, raw: null, usage: status.usage },
-        );
+        return settleDownload(task, candidate, submitRef, status.result, signal, {
+          providerRequestId: providerTaskId,
+          raw: null,
+          usage: status.usage,
+        });
       }
       if (status.state === 'FAILED') {
         return writeCandidateOutcome(task.projectId, task.id, ({ media }) =>

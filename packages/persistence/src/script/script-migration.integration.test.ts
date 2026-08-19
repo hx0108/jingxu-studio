@@ -236,7 +236,10 @@ describe('0003_script_version_receipts.sql', () => {
         database.close();
       }
     });
-  }, 15_000);
+    // 120 行播种 + 全量升级 v3→head 的压力对账：单跑 ~5s，全量套件并行磁盘竞争下可到
+    // 15s+（2026-08-20 两轮实录 15.7/18.7s 超时、单跑稳定过），被测属性是对账正确性
+    // 而非耗时，故放宽到 60s。
+  }, 60_000);
 
   it('已应用 migration checksum 漂移—检查计划—拒绝且数据库不变', async () => {
     await withSqliteTestContext(async ({ root }) => {

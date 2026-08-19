@@ -45,7 +45,7 @@ export class InMemoryMediaInvocationRepository implements MediaInvocationReposit
 
   public finishTerminal(id: string, evidence: MediaInvocationTerminalEvidence): Promise<boolean> {
     const row = this.invocations.find((entry) => entry.id === id);
-    if (row === undefined || row.status !== 'STARTED') return Promise.resolve(false);
+    if (row?.status !== 'STARTED') return Promise.resolve(false);
     Object.assign(row, {
       errorCode: evidence.errorCode ?? null,
       finishedAt: evidence.finishedAt,

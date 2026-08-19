@@ -58,7 +58,11 @@ class SeedreamAdapterError extends Error {
    */
   public constructor(
     public readonly normalized: NormalizedModelError,
-    public readonly evidence: ModelCallEvidence = { bodyText: null, httpStatus: null, truncated: false },
+    public readonly evidence: ModelCallEvidence = {
+      bodyText: null,
+      httpStatus: null,
+      truncated: false,
+    },
   ) {
     super(normalized.code);
     this.name = 'SeedreamAdapterError';
@@ -227,7 +231,11 @@ export class SeedreamImageModelAdapter implements ImageModelPort {
       });
       // 先读体再判错：非 2xx 的原始 body 是限流/风控复盘唯一证据（design D5）。
       const { bodyText, truncated } = await readBodyCapped(response);
-      const raw: ImageRawResponse = Object.freeze({ bodyText, httpStatus: response.status, truncated });
+      const raw: ImageRawResponse = Object.freeze({
+        bodyText,
+        httpStatus: response.status,
+        truncated,
+      });
       if (!response.ok) {
         throw new SeedreamAdapterError(this.#normalizeStatus(response.status), raw);
       }

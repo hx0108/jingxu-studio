@@ -103,12 +103,10 @@ describe('MockImageModelAdapter', () => {
     const failing = new MockImageModelAdapter({
       steps: [stepError('MODEL_RATE_LIMITED'), stepError('MODEL_PROVIDER_ERROR')],
     });
-    const rateError = await failing
-      .submit(request('invocation_rate'), freshSignal())
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
+    const rateError = await failing.submit(request('invocation_rate'), freshSignal()).then(
+      () => null,
+      (error: unknown) => error,
+    );
     expect(failing.evidenceOf(rateError)).toEqual({
       bodyText: JSON.stringify({
         error: { code: 'MODEL_RATE_LIMITED', invocation: 'invocation_rate' },
@@ -116,12 +114,10 @@ describe('MockImageModelAdapter', () => {
       httpStatus: 429,
       truncated: false,
     });
-    const providerError = await failing
-      .submit(request('invocation_provider'), freshSignal())
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
+    const providerError = await failing.submit(request('invocation_provider'), freshSignal()).then(
+      () => null,
+      (error: unknown) => error,
+    );
     expect(failing.evidenceOf(providerError)).toMatchObject({ httpStatus: 500 });
     // 无响应的本地失败（取消/超时/步骤耗尽）与非本适配器错误证据为 null。
     const cancelled = new MockImageModelAdapter({ steps: [{ kind: 'SYNC' }] });

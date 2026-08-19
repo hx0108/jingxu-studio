@@ -295,12 +295,10 @@ describe('SeedreamImageModelAdapter', () => {
         Promise.resolve(new Response(rateBody, { status: 429 })),
       ),
     });
-    const caught = await adapter
-      .submit(request(), new AbortController().signal)
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
+    const caught = await adapter.submit(request(), new AbortController().signal).then(
+      () => null,
+      (error: unknown) => error,
+    );
     expect(adapter.normalizeError(caught)).toMatchObject({ code: 'MODEL_RATE_LIMITED' });
     // normalized（Renderer 可达路径）只含稳定码，不含 Provider 原文。
     expect(JSON.stringify(adapter.normalizeError(caught))).not.toContain('RateLimitExceeded');
@@ -318,12 +316,10 @@ describe('SeedreamImageModelAdapter', () => {
         Promise.resolve(new Response('x'.repeat(65_537), { status: 500 })),
       ),
     });
-    const truncError = await truncating
-      .submit(request(), new AbortController().signal)
-      .then(
-        () => null,
-        (error: unknown) => error,
-      );
+    const truncError = await truncating.submit(request(), new AbortController().signal).then(
+      () => null,
+      (error: unknown) => error,
+    );
     expect(truncating.evidenceOf(truncError)).toEqual({
       bodyText: 'x'.repeat(65_536),
       httpStatus: 500,
