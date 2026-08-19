@@ -19,9 +19,9 @@
 
 - [x] 3.1 E2E（mock 档）断言：整集批次跑完后 `media_model_invocations` 行数=候选数（SUBMIT+DOWNLOAD）、终态候选 ref 全部可 JOIN、失败矩阵令牌下错误原文落 blob → verify: E2E 全绿
 - [x] 3.2 `print-real-probe-invocations.mjs` 增媒体域联查段（model/segment/status/http/error_code/usage/耗时）→ verify: node 直跑 smoke 过
-- [ ] 3.3 全量门禁绿（unit/contract/integration 各 vitest 套件 `node_modules/.bin` 针对性跑法；tsc -b；eslint --max-warnings=0；prettier）→ verify: 全绿无跳过（跳过须具名说明）
+- [x] 3.3 全量门禁绿（unit/contract/integration 各 vitest 套件 `node_modules/.bin` 针对性跑法；tsc -b；eslint --max-warnings=0；prettier）→ verify: 全绿无跳过（跳过须具名说明）
 
 ## 4. 真实联调与收尾
 
-- [ ] 4.1 真实 Seedream 探针一次（既有 `real-batch-seedream-probe.e2e.spec.ts`，复用凭据/复用口径）+ SQL 断言：每任务 4 条 SUBMIT 行（SUCCEEDED 行 generated_images=1、blob 非空、provider_request_id 非空）、DOWNLOAD 行 sha256=落盘 sha256、候选 ref 非悬空 → verify: 探针绿 + 断言输出留档 README
+- [ ] 4.1 真实 Seedream 探针一次（既有 `real-batch-seedream-probe.e2e.spec.ts`，复用凭据/复用口径）+ SQL 断言（`verify-real-media-evidence.mjs`）：每任务 SUBMIT 行数=候选数（SUCCEEDED 行 generated_images=1、blob 非空；provider_request_id 以 Provider 实际返回为准，真实 Seedream 同步响应无顶层 id → null 属实）、DOWNLOAD 行 sha256=落盘 sha256、候选 ref 非悬空 → verify: 探针绿 + 断言输出留档 README
 - [ ] 4.2 spec delta（屏蔽 Requirement 去掉证据句 + 新增「媒体调用证据必须真实落库且与候选终态原子提交」Requirement 含四场景）+ README 同步 + `openspec validate --strict` 过 + 归档 → verify: validate 零错、README 事实与门禁输出一致

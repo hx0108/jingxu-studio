@@ -238,11 +238,18 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
       // 每轮点击前把现存批次全部标记已知：「新批」= 本轮点击后才出现的批。
       // 续跑项目携带历史终态批，空集起判会把它们误当本轮新批（14:03 实录踩坑）。
       for (const existing of pre.batches) knownBatchIds.add(existing.batchId);
-      if (attempt > 0) await sleep(60_000);
-      if (attempt === 0) {
-        await page.getByRole('button', { name: '为整集生成首帧' }).click();
-      } else {
-        await page.getByRole('button', { name: '重试失败镜头（新批次）' }).click();
+      // 续跑实录（2026-08-20）：重启恢复自动续跑中断批次的 pending 队列（设计内行为），
+      // 活跃批存在时两按钮均禁用、点击必超时——收养该批为本轮批次（从已知集合除名，
+      // 其终态转换即视作本轮新批），等其自然收敛后继续循环，不点击。
+      const activeBatch = pre.batches.find((batch) => batch.status === 'RUNNING');
+      if (activeBatch !== undefined) knownBatchIds.delete(activeBatch.batchId);
+      if (activeBatch === undefined) {
+        if (attempt > 0) await sleep(60_000);
+        if (attempt === 0) {
+          await page.getByRole('button', { name: '为整集生成首帧' }).click();
+        } else {
+          await page.getByRole('button', { name: '重试失败镜头（新批次）' }).click();
+        }
       }
       // 终态=显式 COMPLETED/PARTIAL_COMPLETED：批行创建后先落 PENDING 再转 RUNNING，
       // 「≠RUNNING 且 ≠CANCELLED」会把 PENDING 窗口误判为终态（14:39 实录竞态）。
@@ -423,10 +430,11 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
         page.locator('.shot-first-frame-badge', { hasText: '首帧就绪 4 张' }),
       ).toHaveCount(shotCount);
     } else if (finalStates !== null) {
-      // 续跑按快照逐镜头断言（真实限流留下的 1/4 镜头如实显示 1 张）。
+      // 续跑按快照逐镜头断言（真实限流留下的 1/4 镜头如实显示 1 张）。`#1` 子串会命中
+      // `#10`（10 镜头题材实录 16:0x strict violation），以 \b 词界锁尾。
       for (const [index, shot] of finalStates.shots.entries()) {
         const badge = page
-          .locator('.shot-card', { hasText: `#${String(index + 1)}` })
+          .locator('.shot-card', { hasText: new RegExp(`#${String(index + 1)}\\b`) })
           .first()
           .locator('.shot-first-frame-badge');
         await expect(badge).toContainText(`首帧就绪 ${String(shot.currentGenSucceededCount)} 张`);
@@ -448,7 +456,7 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
     }
     await expect(page.getByRole('button', { name: '取消剩余镜头' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '重试失败镜头（新批次）' })).toHaveCount(0);
-    await page.locator('.shot-card', { hasText: '#1' }).click();
+    await page.locator('.shot-card', { hasText: /#1\b/ }).click();
     await page.getByRole('heading', { name: '首帧候选 · 镜头 #1' }).waitFor();
     await page.waitForFunction(
       () => {

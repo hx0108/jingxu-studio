@@ -54,6 +54,8 @@ interface FakePortOptions {
   readonly pollPlan?: 'SUCCEEDED' | 'ALWAYS_PENDING' | 'FAILED';
   /** download 前置闸门（挂起以制造迟到下载竞态）。 */
   readonly downloadGate?: Promise<void>;
+  /** 非空时 download 段抛该码归一错误（真实实录：结果 URL 拉取失败 → MODEL_RESULT_UNAVAILABLE，无响应体）。 */
+  readonly downloadFailureCode?: NormalizedModelError['code'];
 }
 
 /** 顺序记录 submit/poll/download，供「先留证再轮询」等次序断言。 */
@@ -169,6 +171,15 @@ class FakeImageModel implements ImageModelPort {
     _signal: AbortSignal,
   ): Promise<{ bytes: Uint8Array; mimeType: string }> {
     if (this.options.downloadGate !== undefined) await this.options.downloadGate;
+    if (this.options.downloadFailureCode !== undefined) {
+      throw new FakeModelError({
+        code: this.options.downloadFailureCode,
+        detail: null,
+        providerRequestId: null,
+        retryable: false,
+        userAction: null,
+      });
+    }
     this.order.push(`download:${resultRef.url}`);
     return { bytes: Uint8Array.from([1, 2, 3, 4]), mimeType: 'image/png' };
   }
@@ -526,6 +537,41 @@ describe('MediaTaskScheduler 调用证据（media-invocation-evidence）', () =>
       invocationEvidenceRef: 'inv_1',
       status: 'FAILED',
     });
+  });
+
+  it('下载段失败—同事务三写：候选 FAILED + DOWNLOAD 行 FAILED + SUBMIT 行按成功收尾留原文/usage', async () => {
+    // 2026-08-20 真实联调实录：submit 成功（resultUrl 在手）后下载失败——修复前
+    // SUBMIT 行停留 STARTED、成功响应原文/usage 永久丢失（design D4 修订）。
+    const fixture = buildFixture({ downloadFailureCode: 'MODEL_RESULT_UNAVAILABLE' });
+    await seedTask(fixture.repository);
+    await fixture.scheduler.run('project_1');
+    const rows = fixture.invocations.invocations;
+    expect(rows).toHaveLength(8); // 4 SUBMIT + 4 DOWNLOAD（全部候选到下载段后失败）
+    const submitRows = rows.filter((row) => row.segmentKind === 'SUBMIT');
+    const downloadRows = rows.filter((row) => row.segmentKind === 'DOWNLOAD');
+    for (const row of submitRows) {
+      expect(row.status, `SUBMIT ${row.id} 应按成功收尾`).toBe('SUCCEEDED');
+      expect(new TextDecoder().decode(row.rawResponseBlob ?? new Uint8Array())).toBe(
+        `{"id":"${row.id}","usage":{"generated_images":1}}`,
+      );
+      expect(row.providerReportedGeneratedImages).toBe(1);
+    }
+    for (const row of downloadRows) {
+      expect(row).toMatchObject({
+        errorCode: 'MODEL_RESULT_UNAVAILABLE',
+        rawResponseBlob: null,
+        status: 'FAILED',
+      });
+    }
+    for (const candidate of fixture.repository.candidates) {
+      expect(candidate).toMatchObject({
+        errorCode: 'MODEL_RESULT_UNAVAILABLE',
+        status: 'FAILED',
+      });
+      expect(submitRows.some((row) => row.id === candidate.invocationEvidenceRef)).toBe(true);
+    }
+    // 统一失败口径：候选级全败时任务相位仍 COMPLETED（batch-first-frame 拍板）。
+    expect(fixture.repository.tasks[0]).toMatchObject({ phase: 'COMPLETED' });
   });
 
   it('取消—在飞候选证据行停留 STARTED 不收尾—崩溃窗口如实保留', async () => {

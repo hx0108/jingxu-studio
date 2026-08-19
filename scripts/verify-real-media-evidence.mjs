@@ -4,9 +4,13 @@
 //   B. 终态候选 invocation_evidence_ref 逐行可 JOIN 到 SUBMIT 行（无悬空）；
 //   C. SUBMIT SUCCEEDED：blob 非空、generated_images=1（provider_request_id 可空：
 //      真实 Seedream 同步响应无顶层 id，非空数进 summary）；
-//   D. SUBMIT FAILED：error_code 非空且原文落 blob（真实 429/5xx JSON）；
-//   E. DOWNLOAD SUCCEEDED：blob 恒 NULL、raw_response_sha256=候选落盘 file_sha256；
-//   F. 全部行终态（取消/停机残留 STARTED 属实况，探针收敛跑不得出现）。
+//   D. SUBMIT FAILED：error_code 非空；原文落 blob——传输级错误（MODEL_NETWORK_ERROR/
+//      MODEL_TIMEOUT，请求未获响应）无原文可落，blob NULL 属实，计入 summary；
+//   E. DOWNLOAD 行：SUCCEEDED 者 blob 恒 NULL、raw_response_sha256=候选落盘 file_sha256；
+//      FAILED 者（结果 URL 拉取失败）须带 error_code 且 blob 恒 NULL；
+//   F. 全部行终态（豁免：在飞/中断任务的崩溃窗口残留；修复前「下载段失败未收尾
+//      SUBMIT 行」的历史行——模式=SUBMIT STARTED+候选终态 FAILED+同候选 DOWNLOAD
+//      FAILED 行，修复后不可能再现，计入 summary.downloadFailureResidue）。
 // 用法：node scripts/verify-real-media-evidence.mjs --project <projectId> [--db <sqlite 路径>]
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -70,7 +74,7 @@ try {
     .all(...taskIds);
   const downloadRows = database
     .prepare(
-      `SELECT candidate_id, status, raw_response_blob, raw_response_sha256
+      `SELECT candidate_id, status, error_code, raw_response_blob, raw_response_sha256
        FROM media_model_invocations
        WHERE segment_kind = 'DOWNLOAD' AND media_task_id IN (${placeholders})`,
     )
@@ -123,6 +127,17 @@ try {
   // C/D/F. SUBMIT 行终态内容。provider_request_id 以 Provider 实际返回为准：真实
   // Seedream 图片同步接口响应无顶层 id（2026-08-20 实录 top keys=model/created/data/
   // usage），该列记 null 属实，非空数计入 summary。
+  const noBodyErrorCodes = new Set(['MODEL_NETWORK_ERROR', 'MODEL_TIMEOUT']);
+  const downloadFailedCandidates = new Set(
+    downloadRows.filter((row) => row.status === 'FAILED').map((row) => row.candidate_id),
+  );
+  const terminalFailedCandidates = new Set(
+    candidates
+      .filter((candidate) => candidate.status === 'FAILED')
+      .map((candidate) => candidate.id),
+  );
+  let downloadFailureResidue = 0;
+  let noBodyFailures = 0;
   let startedResidue = 0;
   for (const row of submitRows) {
     if (row.status === 'SUCCEEDED') {
@@ -131,8 +146,20 @@ try {
         violations.push(`SUBMIT_USAGE:${row.id}:${row.provider_reported_generated_images}`);
       }
     } else if (row.status === 'FAILED') {
-      if (row.error_code === null) violations.push(`SUBMIT_NO_ERROR_CODE:${row.id}`);
-      if (row.raw_response_blob === null) violations.push(`SUBMIT_FAILURE_NO_BLOB:${row.id}`);
+      if (row.error_code === null) {
+        violations.push(`SUBMIT_NO_ERROR_CODE:${row.id}`);
+      } else if (row.raw_response_blob === null && noBodyErrorCodes.has(row.error_code)) {
+        noBodyFailures += 1;
+      } else if (row.raw_response_blob === null) {
+        violations.push(`SUBMIT_FAILURE_NO_BLOB:${row.id}:${row.error_code}`);
+      }
+    } else if (
+      downloadFailedCandidates.has(row.candidate_id) &&
+      terminalFailedCandidates.has(row.candidate_id)
+    ) {
+      // 修复前「下载段失败未收尾 SUBMIT 行」历史行（design D4 2026-08-20 修订前的
+      // 真实产物）：候选已因下载失败终态、SUBMIT 行停留 STARTED——如实保留不判违规。
+      downloadFailureResidue += 1;
     } else if (exemptTaskIds(row.media_task_id)) {
       startedResidue += 1;
     } else {
@@ -140,26 +167,32 @@ try {
     }
   }
 
-  // E. DOWNLOAD 轻量行：blob 恒 NULL、sha256 与候选落盘哈希一致。
+  // E. DOWNLOAD 轻量行：blob 恒 NULL；SUCCEEDED 者 sha256 与候选落盘哈希一致，
+  // FAILED 者（结果 URL 拉取失败）须带 error_code。
   const fileShaOf = new Map(candidates.map((candidate) => [candidate.id, candidate.file_sha256]));
   for (const row of downloadRows) {
-    if (row.status !== 'SUCCEEDED') {
-      violations.push(`DOWNLOAD_NOT_SUCCEEDED:${row.candidate_id}:${row.status}`);
-      continue;
-    }
     if (row.raw_response_blob !== null)
       violations.push(`DOWNLOAD_BLOB_NOT_NULL:${row.candidate_id}`);
-    if (row.raw_response_sha256 !== fileShaOf.get(row.candidate_id)) {
-      violations.push(`DOWNLOAD_SHA_MISMATCH:${row.candidate_id}`);
+    if (row.status === 'FAILED') {
+      if (row.error_code === null) violations.push(`DOWNLOAD_NO_ERROR_CODE:${row.candidate_id}`);
+    } else if (row.status === 'SUCCEEDED') {
+      if (row.raw_response_sha256 !== fileShaOf.get(row.candidate_id)) {
+        violations.push(`DOWNLOAD_SHA_MISMATCH:${row.candidate_id}`);
+      }
+    } else {
+      violations.push(`DOWNLOAD_NOT_TERMINAL:${row.candidate_id}:${row.status}`);
     }
   }
 
   const summary = {
     activeTasks: activeTaskIds.size,
     candidates: candidates.length,
+    downloadFailureResidue,
     downloadRows: downloadRows.length,
+    failedDownloads: downloadRows.filter((row) => row.status === 'FAILED').length,
     failedSubmits: submitRows.filter((row) => row.status === 'FAILED').length,
     interruptedTasks: interruptedTaskIds.size,
+    noBodyFailures,
     providerRequestIds: submitRows.filter((row) => row.provider_request_id !== null).length,
     startedResidue,
     succeededCandidates: candidates.filter((candidate) => candidate.status === 'SUCCEEDED').length,

@@ -66,7 +66,7 @@ CREATE INDEX idx_media_invocations_created ON media_model_invocations(created_at
   1. 段前短事务插 STARTED（含请求快照与 sha256）——submit 段插在 `runSegment` 前；download 段与 `markTaskDownloading` 同事务插。
   2. 网络段在事务外；响应后（成功或归一失败）在**候选终态同一事务**内 `finishTerminal`。
 - 成功路径一笔事务三写：`completeCandidateSucceeded` + SUBMIT 行 finishTerminal(SUCCEEDED, 响应/usage) + DOWNLOAD 行 finishTerminal(SUCCEEDED)。
-- 失败路径（`onSegmentFailure` Provider 归一分支）：`completeCandidateFailed` + 该段证据行 finishTerminal(FAILED, error_code + 原文) 同事务。
+- 失败路径（`onSegmentFailure` Provider 归一分支）：`completeCandidateFailed` + 该段证据行 finishTerminal(FAILED, error_code + 原文) 同事务。【2026-08-20 真实联调修订：下载段失败时 submit 段实际已成功（resultUrl 在手），只收 DOWNLOAD 行会把成功 submit 的响应原文/usage 永久丢失——下载段失败改为同事务三写：候选 FAILED + SUBMIT 行 finishTerminal(SUCCEEDED, raw/usage) + DOWNLOAD 行 FAILED；submit 段失败仍为两写。真实实录：task 1657de32 候选 4aa14454 下载 MODEL_RESULT_UNAVAILABLE，修复前 SUBMIT 行 c5d73dfb 停留 STARTED 且 blob/usage 全空。】
 - 取消/持久化异常/停机分支不写候选也不收尾证据行——行停留 STARTED 如实反映中断（崩溃窗口证据，恢复语义零改动，仍不自动重发）。
 - 端口形态：`MediaUnitOfWorkPort.run` 回调从 `(media)` 改为 `(repos: MediaRepositories)`，`MediaRepositories = { media, invocations }`（沿 JobRepositories 先例）。调度器/服务层全部调用点机械改为解构；SQLite 与内存两实现 + 组合根同步。
 

@@ -111,6 +111,13 @@ const findSubmitRowId = (
 ): string | null =>
   rows.find((row) => row.candidateId === candidateId && row.segmentKind === 'SUBMIT')?.id ?? null;
 
+/** submit 段成功结果证据（D5 raw + usage；SUBMIT 行按 SUCCEEDED 收尾的载荷）。 */
+type SubmitOutcomeEvidence = Readonly<{
+  providerRequestId: string | null;
+  raw: ImageRawResponse | null;
+  usage: ImageGenerationUsage;
+}>;
+
 export const createMediaTaskScheduler = (
   dependencies: MediaTaskSchedulerDependencies,
 ): MediaTaskScheduler => {
@@ -197,6 +204,25 @@ export const createMediaTaskScheduler = (
   const isCancelled = (caught: unknown): boolean =>
     caught instanceof Error && caught.name === 'AbortError';
 
+  /** SUBMIT 行按成功收尾（raw/usage 落列）——成功三写与下载段失败补收尾共用。 */
+  const finishSubmitSucceeded = async (
+    repos: MediaRepositories,
+    submitRowId: string,
+    outcome: SubmitOutcomeEvidence,
+  ): Promise<void> => {
+    await repos.invocations.finishTerminal(submitRowId, {
+      status: 'SUCCEEDED',
+      finishedAt: new Date(dependencies.nowMs()).toISOString(),
+      providerRequestId: outcome.providerRequestId,
+      providerReportedGeneratedImages: outcome.usage.generatedImages,
+      providerReportedOutputTokens: outcome.usage.outputTokens,
+      rawResponseBlob: outcome.raw === null ? null : encodeUtf8(outcome.raw.bodyText),
+      rawResponseSha256: outcome.raw === null ? null : dependencies.hashText(outcome.raw.bodyText),
+      rawResponseTruncated: outcome.raw?.truncated ?? false,
+      responseHttpStatus: outcome.raw?.httpStatus ?? null,
+    });
+  };
+
   /** 段失败归一处理。返回 true = 停止驱动该任务；false = 继续兄弟候选。 */
   const onSegmentFailure = async (
     projectId: string,
@@ -205,6 +231,7 @@ export const createMediaTaskScheduler = (
     submitRowId: string,
     segmentRowId: string | null,
     caught: unknown,
+    submitOutcome?: SubmitOutcomeEvidence,
   ): Promise<boolean> => {
     if (persistenceMarkerOf(caught) !== null || isCancelled(caught)) {
       // 持久化/完整性标记或取消：任务级停机，不写候选，证据行停留 STARTED 如实。
@@ -217,7 +244,7 @@ export const createMediaTaskScheduler = (
       return true;
     }
     // Provider 归一化错误：候选级失败，同轮其余候选继续（spec 不变式）；
-    // 失败段证据行与候选终态同一事务收尾（design D4 失败两写，原文入 blob）。
+    // 失败段证据行与候选终态同一事务收尾（design D4，原文入 blob）。
     const evidence = dependencies.imageModel.evidenceOf(caught);
     await writeCandidateOutcome(projectId, taskId, async (repos) => {
       await repos.media.completeCandidateFailed(candidateId, {
@@ -235,6 +262,12 @@ export const createMediaTaskScheduler = (
             evidence?.bodyText == null ? null : dependencies.hashText(evidence.bodyText),
           rawResponseTruncated: evidence?.truncated ?? false,
         });
+      }
+      if (submitOutcome !== undefined) {
+        // 下载段失败补收尾（2026-08-20 真实联调修订）：submit 段实际已成功
+        // （resultUrl 在手），同一事务按 SUCCEEDED 落 raw/usage——否则成功响应
+        // 证据随下载失败永久丢失。
+        await finishSubmitSucceeded(repos, submitRowId, submitOutcome);
       }
     });
     return false;
@@ -257,11 +290,7 @@ export const createMediaTaskScheduler = (
     submitRef: string,
     result: ImageResultRef,
     signal: AbortSignal,
-    submitOutcome: Readonly<{
-      providerRequestId: string | null;
-      raw: ImageRawResponse | null;
-      usage: ImageGenerationUsage;
-    }>,
+    submitOutcome: SubmitOutcomeEvidence,
   ): Promise<boolean> => {
     // D4 第一段：DOWNLOAD 证据行与相位推进同一短事务插入（快照=D2 口径）。
     const downloadInvocationId = dependencies.newId();
@@ -299,7 +328,8 @@ export const createMediaTaskScheduler = (
       });
     } catch (caught) {
       // onSegmentFailure 语义为「true=停机」；本函数返回「true=继续」，需取反。
-      // 下载段失败收 DOWNLOAD 行；SUBMIT 行停 STARTED 如实（design D4）。
+      // 下载段失败同事务三写（design D4 2026-08-20 修订）：候选 FAILED + DOWNLOAD
+      // 行 FAILED + SUBMIT 行按成功收尾（submit 实际已成功，raw/usage 不丢失）。
       const stop = await onSegmentFailure(
         task.projectId,
         task.id,
@@ -307,6 +337,7 @@ export const createMediaTaskScheduler = (
         await submitRowIdOf(task.id, candidate.id, submitRef),
         downloadInvocationId,
         caught,
+        submitOutcome,
       );
       return !stop;
     }
@@ -327,19 +358,7 @@ export const createMediaTaskScheduler = (
         width: result.width,
       });
       if (submitRowId !== null) {
-        await repos.invocations.finishTerminal(submitRowId, {
-          status: 'SUCCEEDED',
-          finishedAt: new Date(dependencies.nowMs()).toISOString(),
-          providerRequestId: submitOutcome.providerRequestId,
-          providerReportedGeneratedImages: submitOutcome.usage.generatedImages,
-          providerReportedOutputTokens: submitOutcome.usage.outputTokens,
-          rawResponseBlob:
-            submitOutcome.raw === null ? null : encodeUtf8(submitOutcome.raw.bodyText),
-          rawResponseSha256:
-            submitOutcome.raw === null ? null : dependencies.hashText(submitOutcome.raw.bodyText),
-          rawResponseTruncated: submitOutcome.raw?.truncated ?? false,
-          responseHttpStatus: submitOutcome.raw?.httpStatus ?? null,
-        });
+        await finishSubmitSucceeded(repos, submitRowId, submitOutcome);
       }
       await repos.invocations.finishTerminal(downloadInvocationId, {
         status: 'SUCCEEDED',
