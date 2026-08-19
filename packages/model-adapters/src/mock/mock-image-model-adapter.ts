@@ -3,9 +3,11 @@ import type {
   ImageDownload,
   ImageGenerationRequest,
   ImageModelPort,
+  ImageRawResponse,
   ImageResultRef,
   ImageTaskStatus,
   ImageTaskSubmission,
+  ModelCallEvidence,
   ModelErrorCode,
   NormalizedModelError,
 } from '@jingxu/application';
@@ -34,11 +36,17 @@ export interface MockImageModelAdapterOptions {
 
 export class MockImageModelError extends Error {
   public readonly normalized: NormalizedModelError;
+  /** 确定性原始响应证据（main-only 留证通道）；无响应的本地失败为全 null。 */
+  public readonly evidence: ModelCallEvidence;
 
-  public constructor(normalized: NormalizedModelError) {
+  public constructor(
+    normalized: NormalizedModelError,
+    evidence: ModelCallEvidence = { bodyText: null, httpStatus: null, truncated: false },
+  ) {
     super(normalized.detail ?? normalized.code);
     this.name = 'MockImageModelError';
     this.normalized = normalized;
+    this.evidence = evidence;
   }
 }
 
@@ -198,6 +206,30 @@ const defaultWait = async (milliseconds: number, signal: AbortSignal): Promise<v
 
 const MOCK_USAGE = Object.freeze({ generatedImages: 1, outputTokens: null });
 
+/** 确定性成功原文：镜像 Seedream 同步响应结构（证据行/E2E 断言可直接 JSON.parse）。 */
+const mockSyncRawOf = (
+  request: ImageGenerationRequest,
+  url: string,
+  providerRequestId: string,
+): ImageRawResponse =>
+  Object.freeze({
+    bodyText: JSON.stringify({
+      data: [{ size: `${String(request.size.width)}x${String(request.size.height)}`, url }],
+      id: providerRequestId,
+      usage: { generated_images: 1, output_tokens: null },
+    }),
+    httpStatus: 200,
+    truncated: false,
+  });
+
+/** 确定性失败原文（同 invocationId+code 跨进程稳定）：限流记 429，其余 500。 */
+const mockErrorEvidenceOf = (invocationId: string, code: ModelErrorCode): ModelCallEvidence =>
+  Object.freeze({
+    bodyText: JSON.stringify({ error: { code, invocation: invocationId } }),
+    httpStatus: code === 'MODEL_RATE_LIMITED' ? 429 : 500,
+    truncated: false,
+  });
+
 /**
  * 只用于确定性测试的 ImageModelPort 实现。submit 消费声明式步骤序列，
  * download 从 mock-image:// URL 本地重放确定性 PNG——不读取网络、凭据或用户目录。
@@ -242,7 +274,10 @@ export class MockImageModelAdapter implements ImageModelPort {
       await this.#wait(step.afterMs ?? 0, signal);
     }
     if (step.kind === 'ERROR') {
-      throw new MockImageModelError(step.error);
+      throw new MockImageModelError(
+        step.error,
+        mockErrorEvidenceOf(request.invocationId, step.error.code),
+      );
     }
     if (step.kind === 'TIMEOUT') {
       throw new MockImageModelError(createMockModelError('MODEL_TIMEOUT'));
@@ -262,6 +297,7 @@ export class MockImageModelAdapter implements ImageModelPort {
     }
     return Object.freeze({
       kind: 'SYNC',
+      raw: mockSyncRawOf(request, url, providerRequestId),
       result: this.#resultRef(request, url, providerRequestId),
       usage: MOCK_USAGE,
     });
@@ -332,6 +368,10 @@ export class MockImageModelAdapter implements ImageModelPort {
       retryable: false,
       userAction: null,
     });
+  }
+
+  public evidenceOf(error: unknown): ModelCallEvidence | null {
+    return error instanceof MockImageModelError ? error.evidence : null;
   }
 
   #resultRef(

@@ -82,6 +82,63 @@ describe('MockImageModelAdapter', () => {
     }
   });
 
+  it('证据通道—SYNC raw 与失败原文确定性且可解析—限流记 429 其余 500', async () => {
+    const sync = new MockImageModelAdapter({ now: () => 1_000, steps: [{ kind: 'SYNC' }] });
+    const submission = await sync.submit(request('invocation_evidence'), freshSignal());
+    expect(submission.kind).toBe('SYNC');
+    if (submission.kind !== 'SYNC') return;
+    expect(submission.raw.httpStatus).toBe(200);
+    expect(submission.raw.truncated).toBe(false);
+    const parsed = JSON.parse(submission.raw.bodyText) as {
+      data: { size: string; url: string }[];
+      id: string;
+      usage: { generated_images: number; output_tokens: null };
+    };
+    expect(parsed).toEqual({
+      data: [{ size: '12x8', url: 'mock-image://12x8/invocation_evidence' }],
+      id: 'mock-image-request-1000-1',
+      usage: { generated_images: 1, output_tokens: null },
+    });
+
+    const failing = new MockImageModelAdapter({
+      steps: [stepError('MODEL_RATE_LIMITED'), stepError('MODEL_PROVIDER_ERROR')],
+    });
+    const rateError = await failing
+      .submit(request('invocation_rate'), freshSignal())
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(failing.evidenceOf(rateError)).toEqual({
+      bodyText: JSON.stringify({
+        error: { code: 'MODEL_RATE_LIMITED', invocation: 'invocation_rate' },
+      }),
+      httpStatus: 429,
+      truncated: false,
+    });
+    const providerError = await failing
+      .submit(request('invocation_provider'), freshSignal())
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(failing.evidenceOf(providerError)).toMatchObject({ httpStatus: 500 });
+    // 无响应的本地失败（取消/超时/步骤耗尽）与非本适配器错误证据为 null。
+    const cancelled = new MockImageModelAdapter({ steps: [{ kind: 'SYNC' }] });
+    const cancelError = await cancelled
+      .submit(request('invocation_cancel'), AbortSignal.abort())
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(cancelled.evidenceOf(cancelError)).toEqual({
+      bodyText: null,
+      httpStatus: null,
+      truncated: false,
+    });
+    expect(failing.evidenceOf(new Error('unrelated'))).toBeNull();
+  });
+
   it('ASYNC 提交—poll 抖动两次 PENDING 后终态—失败形态带 errorCode', async () => {
     const adapter = new MockImageModelAdapter({
       steps: [
