@@ -5,6 +5,7 @@ import type {
   ImageResultRef,
   ImageTaskStatus,
   ImageTaskSubmission,
+  ModelCallEvidence,
 } from './image-model-types';
 
 /**
@@ -23,7 +24,8 @@ export interface ImageModelPort {
    * 提交一次单图生成（方舟无 n 参数，N 候选 = N 次 submit）。
    * 同步 Provider 直接返回终态结果引用；异步 Provider 返回 providerTaskId，
    * 调用方必须先持久化再进入轮询（重启恢复依据）。signal 取消 SHALL 归一化
-   * MODEL_CANCELLED。
+   * MODEL_CANCELLED。同步形态附带 raw 原文（含 httpStatus）供主进程留证，
+   * 不得进入 NormalizedModelError 或 Renderer。
    */
   submit(request: ImageGenerationRequest, signal: AbortSignal): Promise<ImageTaskSubmission>;
   /** 轮询异步任务；同步形态下恒即时 SUCCEEDED。 */
@@ -35,4 +37,10 @@ export interface ImageModelPort {
   download(resultRef: ImageResultRef, signal: AbortSignal): Promise<ImageDownload>;
   /** 将 Provider 专有错误归一化为稳定 NormalizedModelError，脱敏后返回。 */
   normalizeError(error: unknown): NormalizedModelError;
+  /**
+   * 主进程证据通道（media-invocation-evidence design D5）：从适配器错误中提取
+   * 原始响应（httpStatus/bodyText）供 media_model_invocations 留档；非本适配器
+   * 错误返回 null。MUST NOT 进入 NormalizedModelError、日志或 Renderer。
+   */
+  evidenceOf(error: unknown): ModelCallEvidence | null;
 }

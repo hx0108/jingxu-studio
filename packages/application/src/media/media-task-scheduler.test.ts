@@ -21,15 +21,25 @@ const MODEL_ID = 'doubao-seedream-5-0-lite-260128';
 type SubmitStep =
   | Readonly<{ kind: 'SYNC' }>
   | Readonly<{ kind: 'ASYNC' }>
-  | Readonly<{ kind: 'ERROR'; code: NormalizedModelError['code'] }>
+  | Readonly<{
+      kind: 'ERROR';
+      code: NormalizedModelError['code'];
+      /** 错误原始响应证据（evidenceOf 通道；默认确定性 429 原文）。 */
+      evidence?: Readonly<{ bodyText: string; httpStatus: number; truncated: boolean }>;
+    }>
   | Readonly<{ kind: 'HANG' }>;
 
 class FakeModelError extends Error {
+  public readonly evidence: Readonly<{ bodyText: string; httpStatus: number; truncated: boolean }> | null;
   public readonly normalized: NormalizedModelError;
 
-  public constructor(normalized: NormalizedModelError) {
+  public constructor(
+    normalized: NormalizedModelError,
+    evidence: Readonly<{ bodyText: string; httpStatus: number; truncated: boolean }> | null = null,
+  ) {
     super(normalized.code);
     this.name = 'FakeModelError';
+    this.evidence = evidence;
     this.normalized = normalized;
   }
 }
@@ -85,13 +95,20 @@ class FakeImageModel implements ImageModelPort {
     }
     this.order.push(`submit:${request.invocationId}`);
     if (step.kind === 'ERROR') {
-      throw new FakeModelError({
-        code: step.code,
-        detail: null,
-        providerRequestId: null,
-        retryable: false,
-        userAction: null,
-      });
+      throw new FakeModelError(
+        {
+          code: step.code,
+          detail: null,
+          providerRequestId: null,
+          retryable: false,
+          userAction: null,
+        },
+        step.evidence ?? {
+          bodyText: `{"error":{"code":"FakeRateLimited","invocation":"${request.invocationId}"}}`,
+          httpStatus: 429,
+          truncated: false,
+        },
+      );
     }
     if (step.kind === 'ASYNC') {
       return { kind: 'ASYNC', providerTaskId: `pt_${String(index + 1)}` };
@@ -102,7 +119,16 @@ class FakeImageModel implements ImageModelPort {
       url: `mock://${request.invocationId}`,
       width: 1440,
     };
-    return { kind: 'SYNC', result, usage: { generatedImages: 1, outputTokens: null } };
+    return {
+      kind: 'SYNC',
+      raw: {
+        bodyText: `{"id":"${request.invocationId}","usage":{"generated_images":1}}`,
+        httpStatus: 200,
+        truncated: false,
+      },
+      result,
+      usage: { generatedImages: 1, outputTokens: null },
+    };
   }
 
   public poll(providerTaskId: string): Promise<ImageTaskStatus> {
@@ -171,6 +197,12 @@ class FakeImageModel implements ImageModelPort {
       retryable: false,
       userAction: null,
     };
+  }
+
+  public evidenceOf(
+    error: unknown,
+  ): Readonly<{ bodyText: string | null; httpStatus: number | null; truncated: boolean }> | null {
+    return error instanceof FakeModelError ? error.evidence : null;
   }
 }
 

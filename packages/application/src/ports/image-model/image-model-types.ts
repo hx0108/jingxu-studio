@@ -19,8 +19,8 @@ export interface ImageReferencePayload {
  * 单图生成请求（业务层组装；Adapter 映射到具体 Provider 接口）。
  *
  * 方舟无 `n` 批量参数：N 候选 = N 次独立 submit（design D6-1），每次各记一条
- * model_invocations。prompt 由服务层按镜头创意字段 + STORY_BIBLE + FormatProfile
- * 组装完成，Adapter 不做业务拼接。
+ * media_model_invocations 证据行（media-invocation-evidence）。prompt 由服务层按
+ * 镜头创意字段 + STORY_BIBLE + FormatProfile 组装完成，Adapter 不做业务拼接。
  */
 export interface ImageGenerationRequest {
   readonly invocationId: string;
@@ -50,9 +50,33 @@ export interface ImageResultRef {
   readonly width: number | null;
 }
 
+/** 成功响应原文（主进程留证专用；超 64 KiB 截断并置 truncated，不含凭据）。 */
+export type ImageRawResponse = Readonly<{
+  bodyText: string;
+  httpStatus: number;
+  truncated: boolean;
+}>;
+
+/**
+ * 适配器错误携带的原始响应证据（Port.evidenceOf 返回；media-invocation-evidence
+ * design D5）：main-only 通道，不进入 NormalizedModelError/日志/Renderer。
+ * 本地校验失败（未发请求）为全 null。
+ */
+export type ModelCallEvidence = Readonly<{
+  bodyText: string | null;
+  httpStatus: number | null;
+  truncated: boolean;
+}>;
+
 /** submit() 的双形态返回：同步终态结果 或 异步任务句柄（须先持久化再轮询）。 */
 export type ImageTaskSubmission =
-  | Readonly<{ kind: 'SYNC'; result: ImageResultRef; usage: ImageGenerationUsage }>
+  | Readonly<{
+      kind: 'SYNC';
+      /** 响应原文（留证用；超 64 KiB 由 Adapter 截断并如实标记）。 */
+      raw: ImageRawResponse;
+      result: ImageResultRef;
+      usage: ImageGenerationUsage;
+    }>
   | Readonly<{ kind: 'ASYNC'; providerTaskId: string }>;
 
 /** poll() 的任务状态判别联合。 */

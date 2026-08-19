@@ -135,6 +135,7 @@ const buildScheduler = (
         return provider.download(resultRef, signal);
       },
       normalizeError: (error) => provider.normalizeError(error),
+      evidenceOf: (error) => provider.evidenceOf(error),
     },
     mediaUnitOfWork: session.unitOfWork,
     newId: (() => {
