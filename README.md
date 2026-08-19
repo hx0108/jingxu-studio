@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前无 Active Change。最近归档的 Change 为 `batch-first-frame-generation`（2026-08-19，V2 图片切片第二步：整集批量首帧——惰性逐镜头建档、失败隔离与重试新批次、取消剩余、重启恢复不重发、批次进度与镜头徽标）。次近为 `image-credential-management`（2026-08-19，真实用户可用性收尾：图片 Provider 凭据配置 UI + SHOT_CONTRACT 调用超时/重试稳健化）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前无 Active Change。最近归档的 Change 为 `media-invocation-evidence`（2026-08-20，媒体域调用证据链：`media_model_invocations` 两段式留证、候选终态同事务收尾、SYNC raw + evidenceOf main-only、真实联调 SQL 断言零违规）。次近为 `batch-first-frame-generation`（2026-08-19，V2 图片切片第二步：整集批量首帧——惰性逐镜头建档、失败隔离与重试新批次、取消剩余、重启恢复不重发、批次进度与镜头徽标）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 

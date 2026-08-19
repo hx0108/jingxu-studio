@@ -24,4 +24,4 @@
 ## 4. 真实联调与收尾
 
 - [x] 4.1 真实 Seedream 探针一次（既有 `real-batch-seedream-probe.e2e.spec.ts`，复用凭据/复用口径）+ SQL 断言（`verify-real-media-evidence.mjs`）：每任务 SUBMIT 行数=候选数（SUCCEEDED 行 generated_images=1、blob 非空；provider_request_id 以 Provider 实际返回为准，真实 Seedream 同步响应无顶层 id → null 属实）、DOWNLOAD 行 sha256=落盘 sha256、候选 ref 非悬空 → verify: 探针绿 + 断言输出留档 README（2026-08-20：探针续跑三轮收敛全绿；断言零违规——42 SUBMIT/39 DOWNLOAD/48 候选，2 崩溃窗口残留 + 2 真实失败原文留档；另揪出下载段失败证据丢失缺陷并当日修复，见 design D4 修订）
-- [ ] 4.2 spec delta（屏蔽 Requirement 去掉证据句 + 新增「媒体调用证据必须真实落库且与候选终态原子提交」Requirement 含四场景）+ README 同步 + `openspec validate --strict` 过 + 归档 → verify: validate 零错、README 事实与门禁输出一致
+- [x] 4.2 spec delta（屏蔽 Requirement 去掉证据句 + 新增「媒体调用证据必须真实落库且与候选终态原子提交」Requirement 含四场景）+ README 同步 + `openspec validate --strict` 过 + 归档 → verify: validate 零错、README 事实与门禁输出一致
