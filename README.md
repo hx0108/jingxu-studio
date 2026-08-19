@@ -105,6 +105,15 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 ## 最近验证证据
 
+2026-08-20 `media-invocation-evidence` 收尾记录（媒体域调用证据链，离线门禁 + 真实 Seedream 续跑联调）：
+
+- 拍板 D1–D6 全按推荐：迁移 0011 `media_model_invocations`（head 10→11）、SUBMIT 行 id=invocationId + 候选 ref 恒指 SUBMIT 行 + DOWNLOAD 轻量行（结果 URL 快照 + 落盘 sha256，blob 恒 NULL）、快照含参数指纹与参考图 sha256 清单（64KiB 截断 + usage 落列，图片字节恒不入库）、两段式 STARTED→候选终态同事务收尾、SYNC raw + `evidenceOf` main-only、探针 + SQL 断言。
+- 真实联调（`real-batch-seedream-probe` 续跑复用 project_53ea7371，三轮收敛；前两轮败因均探针侧——重启恢复自动续跑批次时按钮禁用点击超时（改为收养活跃批）、`#1` 子串命中 `#10`（10 镜头题材，词界匹配修复）——第三轮全绿）：finalCounts [4,4,4,4,4,4,4,4,2,4]（真实限流在 cb7e97e4 轮2 留 2 FAILED+2 SUCCEEDED 真实原文取证）、空目标幂等 `MEDIA_BATCH_NO_PENDING_SHOTS`、真实 JPEG 141–608KB 全 1440×2560、非首镜头选择回填、UI 徽标逐镜头断言 + 4 张真实解码。播种题材换失声主角旁白叙事（原题材当日遭 Qwen speaker_id 漂移 3/3 败，昨日 5/5 过——provider 侧输出漂移与本文无关，另立事项）。
+- 真实联调揪出并修复设计缺陷（design D4 当日修订）：下载段失败只收 DOWNLOAD 行 → submit 已成功（resultUrl 在手）的响应原文/usage 永久丢失（实录 task 1657de32 候选 4aa14454：SUBMIT 行停 STARTED、blob/usage 全空）。修订为同事务三写：候选 FAILED + DOWNLOAD FAILED + SUBMIT 按 SUCCEEDED 收尾（raw/usage 落列）；新增单测断言三写与「候选级全败任务相位仍 COMPLETED」。
+- SQL 证据断言（`scripts/verify-real-media-evidence.mjs` 纯 node 只读查生产库，Playwright runner 不支持 node:sqlite 故独立脚本）：`REAL_MEDIA_EVIDENCE_OK` 零违规——12 任务/48 候选/42 SUBMIT（38 SUCCEEDED 全 blob 非空且 usage=1；1 FAILED MODEL_NETWORK_ERROR 无原文属实——传输级错误无响应体；2 STARTED 崩溃窗口残留：两次探针进程杀死在 submit 在飞，如实保留且恢复不重发）/39 DOWNLOAD（38 SUCCEEDED sha256=落盘全对齐 + 1 FAILED MODEL_RESULT_UNAVAILABLE 真实结果 URL 拉取失败 13.2s 留痕）。
+- 两项 Provider 侧实录（探针侧已消化，供后续事项）：① 真实 Seedream 图片同步响应无顶层 id（top keys=model/created/data/usage）→ `provider_request_id` 记 null 属实（mock 比 real 富），证据链路靠 snapshot+sha256+时间戳；② Qwen SHOT_CONTRACT speaker_id 输出漂移（WEAK_LIP_SYNC 对白镜头 null speaker_id，text 域 FINAL 层不可修复）——建议 text 域后续 change 将该类违规纳入可修复层或系统派生。
+- 全量门禁（f404641，重建三 bundle 后）：format:check、eslint --max-warnings=0、tsc -b 零错误；unit 693、contract 109、integration 201；Playwright Electron E2E 离线 16 passed + 3 skipped（真实探针凭据门控），T5 证据断言 MEDIA_EVIDENCE_OK {submitRows:24=candidates, downloadRows:20, failedSubmits:4}。script-migration 压力测试超时 15s→60s（全量并行磁盘竞争两轮实录 15.7/18.7s，被测属性是对账正确性非耗时）。
+
 2026-08-19 `batch-first-frame-generation` 收尾记录（整集批量首帧，离线门禁 + 真实 Seedream 联调）：
 
 - 拍板 D1–D6 全按推荐：批次表+惰性逐镜头建档（迁移 0010，head 9→10）、批次只汇总/重试失败镜头=新批次、服务端当前世代跳过无 force、同项目串行沿用、`listStoryboardImageStates` + 1s 有界轮询、取消仅未建档镜头。
