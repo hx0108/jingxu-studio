@@ -24,6 +24,8 @@ import {
 export interface MediaRequestBlueprint {
   readonly modelId: string;
   readonly prompt: string;
+  /** 参考图 CAS 身份清单（与 referenceImages 同序）——证据快照只存哈希不存字节（D3）。 */
+  readonly referenceImageSha256s: readonly string[];
   readonly referenceImages: readonly ImageReferencePayload[];
   readonly size: Readonly<{ height: number; width: number }>;
 }
@@ -134,6 +136,7 @@ export const createMediaRequestBlueprintBuilder = (
         : [{ bibleRefId: creative.sceneId, type: 'SCENE' as const }]),
     ];
     const referenceImages: ImageReferencePayload[] = [];
+    const referenceImageSha256s: string[] = [];
     for (const binding of bindings.slice(0, 14)) {
       const version = await dependencies.mediaUnitOfWork.run(({ media }) =>
         media.findCurrentAssetVersion(task.projectId, binding.type, binding.bibleRefId),
@@ -145,11 +148,13 @@ export const createMediaRequestBlueprintBuilder = (
         projectId: task.projectId,
       });
       referenceImages.push({ bytes, mimeType: version.mimeType });
+      referenceImageSha256s.push(version.fileSha256);
     }
 
     return {
       modelId,
       prompt: buildFirstFramePrompt({ boundCharacters, creative, scene }),
+      referenceImageSha256s,
       referenceImages,
       size,
     };

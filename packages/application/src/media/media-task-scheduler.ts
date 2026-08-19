@@ -5,6 +5,8 @@
  * - 同项目任务严格串行（与文本 Job 一致的并发模型），不同项目互不阻塞；
  * - 取消先落 CANCELLED 再中止在飞段，迟到下载经相位复核不落库；
  * - 每段 Provider 调用（submit/poll/download）独立超时；
+ * - 每段调用证据两段式落库（media-invocation-evidence design D4）：段前短事务
+ *   插 STARTED（含请求快照），候选终态同一事务收尾；中断残留 STARTED 如实保留；
  * - 恢复只信证据：候选已持久化 provider_task_id 才恢复轮询；否则按
  *   MEDIA_TASK_INTERRUPTED 标记失败待人工，绝不自动重发（spec 不变式）。
  */
@@ -12,13 +14,16 @@
 import type { ImageModelPort } from '../ports/image-model/image-model-port';
 import type {
   ImageGenerationRequest,
+  ImageGenerationUsage,
+  ImageRawResponse,
   ImageResultRef,
   ImageTaskStatus,
   ImageTaskSubmission,
 } from '../ports/image-model/image-model-types';
+import type { MediaModelInvocationRecord } from '../ports/media/media-invocation-repository';
 import type {
   MediaCandidateRecord,
-  MediaRepository,
+  MediaRepositories,
   MediaTaskPhase,
   MediaTaskRecord,
   MediaUnitOfWorkPort,
@@ -63,6 +68,8 @@ export interface MediaTaskScheduler {
 export interface MediaTaskSchedulerDependencies {
   /** 候选图字节落盘（内容寻址，sha256 校验后才登记）。 */
   readonly fileStore: MediaFileStorePort;
+  /** 证据快照/响应原文 sha256（组合根注入；本包不引 node: 模块）。 */
+  readonly hashText: (input: string) => string;
   readonly imageModel: ImageModelPort;
   /**
    * 项目队列排空后的批次推进钩子（batch-first-frame-generation 任务 3.2）：
@@ -92,6 +99,17 @@ const persistenceMarkerOf = (caught: unknown): string | null => {
   const message = caught instanceof Error ? caught.message : '';
   return message.startsWith('MEDIA_') ? message : null;
 };
+
+const TEXT_ENCODER = new TextEncoder();
+
+const encodeUtf8 = (text: string): Uint8Array => TEXT_ENCODER.encode(text);
+
+/** 该候选 SUBMIT 证据行 id（design D2：候选 ref 与收尾对象恒指 SUBMIT 行）。 */
+const findSubmitRowId = (
+  rows: readonly MediaModelInvocationRecord[],
+  candidateId: string,
+): string | null =>
+  rows.find((row) => row.candidateId === candidateId && row.segmentKind === 'SUBMIT')?.id ?? null;
 
 export const createMediaTaskScheduler = (
   dependencies: MediaTaskSchedulerDependencies,
@@ -135,13 +153,13 @@ export const createMediaTaskScheduler = (
   const writeCandidateOutcome = async (
     projectId: string,
     taskId: string,
-    write: (media: MediaRepository) => Promise<unknown>,
+    write: (repos: MediaRepositories) => Promise<unknown>,
   ): Promise<boolean> =>
     mediaUnitOfWork
-      .run(async ({ media }) => {
-        const fresh = await media.findTaskById(projectId, taskId);
+      .run(async (repos) => {
+        const fresh = await repos.media.findTaskById(projectId, taskId);
         if (fresh === null || isTerminal(fresh.phase)) return false;
-        await write(media);
+        await write(repos);
         return true;
       })
       .catch(async () => {
@@ -184,11 +202,12 @@ export const createMediaTaskScheduler = (
     projectId: string,
     taskId: string,
     candidateId: string,
-    evidenceRef: string,
+    submitRowId: string,
+    segmentRowId: string | null,
     caught: unknown,
   ): Promise<boolean> => {
     if (persistenceMarkerOf(caught) !== null || isCancelled(caught)) {
-      // 持久化/完整性标记或取消：任务级停机，不写候选。
+      // 持久化/完整性标记或取消：任务级停机，不写候选，证据行停留 STARTED 如实。
       await stopForAbort(projectId, taskId);
       return true;
     }
@@ -197,27 +216,73 @@ export const createMediaTaskScheduler = (
       await stopForAbort(projectId, taskId);
       return true;
     }
-    // Provider 归一化错误：候选级失败，同轮其余候选继续（spec 不变式）。
-    await writeCandidateOutcome(projectId, taskId, (media) =>
-      media.completeCandidateFailed(candidateId, {
+    // Provider 归一化错误：候选级失败，同轮其余候选继续（spec 不变式）；
+    // 失败段证据行与候选终态同一事务收尾（design D4 失败两写，原文入 blob）。
+    const evidence = dependencies.imageModel.evidenceOf(caught);
+    await writeCandidateOutcome(projectId, taskId, async (repos) => {
+      await repos.media.completeCandidateFailed(candidateId, {
         errorCode: normalized.code,
-        invocationEvidenceRef: evidenceRef,
-      }),
-    );
+        invocationEvidenceRef: submitRowId,
+      });
+      if (segmentRowId !== null) {
+        await repos.invocations.finishTerminal(segmentRowId, {
+          status: 'FAILED',
+          errorCode: normalized.code,
+          finishedAt: new Date(dependencies.nowMs()).toISOString(),
+          responseHttpStatus: evidence?.httpStatus ?? null,
+          rawResponseBlob: evidence?.bodyText == null ? null : encodeUtf8(evidence.bodyText),
+          rawResponseSha256:
+            evidence?.bodyText == null ? null : dependencies.hashText(evidence.bodyText),
+          rawResponseTruncated: evidence?.truncated ?? false,
+        });
+      }
+    });
     return false;
+  };
+
+  /** 候选 SUBMIT 证据行 id 解析（ASYNC/恢复路径无 invocationId 上下文时统一入口）。 */
+  const submitRowIdOf = async (
+    taskId: string,
+    candidateId: string,
+    fallback: string,
+  ): Promise<string> => {
+    const rows = await mediaUnitOfWork.run(({ invocations }) => invocations.listByTaskId(taskId));
+    return findSubmitRowId(rows, candidateId) ?? fallback;
   };
 
   /** 下载→落盘→（事务内相位复核）候选成功落库。返回是否继续驱动。 */
   const settleDownload = async (
     task: MediaTaskRecord,
     candidate: MediaCandidateRecord,
-    evidenceRef: string,
+    submitRef: string,
     result: ImageResultRef,
     signal: AbortSignal,
+    submitOutcome: Readonly<{
+      providerRequestId: string | null;
+      raw: ImageRawResponse | null;
+      usage: ImageGenerationUsage;
+    }>,
   ): Promise<boolean> => {
+    // D4 第一段：DOWNLOAD 证据行与相位推进同一短事务插入（快照=D2 口径）。
+    const downloadInvocationId = dependencies.newId();
+    const downloadSnapshot = JSON.stringify({
+      providerRequestId: result.providerRequestId,
+      resultUrl: result.url,
+    });
     try {
-      // 懒转移 DOWNLOADING（幂等）：首次进入下载段的候选负责推进相位。
-      await mediaUnitOfWork.run(({ media }) => media.markTaskDownloading(task.id));
+      await mediaUnitOfWork.run(async (repos) => {
+        // 懒转移 DOWNLOADING（幂等）：首次进入下载段的候选负责推进相位。
+        await repos.media.markTaskDownloading(task.id);
+        await repos.invocations.insert({
+          candidateId: candidate.id,
+          id: downloadInvocationId,
+          mediaTaskId: task.id,
+          modelId: candidate.modelId,
+          requestSha256: dependencies.hashText(downloadSnapshot),
+          requestSnapshotJson: downloadSnapshot,
+          segmentKind: 'DOWNLOAD',
+        });
+      });
     } catch {
       await stopForAbort(task.projectId, task.id);
       return false;
@@ -234,26 +299,54 @@ export const createMediaTaskScheduler = (
       });
     } catch (caught) {
       // onSegmentFailure 语义为「true=停机」；本函数返回「true=继续」，需取反。
+      // 下载段失败收 DOWNLOAD 行；SUBMIT 行停 STARTED 如实（design D4）。
       const stop = await onSegmentFailure(
         task.projectId,
         task.id,
         candidate.id,
-        evidenceRef,
+        await submitRowIdOf(task.id, candidate.id, submitRef),
+        downloadInvocationId,
         caught,
       );
       return !stop;
     }
-    return writeCandidateOutcome(task.projectId, task.id, (media) =>
-      media.completeCandidateSucceeded(candidate.id, {
+    // 成功一笔事务三写（design D4）：候选 SUCCEEDED + SUBMIT 行收尾（raw/usage）
+    // + DOWNLOAD 行收尾（sha256=落盘哈希；blob 恒 NULL——字节只在内容寻址存储）。
+    return writeCandidateOutcome(task.projectId, task.id, async (repos) => {
+      const submitRowId = findSubmitRowId(
+        await repos.invocations.listByTaskId(task.id),
+        candidate.id,
+      );
+      await repos.media.completeCandidateSucceeded(candidate.id, {
         byteSize: stored.byteSize,
         fileSha256: stored.sha256,
         height: result.height,
-        invocationEvidenceRef: evidenceRef,
+        invocationEvidenceRef: submitRowId ?? submitRef,
         mimeType: stored.mimeType,
         storageRelPath: stored.storageRelPath,
         width: result.width,
-      }),
-    );
+      });
+      if (submitRowId !== null) {
+        await repos.invocations.finishTerminal(submitRowId, {
+          status: 'SUCCEEDED',
+          finishedAt: new Date(dependencies.nowMs()).toISOString(),
+          providerRequestId: submitOutcome.providerRequestId,
+          providerReportedGeneratedImages: submitOutcome.usage.generatedImages,
+          providerReportedOutputTokens: submitOutcome.usage.outputTokens,
+          rawResponseBlob:
+            submitOutcome.raw === null ? null : encodeUtf8(submitOutcome.raw.bodyText),
+          rawResponseSha256:
+            submitOutcome.raw === null ? null : dependencies.hashText(submitOutcome.raw.bodyText),
+          rawResponseTruncated: submitOutcome.raw?.truncated ?? false,
+          responseHttpStatus: submitOutcome.raw?.httpStatus ?? null,
+        });
+      }
+      await repos.invocations.finishTerminal(downloadInvocationId, {
+        status: 'SUCCEEDED',
+        finishedAt: new Date(dependencies.nowMs()).toISOString(),
+        rawResponseSha256: stored.sha256,
+      });
+    });
   };
 
   /** 异步证据驱动：轮询单候选到终态（含轮询截止），再下载落库。返回是否继续。 */
@@ -263,6 +356,8 @@ export const createMediaTaskScheduler = (
     providerTaskId: string,
     signal: AbortSignal,
   ): Promise<boolean> => {
+    // D2：候选 ref 恒指 SUBMIT 证据行（查无行时回退 providerTaskId，保持既有形态）。
+    const submitRef = await submitRowIdOf(task.id, candidate.id, providerTaskId);
     const deadline = dependencies.nowMs() + dependencies.pollDeadlineMs;
     for (;;) {
       if (signal.aborted) {
@@ -279,27 +374,36 @@ export const createMediaTaskScheduler = (
           task.projectId,
           task.id,
           candidate.id,
-          providerTaskId,
+          submitRef,
+          // 轮询段无证据行（POLL 枚举预留，Seedream 恒 SYNC 不触发）。
+          null,
           caught,
         );
         return !stop;
       }
       if (status.state === 'SUCCEEDED') {
-        return settleDownload(task, candidate, providerTaskId, status.result, signal);
+        return settleDownload(
+          task,
+          candidate,
+          submitRef,
+          status.result,
+          signal,
+          { providerRequestId: providerTaskId, raw: null, usage: status.usage },
+        );
       }
       if (status.state === 'FAILED') {
-        return writeCandidateOutcome(task.projectId, task.id, (media) =>
+        return writeCandidateOutcome(task.projectId, task.id, ({ media }) =>
           media.completeCandidateFailed(candidate.id, {
             errorCode: status.errorCode,
-            invocationEvidenceRef: providerTaskId,
+            invocationEvidenceRef: submitRef,
           }),
         );
       }
       if (dependencies.nowMs() >= deadline) {
-        return writeCandidateOutcome(task.projectId, task.id, (media) =>
+        return writeCandidateOutcome(task.projectId, task.id, ({ media }) =>
           media.completeCandidateFailed(candidate.id, {
             errorCode: 'MODEL_TIMEOUT',
-            invocationEvidenceRef: providerTaskId,
+            invocationEvidenceRef: submitRef,
           }),
         );
       }
@@ -345,13 +449,39 @@ export const createMediaTaskScheduler = (
     let mode: 'SYNC' | 'ASYNC' | null = null;
     const providerTaskIds = new Map<string, string>();
     for (const candidate of pending) {
+      const invocationId = dependencies.newId();
       const request: ImageGenerationRequest = {
-        invocationId: dependencies.newId(),
+        invocationId,
         modelId: blueprint.modelId,
         prompt: blueprint.prompt,
         referenceImages: blueprint.referenceImages,
         size: blueprint.size,
       };
+      // D4 第一段：submit 段前短事务插 SUBMIT STARTED（快照=D3 口径，不含字节与凭据）。
+      const submitSnapshot = JSON.stringify({
+        modelId: blueprint.modelId,
+        prompt: blueprint.prompt,
+        referenceImageSha256s: blueprint.referenceImageSha256s,
+        responseFormat: 'url',
+        size: blueprint.size,
+        watermark: true,
+      });
+      try {
+        await mediaUnitOfWork.run(({ invocations }) =>
+          invocations.insert({
+            candidateId: candidate.id,
+            id: invocationId,
+            mediaTaskId: task.id,
+            modelId: blueprint.modelId,
+            requestSha256: dependencies.hashText(submitSnapshot),
+            requestSnapshotJson: submitSnapshot,
+            segmentKind: 'SUBMIT',
+          }),
+        );
+      } catch {
+        await stopForAbort(task.projectId, task.id);
+        return;
+      }
       let submission: ImageTaskSubmission;
       try {
         submission = await runSegment(signal, (segment) =>
@@ -362,7 +492,8 @@ export const createMediaTaskScheduler = (
           task.projectId,
           task.id,
           candidate.id,
-          request.invocationId,
+          invocationId,
+          invocationId,
           caught,
         );
         if (stop) return;
@@ -377,9 +508,14 @@ export const createMediaTaskScheduler = (
         const proceed = await settleDownload(
           task,
           candidate,
-          request.invocationId,
+          invocationId,
           submission.result,
           signal,
+          {
+            providerRequestId: submission.result.providerRequestId,
+            raw: submission.raw,
+            usage: submission.usage,
+          },
         );
         if (!proceed) return;
         continue;

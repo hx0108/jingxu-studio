@@ -122,6 +122,7 @@ const buildScheduler = (
       writeImage: ({ bytes, mimeType, projectId }) =>
         store.write({ bytes, mimeType, namespace: 'images', projectId }),
     },
+    hashText: (value) => createHash('sha256').update(value, 'utf8').digest('hex'),
     imageModel: {
       validateCredential: () => provider.validateCredential(),
       submit: (request, signal) => {
@@ -150,6 +151,7 @@ const buildScheduler = (
         Promise.resolve({
           modelId: MODEL_ID,
           prompt: '雨巷',
+          referenceImageSha256s: [],
           referenceImages: [],
           size: { height: 8, width: 8 },
         }),

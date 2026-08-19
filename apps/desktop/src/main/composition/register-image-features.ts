@@ -273,6 +273,7 @@ export const createImageFeatureRegistration = ({
           writeImage: ({ bytes, mimeType, projectId }) =>
             store.write({ bytes, mimeType, namespace: 'images', projectId }),
         },
+        hashText: (value) => createHash('sha256').update(value, 'utf8').digest('hex'),
         imageModel,
         mediaUnitOfWork,
         newId: randomUUID,

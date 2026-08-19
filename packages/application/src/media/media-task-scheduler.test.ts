@@ -207,6 +207,7 @@ class FakeImageModel implements ImageModelPort {
 }
 
 interface Fixture {
+  readonly invocations: InMemoryMediaInvocationRepository;
   readonly port: FakeImageModel;
   readonly repository: InMemoryMediaRepository;
   readonly scheduler: MediaTaskScheduler;
@@ -226,9 +227,9 @@ const buildFixture = (
   onProjectIdle?: (projectId: string) => Promise<boolean>,
 ): Fixture => {
   const repository = new InMemoryMediaRepository();
+  const invocationRepository = new InMemoryMediaInvocationRepository();
   const unitOfWork: MediaUnitOfWorkPort = {
-    run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+    run: (work) => work({ invocations: invocationRepository, media: repository }),
   };
   const port = new FakeImageModel(portOptions);
   const writes: { byteSize: number; storageRelPath: string }[] = [];
@@ -249,6 +250,7 @@ const buildFixture = (
   let clock = 0;
   const scheduler = createMediaTaskScheduler({
     fileStore,
+    hashText: hash64,
     imageModel: port,
     mediaUnitOfWork: unitOfWork,
     ...(onProjectIdle === undefined ? {} : { onProjectIdle }),
@@ -267,6 +269,7 @@ const buildFixture = (
         Promise.resolve({
           modelId: MODEL_ID,
           prompt: '雨巷中的少女',
+          referenceImageSha256s: [],
           referenceImages: [],
           size: { height: 2560, width: 1440 },
         }),
@@ -274,7 +277,7 @@ const buildFixture = (
     segmentTimeoutMs,
     sleep: () => Promise.resolve(undefined),
   });
-  return { port, repository, scheduler, writes };
+  return { invocations: invocationRepository, port, repository, scheduler, writes };
 };
 
 /** 建任务 + 4 个 PENDING 候选（round 与任务一致），可选推进相位与候选级留证。 */
@@ -428,8 +431,121 @@ describe('MediaTaskScheduler 同步 Provider（Seedream 形态）', () => {
   });
 });
 
+describe('MediaTaskScheduler 调用证据（media-invocation-evidence）', () => {
+  it('同步成功—每候选 SUBMIT+DOWNLOAD 各一行—三写齐备且快照/原文/usage 落列', async () => {
+    const fixture = buildFixture();
+    await seedTask(fixture.repository);
+    await fixture.scheduler.run('project_1');
+    const rows = fixture.invocations.invocations;
+    expect(rows).toHaveLength(8); // 4 SUBMIT + 4 DOWNLOAD
+    const submitRows = rows.filter((row) => row.segmentKind === 'SUBMIT');
+    const downloadRows = rows.filter((row) => row.segmentKind === 'DOWNLOAD');
+    expect(submitRows.map((row) => row.status)).toEqual([
+      'SUCCEEDED',
+      'SUCCEEDED',
+      'SUCCEEDED',
+      'SUCCEEDED',
+    ]);
+    expect(downloadRows.every((row) => row.status === 'SUCCEEDED')).toBe(true);
+    for (const [index, row] of submitRows.entries()) {
+      const invocationId = `inv_${String(index * 2 + 1)}`;
+      expect(row.id).toBe(invocationId);
+      // D3 快照：模型/提示词/尺寸/参考图哈希清单/固定参数，不含字节与凭据。
+      expect(JSON.parse(row.requestSnapshotJson)).toEqual({
+        modelId: MODEL_ID,
+        prompt: '雨巷中的少女',
+        referenceImageSha256s: [],
+        responseFormat: 'url',
+        size: { height: 2560, width: 1440 },
+        watermark: true,
+      });
+      expect(row.requestSha256).toBe(hash64(row.requestSnapshotJson));
+      expect(new TextDecoder().decode(row.rawResponseBlob ?? new Uint8Array())).toBe(
+        `{"id":"${invocationId}","usage":{"generated_images":1}}`,
+      );
+      expect(row.rawResponseSha256).toBe(
+        hash64(`{"id":"${invocationId}","usage":{"generated_images":1}}`),
+      );
+      expect(row).toMatchObject({
+        finishedAt: expect.any(String),
+        providerRequestId: invocationId,
+        providerReportedGeneratedImages: 1,
+        responseHttpStatus: 200,
+        rawResponseTruncated: false,
+      });
+    }
+    // DOWNLOAD 轻量行（D2）：blob 恒 NULL（字节只在内容寻址存储），sha256=落盘哈希。
+    for (const [index, row] of downloadRows.entries()) {
+      const submitId = `inv_${String(index * 2 + 1)}`;
+      expect(row.id).toBe(`inv_${String(index * 2 + 2)}`);
+      expect(JSON.parse(row.requestSnapshotJson)).toEqual({
+        providerRequestId: submitId,
+        resultUrl: `mock://${submitId}`,
+      });
+      expect(row).toMatchObject({
+        rawResponseBlob: null,
+        rawResponseSha256: hash64(`stored_${String(index + 1)}`),
+        status: 'SUCCEEDED',
+      });
+    }
+    // D2：候选 ref 逐行指向 SUBMIT 行 id。
+    expect(
+      fixture.repository.candidates.every((candidate) =>
+        submitRows.some((row) => row.id === candidate.invocationEvidenceRef),
+      ),
+    ).toBe(true);
+  });
+
+  it('submit 失败—候选 FAILED 与该段证据行 FAILED 同批落库—错误原文入 blob', async () => {
+    const fixture = buildFixture({
+      submits: [{ kind: 'ERROR', code: 'MODEL_RATE_LIMITED' }, { kind: 'SYNC' }],
+    });
+    await seedTask(fixture.repository);
+    await fixture.scheduler.run('project_1');
+    const rows = fixture.invocations.invocations;
+    expect(rows).toHaveLength(7); // 4 SUBMIT（1 失败）+ 3 DOWNLOAD（失败候选未达下载段）
+    const failedSubmit = rows.find((row) => row.id === 'inv_1');
+    expect(failedSubmit).toMatchObject({
+      errorCode: 'MODEL_RATE_LIMITED',
+      responseHttpStatus: 429,
+      segmentKind: 'SUBMIT',
+      status: 'FAILED',
+    });
+    expect(new TextDecoder().decode(failedSubmit?.rawResponseBlob ?? new Uint8Array())).toBe(
+      '{"error":{"code":"FakeRateLimited","invocation":"inv_1"}}',
+    );
+    expect(failedSubmit?.rawResponseSha256).toBe(
+      hash64('{"error":{"code":"FakeRateLimited","invocation":"inv_1"}}'),
+    );
+    expect(fixture.repository.candidates[0]).toMatchObject({
+      errorCode: 'MODEL_RATE_LIMITED',
+      invocationEvidenceRef: 'inv_1',
+      status: 'FAILED',
+    });
+  });
+
+  it('取消—在飞候选证据行停留 STARTED 不收尾—崩溃窗口如实保留', async () => {
+    let releaseDownload: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      releaseDownload = resolve;
+    });
+    const fixture = buildFixture({ downloadGate: gate });
+    const taskId = await seedTask(fixture.repository);
+    const driven = fixture.scheduler.run('project_1');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await fixture.scheduler.cancel('project_1', taskId);
+    releaseDownload();
+    await driven;
+    const rows = fixture.invocations.invocations;
+    expect(rows.map((row) => [row.segmentKind, row.status, row.finishedAt])).toEqual([
+      ['SUBMIT', 'STARTED', null],
+      ['DOWNLOAD', 'STARTED', null],
+    ]);
+  });
+});
+
 describe('MediaTaskScheduler 异步 Provider', () => {
-  it('异步全链路—先留证后轮询—任务 POLLING→COMPLETED—证据为 providerTaskId', async () => {
+  it('异步全链路—先留证后轮询—任务 POLLING→COMPLETED—ref 指 SUBMIT 证据行', async () => {
     const fixture = buildFixture({
       submits: [{ kind: 'ASYNC' }, { kind: 'ASYNC' }, { kind: 'ASYNC' }, { kind: 'ASYNC' }],
     });
@@ -458,9 +574,14 @@ describe('MediaTaskScheduler 异步 Provider', () => {
       'SUCCEEDED',
       'SUCCEEDED',
     ]);
+    // media-invocation-evidence D2：候选 ref 恒指 SUBMIT 证据行（非 providerTaskId）。
+    const submitRows = fixture.invocations.invocations.filter(
+      (row) => row.segmentKind === 'SUBMIT',
+    );
+    expect(submitRows).toHaveLength(4);
     expect(
       fixture.repository.candidates.every((candidate) =>
-        candidate.invocationEvidenceRef?.startsWith('pt_'),
+        submitRows.some((row) => row.id === candidate.invocationEvidenceRef),
       ),
     ).toBe(true);
   });
@@ -582,6 +703,7 @@ describe('MediaTaskScheduler 队列语义', () => {
       fileStore: {
         writeImage: () => Promise.reject(new Error('unreachable')),
       },
+      hashText: hash64,
       imageModel: fixture.port,
       mediaUnitOfWork: unitOfWork,
       newId: () => 'inv_x',
