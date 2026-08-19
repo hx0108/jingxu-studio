@@ -116,7 +116,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - run-1（19.1m，真实 Qwen 播种 7 镜头）：批次一 UI 取消 → CANCELLED 且在飞首镜头自然跑完 4 张、其余镜头零建档零候选；驱动批服务端跳过清单恰为已就绪镜头；真实限流实录（火山方舟安心体验模式 `SetLimitExceeded` → 候选 `MODEL_RATE_LIMITED`）致 PARTIAL_COMPLETED，失败成员携带候选错误码实证。账号侧恢复：调限额 → 404 `ModelNotOpen` → 控制台开通 doubao-seedream-5-0（直连探针另核验 9:16 最小 3,686,400px = 恰 1440×2560）。
 - 续跑收敛：重试新批次 rounds 2–4 全败留痕（~1.2s 快败 = 真实 429 往返）→ round 5 批 6871e46f 干净收敛 COMPLETED。期间揪出探针三缺陷并修复：历史终态批误判新批（改已知集合起判）、批行 PENDING 窗口误判终态（终态收敛为显式 COMPLETED/PARTIAL_COMPLETED）、收敛口径与应用待生成口径不符（当前世代 ≥1 张即「已有首帧」：1/4 镜头被新批跳过、整集按钮空目标不建批为铁证 → 续跑收敛线对齐 ≥1，严格 4 张断言仅全新跑强制）。
 - 终轮全绿（14.0s，零新图）：finalCounts [4,4,4,4,4,1,4]；空目标幂等 `MEDIA_BATCH_NO_PENDING_SHOTS`；7 镜头 featured 轮全 `jingxu://` 真实 JPEG 1440×2560、167–637KB、同轮 generationInputHash 一致（f1a38ed1 rounds 1–4 全败 → round 5 干净 4 张留痕；4163dc50 一成三败如实 1 张）；非首镜头选择回填 selectedAt；UI 徽标逐镜头断言 + 镜头 #1 候选 4 张真实解码。另：ARK 凭据末四位一致时复用免删存（删除确认框曾需人工应答卡住一轮，续跑路径不再触发）。
-- 真实用户使用验收仍待人工核验。
+- 真实用户使用验收通过（2026-08-19 实机验收：7 镜头 25 张真实首帧的徽标/进度行/大图质量与风格/候选选中态均确认满意）——本 change 验证项全部闭环。
 
 2026-08-19 `image-credential-management` 收尾记录（图片凭据 UI + SHOT_CONTRACT 超时/重试稳健化）：
 
