@@ -170,7 +170,7 @@ describe('MediaTaskScheduler 组合根集成（真 SQLite + 内容寻址存储 +
         ['shot_bare', 'shotv_bare'],
       ]);
       // 崩溃模拟：提交已发生（Provider 侧留有任务）、证据已落库、进程随即终止。
-      const resumeTask = await sessionA.unitOfWork.run((media) =>
+      const resumeTask = await sessionA.unitOfWork.run(({ media }) =>
         media.insertTask({
           candidateCount: 4,
           generationInputHash: hash64('gen_resume'),
@@ -181,7 +181,7 @@ describe('MediaTaskScheduler 组合根集成（真 SQLite + 内容寻址存储 +
           shotVersionId: 'shotv_resume',
         }),
       );
-      const candidates = await sessionA.unitOfWork.run((media) =>
+      const candidates = await sessionA.unitOfWork.run(({ media }) =>
         media.insertCandidates({
           candidateIds: ['c_resume_1', 'c_resume_2', 'c_resume_3', 'c_resume_4'],
           generationInputHash: hash64('gen_resume'),
@@ -206,15 +206,15 @@ describe('MediaTaskScheduler 组合根集成（真 SQLite + 内容寻址存储 +
           new AbortController().signal,
         );
         if (submission.kind !== 'ASYNC') throw new Error('mock step expected ASYNC');
-        await sessionA.unitOfWork.run((media) =>
+        await sessionA.unitOfWork.run(({ media }) =>
           media.assignCandidateProviderTask(candidate.id, submission.providerTaskId),
         );
       }
-      await sessionA.unitOfWork.run((media) =>
+      await sessionA.unitOfWork.run(({ media }) =>
         media.markTaskPolling('task_resume', 'mock-image-task-1'),
       );
       // 同项目第二个在飞任务：SUBMITTED 无任何证据（同步 Provider 崩溃窗口同型）。
-      await sessionA.unitOfWork.run((media) =>
+      await sessionA.unitOfWork.run(({ media }) =>
         media.insertTask({
           candidateCount: 4,
           generationInputHash: hash64('gen_bare'),
@@ -225,7 +225,7 @@ describe('MediaTaskScheduler 组合根集成（真 SQLite + 内容寻址存储 +
           shotVersionId: 'shotv_bare',
         }),
       );
-      await sessionA.unitOfWork.run((media) =>
+      await sessionA.unitOfWork.run(({ media }) =>
         media.insertCandidates({
           candidateIds: ['c_bare_1', 'c_bare_2', 'c_bare_3', 'c_bare_4'],
           generationInputHash: hash64('gen_bare'),
@@ -252,16 +252,16 @@ describe('MediaTaskScheduler 组合根集成（真 SQLite + 内容寻址存储 +
       await scheduler.run('project_media');
       expect(counts.submits).toBe(0); // spec 不变式：不自动重发
 
-      const task = await sessionB.unitOfWork.run((media) =>
+      const task = await sessionB.unitOfWork.run(({ media }) =>
         media.findTaskById('project_media', 'task_resume'),
       );
       expect(task).toMatchObject({ phase: 'COMPLETED' });
-      const bare = await sessionB.unitOfWork.run((media) =>
+      const bare = await sessionB.unitOfWork.run(({ media }) =>
         media.findTaskById('project_media', 'task_bare'),
       );
       expect(bare).toMatchObject({ errorCode: 'MEDIA_TASK_INTERRUPTED', phase: 'FAILED' });
 
-      const finalCandidates = await sessionB.unitOfWork.run((media) =>
+      const finalCandidates = await sessionB.unitOfWork.run(({ media }) =>
         media.listCandidates('shot_resume'),
       );
       expect(finalCandidates.map((candidate) => candidate.status)).toEqual([
@@ -301,7 +301,7 @@ describe('MediaTaskScheduler 组合根集成（真 SQLite + 内容寻址存储 +
     try {
       const session = harness.openSession();
       seedBaseRows(session.database, [['shot_cancel', 'shotv_cancel']]);
-      const task = await session.unitOfWork.run((media) =>
+      const task = await session.unitOfWork.run(({ media }) =>
         media.insertTask({
           candidateCount: 4,
           generationInputHash: hash64('gen_cancel'),
@@ -312,7 +312,7 @@ describe('MediaTaskScheduler 组合根集成（真 SQLite + 内容寻址存储 +
           shotVersionId: 'shotv_cancel',
         }),
       );
-      await session.unitOfWork.run((media) =>
+      await session.unitOfWork.run(({ media }) =>
         media.insertCandidates({
           candidateIds: ['c_cancel_1', 'c_cancel_2', 'c_cancel_3', 'c_cancel_4'],
           generationInputHash: hash64('gen_cancel'),
@@ -333,7 +333,7 @@ describe('MediaTaskScheduler 组合根集成（真 SQLite + 内容寻址存储 +
       await driven;
 
       expect(counts.submits).toBe(1); // 后续候选不再提交
-      const candidates = await session.unitOfWork.run((media) =>
+      const candidates = await session.unitOfWork.run(({ media }) =>
         media.listCandidates('shot_cancel'),
       );
       expect(candidates.map((candidate) => candidate.status)).toEqual([
@@ -342,7 +342,7 @@ describe('MediaTaskScheduler 组合根集成（真 SQLite + 内容寻址存储 +
         'PENDING',
         'PENDING',
       ]); // 迟到下载未登记（孤儿文件由空间治理独立处理）
-      const fresh = await session.unitOfWork.run((media) =>
+      const fresh = await session.unitOfWork.run(({ media }) =>
         media.findTaskById('project_media', 'task_cancel'),
       );
       expect(fresh).toMatchObject({ phase: 'CANCELLED' });

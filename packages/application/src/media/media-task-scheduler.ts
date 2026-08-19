@@ -102,11 +102,11 @@ export const createMediaTaskScheduler = (
   let stopped = false;
 
   const readTask = (projectId: string, taskId: string): Promise<MediaTaskRecord | null> =>
-    mediaUnitOfWork.run((media) => media.findTaskById(projectId, taskId));
+    mediaUnitOfWork.run(({ media }) => media.findTaskById(projectId, taskId));
 
   const attemptFailTask = async (taskId: string, errorCode: string): Promise<void> => {
     try {
-      await mediaUnitOfWork.run((media) => media.failTask(taskId, errorCode));
+      await mediaUnitOfWork.run(({ media }) => media.failTask(taskId, errorCode));
     } catch {
       // 已终态或持久化异常：排空循环的停滞护栏负责暴露后者。
     }
@@ -114,7 +114,7 @@ export const createMediaTaskScheduler = (
 
   const finishDriving = async (taskId: string): Promise<void> => {
     try {
-      await mediaUnitOfWork.run((media) => media.completeTask(taskId));
+      await mediaUnitOfWork.run(({ media }) => media.completeTask(taskId));
     } catch {
       // 已终态（取消/失败竞态）——幂等收尾。
     }
@@ -138,7 +138,7 @@ export const createMediaTaskScheduler = (
     write: (media: MediaRepository) => Promise<unknown>,
   ): Promise<boolean> =>
     mediaUnitOfWork
-      .run(async (media) => {
+      .run(async ({ media }) => {
         const fresh = await media.findTaskById(projectId, taskId);
         if (fresh === null || isTerminal(fresh.phase)) return false;
         await write(media);
@@ -217,7 +217,7 @@ export const createMediaTaskScheduler = (
   ): Promise<boolean> => {
     try {
       // 懒转移 DOWNLOADING（幂等）：首次进入下载段的候选负责推进相位。
-      await mediaUnitOfWork.run((media) => media.markTaskDownloading(task.id));
+      await mediaUnitOfWork.run(({ media }) => media.markTaskDownloading(task.id));
     } catch {
       await stopForAbort(task.projectId, task.id);
       return false;
@@ -310,7 +310,9 @@ export const createMediaTaskScheduler = (
   /** 证据驱动循环：逐个推进 PENDING 且已留证候选；证据缺失即按中断停机。 */
   const driveFromEvidence = async (task: MediaTaskRecord, signal: AbortSignal): Promise<void> => {
     for (;;) {
-      const candidates = await mediaUnitOfWork.run((media) => media.listCandidates(task.shotId));
+      const candidates = await mediaUnitOfWork.run(({ media }) =>
+        media.listCandidates(task.shotId),
+      );
       const pending = candidates.filter(
         (entry) => entry.roundNo === task.roundNo && entry.status === 'PENDING',
       );
@@ -389,7 +391,7 @@ export const createMediaTaskScheduler = (
       mode = 'ASYNC';
       try {
         // spec 不变式：taskId 先持久化再轮询；assign 失败即留证缺失，按中断停机。
-        await mediaUnitOfWork.run((media) =>
+        await mediaUnitOfWork.run(({ media }) =>
           media.assignCandidateProviderTask(candidate.id, submission.providerTaskId),
         );
         providerTaskIds.set(candidate.id, submission.providerTaskId);
@@ -402,7 +404,7 @@ export const createMediaTaskScheduler = (
       const firstTaskId = [...providerTaskIds.values()][0];
       if (firstTaskId !== undefined) {
         try {
-          await mediaUnitOfWork.run((media) => media.markTaskPolling(task.id, firstTaskId));
+          await mediaUnitOfWork.run(({ media }) => media.markTaskPolling(task.id, firstTaskId));
         } catch {
           // 已转移/终态竞态：证据已落，继续由证据驱动接管。
         }
@@ -416,7 +418,7 @@ export const createMediaTaskScheduler = (
   const advance = async (projectId: string, taskId: string, signal: AbortSignal): Promise<void> => {
     const task = await readTask(projectId, taskId);
     if (task === null || isTerminal(task.phase)) return;
-    const candidates = await mediaUnitOfWork.run((media) => media.listCandidates(task.shotId));
+    const candidates = await mediaUnitOfWork.run(({ media }) => media.listCandidates(task.shotId));
     const pending = candidates.filter(
       (entry) => entry.roundNo === task.roundNo && entry.status === 'PENDING',
     );
@@ -431,7 +433,7 @@ export const createMediaTaskScheduler = (
         const firstTaskId = evidenced[0]?.providerTaskId;
         if (typeof firstTaskId === 'string') {
           try {
-            await mediaUnitOfWork.run((media) => media.markTaskPolling(taskId, firstTaskId));
+            await mediaUnitOfWork.run(({ media }) => media.markTaskPolling(taskId, firstTaskId));
           } catch {
             // 已转移/终态竞态：证据驱动自行接管。
           }
@@ -471,7 +473,7 @@ export const createMediaTaskScheduler = (
     let lastTaskId: string | null = null;
     let repeats = 0;
     for (;;) {
-      const tasks = await mediaUnitOfWork.run((media) => media.listUnfinishedTasks(projectId));
+      const tasks = await mediaUnitOfWork.run(({ media }) => media.listUnfinishedTasks(projectId));
       if (stopped) return;
       const next = tasks[0];
       if (next === undefined) {
@@ -498,7 +500,7 @@ export const createMediaTaskScheduler = (
     cancel: async (projectId, taskId) => {
       // 先落 CANCELLED（幂等）再中止在飞段；迟到下载由事务内相位复核拦下。
       try {
-        await mediaUnitOfWork.run((media) => media.cancelTask(taskId));
+        await mediaUnitOfWork.run(({ media }) => media.cancelTask(taskId));
       } catch {
         // 已终态——幂等取消。
       }
@@ -512,10 +514,12 @@ export const createMediaTaskScheduler = (
     },
 
     recover: async (projectId) => {
-      const tasks = await mediaUnitOfWork.run((media) => media.listUnfinishedTasks(projectId));
+      const tasks = await mediaUnitOfWork.run(({ media }) => media.listUnfinishedTasks(projectId));
       const outcomes: MediaRecoveryOutcome[] = [];
       for (const task of tasks) {
-        const candidates = await mediaUnitOfWork.run((media) => media.listCandidates(task.shotId));
+        const candidates = await mediaUnitOfWork.run(({ media }) =>
+          media.listCandidates(task.shotId),
+        );
         const pending = candidates.filter(
           (entry) => entry.roundNo === task.roundNo && entry.status === 'PENDING',
         );

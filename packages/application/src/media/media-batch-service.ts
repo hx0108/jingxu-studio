@@ -149,9 +149,9 @@ export const createMediaBatchService = (
     projectId: string,
     batchId: string,
   ): Promise<MediaBatchViewDto> => {
-    const batch = await mediaUnitOfWork.run((media) => media.findBatchById(projectId, batchId));
+    const batch = await mediaUnitOfWork.run(({ media }) => media.findBatchById(projectId, batchId));
     if (batch === null) throw new Error('MEDIA_BATCH_NOT_FOUND');
-    return mediaUnitOfWork.run((media) => buildBatchView(media, batch));
+    return mediaUnitOfWork.run(({ media }) => buildBatchView(media, batch));
   };
 
   return {
@@ -174,7 +174,7 @@ export const createMediaBatchService = (
           );
         }
         // 幂等重放：同 requestId 批次直接回视图；目标集合漂移视为 requestId 复用。
-        const replay = await mediaUnitOfWork.run((media) =>
+        const replay = await mediaUnitOfWork.run(({ media }) =>
           media.findBatchByIdempotencyKey(input.projectId, input.requestId),
         );
         if (replay !== null) {
@@ -188,7 +188,7 @@ export const createMediaBatchService = (
           return { data: await toBatchViewById(input.projectId, replay.id), ok: true };
         }
         // 当前世代跳过过滤（D3）：与首帧选择策略同一世代定义，SUCCEEDED 即跳过。
-        const filter = await mediaUnitOfWork.run<BatchTargetFilter>(async (media) => {
+        const filter = await mediaUnitOfWork.run<BatchTargetFilter>(async ({ media }) => {
           const succeededKeys = new Set(
             (await media.listSucceededCandidateShotHashes(input.projectId)).map(
               (entry) => `${entry.shotId}:${entry.generationInputHash}`,
@@ -229,7 +229,7 @@ export const createMediaBatchService = (
             '如需重新生成，请在镜头详情中单独发起（已有候选不会被覆盖）。',
           );
         }
-        const running = await mediaUnitOfWork.run((media) =>
+        const running = await mediaUnitOfWork.run(({ media }) =>
           media.findRunningBatchByProject(input.projectId),
         );
         if (running !== null) {
@@ -239,7 +239,7 @@ export const createMediaBatchService = (
             traceId,
           );
         }
-        const batch = await mediaUnitOfWork.run((media) =>
+        const batch = await mediaUnitOfWork.run(({ media }) =>
           media.insertBatch({
             id: dependencies.newId(),
             idempotencyKey: input.requestId,
@@ -258,13 +258,15 @@ export const createMediaBatchService = (
 
     cancelBatch: async (input, traceId) => {
       try {
-        const batch = await mediaUnitOfWork.run((media) =>
+        const batch = await mediaUnitOfWork.run(({ media }) =>
           media.findBatchById(input.projectId, input.batchId),
         );
         if (batch === null) {
           return mediaFailure('MEDIA_BATCH_NOT_FOUND', '批次不存在或不属于该项目', traceId);
         }
-        const cancelled = await mediaUnitOfWork.run((media) => media.cancelBatch(input.batchId));
+        const cancelled = await mediaUnitOfWork.run(({ media }) =>
+          media.cancelBatch(input.batchId),
+        );
         return { data: await toBatchViewById(input.projectId, cancelled.id), ok: true };
       } catch {
         return mediaPersistenceFailure(traceId);
@@ -281,7 +283,7 @@ export const createMediaBatchService = (
         if (storyboard.current?.status !== 'READY') {
           return mediaFailure('MEDIA_STORYBOARD_NOT_READY', '分镜尚未确认 READY', traceId);
         }
-        const states = await mediaUnitOfWork.run(async (media) => {
+        const states = await mediaUnitOfWork.run(async ({ media }) => {
           const batchRecords = await media.listBatchesByProject(input.projectId, 10);
           const batches = await Promise.all(
             batchRecords.map((batch) => buildBatchView(media, batch)),
@@ -330,19 +332,19 @@ export const createMediaBatchService = (
     },
 
     progressBatch: async (projectId) => {
-      const batch = await mediaUnitOfWork.run((media) =>
+      const batch = await mediaUnitOfWork.run(({ media }) =>
         media.findRunningBatchByProject(projectId),
       );
       if (batch === null) return false;
       // 单飞约束（D1-C）：前一成员未终态不建档下一镜头。
-      const unfinished = await mediaUnitOfWork.run((media) =>
+      const unfinished = await mediaUnitOfWork.run(({ media }) =>
         media.countUnfinishedBatchTasks(batch.id),
       );
       if (unfinished > 0) return false;
       const head = batch.pendingShotIds[0];
       if (head === undefined) {
         // 队列耗尽：收尾派生 COMPLETED / PARTIAL_COMPLETED（repo 层统一判定）。
-        await mediaUnitOfWork.run((media) => media.finalizeBatch(batch.id));
+        await mediaUnitOfWork.run(({ media }) => media.finalizeBatch(batch.id));
         return false;
       }
       // 先建档再出队：requestId 由批次派生（确定性），崩溃窗口由幂等重放吸收。
@@ -352,14 +354,14 @@ export const createMediaBatchService = (
       );
       if (!created.ok) {
         // 成员建档失败 → 中止批次（D2）：PARTIAL + 批次级错误码，剩余队列保留可追溯。
-        await mediaUnitOfWork.run((media) => media.finalizeBatch(batch.id, created.error.code));
+        await mediaUnitOfWork.run(({ media }) => media.finalizeBatch(batch.id, created.error.code));
         return false;
       }
-      const popped = await mediaUnitOfWork.run((media) => media.takeNextPendingShot(batch.id));
+      const popped = await mediaUnitOfWork.run(({ media }) => media.takeNextPendingShot(batch.id));
       if (popped === null) {
         // 建档与取消/收尾竞态：批次已非 RUNNING，补偿取消刚建档任务（SUBMITTED 可安全落 CANCELLED）。
         await mediaUnitOfWork
-          .run((media) => media.cancelTask(created.data.id))
+          .run(({ media }) => media.cancelTask(created.data.id))
           .catch(() => undefined);
         return false;
       }

@@ -202,7 +202,9 @@ export const createImageApiService = (
 
     listCandidates: async (input, traceId) => {
       try {
-        const candidates = await mediaUnitOfWork.run((media) => media.listCandidates(input.shotId));
+        const candidates = await mediaUnitOfWork.run(({ media }) =>
+          media.listCandidates(input.shotId),
+        );
         return { data: candidates.map(toCandidateView), ok: true };
       } catch {
         return mediaPersistenceFailure(traceId);
@@ -211,7 +213,7 @@ export const createImageApiService = (
 
     selectCandidate: async (input, traceId) => {
       try {
-        const updated = await mediaUnitOfWork.run(async (media) => {
+        const updated = await mediaUnitOfWork.run(async ({ media }) => {
           const candidate = await media.findCandidateById(input.projectId, input.candidateId);
           if (candidate === null) throw new Error('MEDIA_CANDIDATE_NOT_FOUND');
           await media.selectCandidate(candidate.shotId, input.candidateId);
@@ -236,7 +238,7 @@ export const createImageApiService = (
 
     listAssets: async (input, traceId) => {
       try {
-        const assets = await mediaUnitOfWork.run((media) => media.listAssets(input.projectId));
+        const assets = await mediaUnitOfWork.run(({ media }) => media.listAssets(input.projectId));
         return { data: assets.map(toAssetView), ok: true };
       } catch {
         return mediaPersistenceFailure(traceId);
@@ -250,7 +252,7 @@ export const createImageApiService = (
           mimeType: input.mimeType,
           projectId: input.projectId,
         });
-        const version = await mediaUnitOfWork.run(async (media) => {
+        const version = await mediaUnitOfWork.run(async ({ media }) => {
           const existing = await media.findAssetByIdentity(
             input.projectId,
             input.assetType,
@@ -294,7 +296,7 @@ export const createImageApiService = (
 
     getMediaTask: async (input, traceId) => {
       try {
-        const task = await mediaUnitOfWork.run((media) =>
+        const task = await mediaUnitOfWork.run(({ media }) =>
           media.findTaskById(input.projectId, input.taskId),
         );
         if (task === null) {

@@ -120,7 +120,9 @@ const createMainWindow = async (): Promise<void> => {
               const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
               if (unitOfWork === null) return null;
               try {
-                return await unitOfWork.run((media) => media.findAssetVersionMediaById(versionId));
+                return await unitOfWork.run(({ media }) =>
+                  media.findAssetVersionMediaById(versionId),
+                );
               } catch {
                 return null;
               }
@@ -129,7 +131,9 @@ const createMainWindow = async (): Promise<void> => {
               const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
               if (unitOfWork === null) return null;
               try {
-                return await unitOfWork.run((media) => media.findCandidateMediaById(candidateId));
+                return await unitOfWork.run(({ media }) =>
+                  media.findCandidateMediaById(candidateId),
+                );
               } catch {
                 return null;
               }

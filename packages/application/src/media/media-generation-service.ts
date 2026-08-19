@@ -158,7 +158,7 @@ export const createMediaGenerationService = (
           traceId,
         );
       }
-      const task = await dependencies.mediaUnitOfWork.run(async (media) => {
+      const task = await dependencies.mediaUnitOfWork.run(async ({ media }) => {
         const prior = await media.findTaskByIdempotencyKey(input.projectId, input.requestId);
         if (prior !== null) {
           if (prior.shotId !== input.shotId) throw new Error('REQUEST_ID_REUSED');
@@ -203,7 +203,7 @@ export const createMediaGenerationService = (
 
   propagateStaleForShotVersion: async (shotVersionId, traceId) => {
     try {
-      const affected = await dependencies.mediaUnitOfWork.run((media) =>
+      const affected = await dependencies.mediaUnitOfWork.run(({ media }) =>
         media.markCandidatesStaleByShotVersion(shotVersionId),
       );
       return { data: affected, ok: true };
@@ -218,7 +218,7 @@ export const createMediaGenerationService = (
       if (workspace === null) return { data: [], ok: true };
       const storyboard = workspace.storyboard;
       if (storyboard.current === null) return { data: [], ok: true };
-      const affected = await dependencies.mediaUnitOfWork.run(async (media) => {
+      const affected = await dependencies.mediaUnitOfWork.run(async ({ media }) => {
         const summaries: MediaStaleAffectedShot[] = [];
         for (const shot of storyboard.currentShots) {
           const resolved = await resolveGenerationInput(media, dependencies, input.projectId, shot);

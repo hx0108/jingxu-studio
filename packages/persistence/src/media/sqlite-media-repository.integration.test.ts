@@ -75,11 +75,11 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       try {
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
         await expect(
-          unitOfWork.run((media) =>
+          unitOfWork.run(({ media }) =>
             media.findAssetByIdentity('project_media', 'CHARACTER', 'char_1'),
           ),
         ).resolves.toBeNull();
-        const asset = await unitOfWork.run((media) =>
+        const asset = await unitOfWork.run(({ media }) =>
           media.createAsset({
             assetType: 'CHARACTER',
             bibleRefId: 'char_1',
@@ -98,7 +98,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           updatedAt: NOW,
         });
         await expect(
-          unitOfWork.run((media) =>
+          unitOfWork.run(({ media }) =>
             media.createAsset({
               assetType: 'CHARACTER',
               bibleRefId: 'char_1',
@@ -109,7 +109,9 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           ),
         ).rejects.toThrow('MEDIA_ASSET_CONFLICT');
         await expect(
-          unitOfWork.run((media) => media.findAssetByIdentity('project_media', 'SCENE', 'char_1')),
+          unitOfWork.run(({ media }) =>
+            media.findAssetByIdentity('project_media', 'SCENE', 'char_1'),
+          ),
         ).resolves.toBeNull();
       } finally {
         database.close();
@@ -122,7 +124,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       const database = await setup(root, 'media_repo_version.sqlite');
       try {
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
-        await unitOfWork.run((media) =>
+        await unitOfWork.run(({ media }) =>
           media.createAsset({
             assetType: 'SCENE',
             bibleRefId: 'scene_1',
@@ -131,7 +133,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             projectId: 'project_media',
           }),
         );
-        const first = await unitOfWork.run((media) =>
+        const first = await unitOfWork.run(({ media }) =>
           media.appendAssetVersion({
             assetId: 'asset_1',
             byteSize: 2048,
@@ -140,7 +142,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             mimeType: 'image/png',
           }),
         );
-        const second = await unitOfWork.run((media) =>
+        const second = await unitOfWork.run(({ media }) =>
           media.appendAssetVersion({
             assetId: 'asset_1',
             byteSize: 4096,
@@ -162,7 +164,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           versionNo: 2,
           width: 384,
         });
-        const assets = await unitOfWork.run((media) => media.listAssets('project_media'));
+        const assets = await unitOfWork.run(({ media }) => media.listAssets('project_media'));
         expect(assets).toHaveLength(1);
         expect(assets[0]?.asset.id).toBe('asset_1');
         expect(assets[0]?.versions.map((version) => version.id)).toEqual([
@@ -181,7 +183,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       const database = await setup(root, 'media_repo_candidates.sqlite');
       try {
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
-        const round1 = await unitOfWork.run((media) =>
+        const round1 = await unitOfWork.run(({ media }) =>
           media.insertCandidates({
             candidateIds: ['cand_a', 'cand_b', 'cand_c', 'cand_d'],
             generationInputHash: hash64('h1'),
@@ -205,7 +207,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           selectedAt: null,
           status: 'PENDING',
         });
-        const succeeded = await unitOfWork.run((media) =>
+        const succeeded = await unitOfWork.run(({ media }) =>
           media.completeCandidateSucceeded('cand_a', {
             byteSize: 1024,
             fileSha256: 'e'.repeat(64),
@@ -222,7 +224,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           status: 'SUCCEEDED',
           storageRelPath: 'projects/project_media/images/ee/eeee.png',
         });
-        const failed = await unitOfWork.run((media) =>
+        const failed = await unitOfWork.run(({ media }) =>
           media.completeCandidateFailed('cand_b', {
             errorCode: 'MODEL_CONTENT_REJECTED',
             invocationEvidenceRef: 'invocation_2',
@@ -233,7 +235,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           fileSha256: null,
           status: 'FAILED',
         });
-        const round2 = await unitOfWork.run((media) =>
+        const round2 = await unitOfWork.run(({ media }) =>
           media.insertCandidates({
             candidateIds: ['cand_e'],
             generationInputHash: hash64('h2'),
@@ -245,7 +247,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           }),
         );
         expect(round2[0]?.roundNo).toBe(2);
-        const listed = await unitOfWork.run((media) => media.listCandidates('shot_media'));
+        const listed = await unitOfWork.run(({ media }) => media.listCandidates('shot_media'));
         expect(listed.map((candidate) => candidate.id)).toEqual([
           'cand_a',
           'cand_b',
@@ -275,7 +277,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           'shot_other',
           'shotv_other',
         );
-        await unitOfWork.run((media) =>
+        await unitOfWork.run(({ media }) =>
           media.insertCandidates({
             candidateIds: ['cand_fail'],
             generationInputHash: hash64('h1'),
@@ -286,26 +288,26 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             shotVersionId: 'shotv_media',
           }),
         );
-        await unitOfWork.run((media) =>
+        await unitOfWork.run(({ media }) =>
           media.completeCandidateFailed('cand_fail', {
             errorCode: 'MODEL_CONTENT_REJECTED',
             invocationEvidenceRef: 'invocation_fail',
           }),
         );
 
-        await unitOfWork.run((media) => media.selectCandidate('shot_media', 'cand_a'));
+        await unitOfWork.run(({ media }) => media.selectCandidate('shot_media', 'cand_a'));
         expect(selectedRows(database, 'shot_media')).toEqual([
           { id: 'cand_a', selected_by_context: 'USER' },
         ]);
-        await unitOfWork.run((media) => media.selectCandidate('shot_media', 'cand_b'));
+        await unitOfWork.run(({ media }) => media.selectCandidate('shot_media', 'cand_b'));
         expect(selectedRows(database, 'shot_media')).toEqual([
           { id: 'cand_b', selected_by_context: 'USER' },
         ]);
         await expect(
-          unitOfWork.run((media) => media.selectCandidate('shot_media', 'cand_fail')),
+          unitOfWork.run(({ media }) => media.selectCandidate('shot_media', 'cand_fail')),
         ).rejects.toThrow('MEDIA_CANDIDATE_NOT_SELECTABLE');
         await expect(
-          unitOfWork.run((media) => media.selectCandidate('shot_media', 'cand_other')),
+          unitOfWork.run(({ media }) => media.selectCandidate('shot_media', 'cand_other')),
         ).rejects.toThrow('MEDIA_CANDIDATE_NOT_FOUND');
         expect(selectedRows(database, 'shot_media')).toEqual([
           { id: 'cand_b', selected_by_context: 'USER' },
@@ -338,9 +340,9 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           undefined,
           2,
         );
-        await unitOfWork.run((media) => media.selectCandidate('shot_media', 'cand_a'));
+        await unitOfWork.run(({ media }) => media.selectCandidate('shot_media', 'cand_a'));
 
-        const affected = await unitOfWork.run((media) =>
+        const affected = await unitOfWork.run(({ media }) =>
           media.markCandidatesStaleByGenerationInputHash(hash64('h_shared')),
         );
         expect(affected).toEqual([
@@ -371,7 +373,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
         expect(byId.get('cand_other')).toMatchObject({ status: 'STALE_INPUT' });
         expect(byId.get('cand_b')).toMatchObject({ status: 'SUCCEEDED' });
         await expect(
-          unitOfWork.run((media) =>
+          unitOfWork.run(({ media }) =>
             media.markCandidatesStaleByGenerationInputHash(hash64('h_shared')),
           ),
         ).resolves.toEqual([]);
@@ -387,7 +389,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       try {
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
         await seedSucceededCandidate(unitOfWork, 'cand_ok', hash64('h1'));
-        await unitOfWork.run((media) =>
+        await unitOfWork.run(({ media }) =>
           media.insertCandidates({
             candidateIds: ['cand_wait', 'cand_bad'],
             generationInputHash: hash64('h1'),
@@ -398,14 +400,14 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             shotVersionId: 'shotv_media',
           }),
         );
-        await unitOfWork.run((media) =>
+        await unitOfWork.run(({ media }) =>
           media.completeCandidateFailed('cand_bad', {
             errorCode: 'MODEL_CONTENT_REJECTED',
             invocationEvidenceRef: 'invocation_bad',
           }),
         );
 
-        const affected = await unitOfWork.run((media) =>
+        const affected = await unitOfWork.run(({ media }) =>
           media.markCandidatesStaleByShotVersion('shotv_media'),
         );
         expect(affected).toEqual([{ candidateCount: 3, shotId: 'shot_media' }]);
@@ -418,7 +420,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           { error_code: null, id: 'cand_wait', status: 'STALE_INPUT' },
         ]);
         await expect(
-          unitOfWork.run((media) => media.markCandidatesStaleByShotVersion('shotv_media')),
+          unitOfWork.run(({ media }) => media.markCandidatesStaleByShotVersion('shotv_media')),
         ).resolves.toEqual([]);
       } finally {
         database.close();
@@ -432,7 +434,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       try {
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
         await expect(
-          unitOfWork.run(async (media) => {
+          unitOfWork.run(async ({ media }) => {
             await media.insertCandidates({
               candidateIds: ['cand_a', 'cand_b'],
               generationInputHash: hash64('h1'),
@@ -460,7 +462,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
         });
         // 回滚后连接仍可用（队列未卡死）。
         await expect(
-          unitOfWork.run((media) => media.listCandidates('shot_media')),
+          unitOfWork.run(({ media }) => media.listCandidates('shot_media')),
         ).resolves.toEqual([]);
       } finally {
         database.close();
@@ -473,7 +475,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       const database = await setup(root, 'media_repo_immutable.sqlite');
       try {
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
-        await unitOfWork.run(async (media) => {
+        await unitOfWork.run(async ({ media }) => {
           await media.createAsset({
             assetType: 'CHARACTER',
             bibleRefId: 'char_1',
@@ -507,11 +509,11 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
       try {
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
         await expect(
-          unitOfWork.run((media) =>
+          unitOfWork.run(({ media }) =>
             media.findCurrentAssetVersion('project_media', 'SCENE', 'scene_1'),
           ),
         ).resolves.toBeNull();
-        await unitOfWork.run(async (media) => {
+        await unitOfWork.run(async ({ media }) => {
           await media.createAsset({
             assetType: 'SCENE',
             bibleRefId: 'scene_1',
@@ -522,11 +524,11 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           // 建了资产但从未上传参考图 → null。
         });
         await expect(
-          unitOfWork.run((media) =>
+          unitOfWork.run(({ media }) =>
             media.findCurrentAssetVersion('project_media', 'SCENE', 'scene_1'),
           ),
         ).resolves.toBeNull();
-        await unitOfWork.run(async (media) => {
+        await unitOfWork.run(async ({ media }) => {
           await media.appendAssetVersion({
             assetId: 'asset_scene',
             byteSize: 100,
@@ -543,7 +545,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           });
         });
         await expect(
-          unitOfWork.run((media) =>
+          unitOfWork.run(({ media }) =>
             media.findCurrentAssetVersion('project_media', 'SCENE', 'scene_1'),
           ),
         ).resolves.toMatchObject({ id: 'version_b2', parentVersionId: 'version_b1', versionNo: 2 });
@@ -564,7 +566,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           shotId = 'shot_media',
           shotVersionId = 'shotv_media',
         ) =>
-          unitOfWork.run((media) =>
+          unitOfWork.run(({ media }) =>
             media.insertTask({
               candidateCount: 4,
               generationInputHash: hash64('gen_1'),
@@ -592,59 +594,61 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
         );
         // 幂等读侧。
         await expect(
-          unitOfWork.run((media) => media.findTaskByIdempotencyKey('project_media', 'req_1')),
+          unitOfWork.run(({ media }) => media.findTaskByIdempotencyKey('project_media', 'req_1')),
         ).resolves.toMatchObject({ id: 'task_1' });
         await expect(
-          unitOfWork.run((media) => media.findTaskById('project_media', 'task_1')),
+          unitOfWork.run(({ media }) => media.findTaskById('project_media', 'task_1')),
         ).resolves.toMatchObject({ id: 'task_1' });
         await expect(
-          unitOfWork.run((media) => media.findTaskById('project_media', 'task_missing')),
+          unitOfWork.run(({ media }) => media.findTaskById('project_media', 'task_missing')),
         ).resolves.toBeNull();
 
         // SUBMITTED→POLLING 首次 poll 前持久化 provider_task_id（spec 不变式）。
         await expect(
-          unitOfWork.run((media) => media.markTaskPolling('task_1', 'provider_t1')),
+          unitOfWork.run(({ media }) => media.markTaskPolling('task_1', 'provider_t1')),
         ).resolves.toMatchObject({ phase: 'POLLING', providerTaskId: 'provider_t1' });
         // 重复 markTaskPolling（同参数）幂等安全。
         await expect(
-          unitOfWork.run((media) => media.markTaskPolling('task_1', 'provider_t1')),
+          unitOfWork.run(({ media }) => media.markTaskPolling('task_1', 'provider_t1')),
         ).resolves.toMatchObject({ phase: 'POLLING' });
         // POLLING→DOWNLOADING；终态后一切转移被拒。
         await expect(
-          unitOfWork.run((media) => media.markTaskDownloading('task_1')),
+          unitOfWork.run(({ media }) => media.markTaskDownloading('task_1')),
         ).resolves.toMatchObject({ phase: 'DOWNLOADING' });
         await expect(
-          unitOfWork.run((media) => media.markTaskPolling('task_1', 'provider_t2')),
+          unitOfWork.run(({ media }) => media.markTaskPolling('task_1', 'provider_t2')),
         ).rejects.toThrow('MEDIA_TASK_ALREADY_TERMINAL');
         await expect(
-          unitOfWork.run((media) => media.completeTask('task_1')),
+          unitOfWork.run(({ media }) => media.completeTask('task_1')),
         ).resolves.toMatchObject({ phase: 'COMPLETED' });
         await expect(
-          unitOfWork.run((media) => media.completeTask('task_1')),
+          unitOfWork.run(({ media }) => media.completeTask('task_1')),
         ).resolves.toMatchObject({ phase: 'COMPLETED' });
-        await expect(unitOfWork.run((media) => media.cancelTask('task_1'))).rejects.toThrow(
+        await expect(unitOfWork.run(({ media }) => media.cancelTask('task_1'))).rejects.toThrow(
           'MEDIA_TASK_ALREADY_TERMINAL',
         );
         // 完成后未终态扫描不再包含该任务。
         await expect(
-          unitOfWork.run((media) => media.listUnfinishedTasks('project_media')),
+          unitOfWork.run(({ media }) => media.listUnfinishedTasks('project_media')),
         ).resolves.toEqual([]);
 
         // 第二个任务：非终态取消 + 失败路径错误码（异镜头避开 UNIQUE(shot_id, round_no)）。
         insertShot(database, 'shot_cancel', 'shotv_cancel');
         insertShot(database, 'shot_fail', 'shotv_fail');
         await insertTask('task_3', 'req_3', 'shot_cancel', 'shotv_cancel');
-        await expect(unitOfWork.run((media) => media.cancelTask('task_3'))).resolves.toMatchObject({
+        await expect(
+          unitOfWork.run(({ media }) => media.cancelTask('task_3')),
+        ).resolves.toMatchObject({
           phase: 'CANCELLED',
         });
         await insertTask('task_4', 'req_4', 'shot_fail', 'shotv_fail');
         await expect(
-          unitOfWork.run((media) => media.failTask('task_4', 'MODEL_RATE_LIMITED')),
+          unitOfWork.run(({ media }) => media.failTask('task_4', 'MODEL_RATE_LIMITED')),
         ).resolves.toMatchObject({ errorCode: 'MODEL_RATE_LIMITED', phase: 'FAILED' });
         // 不存在任务 id 的稳定错误。
-        await expect(unitOfWork.run((media) => media.completeTask('task_missing'))).rejects.toThrow(
-          'MEDIA_TASK_NOT_FOUND',
-        );
+        await expect(
+          unitOfWork.run(({ media }) => media.completeTask('task_missing')),
+        ).rejects.toThrow('MEDIA_TASK_NOT_FOUND');
 
         // 任务↔轮一一对应：建档时派生 max(round_no)+1；同镜头第二轮任务被
         // UNIQUE(shot_id, round_no) 拒绝（新轮须先落上一轮候选）。
@@ -656,7 +660,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
         );
 
         // 候选级 provider_task_id 留证（spec：首次 poll 前持久化）。
-        const pendingRound = await unitOfWork.run((media) =>
+        const pendingRound = await unitOfWork.run(({ media }) =>
           media.insertCandidates({
             candidateIds: ['cand_p1', 'cand_p2'],
             generationInputHash: hash64('gen_3'),
@@ -669,20 +673,20 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
         );
         expect(pendingRound.every((candidate) => candidate.providerTaskId === null)).toBe(true);
         await expect(
-          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_p1', 'pt_1')),
+          unitOfWork.run(({ media }) => media.assignCandidateProviderTask('cand_p1', 'pt_1')),
         ).resolves.toMatchObject({ providerTaskId: 'pt_1', status: 'PENDING' });
         // 幂等重放（同 taskId）安全；不同 taskId / 非 PENDING / 不存在分别稳定拒绝。
         await expect(
-          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_p1', 'pt_1')),
+          unitOfWork.run(({ media }) => media.assignCandidateProviderTask('cand_p1', 'pt_1')),
         ).resolves.toMatchObject({ providerTaskId: 'pt_1' });
         await expect(
-          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_p1', 'pt_2')),
+          unitOfWork.run(({ media }) => media.assignCandidateProviderTask('cand_p1', 'pt_2')),
         ).rejects.toThrow('MEDIA_CANDIDATE_TASK_CONFLICT');
         await expect(
-          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_round1', 'pt_3')),
+          unitOfWork.run(({ media }) => media.assignCandidateProviderTask('cand_round1', 'pt_3')),
         ).rejects.toThrow('MEDIA_CANDIDATE_TASK_CONFLICT');
         await expect(
-          unitOfWork.run((media) => media.assignCandidateProviderTask('cand_missing', 'pt_4')),
+          unitOfWork.run(({ media }) => media.assignCandidateProviderTask('cand_missing', 'pt_4')),
         ).rejects.toThrow('MEDIA_CANDIDATE_NOT_FOUND');
       } finally {
         database.close();
@@ -703,7 +707,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           readonly shotId: string;
           readonly shotVersionId: string;
         }) =>
-          unitOfWork.run((media) =>
+          unitOfWork.run(({ media }) =>
             media.insertTask({
               batchId: input.batchId,
               candidateCount: 4,
@@ -716,7 +720,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             }),
           );
         insertShot(database, 'shot_second', 'shotv_second');
-        const batch = await unitOfWork.run((media) =>
+        const batch = await unitOfWork.run(({ media }) =>
           media.insertBatch({
             id: 'batch_1',
             idempotencyKey: 'batch_req_1',
@@ -736,7 +740,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           shotId: 'shot_media',
           shotVersionId: 'shotv_media',
         });
-        await unitOfWork.run(async (media) => {
+        await unitOfWork.run(async ({ media }) => {
           await media.insertCandidates({
             candidateIds: ['cand_b1'],
             generationInputHash: hash64('gen_b1'),
@@ -769,16 +773,16 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           'shotv_second',
           1,
         );
-        await unitOfWork.run((media) => media.completeTask('task_b2'));
+        await unitOfWork.run(({ media }) => media.completeTask('task_b2'));
 
         // 队列排空后收尾：存在候选级失败成员 → PARTIAL_COMPLETED。
-        await unitOfWork.run((media) => media.takeNextPendingShot('batch_1'));
-        await unitOfWork.run((media) => media.takeNextPendingShot('batch_1'));
-        const finalized = await unitOfWork.run((media) => media.finalizeBatch('batch_1'));
+        await unitOfWork.run(({ media }) => media.takeNextPendingShot('batch_1'));
+        await unitOfWork.run(({ media }) => media.takeNextPendingShot('batch_1'));
+        const finalized = await unitOfWork.run(({ media }) => media.finalizeBatch('batch_1'));
         expect(finalized).toMatchObject({ status: 'PARTIAL_COMPLETED' });
 
         // 对照批次：全成功成员（复用 shot_second 的成功轮）→ COMPLETED。
-        await unitOfWork.run((media) =>
+        await unitOfWork.run(({ media }) =>
           media.insertBatch({
             id: 'batch_2',
             idempotencyKey: 'batch_req_2',
@@ -803,9 +807,9 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           'shotv_second',
           2,
         );
-        await unitOfWork.run((media) => media.completeTask('task_b3'));
-        await unitOfWork.run((media) => media.takeNextPendingShot('batch_2'));
-        const allSucceeded = await unitOfWork.run((media) => media.finalizeBatch('batch_2'));
+        await unitOfWork.run(({ media }) => media.completeTask('task_b3'));
+        await unitOfWork.run(({ media }) => media.takeNextPendingShot('batch_2'));
+        const allSucceeded = await unitOfWork.run(({ media }) => media.finalizeBatch('batch_2'));
         expect(allSucceeded).toMatchObject({ status: 'COMPLETED' });
       } finally {
         database.close();
@@ -820,7 +824,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
         const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
         await seedSucceededCandidate(unitOfWork, 'cand_stored', hash64('stored'));
         // 未落盘候选（PENDING）不命中。
-        await unitOfWork.run((media) =>
+        await unitOfWork.run(({ media }) =>
           media.insertCandidates({
             candidateIds: ['cand_pending'],
             generationInputHash: hash64('pending'),
@@ -832,20 +836,20 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           }),
         );
         await expect(
-          unitOfWork.run((media) => media.findCandidateMediaById('cand_stored')),
+          unitOfWork.run(({ media }) => media.findCandidateMediaById('cand_stored')),
         ).resolves.toEqual({
           byteSize: 1024,
           mimeType: 'image/png',
           storageRelPath: `projects/project_media/images/ff/${'f'.repeat(64)}.png`,
         });
         await expect(
-          unitOfWork.run((media) => media.findCandidateMediaById('cand_pending')),
+          unitOfWork.run(({ media }) => media.findCandidateMediaById('cand_pending')),
         ).resolves.toBeNull();
         await expect(
-          unitOfWork.run((media) => media.findCandidateMediaById('cand_unknown')),
+          unitOfWork.run(({ media }) => media.findCandidateMediaById('cand_unknown')),
         ).resolves.toBeNull();
 
-        await unitOfWork.run((media) =>
+        await unitOfWork.run(({ media }) =>
           media.createAsset({
             assetType: 'SCENE',
             bibleRefId: 'scene_media_lookup',
@@ -854,7 +858,7 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
             projectId: 'project_media',
           }),
         );
-        await unitOfWork.run((media) =>
+        await unitOfWork.run(({ media }) =>
           media.appendAssetVersion({
             assetId: 'asset_lookup',
             byteSize: 2048,
@@ -864,14 +868,14 @@ describe('SqliteMediaRepository / SqliteMediaUnitOfWork', () => {
           }),
         );
         await expect(
-          unitOfWork.run((media) => media.findAssetVersionMediaById('version_lookup')),
+          unitOfWork.run(({ media }) => media.findAssetVersionMediaById('version_lookup')),
         ).resolves.toEqual({
           byteSize: 2048,
           mimeType: 'image/webp',
           storageRelPath: `projects/project_media/assets/aa/${'a'.repeat(64)}.webp`,
         });
         await expect(
-          unitOfWork.run((media) => media.findAssetVersionMediaById('version_missing')),
+          unitOfWork.run(({ media }) => media.findAssetVersionMediaById('version_missing')),
         ).resolves.toBeNull();
       } finally {
         database.close();
@@ -888,7 +892,7 @@ const seedSucceededCandidate = async (
   shotVersionId = 'shotv_media',
   roundNo = 1,
 ): Promise<void> => {
-  await unitOfWork.run(async (media) => {
+  await unitOfWork.run(async ({ media }) => {
     await media.insertCandidates({
       candidateIds: [candidateId],
       generationInputHash,

@@ -2,11 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import type { AppResultDto, MediaTaskViewDto } from '@jingxu/contracts';
 
-import type {
-  MediaRepository,
-  MediaStaleAffectedShot,
-  MediaUnitOfWorkPort,
-} from '../ports/media/media-repository';
+import type { MediaStaleAffectedShot, MediaUnitOfWorkPort } from '../ports/media/media-repository';
+import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
 import type { ImageApiService } from './image-api-service';
 import { createImageApiService } from './image-api-service';
@@ -72,7 +69,10 @@ const buildFixture = (
   assertCredentialReady?: () => Promise<void>,
 ): Fixture => {
   const repository = new InMemoryMediaRepository();
-  const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
+  const unitOfWork: MediaUnitOfWorkPort = {
+    run: (work) =>
+      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+  };
   const kicked: string[] = [];
   const writes: { byteSize: number; projectId: string; sha256: string }[] = [];
   let counter = 0;
@@ -112,8 +112,11 @@ const seedSucceededCandidate = async (
   repository: InMemoryMediaRepository,
   candidateId: string,
 ): Promise<void> => {
-  const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
-  const inserted = await unitOfWork.run((media: MediaRepository) =>
+  const unitOfWork: MediaUnitOfWorkPort = {
+    run: (work) =>
+      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+  };
+  const inserted = await unitOfWork.run(({ media }) =>
     media.insertCandidates({
       candidateIds: [candidateId],
       generationInputHash: hash64('gen'),
@@ -126,7 +129,7 @@ const seedSucceededCandidate = async (
   );
   const id = inserted[0]?.id;
   if (id === undefined) throw new Error('candidate not seeded');
-  await unitOfWork.run((media: MediaRepository) =>
+  await unitOfWork.run(({ media }) =>
     media.completeCandidateSucceeded(id, {
       byteSize: 4,
       fileSha256: hash64('file'),
@@ -247,8 +250,11 @@ describe('createImageApiService', () => {
     const fixture = buildFixture();
     await seedSucceededCandidate(fixture.repository, 'cand_a_1');
     await seedSucceededCandidate(fixture.repository, 'cand_b_1');
-    const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(fixture.repository) };
-    await unitOfWork.run((media) => media.selectCandidate('shot_1', 'cand_a_1'));
+    const unitOfWork: MediaUnitOfWorkPort = {
+      run: (work) =>
+        work({ invocations: new InMemoryMediaInvocationRepository(), media: fixture.repository }),
+    };
+    await unitOfWork.run(({ media }) => media.selectCandidate('shot_1', 'cand_a_1'));
     const result = await fixture.service.selectCandidate(
       { candidateId: 'cand_b_1', projectId: 'project_1', requestId: 'request_select_1' },
       'trace_1',
@@ -366,8 +372,11 @@ describe('createImageApiService', () => {
 
   it('listAssets—currentVersion 指向最新版本—空资产 currentVersion 为 null', async () => {
     const fixture = buildFixture();
-    const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(fixture.repository) };
-    const bare = await unitOfWork.run((media) =>
+    const unitOfWork: MediaUnitOfWorkPort = {
+      run: (work) =>
+        work({ invocations: new InMemoryMediaInvocationRepository(), media: fixture.repository }),
+    };
+    const bare = await unitOfWork.run(({ media }) =>
       media.createAsset({
         assetType: 'SCENE',
         bibleRefId: 'scene_alley',
@@ -402,8 +411,11 @@ describe('createImageApiService', () => {
 
   it('getMediaTask—命中返回视图—未命中 MEDIA_TASK_NOT_FOUND', async () => {
     const fixture = buildFixture();
-    const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(fixture.repository) };
-    await unitOfWork.run((media) =>
+    const unitOfWork: MediaUnitOfWorkPort = {
+      run: (work) =>
+        work({ invocations: new InMemoryMediaInvocationRepository(), media: fixture.repository }),
+    };
+    await unitOfWork.run(({ media }) =>
       media.insertTask({
         candidateCount: 4,
         generationInputHash: hash64('gen'),

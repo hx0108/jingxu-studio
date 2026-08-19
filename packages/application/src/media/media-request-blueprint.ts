@@ -11,11 +11,7 @@
  */
 
 import type { FormatProfileRepository } from '../ports/project/format-profile-repository';
-import type {
-  MediaRepository,
-  MediaTaskRecord,
-  MediaUnitOfWorkPort,
-} from '../ports/media/media-repository';
+import type { MediaTaskRecord, MediaUnitOfWorkPort } from '../ports/media/media-repository';
 import type { ImageReferencePayload } from '../ports/image-model/image-model-types';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
 import {
@@ -114,7 +110,7 @@ export const createMediaRequestBlueprintBuilder = (
     const size = profile === undefined ? null : resolveImageSize(profile.spec.aspectRatio);
     if (size === null) throw new Error('MEDIA_BLUEPRINT_SIZE_INVALID');
 
-    const candidates = await dependencies.mediaUnitOfWork.run((media: MediaRepository) =>
+    const candidates = await dependencies.mediaUnitOfWork.run(({ media }) =>
       media.listCandidates(task.shotId),
     );
     const modelId = candidates.find((candidate) => candidate.roundNo === task.roundNo)?.modelId;
@@ -139,7 +135,7 @@ export const createMediaRequestBlueprintBuilder = (
     ];
     const referenceImages: ImageReferencePayload[] = [];
     for (const binding of bindings.slice(0, 14)) {
-      const version = await dependencies.mediaUnitOfWork.run((media: MediaRepository) =>
+      const version = await dependencies.mediaUnitOfWork.run(({ media }) =>
         media.findCurrentAssetVersion(task.projectId, binding.type, binding.bibleRefId),
       );
       if (version === null) continue;

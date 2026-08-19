@@ -6,6 +6,8 @@
  * 内容寻址文件由 ContentAddressedStore 落盘，这里只登记哈希与元数据。
  */
 
+import type { MediaInvocationRepository } from './media-invocation-repository';
+
 export type MediaAssetType = 'CHARACTER' | 'SCENE';
 
 export type MediaAssetProvenance = 'UPLOADED';
@@ -367,7 +369,13 @@ export interface MediaRepository {
   listLatestTaskPerShot(projectId: string): Promise<readonly MediaTaskRecord[]>;
 }
 
+/** 媒体事务内可见的仓储集合（沿 JobRepositories 先例；media-invocation-evidence design D4）。 */
+export interface MediaRepositories {
+  readonly media: MediaRepository;
+  readonly invocations: MediaInvocationRepository;
+}
+
 /** 媒体读写事务边界：单一 `BEGIN IMMEDIATE`，work 抛出即回滚（沿 ProjectUnitOfWorkPort 语义）。 */
 export interface MediaUnitOfWorkPort {
-  run<T>(work: (media: MediaRepository) => Promise<T>): Promise<T>;
+  run<T>(work: (repos: MediaRepositories) => Promise<T>): Promise<T>;
 }

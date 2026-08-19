@@ -10,6 +10,7 @@ import type {
   StoryboardShotSnapshot,
 } from '../ports/script/script-types';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
+import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
 import { createMediaRequestBlueprintBuilder } from './media-request-blueprint';
 
@@ -81,7 +82,10 @@ interface Fixture {
 
 const fixture = (snapshot: ScriptWorkspaceSnapshot | null): Fixture => {
   const repository = new InMemoryMediaRepository();
-  const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
+  const unitOfWork: MediaUnitOfWorkPort = {
+    run: (work) =>
+      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+  };
   const workspaceQuery: ScriptWorkspaceQueryPort & {
     snapshot: ScriptWorkspaceSnapshot | null;
   } = {
@@ -156,8 +160,11 @@ const snapshotOf = (
 });
 
 const seedTask = async (repository: InMemoryMediaRepository): Promise<string> => {
-  const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
-  const task = await unitOfWork.run((media) =>
+  const unitOfWork: MediaUnitOfWorkPort = {
+    run: (work) =>
+      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+  };
+  const task = await unitOfWork.run(({ media }) =>
     media.insertTask({
       candidateCount: 4,
       generationInputHash: hash64('gen'),
@@ -168,7 +175,7 @@ const seedTask = async (repository: InMemoryMediaRepository): Promise<string> =>
       shotVersionId: 'scv_1',
     }),
   );
-  await unitOfWork.run((media) =>
+  await unitOfWork.run(({ media }) =>
     media.insertCandidates({
       candidateIds: ['c_1', 'c_2', 'c_3', 'c_4'],
       generationInputHash: hash64('gen'),
@@ -187,8 +194,11 @@ const seedAsset = async (
   assetType: 'CHARACTER' | 'SCENE',
   bibleRefId: string,
 ): Promise<void> => {
-  const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
-  const asset = await unitOfWork.run((media) =>
+  const unitOfWork: MediaUnitOfWorkPort = {
+    run: (work) =>
+      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+  };
+  const asset = await unitOfWork.run(({ media }) =>
     media.createAsset({
       assetType,
       bibleRefId,
@@ -197,7 +207,7 @@ const seedAsset = async (
       projectId: 'project_1',
     }),
   );
-  await unitOfWork.run((media) =>
+  await unitOfWork.run(({ media }) =>
     media.appendAssetVersion({
       assetId: asset.id,
       byteSize: 3,
@@ -284,8 +294,11 @@ describe('createMediaRequestBlueprintBuilder', () => {
       snapshotOf([shot1(shotDocument(['char_hero'], 'scene_alley'))], bibleDocument()),
     );
     const repository = fixture_.repository;
-    const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
-    const task = await unitOfWork.run((media) =>
+    const unitOfWork: MediaUnitOfWorkPort = {
+      run: (work) =>
+        work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+    };
+    const task = await unitOfWork.run(({ media }) =>
       media.insertTask({
         candidateCount: 4,
         generationInputHash: hash64('gen'),
@@ -302,8 +315,11 @@ describe('createMediaRequestBlueprintBuilder', () => {
 
 /** 从仓储取回种下的任务行（build 消费 MediaTaskRecord）。 */
 const unitOfWorkTask = async (repository: InMemoryMediaRepository): Promise<MediaTaskRecord> => {
-  const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
-  const task = await unitOfWork.run((media) => media.findTaskById('project_1', 'task_1'));
+  const unitOfWork: MediaUnitOfWorkPort = {
+    run: (work) =>
+      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+  };
+  const task = await unitOfWork.run(({ media }) => media.findTaskById('project_1', 'task_1'));
   if (task === null) throw new Error('task_1 not seeded');
   return task;
 };

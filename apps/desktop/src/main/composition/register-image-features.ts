@@ -329,7 +329,7 @@ export const createImageFeatureRegistration = ({
               scheduler.kick(ref.projectId);
             }),
           );
-          const batchProjectIds = await mediaUnitOfWork.run((media) =>
+          const batchProjectIds = await mediaUnitOfWork.run(({ media }) =>
             media.listRunningBatchProjectIds(),
           );
           for (const projectId of batchProjectIds) scheduler.kick(projectId);

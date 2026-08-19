@@ -9,6 +9,7 @@ import type {
 } from '../ports/script/script-types';
 import type { FormatProfile } from '@jingxu/domain';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
+import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
 import { computeGenerationInputHash } from './media-generation-prompt';
 import { createMediaGenerationService } from './media-generation-service';
@@ -108,7 +109,10 @@ const fixture = (
   status: EpisodeVersion['status'] = 'READY',
 ): Fixture => {
   const repository = new InMemoryMediaRepository();
-  const unitOfWork: MediaUnitOfWorkPort = { run: (work) => work(repository) };
+  const unitOfWork: MediaUnitOfWorkPort = {
+    run: (work) =>
+      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+  };
   const workspaceQuery: ScriptWorkspaceQueryPort & {
     snapshot: ScriptWorkspaceSnapshot | null;
   } = {
