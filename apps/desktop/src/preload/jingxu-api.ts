@@ -44,6 +44,8 @@ import {
   saveScriptDraftInputSchema,
   shotEditLockSummarySchema,
   storyboardEditShotInputSchema,
+  storyboardExportEpisodeInputSchema,
+  storyboardExportResultSchema,
   storyboardLockShotInputSchema,
   storyboardUnlockShotInputSchema,
   STORYBOARD_IPC_CHANNELS,
@@ -85,6 +87,7 @@ import {
   type RestoreScriptVersionInputDto,
   type SaveScriptDraftInputDto,
   type StoryboardEditShotInputDto,
+  type StoryboardExportEpisodeInputDto,
   type StoryboardLockShotInputDto,
   type StoryboardUnlockShotInputDto,
   type SelectCandidateInputDto,
@@ -308,6 +311,13 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
           await invoke(
             STORYBOARD_IPC_CHANNELS.editShot,
             storyboardEditShotInputSchema.parse(input),
+          ),
+        ),
+      exportEpisode: async (input: StoryboardExportEpisodeInputDto) =>
+        appResultSchema(storyboardExportResultSchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.exportEpisode,
+            storyboardExportEpisodeInputSchema.parse(input),
           ),
         ),
       lockShot: async (input: StoryboardLockShotInputDto) =>

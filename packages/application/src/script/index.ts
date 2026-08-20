@@ -29,6 +29,16 @@ export {
   type ShotLockTargetInput,
 } from './shot-edit-lock-service';
 export {
+  assembleStoryboardExport,
+  createStoryboardExportService,
+  type StoryboardExportAssemblyInput,
+  type StoryboardExportFileSink,
+  type StoryboardExportInput,
+  type StoryboardExportService,
+  type StoryboardExportServiceDependencies,
+  type StoryboardExportSummary,
+} from './storyboard-export-service';
+export {
   changedEditableRoots,
   LOCKABLE_ROOTS,
   EDITABLE_ROOTS,

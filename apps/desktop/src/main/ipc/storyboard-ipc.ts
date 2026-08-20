@@ -5,6 +5,8 @@ import {
   STORYBOARD_IPC_CHANNELS,
   shotEditLockSummarySchema,
   storyboardEditShotInputSchema,
+  storyboardExportEpisodeInputSchema,
+  storyboardExportResultSchema,
   storyboardLockShotInputSchema,
   storyboardUnlockShotInputSchema,
 } from '@jingxu/contracts';
@@ -12,6 +14,8 @@ import type {
   AppResultDto,
   ShotEditLockSummaryDto,
   StoryboardEditShotInputDto,
+  StoryboardExportEpisodeInputDto,
+  StoryboardExportResultDto,
   StoryboardLockShotInputDto,
   StoryboardUnlockShotInputDto,
 } from '@jingxu/contracts';
@@ -28,12 +32,16 @@ export interface StoryboardIpcRegistrar {
   ): void;
 }
 
-/** Main 注入的分镜编辑/锁定用例；IPC Host 不接触 Repository 或数据库连接。 */
+/** Main 注入的分镜编辑/锁定/导出用例；IPC Host 不接触 Repository 或数据库连接。 */
 export interface StoryboardIpcService {
   readonly editShot: (
     input: StoryboardEditShotInputDto,
     traceId: string,
   ) => Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  readonly exportEpisode: (
+    input: StoryboardExportEpisodeInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<StoryboardExportResultDto>>;
   readonly lockShot: (
     input: StoryboardLockShotInputDto,
     traceId: string,
@@ -117,7 +125,7 @@ const parseOutput = async <T>(
   }
 };
 
-/** 注册三个 storyboard.* 命令 channel，并按 sender、DTO、启动门、Application、输出依次校验。 */
+/** 注册四个 storyboard.* 命令 channel，并按 sender、DTO、启动门、Application、输出依次校验。 */
 export const registerStoryboardIpc = (
   registrar: StoryboardIpcRegistrar,
   service: StoryboardIpcService,
@@ -126,12 +134,12 @@ export const registerStoryboardIpc = (
   traceIds: StoryboardIpcTraceIds = { newTraceId: randomUUID },
 ): void => {
   const coordinator = new StoryboardRequestCoordinator();
-  const summaryResult = appResultSchema(shotEditLockSummarySchema);
 
-  const registerCommand = <TInput extends { readonly requestId: string }>(
+  const registerCommand = <TInput extends { readonly requestId: string }, TOutput>(
     channel: string,
     inputSchema: ZodType<TInput>,
-    invoke: (input: TInput, traceId: string) => Promise<AppResultDto<ShotEditLockSummaryDto>>,
+    outputSchema: ZodType<AppResultDto<TOutput>>,
+    invoke: (input: TInput, traceId: string) => Promise<AppResultDto<TOutput>>,
   ): void => {
     registrar.handle(channel, (event, ...arguments_) => {
       assertTrustedIpcSender(event, trustedUrl);
@@ -145,25 +153,35 @@ export const registerStoryboardIpc = (
       return coordinator.run(
         input.requestId,
         signature,
-        () => parseOutput(summaryResult, () => invoke(input, traceId), traceId),
+        () => parseOutput(outputSchema, () => invoke(input, traceId), traceId),
         () => errorResult('REQUEST_ID_REUSED', traceId),
       );
     });
   };
 
+  const summaryResult = appResultSchema(shotEditLockSummarySchema);
   registerCommand(
     STORYBOARD_IPC_CHANNELS.editShot,
     storyboardEditShotInputSchema,
+    summaryResult,
     (input, traceId) => service.editShot(input, traceId),
+  );
+  registerCommand(
+    STORYBOARD_IPC_CHANNELS.exportEpisode,
+    storyboardExportEpisodeInputSchema,
+    appResultSchema(storyboardExportResultSchema),
+    (input, traceId) => service.exportEpisode(input, traceId),
   );
   registerCommand(
     STORYBOARD_IPC_CHANNELS.lockShot,
     storyboardLockShotInputSchema,
+    summaryResult,
     (input, traceId) => service.lockShot(input, traceId),
   );
   registerCommand(
     STORYBOARD_IPC_CHANNELS.unlockShot,
     storyboardUnlockShotInputSchema,
+    summaryResult,
     (input, traceId) => service.unlockShot(input, traceId),
   );
 };

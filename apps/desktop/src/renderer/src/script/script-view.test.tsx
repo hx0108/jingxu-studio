@@ -9,6 +9,7 @@ import type {
   StoryboardWorkspaceDto,
 } from '@jingxu/contracts';
 
+import { ExportDeviationDialog } from './ExportDeviationDialog';
 import { OriginalInput } from './OriginalInput';
 import { ProviderSettings } from './ProviderSettings';
 import { StoryboardPanel } from './StoryboardPanel';
@@ -114,6 +115,8 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         imageStates={null}
         onBatchCancel={vi.fn()}
         onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        exportNotice={null}
         onLockShot={vi.fn()}
         onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
@@ -158,6 +161,64 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     expect(html).toContain('七类根字段加锁');
     expect(html).toContain('v1 · READY · 2 个镜头');
     expect(html).toContain('恢复为新草稿');
+    // storyboard-export：非 READY 整集不渲染导出入口（spec 工作台入口场景）。
+    expect(html).not.toContain('导出整集');
+  });
+
+  it('READY 整集—渲染导出入口并展示不含路径的成功回执通知', () => {
+    const storyboard: StoryboardWorkspaceDto = {
+      current: storyboardVersion({
+        id: 'episodever_0001',
+        shotCount: 2,
+        status: 'READY',
+        versionNo: 3,
+      }),
+      history: [],
+      shots: [
+        shotSummary({
+          narrativePurpose: '雨夜车厢大远景开场',
+          sequence: 1,
+          shotId: 'shot_00000001',
+          targetDurationSec: 12,
+        }),
+        shotSummary({
+          narrativePurpose: '林夜攥紧怀表起身',
+          sequence: 2,
+          shotId: 'shot_00000002',
+          targetDurationSec: 8,
+        }),
+      ],
+      totalDurationSec: 20,
+    };
+    const html = renderToStaticMarkup(
+      <StoryboardPanel
+        batchBusy={false}
+        episodeTargetDurationSec={90}
+        exportNotice="导出成功：export_abc123（sha256 …a1b2，1024 字节）"
+        generateHint={null}
+        imageStates={null}
+        job={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onConfirm={vi.fn()}
+        onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        onGenerate={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
+        onLockShot={vi.fn()}
+        onRestore={vi.fn()}
+        onUnlockShot={vi.fn()}
+        pending={false}
+        projectId="project_12345678"
+        storyboard={storyboard}
+      />,
+    );
+    expect(html).toContain('name="export-episode"');
+    expect(html).toContain('导出整集');
+    // 成功通知只含 exportId 与哈希尾 4 位，绝不含文件路径（路径红线）。
+    expect(html).toContain('导出成功：export_abc123（sha256 …a1b2，1024 字节）');
+    expect(html).not.toContain('.json');
+    expect(html).not.toContain('文件路径');
   });
 
   it('尚未生成分镜—空态提示、未生成徽标且无镜头卡片', () => {
@@ -168,6 +229,8 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         imageStates={null}
         onBatchCancel={vi.fn()}
         onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        exportNotice={null}
         onLockShot={vi.fn()}
         onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
@@ -197,6 +260,8 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         imageStates={null}
         onBatchCancel={vi.fn()}
         onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        exportNotice={null}
         onLockShot={vi.fn()}
         onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
@@ -232,6 +297,8 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         imageStates={null}
         onBatchCancel={vi.fn()}
         onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        exportNotice={null}
         onLockShot={vi.fn()}
         onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
@@ -359,6 +426,8 @@ describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () 
         job={null}
         onBatchCancel={vi.fn()}
         onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        exportNotice={null}
         onLockShot={vi.fn()}
         onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
@@ -401,6 +470,8 @@ describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () 
         job={null}
         onBatchCancel={vi.fn()}
         onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        exportNotice={null}
         onLockShot={vi.fn()}
         onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
@@ -435,6 +506,8 @@ describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () 
         job={null}
         onBatchCancel={vi.fn()}
         onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        exportNotice={null}
         onLockShot={vi.fn()}
         onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
@@ -458,5 +531,39 @@ describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () 
     expect(html).toContain('为整集生成首帧');
     expect(html).toContain('分镜整集确认 READY 后可为整集批量生成首帧。');
     expect(html).not.toContain('batch-progress');
+  });
+});
+
+describe('ExportDeviationDialog 可观察基线（storyboard-export D5）', () => {
+  it('打开时展示实际 Σ 与必填原因输入，未填原因时确认按钮禁用', () => {
+    const html = renderToStaticMarkup(
+      <ExportDeviationDialog
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+        open
+        pending={false}
+        totalDurationSec="48"
+      />,
+    );
+    expect(html).toContain('整集时长偏离目标区间');
+    expect(html).toContain('当前镜头时长合计 48s');
+    expect(html).toContain('偏离 60–120 秒目标区间');
+    expect(html).toContain('id="export-deviation-reason"');
+    // 初始原因为空：确认按钮禁用（唯一 disabled 出自确认按钮），防止无原因越带导出。
+    expect(html).toContain('name="export-deviation-confirm"');
+    expect(html).toContain('disabled=""');
+  });
+
+  it('关闭时不渲染任何内容', () => {
+    const html = renderToStaticMarkup(
+      <ExportDeviationDialog
+        onCancel={vi.fn()}
+        onConfirm={vi.fn()}
+        open={false}
+        pending={false}
+        totalDurationSec="48"
+      />,
+    );
+    expect(html).toBe('');
   });
 });

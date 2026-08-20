@@ -11,6 +11,7 @@ import type {
   StoryboardVersionSummaryDto,
 } from '@jingxu/contracts';
 
+import { ExportDeviationDialog } from './ExportDeviationDialog';
 import { OriginalInput } from './OriginalInput';
 import { StoryboardPanel } from './StoryboardPanel';
 import { ProviderSettings } from './ProviderSettings';
@@ -57,6 +58,9 @@ export const ScriptWorkspaceView = ({
   const [dirty, setDirty] = useState(false);
   const [pendingStage, setPendingStage] = useState<Stage | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
+  // storyboard-export：成功回执通知（不含路径红线）与 Σ 偏离确认弹层状态（D5）。
+  const [exportNotice, setExportNotice] = useState<string | null>(null);
+  const [deviation, setDeviation] = useState<{ readonly totalDurationSec: string } | null>(null);
   const imageStates = useStoryboardImageStates(projectId);
 
   // 整集首帧批次命令（batch-first-frame 5.2）：发起=全量镜头（服务端当前世代跳过，
@@ -312,6 +316,42 @@ export const ScriptWorkspaceView = ({
       else {
         await refresh();
         onCommitted?.();
+      }
+    } catch {
+      setError(rendererTransportError());
+    }
+    setPending(false);
+  };
+
+  // 整集导出（storyboard-export D5 单命令确认重发）：EXPORT_DURATION_DEVIATION 弹
+  // 偏离确认；EXPORT_CANCELLED 静默；成功只展示 exportId 与哈希尾 4 位（路径红线）。
+  const performStoryboardExport = async (
+    options: Readonly<{ deviationReason?: string; warnConfirmed?: boolean }>,
+  ): Promise<void> => {
+    const currentStoryboard = workspace?.storyboard.current ?? null;
+    if (workspace === null || currentStoryboard === null || pending) return;
+    setPending(true);
+    setError(null);
+    setExportNotice(null);
+    try {
+      const result = await getStoryboardClient().exportEpisode({
+        deviationReason: options.deviationReason ?? null,
+        episodeId: workspace.episode.id,
+        expectedVersionId: currentStoryboard.id,
+        projectId,
+        requestId: createScriptRequestId('storyboard-export'),
+        warnConfirmed: options.warnConfirmed,
+      });
+      if (result.ok) {
+        setExportNotice(
+          `导出成功：${result.data.exportId}（sha256 …${result.data.fileSha256.slice(-4)}，${String(
+            result.data.byteSize,
+          )} 字节）`,
+        );
+      } else if (result.error.code === 'EXPORT_DURATION_DEVIATION') {
+        setDeviation({ totalDurationSec: result.error.fieldErrors?.totalDurationSec ?? '' });
+      } else if (result.error.code !== 'EXPORT_CANCELLED') {
+        setError(result.error);
       }
     } catch {
       setError(rendererTransportError());
@@ -575,6 +615,7 @@ export const ScriptWorkspaceView = ({
       <StoryboardPanel
         batchBusy={batchBusy}
         episodeTargetDurationSec={workspace.episode.targetDurationSec}
+        exportNotice={exportNotice}
         generateHint={storyboardGenerateHint}
         imageStates={imageStates.states}
         job={job}
@@ -587,6 +628,9 @@ export const ScriptWorkspaceView = ({
               void performStoryboardCommand('confirm', currentStoryboard);
             }
           }
+        }}
+        onExportEpisode={() => {
+          void performStoryboardExport({});
         }}
         onGenerate={() => {
           if (sceneScriptCurrent?.status !== 'READY') return;
@@ -640,6 +684,20 @@ export const ScriptWorkspaceView = ({
         open={pendingStage !== null}
         pending={pending}
       />
+      {deviation !== null && (
+        <ExportDeviationDialog
+          onCancel={() => {
+            setDeviation(null);
+          }}
+          onConfirm={(reason) => {
+            setDeviation(null);
+            void performStoryboardExport({ deviationReason: reason, warnConfirmed: true });
+          }}
+          open
+          pending={pending}
+          totalDurationSec={deviation.totalDurationSec}
+        />
+      )}
     </section>
   );
 };

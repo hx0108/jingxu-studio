@@ -326,8 +326,13 @@ test('分镜逐镜头编辑与锁定—编辑往返/锁阻断/解锁/非法路�
     expect(dataPath.unrelatedLockedPaths).toEqual(['/dialogue']);
     expect(dataPath.invalidPointerCode).toBe('SHOT_LOCK_POINTER_INVALID');
     expect(dataPath.unlockedPaths).toEqual([]);
-    // storyboard 命名空间白名单（D4）。
-    expect(dataPath.storyboardKeys).toEqual(['editShot', 'lockShot', 'unlockShot']);
+    // storyboard 命名空间白名单（D4；storyboard-export 起第 4 方法 exportEpisode）。
+    expect(dataPath.storyboardKeys).toEqual([
+      'editShot',
+      'exportEpisode',
+      'lockShot',
+      'unlockShot',
+    ]);
     expect(dataPath.storyboardFrozen).toBe(true);
 
     // ---- UI 通路：项目导航、编辑入口、锁徽标、锁阻断错误、七根级入口 ----
