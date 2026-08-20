@@ -69,3 +69,8 @@ export type {
   VideoGenerationService,
   VideoGenerationServiceDependencies,
 } from './video-generation-service';
+export { createVideoRequestBlueprintBuilder } from './video-request-blueprint';
+export type {
+  VideoRequestBlueprintBuilder,
+  VideoRequestBlueprintBuilderDependencies,
+} from './video-request-blueprint';
