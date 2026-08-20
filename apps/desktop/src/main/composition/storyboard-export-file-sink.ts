@@ -25,9 +25,13 @@ export const createDialogStoryboardExportSink = (
       targetPath = join(options.exportDir, defaultFileName);
     } else {
       const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
+      // deliverables：默认名扩展名由服务按 format 派生（.json/.md），过滤器随之。
+      const markdown = defaultFileName.endsWith('.md');
       const dialogOptions = {
         defaultPath: defaultFileName,
-        filters: [{ extensions: ['json'], name: 'JSON' }],
+        filters: markdown
+          ? [{ extensions: ['md'], name: 'Markdown' }]
+          : [{ extensions: ['json'], name: 'JSON' }],
       };
       const picked =
         window === null

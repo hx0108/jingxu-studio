@@ -476,4 +476,75 @@ describe('StoryboardExportService READY_EXPORT 门禁与三段式用例', () => 
     if (result.ok) return;
     expect(result.error.code).toBe('PROJECT_PERSISTENCE_FAILED');
   });
+
+  it('format=MARKDOWN_TABLE：同门禁同回执—分镜表默认名/.md 渲染/审计 format 留痕（deliverables D1）', async () => {
+    const { audits, service, sinkCalls } = createHarness();
+    const result = await service.exportEpisode(
+      { ...baseInput, format: 'MARKDOWN_TABLE' },
+      'trace-10',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.exportId).toBe('export_newid-1');
+    expect(sinkCalls).toHaveLength(1);
+    expect(sinkCalls[0]?.defaultFileName).toBe(`storyboard_${PROJECT_ID}_${EPISODE_ID}_v3.md`);
+    expect(sinkCalls[0]?.content).toContain('# 分镜表：');
+    expect(sinkCalls[0]?.content).toContain('| 镜头号 | 景别 | 运镜 |');
+    expect(sinkCalls[0]?.content).not.toContain('"schema_version"');
+    expect((audits[0]?.metadata as Readonly<Record<string, unknown>>).format).toBe(
+      'MARKDOWN_TABLE',
+    );
+  });
+
+  it('format=PRODUCIBILITY_REPORT：报告默认名/规则版本随文/审计 format 留痕', async () => {
+    const { audits, service, sinkCalls } = createHarness();
+    const result = await service.exportEpisode(
+      { ...baseInput, format: 'PRODUCIBILITY_REPORT' },
+      'trace-11',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(sinkCalls[0]?.defaultFileName).toBe(`report_${PROJECT_ID}_${EPISODE_ID}_v3.md`);
+    expect(sinkCalls[0]?.content).toContain('# 可生产性报告：');
+    expect(sinkCalls[0]?.content).toContain('jingxu-producibility-rules/1');
+    expect((audits[0]?.metadata as Readonly<Record<string, unknown>>).format).toBe(
+      'PRODUCIBILITY_REPORT',
+    );
+  });
+
+  it('缺省 format：JSON 默认名与审计 format=EPISODE_JSON（向后兼容）', async () => {
+    const { audits, service, sinkCalls } = createHarness();
+    const result = await service.exportEpisode(baseInput, 'trace-12');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(sinkCalls[0]?.defaultFileName).toBe(`export_${PROJECT_ID}_${EPISODE_ID}_v3.json`);
+    expect((audits[0]?.metadata as Readonly<Record<string, unknown>>).format).toBe('EPISODE_JSON');
+  });
+
+  it('偏离确认 + format=PRODUCIBILITY_REPORT：Σ 判定与原因留痕对 Markdown 交付物同样生效', async () => {
+    const deviating = createHarness({ durations: [15, 15] });
+    const rejected = await deviating.service.exportEpisode(
+      { ...baseInput, format: 'PRODUCIBILITY_REPORT' },
+      'trace-13a',
+    );
+    expect(rejected.ok).toBe(false);
+    if (rejected.ok) return;
+    expect(rejected.error.code).toBe('EXPORT_DURATION_DEVIATION');
+    expect(deviating.sinkCalls).toHaveLength(0);
+    const confirmed = await deviating.service.exportEpisode(
+      {
+        ...baseInput,
+        deviationReason: '快闪风格整集',
+        format: 'PRODUCIBILITY_REPORT',
+        requestId: 'request-export-13',
+        warnConfirmed: true,
+      },
+      'trace-13b',
+    );
+    expect(confirmed.ok).toBe(true);
+    const metadata = deviating.audits[0]?.metadata as Readonly<Record<string, unknown>>;
+    expect(metadata.format).toBe('PRODUCIBILITY_REPORT');
+    expect(metadata.deviationReason).toBe('快闪风格整集');
+    expect(deviating.sinkCalls[0]?.content).toContain('- 偏离确认：已确认偏离，原因：快闪风格整集');
+  });
 });

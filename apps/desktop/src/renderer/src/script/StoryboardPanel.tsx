@@ -3,6 +3,7 @@ import { useState } from 'react';
 import type {
   JobSummaryDto,
   StoryboardEditShotInputDto,
+  StoryboardExportFormat,
   StoryboardImageStatesDto,
   StoryboardLockShotInputDto,
   StoryboardShotSummaryDto,
@@ -83,8 +84,8 @@ export interface StoryboardPanelProps {
   readonly onConfirm: () => void;
   /** 逐镜头编辑/锁定/解锁命令（shot-edit-lock D1/D3）；面板组装完整 DTO 输入。 */
   readonly onEditShot: (input: StoryboardEditShotInputDto) => void;
-  /** storyboard-export：READY 整集导出入口（非 READY 面板不渲染按钮）。 */
-  readonly onExportEpisode: () => void;
+  /** storyboard-export：READY 整集三导出入口（deliverables D3；非 READY 不渲染）。 */
+  readonly onExportEpisode: (format: StoryboardExportFormat) => void;
   readonly exportNotice: string | null;
   readonly onGenerate: () => void;
   readonly onGenerateFirstFrames: () => void;
@@ -205,11 +206,40 @@ export const StoryboardPanel = ({
         >
           为整集生成首帧
         </button>
-        {/* storyboard-export：READY 才渲染入口（spec：非 READY 不渲染）。 */}
+        {/* storyboard-export：READY 才渲染三导出入口（spec：非 READY 不渲染）。 */}
         {current?.status === 'READY' && (
-          <button disabled={pending} name="export-episode" onClick={onExportEpisode} type="button">
-            导出整集
-          </button>
+          <>
+            <button
+              disabled={pending}
+              name="export-episode"
+              onClick={() => {
+                onExportEpisode('EPISODE_JSON');
+              }}
+              type="button"
+            >
+              导出整集
+            </button>
+            <button
+              disabled={pending}
+              name="export-episode-markdown"
+              onClick={() => {
+                onExportEpisode('MARKDOWN_TABLE');
+              }}
+              type="button"
+            >
+              导出分镜表
+            </button>
+            <button
+              disabled={pending}
+              name="export-episode-report"
+              onClick={() => {
+                onExportEpisode('PRODUCIBILITY_REPORT');
+              }}
+              type="button"
+            >
+              导出报告
+            </button>
+          </>
         )}
       </div>
       {exportNotice !== null && (

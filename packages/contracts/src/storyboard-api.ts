@@ -64,6 +64,17 @@ export type StoryboardUnlockShotInputDto = z.infer<typeof storyboardUnlockShotIn
 export type ShotEditLockSummaryDto = z.infer<typeof shotEditLockSummarySchema>;
 
 /**
+ * 交付物形态（storyboard-export-deliverables D1）：三值枚举，缺省 EPISODE_JSON
+ * 保持旧调用面向后兼容；回执五键格式无关。
+ */
+export const storyboardExportFormatSchema = z.enum([
+  'EPISODE_JSON',
+  'MARKDOWN_TABLE',
+  'PRODUCIBILITY_REPORT',
+]);
+export type StoryboardExportFormat = z.infer<typeof storyboardExportFormatSchema>;
+
+/**
  * Σ 软带偏离确认（storyboard-export D5）：服务端是算带事实源，契约层只做
  * 形状粗校验；deviationReason 非空判定在服务层（EXPORT_DURATION_DEVIATION）。
  */
@@ -73,6 +84,8 @@ export const storyboardExportEpisodeInputSchema = z
     deviationReason: z.string().max(280).nullable().optional(),
     episodeId: idSchema,
     expectedVersionId: idSchema,
+    /** 交付物形态；缺省 EPISODE_JSON（旧调用不带 format 仍为 JSON 导出）。 */
+    format: storyboardExportFormatSchema.default('EPISODE_JSON'),
     projectId: projectIdSchema,
     requestId: requestIdSchema,
     warnConfirmed: z.boolean().optional(),
