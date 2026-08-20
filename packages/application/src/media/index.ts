@@ -43,3 +43,17 @@ export type {
   MediaTaskSchedulerDependencies,
 } from './media-task-scheduler';
 export { mediaFailure, mediaPersistenceFailure } from './media-service-error';
+export {
+  buildVideoParametersFingerprint,
+  buildVideoPrompt,
+  computeVideoGenerationInputHash,
+  extractVideoShotFields,
+  resolveVideoDurationTier,
+} from './video-generation-input';
+export type {
+  VideoDurationRange,
+  VideoDurationTier,
+  VideoGenerationInputDescriptor,
+  VideoParametersFingerprintInput,
+  VideoShotMotionFields,
+} from './video-generation-input';
