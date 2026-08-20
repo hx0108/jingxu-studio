@@ -161,11 +161,13 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     expect(html).toContain('七类根字段加锁');
     expect(html).toContain('v1 · READY · 2 个镜头');
     expect(html).toContain('恢复为新草稿');
-    // storyboard-export：非 READY 整集不渲染导出入口（spec 工作台入口场景）。
+    // storyboard-export：非 READY 整集不渲染任何导出入口（spec 工作台入口场景）。
     expect(html).not.toContain('导出整集');
+    expect(html).not.toContain('导出分镜表');
+    expect(html).not.toContain('导出报告');
   });
 
-  it('READY 整集—渲染导出入口并展示不含路径的成功回执通知', () => {
+  it('READY 整集—渲染三导出入口（deliverables D3）并展示不含路径的成功回执通知', () => {
     const storyboard: StoryboardWorkspaceDto = {
       current: storyboardVersion({
         id: 'episodever_0001',
@@ -215,6 +217,11 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     );
     expect(html).toContain('name="export-episode"');
     expect(html).toContain('导出整集');
+    // deliverables D3：分镜表与报告两个并列入口同 READY 条件渲染。
+    expect(html).toContain('name="export-episode-markdown"');
+    expect(html).toContain('导出分镜表');
+    expect(html).toContain('name="export-episode-report"');
+    expect(html).toContain('导出报告');
     // 成功通知只含 exportId 与哈希尾 4 位，绝不含文件路径（路径红线）。
     expect(html).toContain('导出成功：export_abc123（sha256 …a1b2，1024 字节）');
     expect(html).not.toContain('.json');

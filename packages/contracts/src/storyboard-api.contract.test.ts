@@ -197,6 +197,28 @@ describe('Storyboard IPC Contract（shot-edit-lock D4）', () => {
     ).toBe(false);
   });
 
+  it('导出命令—format 三值枚举缺省回填 EPISODE_JSON—非法形态拒绝（deliverables D1）', () => {
+    const input = {
+      episodeId,
+      expectedVersionId: versionId,
+      projectId,
+      requestId: 'request-123',
+    };
+    // 缺省兼容：旧调用不带 format 解析后回填 EPISODE_JSON。
+    const defaulted = storyboardExportEpisodeInputSchema.parse(input);
+    expect(defaulted.format).toBe('EPISODE_JSON');
+    for (const format of ['MARKDOWN_TABLE', 'PRODUCIBILITY_REPORT']) {
+      expect(storyboardExportEpisodeInputSchema.safeParse({ ...input, format }).success).toBe(true);
+    }
+    // 枚举外值与伪造交付物字段拒绝（Markdown/报告是服务端派生文本，不由入参指定）。
+    expect(
+      storyboardExportEpisodeInputSchema.safeParse({ ...input, format: 'WORD_DOC' }).success,
+    ).toBe(false);
+    expect(storyboardExportEpisodeInputSchema.safeParse({ ...input, format: null }).success).toBe(
+      false,
+    );
+  });
+
   it('导出回执—哈希与计数且无路径字段—坏哈希/路径字段拒绝', () => {
     const result = {
       byteSize: 20480,

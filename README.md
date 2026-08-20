@@ -105,8 +105,15 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - `shot-speaker-id-repair` 已修复 spoken 非旁白镜头 speaker_id 空值漂移致死（2026-08-20 Qwen 实录：WEAK_LIP_SYNC 有台词镜头 null speaker_id 整代失败）：多角色/异形镜头由 `validateModelShotSetCandidate` 增跨字段值校验（非空 string + ShotContract 1.1.0 同款 pattern，`CANDIDATE_DIALOGUE_SPEAKER_INVALID`）落在可修复候选层接入既有 STRUCTURE_REPAIR 修复轮；单角色镜头候选层豁免、`injectShotSystemFields` 确定性派生唯一角色为说话人（与 narrator/无台词推导同族）；修复后非 bible 键仍走 COLLECTION 如实终态（不扩 isRepairable）。零迁移、零 IPC/UI/组合根改动。
 - `shot-edit-lock` 已实现分镜逐镜头编辑与锁定（2026-08-20，D1 JSON 文本编辑器/D2 锁对人 AI 一致/D3 七根级/D4 `storyboard.*` 命名空间/D6 edit 复用回执）：JSON 编辑器提交完整 ShotContract 文档，`editShot` 单事务完成 Registry 校验 → 写集推导 → 锁复检（父/子/相等冲突全阻断，`SHOT_LOCK_CONFLICT` 且 fieldErrors 列冲突路径）→ EDIT_INVARIANT 集合校验 → 新 scv DRAFT（系统字段重写、有效锁复制）→ 新整集快照 + shotSetHash 复算，回执幂等重放（复用 SAVE_SCRIPT_DRAFT，同 requestId 同载荷返回同 shotVersionId）；`lockShot`/`unlockShot` 七类创意根字段级版本化（不变量 13：locked_paths ≡ lock_records 有效集合），无回执、同态重入为幂等 no-op，元数据根拒绝 `SHOT_LOCK_POINTER_INVALID`；`storyboard` 三方法 IPC 白名单（singleflight + 输出脱敏复验 + 启动写门控），分镜工作台提供编辑入口、镜头锁徽标、七根级锁定/逐路径解锁与冲突错误回显。
 - `storyboard-export` 已实现分镜整集 JSON 导出（2026-08-20，D1 仅 EpisodeStoryboardExport 1.1.0 文件导出/D2 轻量审计事件/D4 `storyboard.exportEpisode` 第 4 方法/D5 单命令确认重发）：`StoryboardExportService` 三段式用例——读事务内 READY_EXPORT 门禁（stageHeads 基线一致 + 整集 READY + `validateShotSetCollection` 复跑 + Σ 软带 [60,120] 判定 + envelope Registry 校验）、事务外文件落盘（main 侧 dialog/E2E 双形态 sink，默认名 `export_<projectId>_<episodeId>_v<versionNo>.json`）、独立短事务审计留痕（`STORYBOARD_EXPORTED`：actor=USER、afterSha256=文件哈希、metadata 含 byteSize/fileSha256/totalDurationSec/deviationReason；审计失败响亮 `EXPORT_AUDIT_FAILED` 附哈希不回滚文件）；组装纯函数确定性派生 12 键 envelope（format_profile 投影 `*_pct` 键改名、`contains_ai_assisted_content` = 任一镜头 `source_type≠HUMAN_CREATED`、`locked_paths` 随文档原样）；路径红线——文件路径绝不进入回执/Renderer/审计行；越带导出 `EXPORT_DURATION_DEVIATION` 带实际 Σ，工作台弹偏离确认对话填原因后同命令 `warnConfirmed` 重发。
+- `storyboard-export-deliverables` 已实现 Markdown 分镜表与可生产性报告导出（2026-08-20，D1 复用 `storyboard.exportEpisode` + `format` 枚举入参/D2 结构事实 + 正脸长对白单条 WARN/D3 三按钮并列）：`storyboardExportEpisodeInputSchema` 增 `format` 三值枚举（`EPISODE_JSON|MARKDOWN_TABLE|PRODUCIBILITY_REPORT`，`.default('EPISODE_JSON')` 向后兼容，回执仍 5 键格式无关、白名单/IPC 面零扩张）；两种 Markdown 交付物由同一 `assembleStoryboardExport` envelope（Registry 1.1.0 校验后）确定性渲染——分镜表 9 列（镜头号/景别/运镜/时长/叙事目的/台词/角色/场景/锁定数）+ 头部事实行，可生产性报告六章节（头部事实/时长事实/集合校验结论/AI 参与度/规则段/镜头清单），单元格 `\|` 转义、换行压空格，渲染零 I/O 零时钟；可生产性规则版本 `jingxu-producibility-rules/1` + 阈值常量 `SPEECH_DURATION_WARN_SEC=4` 随报告输出，PRD 9.5 判定式（`frontal_face=true && mouth_visible=true && estimated_speech_duration_sec > 4`）单条 WARN 非阻断；服务层三 format 共用同一 prepare 门禁仅分叉渲染/默认名（`storyboard_…_v<N>.md` / `report_…_v<N>.md`）/审计 `metadata.format`；sink 按扩展名分支 save dialog 过滤器（JSON/Markdown）；工作台 READY 态三按钮并列（导出整集/导出分镜表/导出报告），偏离弹层与成功通知三入口共用且携带 format 重发。
 
 ## 最近验证证据
+
+2026-08-20 `storyboard-export-deliverables` 实施记录（Markdown 分镜表 + 可生产性报告导出，D1/D2/D3 全按推荐拍板）：
+
+- 全量门禁（重建三 bundle）：format:check、eslint --max-warnings=0、tsc -b 零错误；unit **763**/86 文件（+11：分镜表金样 7 + 服务 format 分支 4）、contract **125**/16 文件（+1：format 三值枚举缺省回填/非法拒绝）、integration **204**/37 文件零回归；Playwright Electron E2E 离线 **19 passed + 3 skipped**（基线 18+3，+1 为新增 deliverables 单规格）；`openspec validate --all --strict` 12/12。
+- E2E 边界钉：数据通路导出分镜表 `.md`（9 列表头/分隔行/6 数据行逐镜断言、镜头 #1 全列、#3 空镜台词列空、头部事实行 v<N>/Σ90/exportId/导出时间、竖线换行转义）；可生产性报告六章节 + 画幅/规则版本行 + 无 WARN 段 + AI 参与度 6/6 + 判定式行；editShot 镜头 1 对白时长 3→5 → confirmVersion（重取 current 版本）后 v2 报告 WARN 命中恰 1 行（`- WARN #1（shot_…）：正脸长对白 5s > 4s（WEAK_LIP_SYNC 风险）`）；UI 三按钮可见、点击「导出分镜表」成功通知含 sha256 且不含 `.md`/导出目录；审计断言（`verify-storyboard-deliverables.mjs` 纯 node 只读查库）4 行 `STORYBOARD_EXPORTED`：format 顺序 [MARKDOWN_TABLE, PRODUCIBILITY_REPORT, PRODUCIBILITY_REPORT, MARKDOWN_TABLE]、totalDurationSec 恒 90、fileSha256=after_sha256 逐行一致、任何列不含 `.md`/`.json`/反斜杠/exports。
+- 旧 `storyboard-export` E2E 回归绿（含 `format: 'EPISODE_JSON'` 显式化与默认名/审计断言不变）；contracts/IPC/组合根白名单面零改动（`exportEpisode` 方法数不变，仅入参增枚举）。
 
 2026-08-20 `storyboard-export` 实施记录（分镜整集 JSON 导出，D1/D2/D4/D5 全按推荐拍板）：
 
@@ -222,7 +229,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 ## 当前尚未实现
 
-- 分镜导入导出和评测业务用例（整集 JSON 文件导出已随 `storyboard-export`（2026-08-20）落地；Markdown 分镜表、可生产性报告、导入 RETURN_TO_ORIGIN 与 ProjectTransferBundle 均在后续 Change；逐镜头编辑与锁定已随 `shot-edit-lock`（2026-08-20）落地）
+- 分镜导入导出和评测业务用例（整集 JSON 文件导出已随 `storyboard-export`（2026-08-20）落地；Markdown 分镜表与可生产性报告已随 `storyboard-export-deliverables`（2026-08-20）落地；导入 RETURN_TO_ORIGIN、ProjectTransferBundle 与评测业务用例仍在后续 Change；逐镜头编辑与锁定已随 `shot-edit-lock`（2026-08-20）落地）
 - 真实用户使用和发布验收（真实 Qwen 六阶段与真实 Seedream 首帧生成连通性已分别于 2026-08-16、2026-08-17 通过开发者环境全流程联调）
 - 视频、TTS、口型、成片和其他 V2/V3 能力（V2 图片切片第一、二步——逐镜头首帧候选与整集批量首帧——已分别随 `shot-first-frame-image-generation`（2026-08-17）、`batch-first-frame-generation`（2026-08-19）落地；首帧外后帧等在后续 Change）
 - AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 目前具备可重复的 Mock 自动化证据与一次真实 Qwen 开发者环境全流程运行，仍不能据此声称真实用户使用或 V1 发布验收已经完成

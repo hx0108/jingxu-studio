@@ -1,5 +1,5 @@
 import type { FormatProfile } from '@jingxu/domain';
-import type { AppResultDto, ProjectErrorCode } from '@jingxu/contracts';
+import type { AppResultDto, ProjectErrorCode, StoryboardExportFormat } from '@jingxu/contracts';
 
 import type { ScriptUnitOfWorkPort } from '../ports/script/index';
 import type { FormatProfileRepository } from '../ports/project/format-profile-repository';
@@ -8,6 +8,10 @@ import {
   extractShotCollectionBibleKeys,
   validateShotSetCollection,
 } from './shot-collection-validator';
+import {
+  renderProducibilityReport,
+  renderStoryboardMarkdownTable,
+} from './storyboard-export-markdown';
 
 /**
  * 分镜整集导出（storyboard-export，PRD 9.7.1/9.8）。
@@ -23,6 +27,8 @@ export interface StoryboardExportInput {
   readonly episodeId: string;
   /** 基线整集版本 id；与当前 head 不一致视为并发冲突。 */
   readonly expectedVersionId: string;
+  /** 交付物形态（deliverables D1）；缺省 EPISODE_JSON（服务直调方兼容）。 */
+  readonly format?: StoryboardExportFormat | undefined;
   readonly projectId: string;
   readonly requestId: string;
   readonly warnConfirmed?: boolean | undefined;
@@ -277,14 +283,25 @@ export const createStoryboardExportService = (
     }
 
     // ② 落盘：main 侧 sink（save dialog + 写文件 + sha256）。取消/失败均不留痕。
-    const content = JSON.stringify(prepared.envelope, null, 2);
-    const written = await dependencies.sink.write(
-      `export_${input.projectId}_${input.episodeId}_v${String(
-        // 版本号参与默认文件名：取自 envelope（versionNo），不重复查库。
-        prepared.envelope.episode_version,
-      )}.json`,
-      content,
-    );
+    // 三种 format 共用同一 envelope 事实（同源同门禁），仅分叉渲染与默认文件名。
+    const format = input.format ?? 'EPISODE_JSON';
+    const stem = `${input.projectId}_${input.episodeId}_v${String(
+      // 版本号参与默认文件名：取自 envelope（versionNo），不重复查库。
+      prepared.envelope.episode_version,
+    )}`;
+    const [prefix, extension] =
+      format === 'MARKDOWN_TABLE'
+        ? (['storyboard', '.md'] as const)
+        : format === 'PRODUCIBILITY_REPORT'
+          ? (['report', '.md'] as const)
+          : (['export', '.json'] as const);
+    const content =
+      format === 'EPISODE_JSON'
+        ? JSON.stringify(prepared.envelope, null, 2)
+        : format === 'MARKDOWN_TABLE'
+          ? renderStoryboardMarkdownTable(prepared.envelope)
+          : renderProducibilityReport(prepared.envelope, prepared.deviationReason);
+    const written = await dependencies.sink.write(`${prefix}_${stem}${extension}`, content);
     if (written.outcome === 'cancelled') {
       return scriptFailure('EXPORT_CANCELLED', '已取消导出', traceId);
     }
@@ -312,6 +329,7 @@ export const createStoryboardExportService = (
             byteSize: written.byteSize,
             deviationReason: prepared.deviationReason,
             fileSha256: written.fileSha256,
+            format,
             totalDurationSec: prepared.totalDurationSec,
           },
           objectId: input.episodeId,

@@ -74,6 +74,8 @@ const commands = {
   exportEpisode: {
     episodeId: summary.episode.episodeId,
     expectedVersionId: summary.episode.id,
+    // deliverables D1：IPC 边界 parse 后 format 缺省回填 EPISODE_JSON 传入服务。
+    format: 'EPISODE_JSON',
     projectId: 'project_12345678',
     requestId: 'request_export_123456',
   },

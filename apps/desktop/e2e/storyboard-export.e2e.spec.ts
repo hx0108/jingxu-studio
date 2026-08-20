@@ -105,6 +105,7 @@ test('整集分镜导出—READY 门禁/1.1.0 JSON 落盘/Σ 偏离确认重发/
         const result = await window.jingxu.storyboard.exportEpisode({
           episodeId: context.episodeId,
           expectedVersionId: context.versionId,
+          format: 'EPISODE_JSON',
           projectId: context.projectId,
           requestId: `export_${crypto.randomUUID()}`,
         });
@@ -208,6 +209,7 @@ test('整集分镜导出—READY 门禁/1.1.0 JSON 落盘/Σ 偏离确认重发/
         const notReady = await window.jingxu.storyboard.exportEpisode({
           episodeId: context.episodeId,
           expectedVersionId,
+          format: 'EPISODE_JSON',
           projectId: context.projectId,
           requestId: requestId('export-not-ready'),
         });
@@ -232,6 +234,7 @@ test('整集分镜导出—READY 门禁/1.1.0 JSON 落盘/Σ 偏离确认重发/
         const deviation = await window.jingxu.storyboard.exportEpisode({
           episodeId: context.episodeId,
           expectedVersionId: current.id,
+          format: 'EPISODE_JSON',
           projectId: context.projectId,
           requestId: requestId('export-deviation'),
         });
