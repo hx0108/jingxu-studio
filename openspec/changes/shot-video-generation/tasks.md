@@ -4,7 +4,7 @@
 
 - [x] 1.1 Provider 枚举增 `VOLCARK_SEEDANCE`（contracts job-provider-api）；video.* 七方法通道白名单 `VIDEO_IPC_CHANNELS`（generateVideoCandidates/listVideoCandidates/selectVideoCandidate/getVideoTask/generateVideosForShots/cancelVideoBatch/listStoryboardVideoStates）+ DTO schema；contract 测试（7 排序、枚举、脱敏面）
 - [x] 1.2 `ports/video-model/video-model-port.ts` + 类型（submit SYNC/ASYNC 判别联合、poll PENDING|SUCCEEDED|FAILED、usage/raw evidence）；调度器依赖 `imageModel` 泛化为 `MediaModelPort` 结构别名、`fileStore.writeImage` 参数化命名空间（images|videos）——图片实例行为零变化（既有 807 行调度器测试全绿为证）
-- [ ] 1.3 `SeedanceVideoModelAdapter`（model-adapters/volcark/）：create task→poll→download 真 ASYNC；错误归一矩阵（401/403/429/5xx/超时/Abort/URL 失效）；mp4 字节魔数嗅探（ftyp）；前置校验（时长档位/分辨率/首帧字节上限）按能力快照；raw/evidenceOf main-only；单测矩阵
+- [x] 1.3 `SeedanceVideoModelAdapter`（model-adapters/volcark/）：create task→poll→download 真 ASYNC；错误归一矩阵（401/403/429/5xx/超时/Abort/URL 失效）；mp4 字节魔数嗅探（ftyp）；前置校验（时长档位/分辨率/首帧字节上限）按能力快照；raw/evidenceOf main-only；单测矩阵
 - [ ] 1.4 `MockVideoModelAdapter`（声明式步骤 ASYNC pendingPolls/失败/慢异步）；`JINGXU_E2E_VIDEO_STEPS` 令牌解析（组合根，非法令牌启动期抛，缺省预算熔断）
 
 ## 2. persistence（迁移 0012，head 11→12）
