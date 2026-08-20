@@ -119,6 +119,7 @@ const storyboardVersionToDto = (
 });
 
 // 镜头文档在提交时已通过 ShotContract 1.1.0 FINAL 校验；此处仅做摘要字段提取。
+// document/lockedPaths 为 shot-edit-lock D1/D3 数据源：编辑器全文与镜头卡片锁定标识。
 const shotSummaryToDto = ({
   sequence,
   shotId,
@@ -126,12 +127,17 @@ const shotSummaryToDto = ({
 }: StoryboardShotSnapshot): StoryboardShotSummaryDto => {
   const document = JSON.parse(version.document) as Readonly<{
     cinematography?: Readonly<{ camera_motion?: unknown; shot_size?: unknown }>;
+    locked_paths?: unknown;
     narrative_purpose?: unknown;
   }>;
   return {
     cameraMotion: document.cinematography
       ?.camera_motion as StoryboardShotSummaryDto['cameraMotion'],
     dialogueRenderMode: version.dialogueRenderMode,
+    document,
+    lockedPaths: Array.isArray(document.locked_paths)
+      ? (document.locked_paths as readonly string[]).map(String)
+      : [],
     narrativePurpose: document.narrative_purpose as string,
     sequence,
     shotId,

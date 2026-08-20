@@ -54,6 +54,10 @@ export const projectErrorCodeSchema = z.enum([
   'SCRIPT_VERSION_CONFLICT',
   'SCRIPT_SCHEMA_INVALID',
   'SCRIPT_STAGE_UNSUPPORTED',
+  // V2 分镜编辑/锁定切片（shot-edit-lock）。
+  'SHOT_EDIT_NO_CHANGE',
+  'SHOT_LOCK_CONFLICT',
+  'SHOT_LOCK_POINTER_INVALID',
   // V2 图片切片（shot-first-frame-image-generation §4.1/§5.1）。
   'MEDIA_STORYBOARD_NOT_READY',
   'MEDIA_SHOT_NOT_IN_READY_SET',

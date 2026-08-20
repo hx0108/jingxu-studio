@@ -11,6 +11,7 @@ import type {
   ScriptVersion,
   Shot,
   ShotContractVersion,
+  ShotLockRecord,
   StageHead,
   StoryBibleVersion,
   SourceInput,
@@ -131,6 +132,15 @@ export interface ShotContractVersionRepositoryPort {
   insertMany(versions: readonly ShotContractVersion[]): Promise<void>;
 }
 
+/** lock_records 读写的唯一可写事实源（TECH §9.2；locked_paths 只是投影）。 */
+export interface ShotLockRepositoryPort {
+  /** 有效（未解锁）锁，按 locked_at 升序；objectType 恒 SHOT_CONTRACT。 */
+  listActive(projectId: string, shotId: string): Promise<readonly ShotLockRecord[]>;
+  insert(record: ShotLockRecord): Promise<void>;
+  /** 显式解锁置 unlocked_at；行不存在或已解锁返回 false（并发竞态由调用方收口）。 */
+  unlock(id: string, unlockedAt: string): Promise<boolean>;
+}
+
 /**
  * 分镜聚合仓储。独立于 ScriptRepositories 声明；Persistence 实现与 UoW 聚合
  * 在接线 Change 步骤中将两者合并暴露给 SHOT_CONTRACT 提交事务。
@@ -139,4 +149,5 @@ export interface StoryboardRepositories {
   readonly episodeVersions: EpisodeVersionRepositoryPort;
   readonly shots: ShotRepositoryPort;
   readonly shotContractVersions: ShotContractVersionRepositoryPort;
+  readonly locks: ShotLockRepositoryPort;
 }

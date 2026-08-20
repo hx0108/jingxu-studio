@@ -19,6 +19,8 @@ import type {
   Shot,
   ShotContractVersion,
   ShotContractVersionRepositoryPort,
+  ShotLockRecord,
+  ShotLockRepositoryPort,
   ShotRepositoryPort,
   SourceInput,
   SourceInputRepositoryPort,
@@ -41,6 +43,7 @@ import {
   mapScriptVersion,
   mapShot,
   mapShotContractVersion,
+  mapLockRecord,
   mapSourceInput,
   mapStageHead,
   mapStoryBibleVersion,
@@ -629,6 +632,48 @@ export class SqliteShotContractVersionRepository implements ShotContractVersionR
           v.sourceInvocationId,
           v.createdAt,
         );
+    });
+  }
+}
+export class SqliteShotLockRepository implements ShotLockRepositoryPort {
+  public constructor(private readonly db: SqliteDatabase) {}
+  public listActive(projectId: string, shotId: string): Promise<readonly ShotLockRecord[]> {
+    return syncToPromise(() =>
+      (
+        this.db
+          .prepare(
+            "SELECT id, project_id, object_type, object_id, object_version_id, json_pointer, locked_by, note, locked_at, unlocked_at FROM lock_records WHERE project_id=? AND object_type='SHOT_CONTRACT' AND object_id=? AND unlocked_at IS NULL ORDER BY locked_at, id",
+          )
+          .all(projectId, shotId) as ScriptRow[]
+      ).map(mapLockRecord),
+    );
+  }
+  public insert(v: ShotLockRecord): Promise<void> {
+    return syncToPromise(() => {
+      this.db
+        .prepare(
+          'INSERT INTO lock_records (id, project_id, object_type, object_id, object_version_id, json_pointer, locked_by, note, locked_at, unlocked_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        )
+        .run(
+          v.id,
+          v.projectId,
+          v.objectType,
+          v.objectId,
+          v.objectVersionId,
+          v.jsonPointer,
+          v.lockedBy,
+          v.note,
+          v.lockedAt,
+          v.unlockedAt,
+        );
+    });
+  }
+  public unlock(id: string, unlockedAt: string): Promise<boolean> {
+    return syncToPromise(() => {
+      const result = this.db
+        .prepare('UPDATE lock_records SET unlocked_at=? WHERE id=? AND unlocked_at IS NULL')
+        .run(unlockedAt, id) as RunResult;
+      return result.changes === 1;
     });
   }
 }

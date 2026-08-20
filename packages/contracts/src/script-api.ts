@@ -149,12 +149,16 @@ export const scriptStageWorkspaceSchema = z
 export const storyboardShotSummarySchema = z
   .object({
     cameraMotion: z.enum(['STATIC', 'PAN', 'TILT', 'DOLLY', 'ZOOM', 'TRACK', 'HANDHELD', 'OTHER']),
+    /** 当前版本完整 ShotContract 文档（shot-edit-lock D1：JSON 编辑器数据源）。 */
+    document: z.record(z.string(), z.unknown()),
     dialogueRenderMode: z.enum([
       'NARRATION_FIRST',
       'WEAK_LIP_SYNC',
       'PRECISE_LIP_SYNC',
       'SUBTITLE_ONLY',
     ]),
+    /** 有效锁投影（不变量 13：≡ lock_records 有效集合）。 */
+    lockedPaths: z.array(z.string().regex(/^\//u)).max(32),
     narrativePurpose: z.string().min(1).max(500),
     sequence: z.number().int().positive(),
     shotId: idSchema,

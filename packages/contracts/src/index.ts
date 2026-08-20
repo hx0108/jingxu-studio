@@ -4,6 +4,7 @@ import type { ImageApi } from './image-api';
 import type { ProjectApi } from './project-api';
 import type { EventsApi, JobApi, ProviderApi } from './job-provider-api';
 import type { ScriptApi } from './script-api';
+import type { StoryboardApi } from './storyboard-api';
 
 export const startupStateSchema = z.enum([
   'BOOTING',
@@ -127,6 +128,7 @@ export * from './project-command';
 export * from './project-dto';
 export * from './script-api';
 export * from './stage';
+export * from './storyboard-api';
 
 export interface JingxuApi {
   readonly events: EventsApi;
@@ -136,6 +138,7 @@ export interface JingxuApi {
   readonly provider: ProviderApi;
   readonly runtime: RuntimeApi;
   readonly script: ScriptApi;
+  readonly storyboard: StoryboardApi;
 }
 
 declare global {

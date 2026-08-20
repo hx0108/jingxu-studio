@@ -170,6 +170,11 @@ describe('Script IPC Contract', () => {
     const shot = (sequence: number, targetDurationSec = 15): Record<string, unknown> => ({
       cameraMotion: sequence === 1 ? 'STATIC' : 'DOLLY',
       dialogueRenderMode: 'NARRATION_FIRST',
+      document: {
+        narrative_purpose: `镜头 ${String(sequence)}`,
+        target_duration_sec: targetDurationSec,
+      },
+      lockedPaths: [],
       narrativePurpose: `镜头 ${String(sequence)} 的叙事目的`,
       sequence,
       shotId: `shot_0000000${String(sequence)}`,

@@ -103,8 +103,15 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - `batch-first-frame-generation` 已实现 V2 图片切片第二步——整集批量首帧：迁移 0010（`media_generation_batches` + 任务 `batch_id` 溯源列，head=10）、`MediaBatchService`（显式动作建批、当前世代 SUCCEEDED 服务端跳过并回告、空目标 `MEDIA_BATCH_NO_PENDING_SHOTS`、requestId 幂等重放）、惰性逐镜头建档（前一成员终态才提交下一镜头，任意时刻每批次至多一个在飞任务；成员复用既有单镜头粒度与派生 requestId `image-generate_<batch>_<shot>`）、失败隔离与统一失败口径（任务 FAILED 或 COMPLETED 而同轮零 SUCCEEDED 候选均计失败并携带候选错误码）、收尾 COMPLETED/PARTIAL_COMPLETED 派生、重试失败镜头=仅含失败镜头的新批次（不复活旧任务行）、取消仅作用未建档镜头（在飞自然终态、幂等）、重启恢复（pending 队列继续全新提交、在飞任务沿用既有零重发规则）；`image` 九方法 IPC 白名单（`generateCandidatesForShots`/`cancelBatch`/`listStoryboardImageStates`）+ 分镜工作台镜头首帧徽标、批次进度行与 1s 有界轮询（可见性守卫、无活跃批次即停）；E2E Mock 步骤脚本化（`JINGXU_E2E_IMAGE_STEPS`）支撑失败注入/取消/重启四场景。离线全量门禁于 2026-08-19 全绿。
 - `media-invocation-evidence` 已实现媒体域调用证据链：迁移 0011（`media_model_invocations`，head 10→11；SUBMIT/DOWNLOAD 两段、请求快照与响应原文 blob+sha256、usage 落列、64KiB 截断标记、双 FK 与终态 CHECK；图片字节恒不入库）、`MediaInvocationRepository` 端口 + SQLite/内存实现、`MediaUnitOfWorkPort` 回调聚合 `MediaRepositories`（全调用点机械重构）、`ImageModelPort` SYNC `raw` 原始响应通道 + `evidenceOf`（仅主进程证据链消费，MUST NOT 进归一错误/日志/Renderer）、Seedream 适配器错误先读体携证据 + 成功返回原文（Authorization 仍只在请求头）、Mock 确定性 raw/evidenceOf；调度器两段式接线（submit 前短事务插 SUBMIT STARTED、成功一笔事务三写「候选 SUCCEEDED + SUBMIT 收尾含 usage/raw + DOWNLOAD 收尾」、失败同事务两写、下载段失败三写「候选 FAILED + DOWNLOAD FAILED + SUBMIT 按成功收尾 raw/usage 不丢失」（2026-08-20 真实联调修订）、取消/停机不收尾 STARTED 残留如实、恢复不自动重发）；候选 `invocation_evidence_ref` 恒指 SUBMIT 证据行、DOWNLOAD 轻量行只记结果 URL 快照与落盘 sha256（blob 恒 NULL）；E2E Mock 档行数/JOIN/失败原文断言 + `print-real-probe-invocations.mjs` 媒体域联查 + `verify-real-media-evidence.mjs` SQL 断言（provider_request_id 以 Provider 实际返回为准，真实 Seedream 同步响应无顶层 id 记 null 属实）。真实联调于 2026-08-20 全绿。
 - `shot-speaker-id-repair` 已修复 spoken 非旁白镜头 speaker_id 空值漂移致死（2026-08-20 Qwen 实录：WEAK_LIP_SYNC 有台词镜头 null speaker_id 整代失败）：多角色/异形镜头由 `validateModelShotSetCandidate` 增跨字段值校验（非空 string + ShotContract 1.1.0 同款 pattern，`CANDIDATE_DIALOGUE_SPEAKER_INVALID`）落在可修复候选层接入既有 STRUCTURE_REPAIR 修复轮；单角色镜头候选层豁免、`injectShotSystemFields` 确定性派生唯一角色为说话人（与 narrator/无台词推导同族）；修复后非 bible 键仍走 COLLECTION 如实终态（不扩 isRepairable）。零迁移、零 IPC/UI/组合根改动。
+- `shot-edit-lock` 已实现分镜逐镜头编辑与锁定（2026-08-20，D1 JSON 文本编辑器/D2 锁对人 AI 一致/D3 七根级/D4 `storyboard.*` 命名空间/D6 edit 复用回执）：JSON 编辑器提交完整 ShotContract 文档，`editShot` 单事务完成 Registry 校验 → 写集推导 → 锁复检（父/子/相等冲突全阻断，`SHOT_LOCK_CONFLICT` 且 fieldErrors 列冲突路径）→ EDIT_INVARIANT 集合校验 → 新 scv DRAFT（系统字段重写、有效锁复制）→ 新整集快照 + shotSetHash 复算，回执幂等重放（复用 SAVE_SCRIPT_DRAFT，同 requestId 同载荷返回同 shotVersionId）；`lockShot`/`unlockShot` 七类创意根字段级版本化（不变量 13：locked_paths ≡ lock_records 有效集合），无回执、同态重入为幂等 no-op，元数据根拒绝 `SHOT_LOCK_POINTER_INVALID`；`storyboard` 三方法 IPC 白名单（singleflight + 输出脱敏复验 + 启动写门控），分镜工作台提供编辑入口、镜头锁徽标、七根级锁定/逐路径解锁与冲突错误回显。
 
 ## 最近验证证据
+
+2026-08-20 `shot-edit-lock` 实施记录（分镜逐镜头编辑与锁定，D1–D6 全按推荐拍板）：
+
+- 全量门禁（重建三 bundle）：format:check、eslint --max-warnings=0、tsc -b 零错误；unit **736**/84 文件、contract **121**/16 文件、integration **204**/37 文件（已知 keyset-history 全并行磁盘竞争 flaky 本次亦过）；Playwright Electron E2E 离线 **17 passed + 3 skipped**（基线 16+3，+1 为新增 shot-edit-lock 单规格：数据通路 8 步 + UI 通路编辑往返/锁徽标/阻断/解锁/版本变化）。
+- 锁语义边界钉（E2E 断言）：编辑往返产生新镜头版本且其余镜头引用不变；同 requestId 同载荷顺序重放命中回执返回同 shotVersionId（不产生第二版本）；锁 /dialogue 后编辑 dialogue → `SHOT_LOCK_CONFLICT` 且 fieldErrors 含冲突路径、无关根编辑通过且锁原样保留；/shot_id 元数据根锁定 → `SHOT_LOCK_POINTER_INVALID`；重复锁定幂等 no-op（整集版本不前进）；解锁后投影清空。
+- 命名空间面扩展同步三处白名单断言（D4 预期面，非回归）：preload `jingxu-api`/`job-provider-api` 两契约测试与 bootstrap E2E §9.1 `apiKeys` 均增 `storyboard`（含冻结断言）。
 
 2026-08-20 `shot-speaker-id-repair` 实施记录（spoken 非旁白镜头 speaker_id 空值漂移修复，D1 拍板 A+B）：
 
@@ -208,7 +215,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 ## 当前尚未实现
 
-- 分镜逐镜头人工编辑与锁定（locked_paths 目前恒为空）、导入导出和评测业务用例
+- 分镜导入导出和评测业务用例（逐镜头编辑与锁定已随 `shot-edit-lock`（2026-08-20）落地）
 - 真实用户使用和发布验收（真实 Qwen 六阶段与真实 Seedream 首帧生成连通性已分别于 2026-08-16、2026-08-17 通过开发者环境全流程联调）
 - 视频、TTS、口型、成片和其他 V2/V3 能力（V2 图片切片第一、二步——逐镜头首帧候选与整集批量首帧——已分别随 `shot-first-frame-image-generation`（2026-08-17）、`batch-first-frame-generation`（2026-08-19）落地；首帧外后帧等在后续 Change）
 - AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 目前具备可重复的 Mock 自动化证据与一次真实 Qwen 开发者环境全流程运行，仍不能据此声称真实用户使用或 V1 发布验收已经完成

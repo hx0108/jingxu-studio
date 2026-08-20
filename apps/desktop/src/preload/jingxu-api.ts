@@ -42,6 +42,11 @@ import {
   initializeOriginalInputSchema,
   restoreScriptVersionInputSchema,
   saveScriptDraftInputSchema,
+  shotEditLockSummarySchema,
+  storyboardEditShotInputSchema,
+  storyboardLockShotInputSchema,
+  storyboardUnlockShotInputSchema,
+  STORYBOARD_IPC_CHANNELS,
   scriptMutationResultSchema,
   scriptVersionSchema,
   scriptWorkspaceSchema,
@@ -79,6 +84,9 @@ import {
   type RestoreProjectInputDto,
   type RestoreScriptVersionInputDto,
   type SaveScriptDraftInputDto,
+  type StoryboardEditShotInputDto,
+  type StoryboardLockShotInputDto,
+  type StoryboardUnlockShotInputDto,
   type SelectCandidateInputDto,
   type StartupCommandDto,
   type UpdateProjectInputDto,
@@ -93,6 +101,7 @@ export {
   PROVIDER_IPC_CHANNELS,
   RUNTIME_IPC_CHANNELS,
   SCRIPT_IPC_CHANNELS,
+  STORYBOARD_IPC_CHANNELS,
 };
 
 export type InvokeIpc = (channel: string, ...arguments_: readonly unknown[]) => Promise<unknown>;
@@ -290,6 +299,29 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
           await invoke(
             SCRIPT_IPC_CHANNELS.restoreVersion,
             restoreScriptVersionInputSchema.parse(input),
+          ),
+        ),
+    }),
+    storyboard: Object.freeze({
+      editShot: async (input: StoryboardEditShotInputDto) =>
+        appResultSchema(shotEditLockSummarySchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.editShot,
+            storyboardEditShotInputSchema.parse(input),
+          ),
+        ),
+      lockShot: async (input: StoryboardLockShotInputDto) =>
+        appResultSchema(shotEditLockSummarySchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.lockShot,
+            storyboardLockShotInputSchema.parse(input),
+          ),
+        ),
+      unlockShot: async (input: StoryboardUnlockShotInputDto) =>
+        appResultSchema(shotEditLockSummarySchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.unlockShot,
+            storyboardUnlockShotInputSchema.parse(input),
           ),
         ),
     }),

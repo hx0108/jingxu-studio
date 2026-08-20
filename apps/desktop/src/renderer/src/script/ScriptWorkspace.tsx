@@ -7,6 +7,7 @@ import type {
   MediaBatchViewDto,
   ScriptVersionDto,
   ScriptWorkspaceDto,
+  ShotEditLockSummaryDto,
   StoryboardVersionSummaryDto,
 } from '@jingxu/contracts';
 
@@ -19,6 +20,7 @@ import {
   getImageClient,
   getJobClient,
   getScriptClient,
+  getStoryboardClient,
   rendererTransportError,
 } from './script-api';
 import { episodeScopeForStage, isTerminalJob } from './script-ui-policy';
@@ -293,6 +295,26 @@ export const ScriptWorkspaceView = ({
     else {
       await refresh();
       onCommitted?.();
+    }
+    setPending(false);
+  };
+
+  // 逐镜头编辑/锁定/解锁（shot-edit-lock）：成功后刷新整集工作区，失败展示稳定错误码。
+  const performShotEditLockCommand = async (
+    run: () => Promise<AppResultDto<ShotEditLockSummaryDto>>,
+  ): Promise<void> => {
+    if (pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      const result = await run();
+      if (!result.ok) setError(result.error);
+      else {
+        await refresh();
+        onCommitted?.();
+      }
+    } catch {
+      setError(rendererTransportError());
     }
     setPending(false);
   };
@@ -585,6 +607,15 @@ export const ScriptWorkspaceView = ({
             });
         }}
         onGenerateFirstFrames={generateFirstFrames}
+        onEditShot={(input) => {
+          void performShotEditLockCommand(() => getStoryboardClient().editShot(input));
+        }}
+        onLockShot={(input) => {
+          void performShotEditLockCommand(() => getStoryboardClient().lockShot(input));
+        }}
+        onUnlockShot={(input) => {
+          void performShotEditLockCommand(() => getStoryboardClient().unlockShot(input));
+        }}
         onRestore={(version) => {
           if (globalThis.confirm(`基于 v${String(version.versionNo)} 创建新的 DRAFT 整集？`)) {
             void performStoryboardCommand('restore', version);

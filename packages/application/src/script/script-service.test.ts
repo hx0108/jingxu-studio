@@ -16,6 +16,7 @@ const creativeText = '一封来自未来的信改变了侦探原本平静而孤�
 const shotDocument = (purpose: string, shotSize: string): string =>
   JSON.stringify({
     cinematography: { camera_motion: 'DOLLY', shot_size: shotSize },
+    locked_paths: [],
     narrative_purpose: purpose,
   });
 

@@ -8,6 +8,7 @@ import type {
   ScriptVersion,
   Shot,
   ShotContractVersion,
+  ShotLockRecord,
   StageHead,
   StoryBibleVersion,
   SourceInput,
@@ -184,6 +185,22 @@ export const mapEpisodeVersionShot = (row: ScriptRow): EpisodeVersionShot => ({
   shotVersionId: text(row, 'shot_version_id'),
   sequence: number(row, 'sequence'),
 });
+export const mapLockRecord = (row: ScriptRow): ShotLockRecord => {
+  const lockedBy = text(row, 'locked_by');
+  if (lockedBy !== 'USER' && lockedBy !== 'SYSTEM') return invalid();
+  return {
+    id: text(row, 'id'),
+    jsonPointer: text(row, 'json_pointer'),
+    lockedAt: text(row, 'locked_at'),
+    lockedBy,
+    note: nullableText(row, 'note'),
+    objectId: text(row, 'object_id'),
+    objectType: 'SHOT_CONTRACT',
+    objectVersionId: text(row, 'object_version_id'),
+    projectId: text(row, 'project_id'),
+    unlockedAt: nullableText(row, 'unlocked_at'),
+  };
+};
 export const mapDependency = (row: ScriptRow): ScriptDependency => ({
   id: text(row, 'id'),
   projectId: text(row, 'project_id'),

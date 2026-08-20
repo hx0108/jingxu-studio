@@ -2,13 +2,17 @@ import { useState } from 'react';
 
 import type {
   JobSummaryDto,
+  StoryboardEditShotInputDto,
   StoryboardImageStatesDto,
+  StoryboardLockShotInputDto,
   StoryboardShotSummaryDto,
+  StoryboardUnlockShotInputDto,
   StoryboardVersionSummaryDto,
   StoryboardWorkspaceDto,
 } from '@jingxu/contracts';
 
 import { FirstFramePanel } from './FirstFramePanel';
+import { createScriptRequestId } from './script-api';
 import { isTerminalJob } from './script-ui-policy';
 import {
   MEDIA_BATCH_STATUS_LABELS,
@@ -51,6 +55,18 @@ const STORYBOARD_JOB_ERROR_COPY: Readonly<Record<string, string>> = {
   STRUCTURE_REPAIR_FAILED: '分镜候选结构修复后仍未通过校验。可重试任务或重新生成。',
 };
 
+/** D3 七根级锁标签：UI 锁定入口只挂七个一级根；解锁按实际有效路径逐条。 */
+const LOCKABLE_ROOT_LABELS: Readonly<Record<string, string>> = {
+  acceptance: '验收标准',
+  cinematography: '摄影设计',
+  content: '内容',
+  continuity: '连贯性',
+  dialogue: '台词',
+  generation_constraints: '生成约束',
+  narrative_purpose: '叙事目的',
+};
+const LOCKABLE_ROOTS = Object.keys(LOCKABLE_ROOT_LABELS);
+
 export interface StoryboardPanelProps {
   readonly episodeTargetDurationSec: number;
   /** 列表级首帧状态底座（design D5）；null 表示尚未载入，不渲染徽标。 */
@@ -65,9 +81,13 @@ export interface StoryboardPanelProps {
   readonly onBatchCancel: (batchId: string) => void;
   readonly onBatchRetryFailed: (shotIds: readonly string[]) => void;
   readonly onConfirm: () => void;
+  /** 逐镜头编辑/锁定/解锁命令（shot-edit-lock D1/D3）；面板组装完整 DTO 输入。 */
+  readonly onEditShot: (input: StoryboardEditShotInputDto) => void;
   readonly onGenerate: () => void;
   readonly onGenerateFirstFrames: () => void;
+  readonly onLockShot: (input: StoryboardLockShotInputDto) => void;
   readonly onRestore: (version: StoryboardVersionSummaryDto) => void;
+  readonly onUnlockShot: (input: StoryboardUnlockShotInputDto) => void;
   readonly pending: boolean;
   readonly storyboard: StoryboardWorkspaceDto;
 }
@@ -81,20 +101,37 @@ export const StoryboardPanel = ({
   onBatchCancel,
   onBatchRetryFailed,
   onConfirm,
+  onEditShot,
   onGenerate,
   onGenerateFirstFrames,
+  onLockShot,
   onRestore,
+  onUnlockShot,
   pending,
   projectId,
   storyboard,
 }: StoryboardPanelProps) => {
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [shotEditorText, setShotEditorText] = useState('');
+  const [shotEditorError, setShotEditorError] = useState<string | null>(null);
   const selectedShot =
     storyboard.shots.find((shot) => shot.shotId === selectedShotId) ?? storyboard.shots[0] ?? null;
   const current = storyboard.current;
   const totalDurationSec = storyboard.totalDurationSec;
   const durationOverLimit = totalDurationSec > episodeTargetDurationSec;
   const jobActive = job !== null && !isTerminalJob(job);
+  // 编辑/锁定入口仅对当前 ACTIVE 集合开放；STALE_INPUT 整集仅供查看（spec）。
+  const shotCommandsEnabled =
+    current !== null && current.status !== 'STALE_INPUT' && selectedShot !== null && !pending;
+
+  const commandTarget = (jsonPointer?: string) => ({
+    episodeId: current?.episodeId ?? '',
+    expectedVersionId: current?.id ?? '',
+    projectId,
+    requestId: createScriptRequestId(jsonPointer === undefined ? 'shot-edit' : 'shot-lock'),
+    shotId: selectedShot?.shotId ?? '',
+  });
 
   // 批次视图派生：RUNNING 批次优先展示，否则回落到最近批次（进度与重试入口）。
   const runningBatch = imageStates?.batches.find((batch) => batch.status === 'RUNNING') ?? null;
@@ -117,7 +154,7 @@ export const StoryboardPanel = ({
         </span>
       </header>
       <p className="action-hint">
-        分镜为只读展示：由生成与确认产生整集版本，不支持编辑、拆分、合并、排序或删除。
+        分镜由生成与确认产生整集版本；选中镜头后可编辑创意字段或对七类根字段加锁（编辑与锁定均产生新版本）。
       </p>
       {current?.status === 'STALE_INPUT' && (
         <p className="field-error">上游已变化，当前分镜仅供查看；请重新生成。</p>
@@ -247,6 +284,11 @@ export const StoryboardPanel = ({
                     {String(shot.targetDurationSec)}s ·{' '}
                     {DIALOGUE_RENDER_LABELS[shot.dialogueRenderMode]}
                   </span>
+                  {shot.lockedPaths.length > 0 && (
+                    <span className="status-badge status-locked">
+                      🔒 {String(shot.lockedPaths.length)}
+                    </span>
+                  )}
                   {badge !== null && (
                     <span className={`shot-first-frame-badge status-badge ${badge.className}`}>
                       {badge.label}
@@ -298,6 +340,141 @@ export const StoryboardPanel = ({
               <dd>{selectedShot.versionId}</dd>
             </div>
           </dl>
+          <div className="shot-lock-panel">
+            <h4>字段锁定</h4>
+            {selectedShot.lockedPaths.length > 0 ? (
+              <ul aria-label="有效锁列表" className="version-list">
+                {selectedShot.lockedPaths.map((path) => (
+                  <li key={path}>
+                    <span>🔒 {path}</span>
+                    <button
+                      className="secondary-button"
+                      disabled={!shotCommandsEnabled}
+                      name="unlock-shot"
+                      onClick={() => {
+                        onUnlockShot({
+                          ...commandTarget(path),
+                          jsonPointer: path,
+                          requestId: createScriptRequestId('shot-unlock'),
+                        });
+                      }}
+                      type="button"
+                    >
+                      解锁
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>当前镜头没有有效锁。</p>
+            )}
+            <div aria-label="七根级锁定入口" className="script-actions">
+              {LOCKABLE_ROOTS.map((root) => {
+                const rootPointer = `/${root}`;
+                const covered = selectedShot.lockedPaths.some(
+                  (path) => path === rootPointer || path.startsWith(`${rootPointer}/`),
+                );
+                return (
+                  <button
+                    className="secondary-button"
+                    disabled={!shotCommandsEnabled || covered}
+                    key={root}
+                    name={`lock-shot-${root}`}
+                    onClick={() => {
+                      onLockShot({
+                        ...commandTarget(rootPointer),
+                        jsonPointer: rootPointer,
+                        note: null,
+                        requestId: createScriptRequestId('shot-lock'),
+                      });
+                    }}
+                    type="button"
+                  >
+                    {covered
+                      ? `🔒 已锁 ${String(LOCKABLE_ROOT_LABELS[root])}`
+                      : `锁定 ${String(LOCKABLE_ROOT_LABELS[root])}`}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {editing ? (
+            <form
+              className="script-form"
+              id="shot-editor"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (!shotCommandsEnabled) return;
+                let document_: Record<string, unknown>;
+                try {
+                  document_ = JSON.parse(shotEditorText) as Record<string, unknown>;
+                } catch {
+                  setShotEditorError('必须是有效 JSON 对象');
+                  return;
+                }
+                setShotEditorError(null);
+                onEditShot({
+                  ...commandTarget(),
+                  document: document_,
+                  requestId: createScriptRequestId('shot-edit'),
+                  shotVersionId: selectedShot.versionId,
+                });
+                setEditing(false);
+              }}
+            >
+              <label>
+                镜头文档（ShotContract JSON）
+                <textarea
+                  aria-describedby="shot-editor-help"
+                  name="shot-editor-text"
+                  onChange={(changeEvent) => {
+                    setShotEditorText(changeEvent.target.value);
+                  }}
+                  rows={18}
+                  value={shotEditorText}
+                />
+              </label>
+              <small id="shot-editor-help">
+                系统字段（版本/状态/血缘）由系统重写；保存创建新 DRAFT 版本并重算整集快照。
+              </small>
+              {shotEditorError !== null && (
+                <p className="field-error" role="alert">
+                  {shotEditorError}
+                </p>
+              )}
+              <div className="script-actions">
+                <button disabled={!shotCommandsEnabled} name="save-shot-edit" type="submit">
+                  保存镜头编辑
+                </button>
+                <button
+                  className="secondary-button"
+                  name="cancel-shot-edit"
+                  onClick={() => {
+                    setEditing(false);
+                    setShotEditorError(null);
+                  }}
+                  type="button"
+                >
+                  取消
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="script-actions">
+              <button
+                disabled={!shotCommandsEnabled}
+                name="open-shot-editor"
+                onClick={() => {
+                  setShotEditorText(JSON.stringify(selectedShot.document, null, 2));
+                  setShotEditorError(null);
+                  setEditing(true);
+                }}
+                type="button"
+              >
+                编辑镜头
+              </button>
+            </div>
+          )}
           <FirstFramePanel
             imageState={shotStates.get(selectedShot.shotId) ?? null}
             key={selectedShot.shotId}

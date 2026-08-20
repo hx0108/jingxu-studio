@@ -211,6 +211,21 @@ export interface ShotContractVersion {
   readonly createdAt: string;
 }
 
+/** lock_records 行（shot-edit-lock）；镜头锁 objectType 恒 SHOT_CONTRACT、objectId=shotId。 */
+export interface ShotLockRecord {
+  readonly id: string;
+  readonly projectId: string;
+  readonly objectType: 'SHOT_CONTRACT';
+  readonly objectId: string;
+  /** 锁建立时的镜头版本 id（溯源用；有效性与版本无关）。 */
+  readonly objectVersionId: string;
+  readonly jsonPointer: string;
+  readonly lockedBy: 'USER' | 'SYSTEM';
+  readonly note: string | null;
+  readonly lockedAt: string;
+  readonly unlockedAt: string | null;
+}
+
 /** episode_version 与镜头版本的集合快照关联（0001 episode_version_shots 行）。 */
 export interface EpisodeVersionShot {
   readonly episodeVersionId: string;

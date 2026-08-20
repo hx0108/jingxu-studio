@@ -47,6 +47,7 @@ describe('Script Application Ports', () => {
       storyBibleVersions: {} as ScriptJobRepositories['storyBibleVersions'],
       scriptVersions: {} as ScriptJobRepositories['scriptVersions'],
       shotContractVersions: {} as ScriptJobRepositories['shotContractVersions'],
+      locks: {} as ScriptJobRepositories['locks'],
       shots: {} as ScriptJobRepositories['shots'],
       stageHeads: {} as ScriptJobRepositories['stageHeads'],
       dependencies: {} as ScriptJobRepositories['dependencies'],
@@ -114,6 +115,11 @@ describe('Script Application Ports', () => {
           recorded.shotVersions.push(...versions);
           return Promise.resolve();
         },
+      },
+      locks: {
+        insert: () => Promise.resolve(),
+        listActive: () => Promise.resolve([]),
+        unlock: () => Promise.resolve(true),
       },
       shots: {
         findById: () => Promise.resolve(null),

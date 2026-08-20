@@ -63,7 +63,10 @@ export interface StoryboardVersionService {
   ): Promise<AppResultDto<StoryboardVersionSummary>>;
 }
 
-const toSummary = (version: EpisodeVersion, shotCount: number): StoryboardVersionSummary => ({
+export const toSummary = (
+  version: EpisodeVersion,
+  shotCount: number,
+): StoryboardVersionSummary => ({
   createdAt: version.createdAt,
   episodeId: version.episodeId,
   formatProfileId: version.formatProfileId,
@@ -77,7 +80,11 @@ const toSummary = (version: EpisodeVersion, shotCount: number): StoryboardVersio
   versionNo: version.versionNo,
 });
 
-const headFor = (version: EpisodeVersion, projectId: string, updatedAt: string): StageHead => ({
+export const headFor = (
+  version: EpisodeVersion,
+  projectId: string,
+  updatedAt: string,
+): StageHead => ({
   currentVersionId: version.id,
   currentVersionType: 'EPISODE_VERSION',
   episodeId: version.episodeId,

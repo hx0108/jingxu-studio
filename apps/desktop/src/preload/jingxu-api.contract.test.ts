@@ -87,7 +87,9 @@ describe('window.jingxu 白名单 Contract', () => {
       'provider',
       'runtime',
       'script',
+      'storyboard',
     ]);
+    expect(Object.isFrozen(api.storyboard)).toBe(true);
     expect(Object.keys(api.script).sort()).toEqual([
       'confirmVersion',
       'getWorkspace',

@@ -20,6 +20,23 @@ export {
   type StoryboardVersionSummary,
 } from './storyboard-version-service';
 export {
+  createShotEditLockService,
+  type ShotEditInput,
+  type ShotEditLockService,
+  type ShotEditLockServiceDependencies,
+  type ShotEditLockSummary,
+  type ShotLockInput,
+  type ShotLockTargetInput,
+} from './shot-edit-lock-service';
+export {
+  changedEditableRoots,
+  LOCKABLE_ROOTS,
+  EDITABLE_ROOTS,
+  parseLockPointer,
+  pointerTokensConflict,
+  validateLockPointer,
+} from './shot-lock-policy';
+export {
   createScriptJobSubmission,
   ScriptJobSubmissionError,
   type ScriptJobSubmissionDependencies,

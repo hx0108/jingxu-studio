@@ -1,6 +1,7 @@
-import type { AppErrorDto, ImageApi, ScriptApi } from '@jingxu/contracts';
+import type { AppErrorDto, ImageApi, ScriptApi, StoryboardApi } from '@jingxu/contracts';
 
 export const getScriptClient = (): ScriptApi => window.jingxu.script;
+export const getStoryboardClient = (): StoryboardApi => window.jingxu.storyboard;
 export const getJobClient = () => window.jingxu.job;
 export const getProviderClient = () => window.jingxu.provider;
 export const getImageClient = (): ImageApi => window.jingxu.image;

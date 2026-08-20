@@ -30,6 +30,11 @@ import {
   createScriptFeatureRegistration,
   type ScriptFeatureRegistration,
 } from './composition/register-script-features';
+import {
+  createProductionStoryboardService,
+  createStoryboardFeatureRegistration,
+  type StoryboardFeatureRegistration,
+} from './composition/register-storyboard-features';
 import { registerRuntimeIpc } from './ipc/runtime-ipc';
 import { registerAppProtocol } from './security/app-protocol';
 import { handleMediaProtocolRequest } from './security/media-protocol';
@@ -46,6 +51,7 @@ let persistenceRuntime: DesktopPersistenceRuntime | null = null;
 let projectFeatureRegistration: ProjectFeatureRegistration | null = null;
 let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null;
 let scriptFeatureRegistration: ScriptFeatureRegistration | null = null;
+let storyboardFeatureRegistration: StoryboardFeatureRegistration | null = null;
 let imageFeatureRegistration: ImageFeatureRegistration | null = null;
 let shutdownStarted = false;
 
@@ -221,6 +227,12 @@ if (!singleInstanceLockAcquired) {
           persistenceRuntime,
           trustedUrl: getTrustedUrl(),
         });
+        storyboardFeatureRegistration = createStoryboardFeatureRegistration({
+          createService: createProductionStoryboardService,
+          ipcRegistrar,
+          persistenceRuntime,
+          trustedUrl: getTrustedUrl(),
+        });
         imageFeatureRegistration = createImageFeatureRegistration({
           clock: () => new Date().toISOString(),
           ipcRegistrar,
@@ -234,11 +246,13 @@ if (!singleInstanceLockAcquired) {
           projectFeatureRegistration?.ensureRegistered();
           jobProviderFeatureRegistration?.ensureRegistered();
           scriptFeatureRegistration?.ensureRegistered();
+          storyboardFeatureRegistration?.ensureRegistered();
           imageFeatureRegistration?.ensureRegistered();
         });
         projectFeatureRegistration.ensureRegistered();
         jobProviderFeatureRegistration.ensureRegistered();
         scriptFeatureRegistration.ensureRegistered();
+        storyboardFeatureRegistration.ensureRegistered();
         imageFeatureRegistration.ensureRegistered();
       }
       await createMainWindow();
@@ -267,6 +281,7 @@ if (!singleInstanceLockAcquired) {
     projectFeatureRegistration = null;
     jobProviderFeatureRegistration = null;
     scriptFeatureRegistration = null;
+    storyboardFeatureRegistration = null;
     imageFeatureRegistration = null;
     persistenceRuntime?.close();
     persistenceRuntime = null;

@@ -64,6 +64,13 @@ const shotSummary = (overrides: {
 }): StoryboardShotSummaryDto => ({
   cameraMotion: overrides.sequence === 1 ? 'STATIC' : 'PAN',
   dialogueRenderMode: overrides.sequence === 1 ? 'NARRATION_FIRST' : 'SUBTITLE_ONLY',
+  document: {
+    cinematography: { camera_motion: 'STATIC', shot_size: 'MEDIUM' },
+    locked_paths: [],
+    narrative_purpose: overrides.narrativePurpose,
+    target_duration_sec: overrides.targetDurationSec,
+  },
+  lockedPaths: [],
   narrativePurpose: overrides.narrativePurpose,
   sequence: overrides.sequence,
   shotId: overrides.shotId,
@@ -106,6 +113,9 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         episodeTargetDurationSec={90}
         imageStates={null}
         onBatchCancel={vi.fn()}
+        onEditShot={vi.fn()}
+        onLockShot={vi.fn()}
+        onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
         onGenerateFirstFrames={vi.fn()}
         generateHint={null}
@@ -141,8 +151,11 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     expect(html).toContain('正在加载首帧候选…');
     // 分镜自身操作可执行（首帧按钮的 disabled 属预期，不在此断言）。
     expect(html).toContain('<button type="button">生成整集分镜</button>');
-    // 只读边界与历史恢复入口。
-    expect(html).toContain('不支持编辑、拆分、合并、排序或删除');
+    // 编辑/锁定入口（shot-edit-lock D1/D3）与历史恢复入口。
+    expect(html).toContain('编辑镜头');
+    expect(html).toContain('字段锁定');
+    expect(html).toContain('锁定 台词');
+    expect(html).toContain('七类根字段加锁');
     expect(html).toContain('v1 · READY · 2 个镜头');
     expect(html).toContain('恢复为新草稿');
   });
@@ -154,6 +167,9 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         episodeTargetDurationSec={90}
         imageStates={null}
         onBatchCancel={vi.fn()}
+        onEditShot={vi.fn()}
+        onLockShot={vi.fn()}
+        onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
         onGenerateFirstFrames={vi.fn()}
         generateHint="前置阶段尚未确认 READY：需先确认场景剧本。"
@@ -180,6 +196,9 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         episodeTargetDurationSec={90}
         imageStates={null}
         onBatchCancel={vi.fn()}
+        onEditShot={vi.fn()}
+        onLockShot={vi.fn()}
+        onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
         onGenerateFirstFrames={vi.fn()}
         generateHint={null}
@@ -212,6 +231,9 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         episodeTargetDurationSec={90}
         imageStates={null}
         onBatchCancel={vi.fn()}
+        onEditShot={vi.fn()}
+        onLockShot={vi.fn()}
+        onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
         onGenerateFirstFrames={vi.fn()}
         generateHint={null}
@@ -336,6 +358,9 @@ describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () 
         ])}
         job={null}
         onBatchCancel={vi.fn()}
+        onEditShot={vi.fn()}
+        onLockShot={vi.fn()}
+        onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
         onConfirm={vi.fn()}
         onGenerate={vi.fn()}
@@ -375,6 +400,9 @@ describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () 
         ])}
         job={null}
         onBatchCancel={vi.fn()}
+        onEditShot={vi.fn()}
+        onLockShot={vi.fn()}
+        onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
         onConfirm={vi.fn()}
         onGenerate={vi.fn()}
@@ -406,6 +434,9 @@ describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () 
         imageStates={{ batches: [], shots: [] }}
         job={null}
         onBatchCancel={vi.fn()}
+        onEditShot={vi.fn()}
+        onLockShot={vi.fn()}
+        onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
         onConfirm={vi.fn()}
         onGenerate={vi.fn()}
