@@ -73,6 +73,8 @@ export const projectErrorCodeSchema = z.enum([
   'MEDIA_TASK_NOT_FOUND',
   'MEDIA_CANDIDATE_NOT_FOUND',
   'MEDIA_CANDIDATE_NOT_SELECTABLE',
+  // V2 视频切片（shot-video-generation）：无已选首帧镜头发起视频段生成的稳定拒绝码。
+  'MEDIA_FIRST_FRAME_NOT_SELECTED',
   // V2 批量首帧（batch-first-frame-generation §5.1 批次编排稳定码）。
   'MEDIA_BATCH_NOT_FOUND',
   'MEDIA_BATCH_ALREADY_RUNNING',

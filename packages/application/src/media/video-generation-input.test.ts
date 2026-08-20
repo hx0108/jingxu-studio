@@ -6,6 +6,7 @@ import {
   computeVideoGenerationInputHash,
   extractVideoShotFields,
   resolveVideoDurationTier,
+  resolveVideoSize,
 } from './video-generation-input';
 
 /** 注入哈希替身（沿 media-generation-service.test 先例）：透传 canonical JSON 锁键序/字段集。 */
@@ -118,6 +119,29 @@ describe('video-generation-input 纯函数（金样锁形）', () => {
     expect(
       extractVideoShotFields(JSON.stringify({ cinematography: { camera_motion: 'PAN' } })),
     ).toBeNull();
+  });
+
+  it('分辨率档位—短边就近 1080p/720p、长边比例偶数对齐、口径缺失如实返回 null', () => {
+    // 9:16 首帧（图片侧 1440x2560 请求口径）→ 1080x1920（与参数指纹金样同一组尺寸）。
+    expect(resolveVideoSize({ height: 2560, width: 1440 })).toEqual({
+      height: 1920,
+      width: 1080,
+    });
+    // 短边 <1080 落 720p；横竖方向保持；恰在阈值取 1080p。
+    expect(resolveVideoSize({ height: 1280, width: 720 })).toEqual({ height: 1280, width: 720 });
+    expect(resolveVideoSize({ height: 720, width: 1280 })).toEqual({ height: 720, width: 1280 });
+    expect(resolveVideoSize({ height: 1920, width: 1080 })).toEqual({
+      height: 1920,
+      width: 1080,
+    });
+    // 长边比例缩放偶数对齐（非整比不产生半像素）。
+    expect(resolveVideoSize({ height: 1800, width: 1013 })).toEqual({ height: 1280, width: 720 });
+    expect(resolveVideoSize({ height: 2000, width: 1000 })).toEqual({ height: 1440, width: 720 });
+    // Provider 未回报尺寸/非整数/非正——不臆造默认，null 交由上层稳定拒绝。
+    expect(resolveVideoSize({ height: null, width: 1440 })).toBeNull();
+    expect(resolveVideoSize({ height: 2560, width: null })).toBeNull();
+    expect(resolveVideoSize({ height: 2560.5, width: 1440 })).toBeNull();
+    expect(resolveVideoSize({ height: 0, width: 1440 })).toBeNull();
   });
 
   it('视频提示词金样—action/emotion 复合 + 叙事目的 + 运镜文本；可缺项', () => {

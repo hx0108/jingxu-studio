@@ -2,8 +2,9 @@
  * 视频生成输入组装（shot-video-generation 任务 3.1，design A4）。
  *
  * 只读纯函数：视频参数指纹（seedance-v1 形态）、generationInputHash（不含资产绑定
- * ——i2v 输入=首帧+提示词）、时长档位就近映射（超上限如实标注）、镜头文档运镜/
- * 叙事字段提取与视频提示词组装。零 I/O；哈希函数沿图片侧同构注入。
+ * ——i2v 输入=首帧+提示词）、时长档位就近映射（超上限如实标注）、分辨率档位短边
+ * 就近派生、镜头文档运镜/叙事字段提取与视频提示词组装。零 I/O；哈希函数沿图片侧
+ * 同构注入。
  */
 
 /** 视频提示词需要的镜头文档字段（ShotContract 1.1.0；系统字段一律不进入提示词）。 */
@@ -150,3 +151,33 @@ export const computeVideoGenerationInputHash = (
     shotContentHash: descriptor.shotContentHash,
     shotVersionId: descriptor.shotVersionId,
   });
+
+/** 已选首帧的落列口径（SUCCEEDED 行的 width/height 可空——Provider 未回报时）。 */
+export type VideoFirstFrameDimensions = Readonly<{ height: number | null; width: number | null }>;
+
+/** 请求分辨率（能力快照 resolution.tier_rule 派生；偶数对齐）。 */
+export interface VideoSize {
+  readonly height: number;
+  readonly width: number;
+}
+
+/**
+ * 分辨率档位派生（快照 tier_rule「短边就近」）：min(width,height)≥1080 取 1080p
+ * 否则 720p；长边按比例缩放并偶数对齐（1440x2560 → 1080x1920）。首帧口径缺失
+ * （Provider 未回报尺寸）返回 null——由调用方按数据异常稳定拒绝，不臆造默认值。
+ * max_edge_px 上限不在此钳制（保持比例如实）：超限由适配器前置校验拒绝（design A3）。
+ */
+export const resolveVideoSize = (firstFrame: VideoFirstFrameDimensions): VideoSize | null => {
+  const { height, width } = firstFrame;
+  if (height === null || width === null) return null;
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
+    return null;
+  }
+  const shortEdge = Math.min(width, height);
+  const longEdge = Math.max(width, height);
+  const tierShort = shortEdge >= 1080 ? 1080 : 720;
+  const tierLong = Math.max(2, Math.round((longEdge * (tierShort / shortEdge)) / 2) * 2);
+  return width <= height
+    ? { height: tierLong, width: tierShort }
+    : { height: tierShort, width: tierLong };
+};

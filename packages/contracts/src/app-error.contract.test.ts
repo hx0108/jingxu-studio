@@ -29,6 +29,7 @@ describe('AppError / AppResult Contract', () => {
         'PROVIDER_CREDENTIAL_MISSING',
         'PROVIDER_CREDENTIAL_UNAVAILABLE',
         'PROVIDER_CALL_FAILED',
+        'MEDIA_FIRST_FRAME_NOT_SELECTED',
       ];
       for (const code of codes) {
         expect(projectErrorCodeSchema.parse(code)).toBe(code);

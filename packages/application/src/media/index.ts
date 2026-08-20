@@ -49,11 +49,23 @@ export {
   computeVideoGenerationInputHash,
   extractVideoShotFields,
   resolveVideoDurationTier,
+  resolveVideoSize,
 } from './video-generation-input';
 export type {
   VideoDurationRange,
   VideoDurationTier,
+  VideoFirstFrameDimensions,
   VideoGenerationInputDescriptor,
   VideoParametersFingerprintInput,
   VideoShotMotionFields,
+  VideoSize,
 } from './video-generation-input';
+export {
+  createVideoGenerationService,
+  resolveVideoGenerationInput,
+} from './video-generation-service';
+export type {
+  ResolvedVideoGenerationInput,
+  VideoGenerationService,
+  VideoGenerationServiceDependencies,
+} from './video-generation-service';
