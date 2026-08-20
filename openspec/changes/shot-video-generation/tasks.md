@@ -20,7 +20,7 @@
 - [x] 3.2 `VideoGenerationService`：已选首帧门禁（`MEDIA_FIRST_FRAME_NOT_SELECTED`）+ 凭据闸 + 幂等建档（candidateCount=2 注入）+ STALE 双传播（shotVersionId / markVideoStaleByFirstFrameChange 按 first_frame_file_sha256 判定）+ 选择指针；单测
 - [x] 3.3 调度器 video 实例（createMediaTaskScheduler 二次实例化：video 仓/video 端口/videos 存储/独立 pollDeadlineMs 分钟级预算与 segmentTimeoutMs）；单测（ASYNC 轮询窗口/候选级超时/取消迟到复核/恢复零重发——复用既有调度器测试模式）
 - [x] 3.4 `VideoBatchService` 二次实例化：目标=已选首帧且当前世代无 SUCCEEDED 视频候选；跳过清单（无首帧/已有）；空目标 `MEDIA_BATCH_NO_PENDING_SHOTS`；惰性逐镜头/失败口径复用/取消/收尾派生/重试新批；单测
-- [ ] 3.5 `VideoApiService`（IPC 编排 + jingxu://media/video-candidate URL 输出 + 输出脱敏面）；单测
+- [x] 3.5 `VideoApiService`（IPC 编排 + jingxu://media/video-candidate URL 输出 + 输出脱敏面）；单测
 
 ## 4. main：组合根 + IPC + 协议/CSP + 凭据
 
