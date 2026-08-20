@@ -10,6 +10,13 @@ import { createContentAddressedStore } from './content-addressed-store';
 
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 const OTHER_PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9, 9]);
+/** 最小 ftyp 盒头前缀（isom brand）——存储层不解析内容，仅保证字节形态真实。 */
+const MP4_BYTES = new Uint8Array([
+  0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 1, 2, 3, 4,
+]);
+const OTHER_MP4_BYTES = new Uint8Array([
+  0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 9, 9, 9, 9,
+]);
 
 const withRoot = async <T>(operation: (root: string) => Promise<T> | T): Promise<T> => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-media-store-'));
@@ -88,6 +95,66 @@ describe('createContentAddressedStore', () => {
         projectId: 'project_media',
       });
       expect(asset.storageRelPath).toMatch(/\/assets\/[0-9a-f]{2}\/[0-9a-f]{64}\.webp$/u);
+    });
+  });
+
+  it('视频命名空间—video/mp4 落 videos 分址/复算读取/原子 rename/防逃逸同口径', async () => {
+    await withRoot(async (root) => {
+      const store = createContentAddressedStore(root);
+      const stored = await store.write({
+        bytes: MP4_BYTES,
+        mimeType: 'video/mp4',
+        namespace: 'videos',
+        projectId: 'project_media',
+      });
+      expect(stored.storageRelPath).toMatch(
+        /^projects\/project_media\/videos\/[0-9a-f]{2}\/[0-9a-f]{64}\.mp4$/u,
+      );
+      expect(stored.mimeType).toBe('video/mp4');
+      expect(new Uint8Array(await store.read(stored.storageRelPath))).toEqual(MP4_BYTES);
+      // 同字节去重；与 images 命名空间分址（内容寻址键含命名空间段）。
+      const again = await store.write({
+        bytes: MP4_BYTES,
+        mimeType: 'video/mp4',
+        namespace: 'videos',
+        projectId: 'project_media',
+      });
+      expect(again.storageRelPath).toBe(stored.storageRelPath);
+      const asImage = await store.write({
+        bytes: MP4_BYTES,
+        mimeType: 'image/png',
+        namespace: 'images',
+        projectId: 'project_media',
+      });
+      expect(asImage.storageRelPath).not.toBe(stored.storageRelPath);
+      // 原子 rename 前复算：注入损坏写入 → CHECKSUM_MISMATCH 且分片目录无残留。
+      const corrupt = createContentAddressedStore(root, {
+        writeFileImpl: async (filePath, bytes) => {
+          const corrupted = new Uint8Array(bytes);
+          corrupted.set([(bytes[0] ?? 0) ^ 0xff], 0);
+          await writeFile(filePath, corrupted);
+        },
+      });
+      await expect(
+        corrupt.write({
+          bytes: OTHER_MP4_BYTES,
+          mimeType: 'video/mp4',
+          namespace: 'videos',
+          projectId: 'project_media',
+        }),
+      ).rejects.toMatchObject({ code: 'MEDIA_STORE_CHECKSUM_MISMATCH' });
+      const shard = createHash('sha256').update(OTHER_MP4_BYTES).digest('hex').slice(0, 2);
+      expect(await readdir(path.join(root, 'projects', 'project_media', 'videos', shard))).toEqual(
+        [],
+      );
+      // 路径防逃逸：videos 路径的形态非法/越界与 images 同口径拒绝。
+      for (const badPath of [
+        'projects/project_media/videos/ab/short.mp4',
+        `projects/../secrets/${'a'.repeat(64)}.mp4`,
+        `projects/project_media/videos/ab/${'a'.repeat(64)}.exe`,
+      ]) {
+        await expect(store.read(badPath), badPath).rejects.toBeInstanceOf(PersistenceRuntimeError);
+      }
     });
   });
 
