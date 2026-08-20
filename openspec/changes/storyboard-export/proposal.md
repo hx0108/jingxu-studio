@@ -13,12 +13,12 @@ PRD 9.7.1/9.8 要求「导出剧本、分镜表和结构化 JSON」，AC-V1-03 �
 - **IPC**：导出命令入 storyboard 域（形态按拍板），复用 sender 校验/启动写门控/singleflight/输出脱敏复验基建。
 - **UI**：分镜工作台 READY 态「导出整集」入口 + WARN 确认与原因输入。
 
-## 拍板点（待人工审查）
+## 拍板（2026-08-20，全按推荐项）
 
-- **D1 切片范围**：本刀是否仅 EpisodeStoryboardExport JSON 文件导出（Markdown 分镜表、可生产性报告、导入 RETURN_TO_ORIGIN、ProjectTransferBundle 各自后继）。
-- **D2 导出留痕形态**：轻量审计事件（episode version 引用 + 文件 sha256 + 可选偏离原因，零迁移）vs 12.4 完整 ExportJob 表与状态机（音频/字幕 V2 味，本刀引入成本高）。
-- **D4 IPC 归属**：并入既有 `storyboard.*`（第 4 方法 `exportEpisode`，白名单契约同步扩展）vs 新立 `export.*` 命名空间。
-- **D5 WARN 偏离确认交互**：单命令携带 `warnConfirmed`+`reason` 重发（服务端算带，越带缺原因返回稳定错误码与实际 Σ）vs 两段式 preview→confirm。
+- **D1 切片范围 = 仅 JSON 导出**：本刀只做 EpisodeStoryboardExport/1.1.0 结构化 JSON 文件导出；Markdown 分镜表、可生产性报告、导入（RETURN_TO_ORIGIN/ProjectTransferBundle）各自后继 change。
+- **D2 留痕形态 = 轻量审计事件**：复用既有审计/事件通路记一条导出事件（episode version 引用 + 文件 sha256 + 字节大小 + 可选偏离原因）；零迁移零状态机，ExportJob 表留给 V2 成片合成。
+- **D4 IPC 归属 = storyboard.exportEpisode**：并入既有 `storyboard.*` 第 4 方法，复用 sender 校验/写门控/singleflight/脱敏复验基建；三处白名单断言同步扩展（preload 两契约 + bootstrap E2E §9.1）。
+- **D5 WARN 交互 = 单命令+确认重发**：导出命令带 `warnConfirmed`+`deviationReason`；服务端算 Σ，越带且缺原因 → 稳定错误码 `EXPORT_DURATION_DEVIATION`（携带实际 Σ），UI 弹确认+原因输入后重发。无中间态、天然幂等。
 
 ## 非目标
 
