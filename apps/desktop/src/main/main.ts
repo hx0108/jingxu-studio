@@ -73,6 +73,8 @@ protocol.registerSchemesAsPrivileged([
       corsEnabled: false,
       secure: true,
       standard: true,
+      // jingxu://media/video-candidate 需要 Range/206 流式播放（<video> 拖动）。
+      stream: true,
       supportFetchAPI: true,
     },
     scheme: APP_SCHEME,
@@ -125,36 +127,54 @@ const createMainWindow = async (): Promise<void> => {
     registerAppProtocol({
       fetchResource: (url) => net.fetch(url),
       handleMediaRequest: (request) =>
-        handleMediaProtocolRequest(request, {
-          locator: {
-            // 运行时不可读（启动故障）时反查直接落空，协议统一 404——不区分存在性。
-            findAssetVersionMedia: async (versionId) => {
-              const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
-              if (unitOfWork === null) return null;
-              try {
-                return await unitOfWork.run(({ media }) =>
-                  media.findAssetVersionMediaById(versionId),
-                );
-              } catch {
-                return null;
-              }
-            },
-            findCandidateMedia: async (candidateId) => {
-              const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
-              if (unitOfWork === null) return null;
-              try {
-                return await unitOfWork.run(({ media }) =>
-                  media.findCandidateMediaById(candidateId),
-                );
-              } catch {
-                return null;
-              }
-            },
+        handleMediaProtocolRequest(
+          {
+            method: request.method,
+            rangeHeader: request.headers?.get('range') ?? null,
+            url: request.url,
           },
-          readFile: (absolutePath) => readFile(absolutePath),
-          resolveWithinProjects:
-            createContentAddressedStore(getManagedRoot()).resolvePathWithinProjects,
-        }),
+          {
+            locator: {
+              // 运行时不可读（启动故障）时反查直接落空，协议统一 404——不区分存在性。
+              findAssetVersionMedia: async (versionId) => {
+                const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+                if (unitOfWork === null) return null;
+                try {
+                  return await unitOfWork.run(({ media }) =>
+                    media.findAssetVersionMediaById(versionId),
+                  );
+                } catch {
+                  return null;
+                }
+              },
+              findCandidateMedia: async (candidateId) => {
+                const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+                if (unitOfWork === null) return null;
+                try {
+                  return await unitOfWork.run(({ media }) =>
+                    media.findCandidateMediaById(candidateId),
+                  );
+                } catch {
+                  return null;
+                }
+              },
+              findVideoCandidateMedia: async (candidateId) => {
+                const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+                if (unitOfWork === null) return null;
+                try {
+                  return await unitOfWork.run(({ video }) =>
+                    video.findCandidateMediaById(candidateId),
+                  );
+                } catch {
+                  return null;
+                }
+              },
+            },
+            readFile: (absolutePath) => readFile(absolutePath),
+            resolveWithinProjects:
+              createContentAddressedStore(getManagedRoot()).resolvePathWithinProjects,
+          },
+        ),
       protocol,
       rendererRoot: path.join(__dirname, '..', 'renderer', rendererName),
       trustedHost: APP_HOST,
