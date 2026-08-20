@@ -26,6 +26,7 @@ export type {
 } from './image-api-service';
 export { InMemoryMediaRepository } from './in-memory-media-repository';
 export { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
+export { InMemoryVideoMediaRepository } from './in-memory-video-media-repository';
 export { createMediaRequestBlueprintBuilder } from './media-request-blueprint';
 export type {
   MediaReferenceImageReader,

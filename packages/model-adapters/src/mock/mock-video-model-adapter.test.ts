@@ -32,15 +32,14 @@ describe('MockVideoModelAdapter', () => {
     expect([...MOCK_VIDEO_MP4_BYTES.slice(4, 8)]).toEqual([0x66, 0x74, 0x79, 0x70]);
     expect(MOCK_VIDEO_MP4_BYTES.length).toBeGreaterThan(512);
     const adapter = new MockVideoModelAdapter({ steps: [] });
-    await expect(adapter.download(refOf('mock-video://seed_a'), freshSignal())).resolves.toBeDefined();
+    await expect(
+      adapter.download(refOf('mock-video://seed_a'), freshSignal()),
+    ).resolves.toBeDefined();
   });
 
   it('ASYNC 提交—providerTaskId 按序命名—pendingPolls 递减后 SUCCEEDED 带引用与 usage', async () => {
     const adapter = new MockVideoModelAdapter({
-      steps: [
-        { kind: 'ASYNC', pendingPolls: 2 },
-        { kind: 'ASYNC' },
-      ],
+      steps: [{ kind: 'ASYNC', pendingPolls: 2 }, { kind: 'ASYNC' }],
     });
     const first = await adapter.submit(request('invocation_polls'), freshSignal());
     expect(first).toEqual({ kind: 'ASYNC', providerTaskId: 'mock-video-task-1' });
@@ -95,7 +94,11 @@ describe('MockVideoModelAdapter', () => {
 
   it('证据通道—失败原文确定性可解析—限流记 429 其余 500—本地失败全 null', async () => {
     const failing = new MockVideoModelAdapter({
-      steps: [stepError('MODEL_RATE_LIMITED'), stepError('MODEL_PROVIDER_ERROR'), { kind: 'ASYNC' }],
+      steps: [
+        stepError('MODEL_RATE_LIMITED'),
+        stepError('MODEL_PROVIDER_ERROR'),
+        { kind: 'ASYNC' },
+      ],
     });
     const rateError = await failing.submit(request('invocation_rate'), freshSignal()).then(
       () => null,
@@ -114,9 +117,14 @@ describe('MockVideoModelAdapter', () => {
     );
     expect(failing.evidenceOf(providerError)).toMatchObject({ httpStatus: 500 });
 
-    const timeoutError = await new MockVideoModelAdapter({ steps: [{ afterMs: 1, kind: 'TIMEOUT' }] })
+    const timeoutError = await new MockVideoModelAdapter({
+      steps: [{ afterMs: 1, kind: 'TIMEOUT' }],
+    })
       .submit(request('invocation_timeout'), freshSignal())
-      .then(() => null, (error: unknown) => error);
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
     // 无网络交互的本地失败：证据通道为全 null（非 null 对象——与 Seedance 默认证据同形）。
     expect(new MockVideoModelAdapter({ steps: [] }).evidenceOf(timeoutError)).toEqual({
       bodyText: null,
@@ -180,9 +188,9 @@ describe('MockVideoModelAdapter', () => {
   });
 
   it('validateCredential—注入即回显—缺省 ok', async () => {
-    await expect(
-      new MockVideoModelAdapter({ steps: [] }).validateCredential(),
-    ).resolves.toEqual({ ok: true });
+    await expect(new MockVideoModelAdapter({ steps: [] }).validateCredential()).resolves.toEqual({
+      ok: true,
+    });
     await expect(
       new MockVideoModelAdapter({
         credentialCheck: { detail: null, errorCode: 'MODEL_CREDENTIAL_INVALID', ok: false },

@@ -12,6 +12,7 @@ import type {
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
 import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
+import { InMemoryVideoMediaRepository } from './in-memory-video-media-repository';
 import { createMediaRequestBlueprintBuilder } from './media-request-blueprint';
 
 const NOW = '2026-08-16T00:00:00.000Z';
@@ -84,7 +85,11 @@ const fixture = (snapshot: ScriptWorkspaceSnapshot | null): Fixture => {
   const repository = new InMemoryMediaRepository();
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const workspaceQuery: ScriptWorkspaceQueryPort & {
     snapshot: ScriptWorkspaceSnapshot | null;
@@ -162,7 +167,11 @@ const snapshotOf = (
 const seedTask = async (repository: InMemoryMediaRepository): Promise<string> => {
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const task = await unitOfWork.run(({ media }) =>
     media.insertTask({
@@ -196,7 +205,11 @@ const seedAsset = async (
 ): Promise<void> => {
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const asset = await unitOfWork.run(({ media }) =>
     media.createAsset({
@@ -307,7 +320,11 @@ describe('createMediaRequestBlueprintBuilder', () => {
     const repository = fixture_.repository;
     const unitOfWork: MediaUnitOfWorkPort = {
       run: (work) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: repository,
+          video: new InMemoryVideoMediaRepository(),
+        }),
     };
     const task = await unitOfWork.run(({ media }) =>
       media.insertTask({
@@ -328,7 +345,11 @@ describe('createMediaRequestBlueprintBuilder', () => {
 const unitOfWorkTask = async (repository: InMemoryMediaRepository): Promise<MediaTaskRecord> => {
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const task = await unitOfWork.run(({ media }) => media.findTaskById('project_1', 'task_1'));
   if (task === null) throw new Error('task_1 not seeded');

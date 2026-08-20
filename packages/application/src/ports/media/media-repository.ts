@@ -139,79 +139,51 @@ export interface MediaSucceededShotHash {
   readonly shotId: string;
 }
 
-export interface MediaRepository {
-  /** 按 (projectId, assetType, bibleRefId) 业务键查资产；不存在返回 null。 */
-  findAssetByIdentity(
-    projectId: string,
-    assetType: MediaAssetType,
-    bibleRefId: string,
-  ): Promise<MediaAssetRecord | null>;
+/** insertCandidates 的公共输入形态；视频域在其上扩展首帧锚点与请求时长档位（design A2）。 */
+export interface MediaCandidateInsertInput {
+  readonly candidateIds: readonly string[];
+  readonly generationInputHash: string;
+  readonly modelId: string;
+  readonly projectId: string;
+  readonly roundNo: number;
+  readonly shotId: string;
+  readonly shotVersionId: string;
+}
 
-  /** 建档；业务键冲突时抛持久化层冲突错误（service 先查再建，约束兜底并发）。 */
-  createAsset(input: {
-    readonly assetType: MediaAssetType;
-    readonly bibleRefId: string;
-    readonly displayName: string;
-    readonly id: string;
-    readonly projectId: string;
-  }): Promise<MediaAssetRecord>;
+/** 候选成功载荷的公共形态（文件四元组+证据引用）；视频域扩展 actualDurationSec。 */
+export interface MediaCandidateSucceededInput {
+  readonly byteSize: number;
+  readonly fileSha256: string;
+  readonly height: number | null;
+  readonly invocationEvidenceRef: string;
+  readonly mimeType: string;
+  readonly storageRelPath: string;
+  readonly width: number | null;
+}
 
-  /**
-   * 追加不可变参考图版本；version_no 由仓储在事务内取 max+1，
-   * parentVersionId 自动指向当前最新版本。
-   */
-  appendAssetVersion(input: {
-    readonly assetId: string;
-    readonly byteSize: number;
-    readonly description?: string | null;
-    readonly fileSha256: string;
-    readonly height?: number | null;
-    readonly id: string;
-    readonly mimeType: string;
-    readonly width?: number | null;
-  }): Promise<MediaAssetVersionRecord>;
-
-  /** 列出项目全部资产及其版本链（版本升序）。 */
-  listAssets(projectId: string): Promise<readonly MediaAssetWithVersions[]>;
-
-  /**
-   * 绑定解析：按业务键取资产当前（最新）参考图版本。
-   * 资产不存在或从未上传参考图返回 null（调用方跳过该项，不阻断生成）。
-   */
-  findCurrentAssetVersion(
-    projectId: string,
-    assetType: MediaAssetType,
-    bibleRefId: string,
-  ): Promise<MediaAssetVersionRecord | null>;
-
+/**
+ * 生成域仓储契约（候选+任务+批次方法族；shot-video-generation design A2 从
+ * MediaRepository 提取）：图片/视频两域同构实例化——候选记录形态协变（视频行在
+ * 公共形态上增时长口径与首帧锚点），建档与成功载荷入参以域扩展形态参数化。
+ * 图片实例 = 全缺省类型参数（既有行为与调用点零变化）。
+ */
+export interface MediaGenerationRepository<
+  CandidateRecord extends MediaCandidateRecord = MediaCandidateRecord,
+  InsertCandidatesInput extends MediaCandidateInsertInput = MediaCandidateInsertInput,
+  CandidateSucceededInput extends MediaCandidateSucceededInput = MediaCandidateSucceededInput,
+> {
   /**
    * 批量预落库一轮 PENDING 候选：round_no 由调用方传入（任务建档时同事务派生并
    * 记录在任务行上，任务与轮一一对应），index_in_round 为 0..count-1。
    * candidateIds 长度必须等于 count。
    */
-  insertCandidates(input: {
-    readonly candidateIds: readonly string[];
-    readonly generationInputHash: string;
-    readonly modelId: string;
-    readonly projectId: string;
-    readonly roundNo: number;
-    readonly shotId: string;
-    readonly shotVersionId: string;
-  }): Promise<readonly MediaCandidateRecord[]>;
+  insertCandidates(input: InsertCandidatesInput): Promise<readonly CandidateRecord[]>;
 
   /** 候选完成（成功形态）：文件四元组 + 调用证据引用一次性落位。 */
   completeCandidateSucceeded(
     candidateId: string,
-    result: {
-      readonly byteSize: number;
-      readonly fileSha256: string;
-      readonly height: number | null;
-      readonly invocationEvidenceRef: string;
-      readonly mimeType: string;
-      readonly storageRelPath: string;
-      readonly width: number | null;
-    },
-  ): Promise<MediaCandidateRecord>;
+    result: CandidateSucceededInput,
+  ): Promise<CandidateRecord>;
 
   /** 候选完成（失败形态）：错误码 + 调用证据引用。 */
   completeCandidateFailed(
@@ -220,13 +192,13 @@ export interface MediaRepository {
       readonly errorCode: string;
       readonly invocationEvidenceRef: string;
     },
-  ): Promise<MediaCandidateRecord>;
+  ): Promise<CandidateRecord>;
 
   /** 列出镜头全部候选（轮次与轮内索引升序），世代分组由上层按 hash 归并。 */
-  listCandidates(shotId: string): Promise<readonly MediaCandidateRecord[]>;
+  listCandidates(shotId: string): Promise<readonly CandidateRecord[]>;
 
   /** IPC selectCandidate 入口：候选 id 反查（项目内定位，跨项目不可见）。 */
-  findCandidateById(projectId: string, candidateId: string): Promise<MediaCandidateRecord | null>;
+  findCandidateById(projectId: string, candidateId: string): Promise<CandidateRecord | null>;
 
   /**
    * 受限取图协议入口：候选 id 反查落盘文件（仅已落盘候选命中；PENDING/FAILED/
@@ -234,9 +206,6 @@ export interface MediaRepository {
    * 路径解析层共同拒绝。
    */
   findCandidateMediaById(candidateId: string): Promise<MediaStoredFileRef | null>;
-
-  /** 受限取图协议入口：资产版本 id 反查落盘文件（版本不可变，任意版本可取）。 */
-  findAssetVersionMediaById(versionId: string): Promise<MediaStoredFileRef | null>;
 
   /**
    * 原子切换选择指针：同镜头先清后设。仅 SUCCEEDED 候选可被选择；
@@ -288,7 +257,7 @@ export interface MediaRepository {
   assignCandidateProviderTask(
     candidateId: string,
     providerTaskId: string,
-  ): Promise<MediaCandidateRecord>;
+  ): Promise<CandidateRecord>;
 
   /**
    * SUBMITTED→POLLING，同时持久化 provider_task_id（spec：首次 poll 前必须持久化）。
@@ -369,10 +338,109 @@ export interface MediaRepository {
   listLatestTaskPerShot(projectId: string): Promise<readonly MediaTaskRecord[]>;
 }
 
-/** 媒体事务内可见的仓储集合（沿 JobRepositories 先例；media-invocation-evidence design D4）。 */
+/** 图片域仓储：生成域方法族（缺省类型参数）+ 资产五方法 + 资产版本取图入口。 */
+export interface MediaRepository extends MediaGenerationRepository {
+  /** 按 (projectId, assetType, bibleRefId) 业务键查资产；不存在返回 null。 */
+  findAssetByIdentity(
+    projectId: string,
+    assetType: MediaAssetType,
+    bibleRefId: string,
+  ): Promise<MediaAssetRecord | null>;
+
+  /** 建档；业务键冲突时抛持久化层冲突错误（service 先查再建，约束兜底并发）。 */
+  createAsset(input: {
+    readonly assetType: MediaAssetType;
+    readonly bibleRefId: string;
+    readonly displayName: string;
+    readonly id: string;
+    readonly projectId: string;
+  }): Promise<MediaAssetRecord>;
+
+  /**
+   * 追加不可变参考图版本；version_no 由仓储在事务内取 max+1，
+   * parentVersionId 自动指向当前最新版本。
+   */
+  appendAssetVersion(input: {
+    readonly assetId: string;
+    readonly byteSize: number;
+    readonly description?: string | null;
+    readonly fileSha256: string;
+    readonly height?: number | null;
+    readonly id: string;
+    readonly mimeType: string;
+    readonly width?: number | null;
+  }): Promise<MediaAssetVersionRecord>;
+
+  /** 列出项目全部资产及其版本链（版本升序）。 */
+  listAssets(projectId: string): Promise<readonly MediaAssetWithVersions[]>;
+
+  /**
+   * 绑定解析：按业务键取资产当前（最新）参考图版本。
+   * 资产不存在或从未上传参考图返回 null（调用方跳过该项，不阻断生成）。
+   */
+  findCurrentAssetVersion(
+    projectId: string,
+    assetType: MediaAssetType,
+    bibleRefId: string,
+  ): Promise<MediaAssetVersionRecord | null>;
+
+  /** 受限取图协议入口：资产版本 id 反查落盘文件（版本不可变，任意版本可取）。 */
+  findAssetVersionMediaById(versionId: string): Promise<MediaStoredFileRef | null>;
+}
+
+/**
+ * 视频候选行（design A1/A4）：在图片候选公共形态上增请求/实际时长口径与首帧锚点。
+ * width/height 承视频分辨率；mime 恒 video/mp4（SUCCEEDED 行）。
+ */
+export interface VideoCandidateRecord extends MediaCandidateRecord {
+  /** Provider 回报的实际时长；未回报 null 如实（不估算）。 */
+  readonly actualDurationSec: number | null;
+  /** 生成时选中的首帧 image_candidates 行 id（i2v 输入锚点，成对固化）。 */
+  readonly firstFrameCandidateId: string;
+  /** 生成时首帧文件 sha256——首帧改选 STALE 判定依据（确定性 join）。 */
+  readonly firstFrameFileSha256: string;
+  /** 建候选时落列的请求时长档位（Seedance [5,10]，应用层就近映射）。 */
+  readonly requestedDurationSec: number;
+}
+
+/** 视频域建档输入：公共形态 + 首帧锚点对 + 请求时长档位（三列 NOT NULL）。 */
+export interface VideoCandidateInsertInput extends MediaCandidateInsertInput {
+  readonly firstFrameCandidateId: string;
+  readonly firstFrameFileSha256: string;
+  readonly requestedDurationSec: number;
+}
+
+/** 视频域成功载荷：公共文件四元组 + Provider 回报实际时长（未回报省略或 null）。 */
+export interface VideoCandidateSucceededInput extends MediaCandidateSucceededInput {
+  readonly actualDurationSec?: number | null;
+}
+
+/**
+ * 视频域仓储（design A2）：生成域方法族的 video 三表实例化 + 首帧改选 STALE 传播。
+ * 任务/批次行与图片域同构（MediaTaskRecord/MediaBatchRecord 直接复用）。
+ */
+export interface VideoMediaRepository extends MediaGenerationRepository<
+  VideoCandidateRecord,
+  VideoCandidateInsertInput,
+  VideoCandidateSucceededInput
+> {
+  /**
+   * STALE 触发②（design A4）：首帧改选后按 `first_frame_file_sha256 ≠ 当前选中首帧
+   * sha` 判定（仓储侧确定性 join，无哈希簿记）。当前镜头无选中首帧时视为锚点缺失，
+   * 全部可传播候选置 STALE。返回受影响镜头摘要（与传播族同口径）。
+   */
+  markVideoStaleByFirstFrameChange(shotId: string): Promise<readonly MediaStaleAffectedShot[]>;
+}
+
+/**
+ * 媒体事务内可见的仓储集合（沿 JobRepositories 先例；media-invocation-evidence
+ * design D4；shot-video-generation design A2 扩 video 域）——跨域读同事务可见
+ * （视频建档读选中首帧引用）。
+ */
 export interface MediaRepositories {
-  readonly media: MediaRepository;
   readonly invocations: MediaInvocationRepository;
+  readonly media: MediaRepository;
+  readonly video: VideoMediaRepository;
 }
 
 /** 媒体读写事务边界：单一 `BEGIN IMMEDIATE`，work 抛出即回滚（沿 ProjectUnitOfWorkPort 语义）。 */

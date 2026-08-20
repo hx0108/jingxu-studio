@@ -623,7 +623,11 @@ describe('0012_shot_video_generation.sql', () => {
             )
             .all(),
         ).toEqual([
-          { batch_id: 'video_batch_1', first_frame_id: 'candidate_first_frame', id: 'video_candidate_1' },
+          {
+            batch_id: 'video_batch_1',
+            first_frame_id: 'candidate_first_frame',
+            id: 'video_candidate_1',
+          },
         ]);
         expect(database.pragma('foreign_key_check')).toEqual([]);
       } finally {

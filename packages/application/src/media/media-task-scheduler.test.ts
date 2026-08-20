@@ -11,6 +11,7 @@ import type { NormalizedModelError } from '../ports/text-model/text-model-types'
 import type { MediaUnitOfWorkPort } from '../ports/media/media-repository';
 import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
+import { InMemoryVideoMediaRepository } from './in-memory-video-media-repository';
 import type { MediaFileStorePort, MediaTaskScheduler } from './media-task-scheduler';
 import { createMediaTaskScheduler } from './media-task-scheduler';
 
@@ -244,7 +245,12 @@ const buildFixture = (
   const repository = new InMemoryMediaRepository();
   const invocationRepository = new InMemoryMediaInvocationRepository();
   const unitOfWork: MediaUnitOfWorkPort = {
-    run: (work) => work({ invocations: invocationRepository, media: repository }),
+    run: (work) =>
+      work({
+        invocations: invocationRepository,
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const port = new FakeImageModel(portOptions);
   const writes: { byteSize: number; storageRelPath: string }[] = [];
@@ -313,7 +319,11 @@ const seedTask = async (
 ): Promise<string> => {
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const shotId = options.shotId ?? 'shot_1';
   const task = await unitOfWork.run(({ media }) =>
@@ -689,7 +699,11 @@ describe('MediaTaskScheduler 启动恢复（recover）', () => {
     const taskId = await seedTask(fixture.repository);
     const unitOfWork: MediaUnitOfWorkPort = {
       run: (work) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: fixture.repository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: fixture.repository,
+          video: new InMemoryVideoMediaRepository(),
+        }),
     };
     await unitOfWork.run(({ media }) =>
       media.assignCandidateProviderTask('task_1_c_1', 'pt_partial'),
@@ -758,7 +772,11 @@ describe('MediaTaskScheduler 队列语义', () => {
     const repository = fixture.repository;
     const unitOfWork: MediaUnitOfWorkPort = {
       run: (work) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: repository,
+          video: new InMemoryVideoMediaRepository(),
+        }),
     };
     const failing = createMediaTaskScheduler({
       fileStore: {

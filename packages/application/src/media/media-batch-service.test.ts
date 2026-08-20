@@ -11,6 +11,7 @@ import type { FormatProfile } from '@jingxu/domain';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
 import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
+import { InMemoryVideoMediaRepository } from './in-memory-video-media-repository';
 import { computeGenerationInputHash } from './media-generation-prompt';
 import { createMediaGenerationService } from './media-generation-service';
 import { createMediaBatchService } from './media-batch-service';
@@ -127,7 +128,11 @@ const fixture = (
   const repository = new InMemoryMediaRepository();
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const workspaceQuery: ScriptWorkspaceQueryPort & {
     snapshot: ScriptWorkspaceSnapshot | null;

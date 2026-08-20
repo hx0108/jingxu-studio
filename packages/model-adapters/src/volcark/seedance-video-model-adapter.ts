@@ -193,7 +193,10 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
           model: this.#modelId,
           // i2v 跟随首帧画幅；分辨率档位按短边就近（1080p/720p，快照 constraints）。
           ratio: 'adaptive',
-          resolution: Math.min(request.resolution.width, request.resolution.height) >= 1080 ? '1080p' : '720p',
+          resolution:
+            Math.min(request.resolution.width, request.resolution.height) >= 1080
+              ? '1080p'
+              : '720p',
           return_url: true,
           watermark: true,
         }),
@@ -203,7 +206,11 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
         signal: invocationSignal,
       });
       const { bodyText, truncated } = await readBodyCapped(response);
-      const raw: VideoRawResponse = Object.freeze({ bodyText, httpStatus: response.status, truncated });
+      const raw: VideoRawResponse = Object.freeze({
+        bodyText,
+        httpStatus: response.status,
+        truncated,
+      });
       if (!response.ok) {
         throw new SeedanceAdapterError(this.#normalizeStatus(response.status), raw);
       }
@@ -248,7 +255,11 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
         },
       );
       const { bodyText, truncated } = await readBodyCapped(response);
-      const raw: VideoRawResponse = Object.freeze({ bodyText, httpStatus: response.status, truncated });
+      const raw: VideoRawResponse = Object.freeze({
+        bodyText,
+        httpStatus: response.status,
+        truncated,
+      });
       if (!response.ok) {
         throw new SeedanceAdapterError(this.#normalizeStatus(response.status), raw);
       }
@@ -326,11 +337,14 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
       });
       if (!response.ok) {
         const { bodyText, truncated } = await readBodyCapped(response);
-        throw new SeedanceAdapterError(normalized('MODEL_RESULT_UNAVAILABLE', false, '重新生成候选'), {
-          bodyText,
-          httpStatus: response.status,
-          truncated,
-        });
+        throw new SeedanceAdapterError(
+          normalized('MODEL_RESULT_UNAVAILABLE', false, '重新生成候选'),
+          {
+            bodyText,
+            httpStatus: response.status,
+            truncated,
+          },
+        );
       }
       const bytes = new Uint8Array(await response.arrayBuffer());
       if (!isMp4(bytes)) {

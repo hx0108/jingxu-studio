@@ -15,7 +15,9 @@ const ARK_KEY = 'ark-test-key-000000';
 const VIDEO_URL = 'https://ark-result.tos-cn-beijing.volces.com/clip.mp4';
 const PNG_BYTES = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 /** mp4 嗅探样例：第 4-7 字节 "ftyp"（ISO BMFF box 头）。 */
-const MP4_BYTES = Uint8Array.from([0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0]);
+const MP4_BYTES = Uint8Array.from([
+  0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 0, 0, 0, 0,
+]);
 
 type FetchMock = Mock<typeof globalThis.fetch>;
 
@@ -88,8 +90,7 @@ describe('SeedanceVideoModelAdapter', () => {
     expect(body.return_url).toBe(true);
     expect(body.watermark).toBe(true);
     const content = body.content as
-      | { image_url?: { url?: unknown }; text?: unknown; type?: unknown }[]
-      | undefined;
+      { image_url?: { url?: unknown }; text?: unknown; type?: unknown }[] | undefined;
     expect(content?.[0]).toEqual({ text: '雨巷中的少女走过青石板，中景缓推', type: 'text' });
     expect(content?.[1]?.type).toBe('image_url');
     // 首帧以 data URI 原样进请求体（atob 逐字节回解比对，不经 Buffer）。
@@ -172,9 +173,10 @@ describe('SeedanceVideoModelAdapter', () => {
         Promise.reject(new DOMException('The operation timed out', 'TimeoutError')),
       ),
     });
-    const timeoutError = await timeoutAdapter
-      .submit(request(), new AbortController().signal)
-      .then(() => null, (error: unknown) => error);
+    const timeoutError = await timeoutAdapter.submit(request(), new AbortController().signal).then(
+      () => null,
+      (error: unknown) => error,
+    );
     expect(timeoutAdapter.normalizeError(timeoutError)).toMatchObject({
       code: 'MODEL_TIMEOUT',
       retryable: false,
@@ -187,9 +189,10 @@ describe('SeedanceVideoModelAdapter', () => {
       credentialPort: credentialPort(),
       fetch: vi.fn<typeof globalThis.fetch>(() => Promise.resolve(jsonResponse({ id: 'cgt' }))),
     });
-    const abortError = await abortAdapter
-      .submit(request(), abortController.signal)
-      .then(() => null, (error: unknown) => error);
+    const abortError = await abortAdapter.submit(request(), abortController.signal).then(
+      () => null,
+      (error: unknown) => error,
+    );
     expect(abortAdapter.normalizeError(abortError)).toMatchObject({
       code: 'MODEL_CANCELLED',
       retryable: false,
@@ -204,9 +207,10 @@ describe('SeedanceVideoModelAdapter', () => {
         Promise.resolve(new Response('x'.repeat(70_000), { status: 500 })),
       ),
     });
-    const remoteError = await bigAdapter
-      .submit(request(), new AbortController().signal)
-      .then(() => null, (error: unknown) => error);
+    const remoteError = await bigAdapter.submit(request(), new AbortController().signal).then(
+      () => null,
+      (error: unknown) => error,
+    );
     const evidence = bigAdapter.evidenceOf(remoteError);
     expect(evidence).not.toBeNull();
     expect(evidence?.bodyText?.length).toBe(65_536);
@@ -219,7 +223,10 @@ describe('SeedanceVideoModelAdapter', () => {
     });
     const localError = await localAdapter
       .submit(request({ durationSec: 3 }), new AbortController().signal)
-      .then(() => null, (error: unknown) => error);
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
     expect(localAdapter.evidenceOf(localError)).toEqual({
       bodyText: null,
       httpStatus: null,
@@ -239,9 +246,9 @@ describe('SeedanceVideoModelAdapter', () => {
     await expect(
       adapterFor({ id: 'cgt-1', status: 'running' }).poll('cgt-1', signal),
     ).resolves.toEqual({ state: 'PENDING' });
-    await expect(adapterFor({ id: 'cgt-1', status: 'queued' }).poll('cgt-1', signal)).resolves.toEqual(
-      { state: 'PENDING' },
-    );
+    await expect(
+      adapterFor({ id: 'cgt-1', status: 'queued' }).poll('cgt-1', signal),
+    ).resolves.toEqual({ state: 'PENDING' });
 
     const succeeded = await adapterFor({
       content: { video_url: VIDEO_URL },

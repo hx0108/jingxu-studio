@@ -42,9 +42,7 @@ describe('parseE2eVideoSteps', () => {
   it('非法令牌启动期即抛—失败要响不带病运行', () => {
     for (const invalid of ['S', 'A:X3', 'A:P', 'E:lower_case', 'T', 'A::P1', 'X:1']) {
       setSteps(invalid);
-      expect(() => parseE2eVideoSteps()).toThrow(
-        'JINGXU_E2E_VIDEO_STEPS_INVALID_TOKEN',
-      );
+      expect(() => parseE2eVideoSteps()).toThrow('JINGXU_E2E_VIDEO_STEPS_INVALID_TOKEN');
     }
   });
 });

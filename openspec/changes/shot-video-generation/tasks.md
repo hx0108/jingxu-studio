@@ -11,7 +11,7 @@
 
 - [x] 2.1 迁移 0012：`video_candidates`（镜像约束族 + requested/actual_duration_sec + first_frame_candidate_id + first_frame_file_sha256 + mime CHECK video/mp4）、`video_generation_tasks`（镜像 + UNIQUE(shot,round_no) + batch FK）、`video_batches`（镜像）、能力快照 `volcark-seedance-video/v1` 行（canonical JSON + sha256 三处锁死；model id 以官方核验为准）
 - [x] 2.2 旧迁移硬编码版本断言 4 文件 9 处同步（initial-schema/project-command-receipts×3/script-migration/persistence-runtime-adapter）
-- [ ] 2.3 `VideoMediaRepository` SQLite + 内存实现（implements 提取出的 `MediaGenerationRepository` 生成域子接口）；`MediaRepositories` 聚合扩 `{ media, invocations, video }`（同一 UnitOfWork/FIFO）；集成测试（约束族/selected 部分唯一/STALE 双触发/世代聚合）
+- [x] 2.3 `VideoMediaRepository` SQLite + 内存实现（implements 提取出的 `MediaGenerationRepository` 生成域子接口）；`MediaRepositories` 聚合扩 `{ media, invocations, video }`（同一 UnitOfWork/FIFO）；集成测试（约束族/selected 部分唯一/STALE 双触发/世代聚合）
 - [ ] 2.4 ContentAddressedStore：MIME 白名单增 video/mp4 + videos 命名空间；集成测试（复算校验/原子 rename/路径防逃逸）
 
 ## 3. application（服务与调度器二次实例化）

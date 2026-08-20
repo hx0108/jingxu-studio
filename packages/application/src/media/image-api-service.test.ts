@@ -5,6 +5,7 @@ import type { AppResultDto, MediaTaskViewDto } from '@jingxu/contracts';
 import type { MediaStaleAffectedShot, MediaUnitOfWorkPort } from '../ports/media/media-repository';
 import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
+import { InMemoryVideoMediaRepository } from './in-memory-video-media-repository';
 import type { ImageApiService } from './image-api-service';
 import { createImageApiService } from './image-api-service';
 import type { MediaGenerationService } from './media-generation-service';
@@ -71,7 +72,11 @@ const buildFixture = (
   const repository = new InMemoryMediaRepository();
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const kicked: string[] = [];
   const writes: { byteSize: number; projectId: string; sha256: string }[] = [];
@@ -114,7 +119,11 @@ const seedSucceededCandidate = async (
 ): Promise<void> => {
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const inserted = await unitOfWork.run(({ media }) =>
     media.insertCandidates({
@@ -252,7 +261,11 @@ describe('createImageApiService', () => {
     await seedSucceededCandidate(fixture.repository, 'cand_b_1');
     const unitOfWork: MediaUnitOfWorkPort = {
       run: (work) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: fixture.repository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: fixture.repository,
+          video: new InMemoryVideoMediaRepository(),
+        }),
     };
     await unitOfWork.run(({ media }) => media.selectCandidate('shot_1', 'cand_a_1'));
     const result = await fixture.service.selectCandidate(
@@ -374,7 +387,11 @@ describe('createImageApiService', () => {
     const fixture = buildFixture();
     const unitOfWork: MediaUnitOfWorkPort = {
       run: (work) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: fixture.repository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: fixture.repository,
+          video: new InMemoryVideoMediaRepository(),
+        }),
     };
     const bare = await unitOfWork.run(({ media }) =>
       media.createAsset({
@@ -413,7 +430,11 @@ describe('createImageApiService', () => {
     const fixture = buildFixture();
     const unitOfWork: MediaUnitOfWorkPort = {
       run: (work) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: fixture.repository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: fixture.repository,
+          video: new InMemoryVideoMediaRepository(),
+        }),
     };
     await unitOfWork.run(({ media }) =>
       media.insertTask({
