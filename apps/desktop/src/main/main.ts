@@ -35,6 +35,7 @@ import {
   createStoryboardFeatureRegistration,
   type StoryboardFeatureRegistration,
 } from './composition/register-storyboard-features';
+import { createDialogStoryboardExportSink } from './composition/storyboard-export-file-sink';
 import { registerRuntimeIpc } from './ipc/runtime-ipc';
 import { registerAppProtocol } from './security/app-protocol';
 import { handleMediaProtocolRequest } from './security/media-protocol';
@@ -228,7 +229,11 @@ if (!singleInstanceLockAcquired) {
           trustedUrl: getTrustedUrl(),
         });
         storyboardFeatureRegistration = createStoryboardFeatureRegistration({
+          appVersion: app.getVersion(),
           createService: createProductionStoryboardService,
+          exportSink: createDialogStoryboardExportSink({
+            exportDir: process.env.JINGXU_E2E_EXPORT_DIR,
+          }),
           ipcRegistrar,
           persistenceRuntime,
           trustedUrl: getTrustedUrl(),

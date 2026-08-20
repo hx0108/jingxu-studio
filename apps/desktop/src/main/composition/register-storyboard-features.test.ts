@@ -30,20 +30,26 @@ const createHarness = (writeEnabled: boolean, storyboardAvailable = true) => {
   >();
   const service: StoryboardIpcService = {
     editShot: vi.fn(() => Promise.resolve(failure)),
+    exportEpisode: vi.fn(() => Promise.resolve(failure)),
     lockShot: vi.fn(() => Promise.resolve(failure)),
     unlockShot: vi.fn(() => Promise.resolve(failure)),
   };
   const createService = vi.fn(() => service);
   const unitOfWork = { run: vi.fn() };
   const registry = { schemaIds: [], validate: vi.fn() };
+  const formatProfiles = { findCurrent: vi.fn() };
+  const exportSink = { write: vi.fn() };
   let ready = writeEnabled;
   const runtime = {
+    getFormatProfileRepository: () => formatProfiles,
     getSchemaRegistry: () => (storyboardAvailable ? registry : null),
     getScriptUnitOfWork: () => (storyboardAvailable ? unitOfWork : null),
     startupService: { getStatus: () => ({ writeEnabled: ready }) },
   } as unknown as DesktopPersistenceRuntime;
   const registration = createStoryboardFeatureRegistration({
+    appVersion: '0.0.0-test',
     createService,
+    exportSink,
     ipcRegistrar: {
       handle: (channel, listener) => handlers.set(channel, listener),
     },
@@ -54,6 +60,8 @@ const createHarness = (writeEnabled: boolean, storyboardAvailable = true) => {
   return {
     channels: [...handlers.keys()],
     createService,
+    exportSink,
+    formatProfiles,
     handlers,
     registration,
     registry,
@@ -76,13 +84,16 @@ const editShotInput = {
 };
 
 describe('createStoryboardFeatureRegistration', () => {
-  it('条件—READY 且 Script Runtime 可用—只注册三个 storyboard.* 频道且只激活一次', () => {
+  it('条件—READY 且 Script Runtime 可用—只注册四个 storyboard.* 频道且只激活一次', () => {
     const harness = createHarness(true);
     expect(harness.registration.ensureRegistered()).toBe(true);
     expect(harness.registration.ensureRegistered()).toBe(false);
     expect(harness.channels.sort()).toEqual(Object.values(STORYBOARD_IPC_CHANNELS).sort());
     expect(harness.channels.every((channel) => channel.startsWith('storyboard.'))).toBe(true);
     expect(harness.createService).toHaveBeenCalledWith({
+      appVersion: '0.0.0-test',
+      exportSink: harness.exportSink,
+      formatProfiles: harness.formatProfiles,
       registry: harness.registry,
       unitOfWork: harness.unitOfWork,
     });

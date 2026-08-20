@@ -58,6 +58,14 @@ export const projectErrorCodeSchema = z.enum([
   'SHOT_EDIT_NO_CHANGE',
   'SHOT_LOCK_CONFLICT',
   'SHOT_LOCK_POINTER_INVALID',
+  // V2 分镜导出切片（storyboard-export）。
+  'EXPORT_NOT_READY',
+  'EXPORT_COLLECTION_INVALID',
+  'EXPORT_SCHEMA_INVALID',
+  'EXPORT_DURATION_DEVIATION',
+  'EXPORT_CANCELLED',
+  'EXPORT_FILE_WRITE_FAILED',
+  'EXPORT_AUDIT_FAILED',
   // V2 图片切片（shot-first-frame-image-generation §4.1/§5.1）。
   'MEDIA_STORYBOARD_NOT_READY',
   'MEDIA_SHOT_NOT_IN_READY_SET',

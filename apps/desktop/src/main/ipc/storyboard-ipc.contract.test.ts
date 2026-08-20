@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { STORYBOARD_IPC_CHANNELS } from '@jingxu/contracts';
-import type { AppResultDto, ShotEditLockSummaryDto } from '@jingxu/contracts';
+import type {
+  AppResultDto,
+  ShotEditLockSummaryDto,
+  StoryboardExportResultDto,
+} from '@jingxu/contracts';
 import type { StoryboardIpcService } from './storyboard-ipc';
 import { registerStoryboardIpc } from './storyboard-ipc';
 
@@ -28,6 +32,17 @@ const summary: ShotEditLockSummaryDto = {
   shotVersionId: 'scv_1234567890',
 };
 const okSummary: AppResultDto<ShotEditLockSummaryDto> = { data: summary, ok: true };
+
+const okExport: AppResultDto<StoryboardExportResultDto> = {
+  data: {
+    byteSize: 20480,
+    episodeVersionId: summary.episode.id,
+    exportId: 'export_12345678',
+    fileSha256: 'a'.repeat(64),
+    totalDurationSec: 90,
+  },
+  ok: true,
+};
 
 const commands = {
   editShot: {
@@ -56,6 +71,12 @@ const commands = {
     requestId: 'request_unlock_1234567',
     shotId: 'shot_1234567890',
   },
+  exportEpisode: {
+    episodeId: summary.episode.episodeId,
+    expectedVersionId: summary.episode.id,
+    projectId: 'project_12345678',
+    requestId: 'request_export_123456',
+  },
 };
 
 const createHarness = (ready = true) => {
@@ -65,6 +86,7 @@ const createHarness = (ready = true) => {
   >();
   const service: StoryboardIpcService = {
     editShot: vi.fn(() => Promise.resolve(okSummary)),
+    exportEpisode: vi.fn(() => Promise.resolve(okExport)),
     lockShot: vi.fn(() => Promise.resolve(okSummary)),
     unlockShot: vi.fn(() => Promise.resolve(okSummary)),
   };
@@ -79,7 +101,7 @@ const createHarness = (ready = true) => {
 };
 
 describe('Storyboard Main IPC Contract（shot-edit-lock 3.2）', () => {
-  it('注册边界—固定三方法—可信 sender 与 strict DTO 后委托 Application', async () => {
+  it('注册边界—固定四方法—可信 sender 与 strict DTO 后委托 Application', async () => {
     const { handlers, service } = createHarness();
     expect([...handlers.keys()].sort()).toEqual(Object.values(STORYBOARD_IPC_CHANNELS).sort());
 
@@ -92,12 +114,19 @@ describe('Storyboard Main IPC Contract（shot-edit-lock 3.2）', () => {
     await expect(
       handlers.get(STORYBOARD_IPC_CHANNELS.unlockShot)?.(trustedEvent(), commands.unlockShot),
     ).resolves.toEqual(okSummary);
+    await expect(
+      handlers.get(STORYBOARD_IPC_CHANNELS.exportEpisode)?.(trustedEvent(), commands.exportEpisode),
+    ).resolves.toEqual(okExport);
     expect(service.editShot).toHaveBeenCalledWith(commands.editShot, 'trace_storyboard_1234');
+    expect(service.exportEpisode).toHaveBeenCalledWith(
+      commands.exportEpisode,
+      'trace_storyboard_1234',
+    );
     expect(service.lockShot).toHaveBeenCalledWith(commands.lockShot, 'trace_storyboard_1234');
     expect(service.unlockShot).toHaveBeenCalledWith(commands.unlockShot, 'trace_storyboard_1234');
   });
 
-  it('非 READY—三个写命令统一阻断—Service 零调用', async () => {
+  it('非 READY—四个写命令统一阻断—Service 零调用', async () => {
     const { handlers, service } = createHarness(false);
     for (const [method, input] of Object.entries(commands)) {
       await expect(

@@ -5,6 +5,8 @@ import {
   STORYBOARD_IPC_CHANNELS,
   shotEditLockSummarySchema,
   storyboardEditShotInputSchema,
+  storyboardExportEpisodeInputSchema,
+  storyboardExportResultSchema,
   storyboardLockShotInputSchema,
   storyboardUnlockShotInputSchema,
   type StoryboardApi,
@@ -17,9 +19,10 @@ const shotId = 'shot_1234567890';
 const shotVersionId = 'scv_1234567890';
 
 describe('Storyboard IPC Contract（shot-edit-lock D4）', () => {
-  it('频道白名单—三个逐方法接口—名称固定且 API 类型公开，script.* 白名单不受影响', () => {
+  it('频道白名单—四个逐方法接口—名称固定且 API 类型公开，script.* 白名单不受影响', () => {
     expect(Object.values(STORYBOARD_IPC_CHANNELS).sort()).toEqual([
       'storyboard.editShot',
+      'storyboard.exportEpisode',
       'storyboard.lockShot',
       'storyboard.unlockShot',
     ]);
@@ -160,5 +163,80 @@ describe('Storyboard IPC Contract（shot-edit-lock D4）', () => {
       documentSnapshot: '{}',
     };
     expect(appErrorSchema.safeParse(withDebug).success).toBe(false);
+  });
+
+  it('导出命令—D5 确认字段可选—strict 契约拒绝路径等伪造字段', () => {
+    const input = {
+      episodeId,
+      expectedVersionId: versionId,
+      projectId,
+      requestId: 'request-123',
+    };
+    expect(storyboardExportEpisodeInputSchema.safeParse(input).success).toBe(true);
+    // D5 越带重发形态：warnConfirmed + deviationReason；reason 非空语义由服务层判定。
+    expect(
+      storyboardExportEpisodeInputSchema.safeParse({
+        ...input,
+        deviationReason: '节奏偏快的快闪风格',
+        warnConfirmed: true,
+      }).success,
+    ).toBe(true);
+    expect(
+      storyboardExportEpisodeInputSchema.safeParse({ ...input, deviationReason: null }).success,
+    ).toBe(true);
+    // 路径红线从入参源头收口：输出路径/文件名字段不可进入命令。
+    expect(
+      storyboardExportEpisodeInputSchema.safeParse({ ...input, filePath: 'C:/x.json' }).success,
+    ).toBe(false);
+    expect(
+      storyboardExportEpisodeInputSchema.safeParse({ ...input, fileName: 'x.json' }).success,
+    ).toBe(false);
+    expect(
+      storyboardExportEpisodeInputSchema.safeParse({ ...input, deviationReason: 'x'.repeat(281) })
+        .success,
+    ).toBe(false);
+  });
+
+  it('导出回执—哈希与计数且无路径字段—坏哈希/路径字段拒绝', () => {
+    const result = {
+      byteSize: 20480,
+      episodeVersionId: versionId,
+      exportId: 'export_0198f7a4-7b0e-7c3a-9c8a-3a4b5c6d7e8f',
+      fileSha256: 'a'.repeat(64),
+      totalDurationSec: 90,
+    };
+    expect(storyboardExportResultSchema.safeParse(result).success).toBe(true);
+    expect(
+      storyboardExportResultSchema.safeParse({ ...result, fileSha256: 'NOT_HEX' }).success,
+    ).toBe(false);
+    expect(storyboardExportResultSchema.safeParse({ ...result, byteSize: -1 }).success).toBe(false);
+    // 路径红线：回执携带任何路径字段即拒绝。
+    expect(
+      storyboardExportResultSchema.safeParse({ ...result, filePath: 'C:/export.json' }).success,
+    ).toBe(false);
+  });
+
+  it('导出错误形态—七个稳定错误码属 ProjectErrorCode，偏离错误携带实际 Σ', () => {
+    for (const code of [
+      'EXPORT_NOT_READY',
+      'EXPORT_COLLECTION_INVALID',
+      'EXPORT_SCHEMA_INVALID',
+      'EXPORT_DURATION_DEVIATION',
+      'EXPORT_CANCELLED',
+      'EXPORT_FILE_WRITE_FAILED',
+      'EXPORT_AUDIT_FAILED',
+    ]) {
+      expect(projectErrorCodeSchema.safeParse(code).success).toBe(true);
+    }
+    expect(
+      appErrorSchema.safeParse({
+        code: 'EXPORT_DURATION_DEVIATION',
+        fieldErrors: { totalDurationSec: '48' },
+        message: '整集时长 48 秒偏离 60–120 秒目标区间。',
+        retryable: false,
+        traceId: 'trace-1234',
+        userAction: '确认偏离并填写原因后重发导出。',
+      }).success,
+    ).toBe(true);
   });
 });

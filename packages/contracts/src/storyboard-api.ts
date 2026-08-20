@@ -63,14 +63,49 @@ export type StoryboardLockShotInputDto = z.infer<typeof storyboardLockShotInputS
 export type StoryboardUnlockShotInputDto = z.infer<typeof storyboardUnlockShotInputSchema>;
 export type ShotEditLockSummaryDto = z.infer<typeof shotEditLockSummarySchema>;
 
+/**
+ * Σ 软带偏离确认（storyboard-export D5）：服务端是算带事实源，契约层只做
+ * 形状粗校验；deviationReason 非空判定在服务层（EXPORT_DURATION_DEVIATION）。
+ */
+export const storyboardExportEpisodeInputSchema = z
+  .object({
+    /** 基线整集版本 id；与当前 head 不一致视为并发冲突。 */
+    deviationReason: z.string().max(280).nullable().optional(),
+    episodeId: idSchema,
+    expectedVersionId: idSchema,
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+    warnConfirmed: z.boolean().optional(),
+  })
+  .strict();
+
+/** 导出成功回执：只有哈希与计数，绝不携带文件路径（路径红线）。 */
+export const storyboardExportResultSchema = z
+  .object({
+    byteSize: z.number().int().nonnegative(),
+    episodeVersionId: idSchema,
+    /** Schema envelope export_id（`export_` 前缀）。 */
+    exportId: z.string().min(1).max(128),
+    fileSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+    totalDurationSec: z.number().int().nonnegative(),
+  })
+  .strict();
+
+export type StoryboardExportEpisodeInputDto = z.infer<typeof storyboardExportEpisodeInputSchema>;
+export type StoryboardExportResultDto = z.infer<typeof storyboardExportResultSchema>;
+
 export interface StoryboardApi {
   editShot(input: StoryboardEditShotInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  exportEpisode(
+    input: StoryboardExportEpisodeInputDto,
+  ): Promise<AppResultDto<StoryboardExportResultDto>>;
   lockShot(input: StoryboardLockShotInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
   unlockShot(input: StoryboardUnlockShotInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
 }
 
 export const STORYBOARD_IPC_CHANNELS = {
   editShot: 'storyboard.editShot',
+  exportEpisode: 'storyboard.exportEpisode',
   lockShot: 'storyboard.lockShot',
   unlockShot: 'storyboard.unlockShot',
 } as const;

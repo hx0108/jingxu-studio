@@ -7,7 +7,7 @@ PRD 9.7.1/9.8 要求「导出剧本、分镜表和结构化 JSON」，AC-V1-03 �
 ## What Changes
 
 - **READY_EXPORT 集合校验 Profile**：既有集合校验器（生成/EDIT_INVARIANT 已用）新增导出档——全部当前 ACTIVE 镜头 version status=READY 且无未处理 BLOCK，其余规则（sequence 连续、previous_shot_id 回指、bible 键解析、Σ target_duration_sec 界内）复用；导出前必跑。
-- **导出组装服务**：episode READY 当前快照（versionNo、storyBibleVersionId、链接镜头完整文档）+ FormatProfile 投影（subtitle_safe_area 键改 `*_pct`，宽高/fps/language 直映射）+ `export_provenance` 确定性派生（`contains_ai_assisted_content` = 任一镜头 `source_type=AI_ASSISTED`，`app_version` 取应用常量）+ `export_id`/`exported_at` 生成 → 组装后过 Registry 双保险校验（envelope 1.1.0，含 ShotContract $ref 离线解析）→ 产出 JSON 文本。
+- **导出组装服务**：episode READY 当前快照（versionNo、storyBibleVersionId、链接镜头完整文档）+ FormatProfile 投影（subtitle_safe_area 键改 `*_pct`，宽高/fps/language 直映射）+ `export_provenance` 确定性派生（`contains_ai_assisted_content` = 任一镜头 `source_type≠HUMAN_CREATED`（AI_GENERATED/AI_ASSISTED 均计），`app_version` 取应用常量）+ `export_id`/`exported_at` 生成 → 组装后过 Registry 双保险校验（envelope 1.1.0，含 ShotContract $ref 离线解析）→ 产出 JSON 文本。
 - **Σ 时长偏离 WARN 门**：Σ∉[60,120]（PRD 软带；[30,180] 为 schema/集合硬界）时导出命令必须携带用户确认与偏离原因，无原因拒绝（交互形态按拍板）。
 - **文件落盘与留痕**：main 侧 Electron save dialog（默认名 `export_<projectId>_<episodeId>_v<versionNo>.json`）+ main 写文件 + sha256 落审计留痕；**路径绝不进 Renderer**（红线，不设拍板）。留痕形态按拍板。
 - **IPC**：导出命令入 storyboard 域（形态按拍板），复用 sender 校验/启动写门控/singleflight/输出脱敏复验基建。

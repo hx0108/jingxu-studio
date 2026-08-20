@@ -83,6 +83,9 @@ export interface StoryboardPanelProps {
   readonly onConfirm: () => void;
   /** 逐镜头编辑/锁定/解锁命令（shot-edit-lock D1/D3）；面板组装完整 DTO 输入。 */
   readonly onEditShot: (input: StoryboardEditShotInputDto) => void;
+  /** storyboard-export：READY 整集导出入口（非 READY 面板不渲染按钮）。 */
+  readonly onExportEpisode: () => void;
+  readonly exportNotice: string | null;
   readonly onGenerate: () => void;
   readonly onGenerateFirstFrames: () => void;
   readonly onLockShot: (input: StoryboardLockShotInputDto) => void;
@@ -102,6 +105,8 @@ export const StoryboardPanel = ({
   onBatchRetryFailed,
   onConfirm,
   onEditShot,
+  onExportEpisode,
+  exportNotice,
   onGenerate,
   onGenerateFirstFrames,
   onLockShot,
@@ -200,7 +205,18 @@ export const StoryboardPanel = ({
         >
           为整集生成首帧
         </button>
+        {/* storyboard-export：READY 才渲染入口（spec：非 READY 不渲染）。 */}
+        {current?.status === 'READY' && (
+          <button disabled={pending} name="export-episode" onClick={onExportEpisode} type="button">
+            导出整集
+          </button>
+        )}
       </div>
+      {exportNotice !== null && (
+        <p className="action-hint" role="status">
+          {exportNotice}
+        </p>
+      )}
       {generateHint !== null && <p className="action-hint">{generateHint}</p>}
       {current !== null && current.status !== 'READY' && (
         <p className="action-hint">分镜整集确认 READY 后可为整集批量生成首帧。</p>
