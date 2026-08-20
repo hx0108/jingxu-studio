@@ -1,7 +1,7 @@
 /**
  * 媒体任务调度器（shot-first-frame-image-generation 任务 4.2，design D4）。
  *
- * 确定性状态机驱动——不调用模型做决策，模型只做单段 HTTP（ImageModelPort）：
+ * 确定性状态机驱动——不调用模型做决策，模型只做单段 HTTP（MediaModelPort）：
  * - 同项目任务严格串行（与文本 Job 一致的并发模型），不同项目互不阻塞；
  * - 取消先落 CANCELLED 再中止在飞段，迟到下载经相位复核不落库；
  * - 每段 Provider 调用（submit/poll/download）独立超时；
@@ -11,7 +11,6 @@
  *   MEDIA_TASK_INTERRUPTED 标记失败待人工，绝不自动重发（spec 不变式）。
  */
 
-import type { ImageModelPort } from '../ports/image-model/image-model-port';
 import type {
   ImageGenerationRequest,
   ImageGenerationUsage,
@@ -21,6 +20,7 @@ import type {
   ImageTaskSubmission,
 } from '../ports/image-model/image-model-types';
 import type { MediaModelInvocationRecord } from '../ports/media/media-invocation-repository';
+import type { MediaModelPort } from '../ports/media/media-model-port';
 import type {
   MediaCandidateRecord,
   MediaRepositories,
@@ -30,9 +30,12 @@ import type {
 } from '../ports/media/media-repository';
 import type { MediaRequestBlueprint } from './media-request-blueprint';
 
-/** 候选图字节落盘（组合根包装 ContentAddressedStore.write 的 images 命名空间）。 */
+/**
+ * 候选媒体字节落盘（组合根包装 ContentAddressedStore.write 并按实例绑定
+ * 域命名空间 images|videos——调度器不感知目录布局，视频走 videos）。
+ */
 export interface MediaFileStorePort {
-  readonly writeImage: (input: {
+  readonly writeMedia: (input: {
     readonly bytes: Uint8Array;
     readonly mimeType: string;
     readonly projectId: string;
@@ -65,12 +68,13 @@ export interface MediaTaskScheduler {
   whenIdle(projectId: string): Promise<void>;
 }
 
-export interface MediaTaskSchedulerDependencies {
-  /** 候选图字节落盘（内容寻址，sha256 校验后才登记）。 */
+export interface MediaTaskSchedulerDependencies<R = ImageGenerationRequest> {
+  /** 候选媒体字节落盘（内容寻址，sha256 校验后才登记；命名空间由组合根绑定）。 */
   readonly fileStore: MediaFileStorePort;
   /** 证据快照/响应原文 sha256（组合根注入；本包不引 node: 模块）。 */
   readonly hashText: (input: string) => string;
-  readonly imageModel: ImageModelPort;
+  /** 媒体模型 Port（shot-video-generation 任务 1.2 泛化：图片/视频实例同构注入）。 */
+  readonly model: MediaModelPort<R>;
   /**
    * 项目队列排空后的批次推进钩子（batch-first-frame-generation 任务 3.2）：
    * 返回 true = 已为批次下一镜头建档（新任务已入列），排空循环继续。
@@ -83,7 +87,7 @@ export interface MediaTaskSchedulerDependencies {
   readonly pollDeadlineMs: number;
   readonly pollIntervalMs: number;
   readonly requestBuilder: {
-    readonly build: (task: MediaTaskRecord) => Promise<MediaRequestBlueprint>;
+    readonly build: (task: MediaTaskRecord) => Promise<MediaRequestBlueprint<R>>;
   };
   /** 单段 Provider 调用（submit/poll/download）超时上限。 */
   readonly segmentTimeoutMs: number;
@@ -118,8 +122,8 @@ type SubmitOutcomeEvidence = Readonly<{
   usage: ImageGenerationUsage;
 }>;
 
-export const createMediaTaskScheduler = (
-  dependencies: MediaTaskSchedulerDependencies,
+export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
+  dependencies: MediaTaskSchedulerDependencies<R>,
 ): MediaTaskScheduler => {
   const { mediaUnitOfWork } = dependencies;
   const drains = new Map<string, Promise<void>>();
@@ -238,14 +242,14 @@ export const createMediaTaskScheduler = (
       await stopForAbort(projectId, taskId);
       return true;
     }
-    const normalized = dependencies.imageModel.normalizeError(caught);
+    const normalized = dependencies.model.normalizeError(caught);
     if (normalized.code === 'MODEL_CANCELLED') {
       await stopForAbort(projectId, taskId);
       return true;
     }
     // Provider 归一化错误：候选级失败，同轮其余候选继续（spec 不变式）；
     // 失败段证据行与候选终态同一事务收尾（design D4，原文入 blob）。
-    const evidence = dependencies.imageModel.evidenceOf(caught);
+    const evidence = dependencies.model.evidenceOf(caught);
     await writeCandidateOutcome(projectId, taskId, async (repos) => {
       await repos.media.completeCandidateFailed(candidateId, {
         errorCode: normalized.code,
@@ -316,12 +320,12 @@ export const createMediaTaskScheduler = (
       await stopForAbort(task.projectId, task.id);
       return false;
     }
-    let stored: Awaited<ReturnType<MediaFileStorePort['writeImage']>>;
+    let stored: Awaited<ReturnType<MediaFileStorePort['writeMedia']>>;
     try {
       const download = await runSegment(signal, (segment) =>
-        dependencies.imageModel.download(result, segment),
+        dependencies.model.download(result, segment),
       );
-      stored = await dependencies.fileStore.writeImage({
+      stored = await dependencies.fileStore.writeMedia({
         bytes: download.bytes,
         mimeType: download.mimeType,
         projectId: task.projectId,
@@ -386,7 +390,7 @@ export const createMediaTaskScheduler = (
       let status: ImageTaskStatus;
       try {
         status = await runSegment(signal, (segment) =>
-          dependencies.imageModel.poll(providerTaskId, segment),
+          dependencies.model.poll(providerTaskId, segment),
         );
       } catch (caught) {
         const stop = await onSegmentFailure(
@@ -455,7 +459,7 @@ export const createMediaTaskScheduler = (
     pending: readonly MediaCandidateRecord[],
     signal: AbortSignal,
   ): Promise<void> => {
-    let blueprint: MediaRequestBlueprint;
+    let blueprint: MediaRequestBlueprint<R>;
     try {
       blueprint = await dependencies.requestBuilder.build(task);
     } catch {
@@ -466,22 +470,10 @@ export const createMediaTaskScheduler = (
     const providerTaskIds = new Map<string, string>();
     for (const candidate of pending) {
       const invocationId = dependencies.newId();
-      const request: ImageGenerationRequest = {
-        invocationId,
-        modelId: blueprint.modelId,
-        prompt: blueprint.prompt,
-        referenceImages: blueprint.referenceImages,
-        size: blueprint.size,
-      };
-      // D4 第一段：submit 段前短事务插 SUBMIT STARTED（快照=D3 口径，不含字节与凭据）。
-      const submitSnapshot = JSON.stringify({
-        modelId: blueprint.modelId,
-        prompt: blueprint.prompt,
-        referenceImageSha256s: blueprint.referenceImageSha256s,
-        responseFormat: 'url',
-        size: blueprint.size,
-        watermark: true,
-      });
+      const request = blueprint.buildRequest(invocationId);
+      // D4 第一段：submit 段前短事务插 SUBMIT STARTED（快照=D3 口径，不含字节与凭据；
+      // 快照字段集由域构建器产出——视频含首帧哈希/时长，图片含参考图哈希/尺寸）。
+      const submitSnapshot = blueprint.submitSnapshotJson;
       try {
         await mediaUnitOfWork.run(({ invocations }) =>
           invocations.insert({
@@ -501,7 +493,7 @@ export const createMediaTaskScheduler = (
       let submission: ImageTaskSubmission;
       try {
         submission = await runSegment(signal, (segment) =>
-          dependencies.imageModel.submit(request, segment),
+          dependencies.model.submit(request, segment),
         );
       } catch (caught) {
         const stop = await onSegmentFailure(

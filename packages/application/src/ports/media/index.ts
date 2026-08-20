@@ -1,4 +1,5 @@
 export type { MediaRepositories } from './media-repository';
+export type { MediaModelPort } from './media-model-port';
 export type {
   MediaInvocationRepository,
   MediaInvocationSegment,

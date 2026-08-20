@@ -129,6 +129,7 @@ export * from './project-dto';
 export * from './script-api';
 export * from './stage';
 export * from './storyboard-api';
+export * from './video-api';
 
 export interface JingxuApi {
   readonly events: EventsApi;

@@ -249,7 +249,7 @@ const buildFixture = (
   const port = new FakeImageModel(portOptions);
   const writes: { byteSize: number; storageRelPath: string }[] = [];
   const fileStore: MediaFileStorePort = {
-    writeImage: ({ bytes, projectId }) => {
+    writeMedia: ({ bytes, projectId }) => {
       const sha256 = hash64(`stored_${String(writes.length + 1)}`);
       const record = {
         byteSize: bytes.byteLength,
@@ -266,7 +266,7 @@ const buildFixture = (
   const scheduler = createMediaTaskScheduler({
     fileStore,
     hashText: hash64,
-    imageModel: port,
+    model: port,
     mediaUnitOfWork: unitOfWork,
     ...(onProjectIdle === undefined ? {} : { onProjectIdle }),
     newId: (() => {
@@ -282,11 +282,22 @@ const buildFixture = (
     requestBuilder: {
       build: () =>
         Promise.resolve({
+          buildRequest: (invocationId: string) => ({
+            invocationId,
+            modelId: MODEL_ID,
+            prompt: '雨巷中的少女',
+            referenceImages: [],
+            size: { height: 2560, width: 1440 },
+          }),
           modelId: MODEL_ID,
-          prompt: '雨巷中的少女',
-          referenceImageSha256s: [],
-          referenceImages: [],
-          size: { height: 2560, width: 1440 },
+          submitSnapshotJson: JSON.stringify({
+            modelId: MODEL_ID,
+            prompt: '雨巷中的少女',
+            referenceImageSha256s: [],
+            responseFormat: 'url',
+            size: { height: 2560, width: 1440 },
+            watermark: true,
+          }),
         }),
     },
     segmentTimeoutMs,
@@ -751,10 +762,10 @@ describe('MediaTaskScheduler 队列语义', () => {
     };
     const failing = createMediaTaskScheduler({
       fileStore: {
-        writeImage: () => Promise.reject(new Error('unreachable')),
+        writeMedia: () => Promise.reject(new Error('unreachable')),
       },
       hashText: hash64,
-      imageModel: fixture.port,
+      model: fixture.port,
       mediaUnitOfWork: unitOfWork,
       newId: () => 'inv_x',
       nowMs: () => 0,

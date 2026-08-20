@@ -119,11 +119,11 @@ const buildScheduler = (
   const store = createContentAddressedStore(harness.managedRoot);
   return createMediaTaskScheduler({
     fileStore: {
-      writeImage: ({ bytes, mimeType, projectId }) =>
+      writeMedia: ({ bytes, mimeType, projectId }) =>
         store.write({ bytes, mimeType, namespace: 'images', projectId }),
     },
     hashText: (value) => createHash('sha256').update(value, 'utf8').digest('hex'),
-    imageModel: {
+    model: {
       validateCredential: () => provider.validateCredential(),
       submit: (request, signal) => {
         counts.submits += 1;
@@ -149,11 +149,22 @@ const buildScheduler = (
     requestBuilder: {
       build: () =>
         Promise.resolve({
+          buildRequest: (invocationId: string) => ({
+            invocationId,
+            modelId: MODEL_ID,
+            prompt: '雨巷',
+            referenceImages: [],
+            size: { height: 8, width: 8 },
+          }),
           modelId: MODEL_ID,
-          prompt: '雨巷',
-          referenceImageSha256s: [],
-          referenceImages: [],
-          size: { height: 8, width: 8 },
+          submitSnapshotJson: JSON.stringify({
+            modelId: MODEL_ID,
+            prompt: '雨巷',
+            referenceImageSha256s: [],
+            responseFormat: 'url',
+            size: { height: 8, width: 8 },
+            watermark: true,
+          }),
         }),
     },
     segmentTimeoutMs: 5_000,
