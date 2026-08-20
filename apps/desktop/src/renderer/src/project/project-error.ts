@@ -67,6 +67,7 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   EXPORT_AUDIT_FAILED: ['导出已完成但留痕失败', '请记录文件哈希并稍后重试；文件本身已可用。'],
   MEDIA_STORYBOARD_NOT_READY: ['分镜尚未确认', '先在分镜阶段确认 READY 后再生成首帧。'],
   MEDIA_SHOT_NOT_IN_READY_SET: ['镜头不在当前分镜集合中', '刷新分镜工作区后重试。'],
+  MEDIA_FIRST_FRAME_NOT_SELECTED: ['镜头尚未选择首帧', '先在首帧候选中选定一帧再生成视频段。'],
   MEDIA_PERSISTENCE_FAILED: ['媒体数据暂时无法保存', '请稍后重试。'],
   MEDIA_TASK_NOT_FOUND: ['找不到这个生成任务', '刷新首帧面板后重试。'],
   MEDIA_CANDIDATE_NOT_FOUND: ['找不到这个候选图', '刷新首帧面板后重选。'],

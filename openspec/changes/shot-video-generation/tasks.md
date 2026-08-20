@@ -24,8 +24,8 @@
 
 ## 4. main：组合根 + IPC + 协议/CSP + 凭据
 
-- [ ] 4.1 `register-video-features.ts` 组合根：调度器/服务/批量装配、VIDEO_CANDIDATE_COUNT=2、轮询参数、E2E 步骤注入、恢复接线、凭据闸（`VIDEO_CREDENTIAL_ID='profile-video-primary'` + env 后门 JINGXU_VIDEO_CREDENTIAL_FILE）；组合根集成测试（注册/装配/恢复）
-- [ ] 4.2 `video-ipc.ts` 注册（singleflight 同 requestId 同签名复用/zod 输出脱敏/STARTUP_WRITE_BLOCKED）；preload `jingxu-api` 白名单 + 两契约测试同步
+- [x] 4.1 `register-video-features.ts` 组合根：调度器/服务/批量装配、VIDEO_CANDIDATE_COUNT=2、轮询参数、E2E 步骤注入、恢复接线、凭据闸（`VIDEO_CREDENTIAL_ID='profile-video-primary'` + env 后门 JINGXU_VIDEO_CREDENTIAL_FILE）；组合根集成测试（注册/装配/恢复）
+- [x] 4.2 `video-ipc.ts` 注册（singleflight 同 requestId 同签名复用/zod 输出脱敏/STARTUP_WRITE_BLOCKED）；preload `jingxu-api` 白名单 + 两契约测试同步
 - [ ] 4.3 media-protocol 增 `/video-candidate/{id}` 段类型 + Range/206 基本支持（越界 416、异常回退 200）；CSP 增 `media-src jingxu:`；registerSchemesAsPrivileged stream 复核；协议单测
 - [ ] 4.4 `VideoProviderCard`（复用 ImageProviderCard 模式：保存即清空/末 4 位回显/model id 只读/删除确认）接入 ProviderSettings
 

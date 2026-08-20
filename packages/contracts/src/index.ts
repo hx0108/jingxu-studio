@@ -5,6 +5,7 @@ import type { ProjectApi } from './project-api';
 import type { EventsApi, JobApi, ProviderApi } from './job-provider-api';
 import type { ScriptApi } from './script-api';
 import type { StoryboardApi } from './storyboard-api';
+import type { VideoApi } from './video-api';
 
 export const startupStateSchema = z.enum([
   'BOOTING',
@@ -140,6 +141,7 @@ export interface JingxuApi {
   readonly runtime: RuntimeApi;
   readonly script: ScriptApi;
   readonly storyboard: StoryboardApi;
+  readonly video: VideoApi;
 }
 
 declare global {

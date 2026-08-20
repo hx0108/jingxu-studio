@@ -22,6 +22,10 @@ import {
   type ImageFeatureRegistration,
 } from './composition/register-image-features';
 import {
+  createVideoFeatureRegistration,
+  type VideoFeatureRegistration,
+} from './composition/register-video-features';
+import {
   createProjectFeatureRegistration,
   type ProjectFeatureRegistration,
 } from './composition/register-project-features';
@@ -54,6 +58,7 @@ let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null
 let scriptFeatureRegistration: ScriptFeatureRegistration | null = null;
 let storyboardFeatureRegistration: StoryboardFeatureRegistration | null = null;
 let imageFeatureRegistration: ImageFeatureRegistration | null = null;
+let videoFeatureRegistration: VideoFeatureRegistration | null = null;
 let shutdownStarted = false;
 
 const createSafeStorageFacade = (): SafeStorageFacade => ({
@@ -247,18 +252,29 @@ if (!singleInstanceLockAcquired) {
           trustedUrl: getTrustedUrl(),
           useE2eMock: process.env.JINGXU_E2E === '1',
         });
+        videoFeatureRegistration = createVideoFeatureRegistration({
+          clock: () => new Date().toISOString(),
+          ipcRegistrar,
+          managedRoot,
+          persistenceRuntime,
+          safeStorage: createSafeStorageFacade(),
+          trustedUrl: getTrustedUrl(),
+          useE2eMock: process.env.JINGXU_E2E === '1',
+        });
         registerRuntimeIpc(ipcRegistrar, persistenceRuntime.startupService, getTrustedUrl(), () => {
           projectFeatureRegistration?.ensureRegistered();
           jobProviderFeatureRegistration?.ensureRegistered();
           scriptFeatureRegistration?.ensureRegistered();
           storyboardFeatureRegistration?.ensureRegistered();
           imageFeatureRegistration?.ensureRegistered();
+          videoFeatureRegistration?.ensureRegistered();
         });
         projectFeatureRegistration.ensureRegistered();
         jobProviderFeatureRegistration.ensureRegistered();
         scriptFeatureRegistration.ensureRegistered();
         storyboardFeatureRegistration.ensureRegistered();
         imageFeatureRegistration.ensureRegistered();
+        videoFeatureRegistration.ensureRegistered();
       }
       await createMainWindow();
     })
@@ -278,6 +294,7 @@ if (!singleInstanceLockAcquired) {
       event.preventDefault();
       shutdownStarted = true;
       void imageFeatureRegistration?.stop();
+      void videoFeatureRegistration?.stop();
       void jobProviderFeatureRegistration.stop().finally(() => {
         app.quit();
       });
@@ -288,6 +305,7 @@ if (!singleInstanceLockAcquired) {
     scriptFeatureRegistration = null;
     storyboardFeatureRegistration = null;
     imageFeatureRegistration = null;
+    videoFeatureRegistration = null;
     persistenceRuntime?.close();
     persistenceRuntime = null;
   });
