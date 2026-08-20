@@ -306,4 +306,98 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     expect(secretFiles).toHaveLength(1);
     expect(secretFiles[0]).not.toBe('profile-image-primary.bin');
   });
+
+  it('视频档凭据闭环—保存→解密测试→删除—密文按视频固定 id 落盘、审计事件、图片档不受干扰', async () => {
+    const reversibleStorage: SafeStorageFacade = {
+      decryptString: (encrypted) => new TextDecoder().decode(encrypted).replace(/^enc:/u, ''),
+      encryptString: (plaintext) => new TextEncoder().encode(`enc:${plaintext}`),
+      isEncryptionAvailable: () => true,
+    };
+    const profiles = new Map<string, ProviderProfile>();
+    const auditEvents: string[] = [];
+    const units = configuredUnits();
+    units.providerProfileRepository = {
+      delete: (id: string) => {
+        profiles.delete(id);
+        return Promise.resolve();
+      },
+      findById: (id: string) => Promise.resolve(profiles.get(id) ?? null),
+      save: (profile: ProviderProfile) => {
+        profiles.set(profile.id, profile);
+        return Promise.resolve();
+      },
+    };
+    units.providerUnitOfWork = {
+      run: (work: (repositories: never) => Promise<unknown>) =>
+        work({
+          audit: {
+            recordCredentialDeleted: (id: string) => {
+              auditEvents.push(id);
+              return Promise.resolve();
+            },
+          },
+          profiles: units.providerProfileRepository,
+        } as never),
+    } as unknown as ProviderUnitOfWorkPort;
+
+    const h = createHarness({ managedRoot: await createRoot(), safeStorage: reversibleStorage });
+    h.setReady(true);
+    h.setUnits(units);
+    h.registration.ensureRegistered();
+    const invoke = (channel: string, input: unknown) =>
+      h.handlers.get(channel)?.(trustedEvent(), input) as Promise<{
+        ok: boolean;
+        data?: {
+          configured: boolean;
+          last4: string | null;
+          modelId: string;
+          provider: string;
+          validated: boolean;
+        };
+      }>;
+    const VIDEO_INPUT = { profileId: 'profile-video-primary' };
+
+    // 保存：视频档行惰性建档，末 4 位回读，provider=VOLCARK_SEEDANCE、Seedance model id。
+    const saved = await invoke(PROVIDER_IPC_CHANNELS.saveCredential, {
+      apiKey: 'ark-key-video7777',
+      expectedVersionId: 'profile-video-primary',
+      profileId: 'profile-video-primary',
+      requestId: 'request-video-save-0001',
+    });
+    expect(saved.ok).toBe(true);
+    expect(saved.data).toMatchObject({
+      configured: true,
+      last4: '7777',
+      modelId: 'doubao-seedance-1-0-lite-i2v-250428',
+      provider: 'VOLCARK_SEEDANCE',
+    });
+    // 密文按视频固定 id 独立落盘（与图片档分存）。
+    expect(await readdir(path.join(h.root, 'secrets'))).toEqual(['profile-video-primary.bin']);
+
+    // 测试：解密校验成功并落 lastValidatedAt（零网络）。
+    const tested = await invoke(PROVIDER_IPC_CHANNELS.testCredential, {
+      ...VIDEO_INPUT,
+      expectedVersionId: 'profile-video-primary',
+      requestId: 'request-video-test-0001',
+    });
+    expect(tested.ok).toBe(true);
+    expect(tested.data?.validated).toBe(true);
+
+    // 删除：行清理 + 审计事件 + 密文文件清理。
+    const deleted = await invoke(PROVIDER_IPC_CHANNELS.deleteCredential, {
+      ...VIDEO_INPUT,
+      expectedVersionId: 'profile-video-primary',
+      requestId: 'request-video-delete-0001',
+    });
+    expect(deleted.ok).toBe(true);
+    expect(deleted.data?.configured).toBe(false);
+    expect(auditEvents).toEqual(['profile-video-primary']);
+    expect(await readdir(path.join(h.root, 'secrets'))).toEqual([]);
+
+    // 图片档与文本档保持未配置（三档互不干扰）。
+    const imageView = await invoke(PROVIDER_IPC_CHANNELS.getProfile, {
+      profileId: 'profile-image-primary',
+    });
+    expect(imageView.data?.configured).toBe(false);
+  });
 });

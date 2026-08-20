@@ -212,11 +212,24 @@ const IMAGE_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, Credential
     },
   });
 
+/** 视频档解密校验的失败文案覆盖（与图片档同语义，指向视频配置入口）。 */
+const VIDEO_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFailureCopy>> =
+  Object.freeze({
+    ...CREDENTIAL_TEST_FAILURES,
+    MODEL_CREDENTIAL_INVALID: {
+      message: '视频 API Key 密文无法解密读取（未配置、系统密钥变更或目录迁移）。',
+      retryable: false,
+      userAction: '请在视频 Provider 设置中重新粘贴 ARK API Key 并保存。',
+    },
+  });
+
 export interface JobProviderIpcDependencies {
   /** 图片档（image-credential-management D1）：按 profileId 精确命中时分发到独立 ProviderService。 */
   readonly image?: Readonly<{ profileId: string; service: ProviderService }>;
   readonly jobs: JobService;
   readonly provider: ProviderService;
+  /** 视频档（shot-video-generation D2）：按 profileId 精确命中时分发到独立 ProviderService。 */
+  readonly video?: Readonly<{ profileId: string; service: ProviderService }>;
   readonly newTraceId?: () => string;
   readonly newSubscriptionId?: () => string;
 }
@@ -249,12 +262,17 @@ export const createJobProviderIpcService = (
   const coordinator = new RequestCoordinator();
   const newTraceId = dependencies.newTraceId ?? randomUUID;
   const newSubscriptionId = dependencies.newSubscriptionId ?? randomUUID;
-  const isImageProfile = (profileId: string): boolean =>
-    dependencies.image?.profileId === profileId;
   const providerFor = (profileId: string): ProviderService => {
-    const image = dependencies.image;
-    if (image === undefined) return dependencies.provider;
-    return image.profileId === profileId ? image.service : dependencies.provider;
+    if (dependencies.image?.profileId === profileId) return dependencies.image.service;
+    if (dependencies.video?.profileId === profileId) return dependencies.video.service;
+    return dependencies.provider;
+  };
+  const credentialTestFailuresFor = (
+    profileId: string,
+  ): Readonly<Record<ModelErrorCode, CredentialTestFailureCopy>> => {
+    if (dependencies.image?.profileId === profileId) return IMAGE_CREDENTIAL_TEST_FAILURES;
+    if (dependencies.video?.profileId === profileId) return VIDEO_CREDENTIAL_TEST_FAILURES;
+    return CREDENTIAL_TEST_FAILURES;
   };
 
   const mutate = <T>(
@@ -375,12 +393,8 @@ export const createJobProviderIpcService = (
           if (!check.ok) {
             // 透传模型端口的稳定失败码；表类型在编译期强制全键覆盖，
             // 运行时意外由外层 catch 归一化为 PROVIDER_CALL_FAILED。
-            // 图片档走解密校验语义，失败文案按档覆盖（D2）。
-            const known = (
-              isImageProfile(input.profileId)
-                ? IMAGE_CREDENTIAL_TEST_FAILURES
-                : CREDENTIAL_TEST_FAILURES
-            )[check.errorCode];
+            // 图片/视频档走解密校验语义，失败文案按档覆盖（D2）。
+            const known = credentialTestFailuresFor(input.profileId)[check.errorCode];
             return err<ProviderProfileDto>(
               check.errorCode,
               traceId,

@@ -6,6 +6,7 @@ import { createScriptRequestId, getProviderClient, rendererTransportError } from
 import { isProviderReadyForGeneration } from './script-ui-policy';
 
 import { ImageProviderCard } from './ImageProviderCard';
+import { VideoProviderCard } from './VideoProviderCard';
 
 const PROFILE_ID = 'profile_qwen_primary';
 
@@ -196,6 +197,7 @@ export const ProviderSettings = ({ onReadyChange }: ProviderSettingsProps) => {
         {!ready && <p className="action-hint">保存 Workspace 并通过凭据测试后才能生成阶段内容。</p>}
       </section>
       <ImageProviderCard />
+      <VideoProviderCard />
     </>
   );
 };

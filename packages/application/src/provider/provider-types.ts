@@ -7,8 +7,8 @@ export interface ProviderProfileConfig {
   readonly lastValidatedAt: string | null;
 }
 
-/** Provider 档位（image-credential-management D1）：文本=QWEN，图片=火山方舟 Seedream。 */
-export type ProviderProfileKind = 'QWEN' | 'VOLCARK_SEEDREAM';
+/** Provider 档位：文本=QWEN，图片=火山方舟 Seedream，视频=火山方舟 Seedance。 */
+export type ProviderProfileKind = 'QWEN' | 'VOLCARK_SEEDREAM' | 'VOLCARK_SEEDANCE';
 
 export interface ProviderProfile {
   readonly baseUrl: string;
