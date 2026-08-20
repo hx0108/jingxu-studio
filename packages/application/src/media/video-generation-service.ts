@@ -88,7 +88,10 @@ export interface ResolvedVideoGenerationInput {
  */
 export const resolveVideoGenerationInput = async (
   media: MediaRepository,
-  dependencies: VideoGenerationServiceDependencies,
+  dependencies: Pick<
+    VideoGenerationServiceDependencies,
+    'durationRange' | 'hashPayload' | 'modelId'
+  >,
   shot: StoryboardShotSnapshot,
 ): Promise<ResolvedVideoGenerationInput> => {
   const imageCandidates = await media.listCandidates(shot.shotId);

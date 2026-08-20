@@ -74,3 +74,5 @@ export type {
   VideoRequestBlueprintBuilder,
   VideoRequestBlueprintBuilderDependencies,
 } from './video-request-blueprint';
+export { createVideoBatchService } from './video-batch-service';
+export type { VideoBatchService, VideoBatchServiceDependencies } from './video-batch-service';
