@@ -9,23 +9,23 @@
 - Renderer：`StoryboardPanel.tsx` 只读；五阶段已有 JSON 文本编辑器 + saveDraft 交互先例（`ScriptWorkspace.tsx:245-271`）；script 域未接 React Query/Zustand（组件本地 state，维持现状）。
 - IPC：`script` 五方法白名单契约锁定；TECH §11 规划了 storyboard 命名空间（未实现）。
 
-## D1: 编辑 UI 形态【待拍板】
+## D1: 编辑 UI 形态【已拍板 2026-08-20：JSON 文本编辑器】
 
 - **方案 A（推荐）：JSON 文本编辑器**。复用五阶段 saveDraft 的成熟交互（文本框 + 保存/校验错误展示），主进程侧 zod/Schema 全量校验兜底，`document_json` 本来就是 blob。实现最轻，编辑能力天然全覆盖白名单字段。
 - 方案 B：结构化表单（七组受控字段逐项编辑 + 逐字段校验错误定位）。对创作者友好，但几十个字段 × 枚举/跨字段校验/错误定位的表单工程量大，且锁 UI（D3）在表单里反而更复杂（每字段挂锁）。
 - 后继演进：表单可作为 V1 验收后的独立 UI change，届时后端命令契约不变。
 
-## D2: 人工编辑与锁的关系【待拍板】
+## D2: 人工编辑与锁的关系【已拍板 2026-08-20：锁对人 AI 一致】
 
 - **方案 A（推荐）：锁对人与 AI 一致**——编辑已锁定路径（冲突含父/子/相等）必须先显式解锁，否则整次编辑事务阻断并列出冲突路径。与 AC-V1-06 锁矩阵语义、PRD「用户可以主动解锁；系统不得为了完成生成而自动解锁」一致；锁语义单一可测。
 - 方案 B：锁只防 AI 写入，人工编辑可直接覆盖。实现少一步，但「锁定」出现两套真相，AC-V1-06 矩阵需按写入者分叉，且用户误触覆盖无保护。
 
-## D3: 锁定 UI 粒度【待拍板】
+## D3: 锁定 UI 粒度【已拍板 2026-08-20：七根级起步（服务层算法全量）】
 
 - **方案 A（推荐）：UI 起步仅七个一级根**（/narrative_purpose、/cinematography、/content、/dialogue、/continuity、/generation_constraints、/acceptance）。粗粒度挂锁/解锁 UI 简单清晰；**服务层算法按 PRD 全量实现**（任意已存在子路径的锁定命令在 API 层合法，AC-V1-06 父子冲突矩阵在服务层测试全量覆盖），后继 change 只扩 UI 树选择器。
 - 方案 B：全子路径树选择器。PRD 全语义一步到位，但 RFC 6901 路径树 + 已存在子路径解析 + 转义（~0/~1）的 UI 工程量大，V1 验证期收益低。
 
-## D4: IPC 命名空间【待拍板】
+## D4: IPC 命名空间【已拍板 2026-08-20：storyboard.* 命名空间】
 
 - **方案 A（推荐）：新 `storyboard` 命名空间**（storyboard.editShot / storyboard.lockShot / storyboard.unlockShot）。与 TECH §11 规划一致；script 五方法白名单契约不动；新协调器接线与既有模式同构（sender 校验、DTO 双端校验、requestId 去重、输出脱敏复验）。
 - 方案 B：扩展 `script.*` 白名单（script.editShot…）。少一组注册，但要改已锁定的五方法契约测试，且 TECH §11 明确 storyboard 独立命名空间。
