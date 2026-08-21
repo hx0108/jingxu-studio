@@ -45,8 +45,7 @@ const REQUIRED_STAGES = ['CONCEPT', 'EPISODE_OUTLINE', 'BEAT_SHEET', 'SCENE_SCRI
 const isRecord = (value: unknown): value is TransferJson =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const stringField = (value: unknown): string | null =>
-  typeof value === 'string' ? value : null;
+const stringField = (value: unknown): string | null => (typeof value === 'string' ? value : null);
 
 // 函数声明（非 const 箭头）：显式 never 返回类型使调用点之后获得类型收窄。
 function invalid(code: TransferValidationErrorCode): never {

@@ -15,6 +15,7 @@ describe('Job Provider Events Preload Contract', () => {
       'runtime',
       'script',
       'storyboard',
+      'transfer',
       'video',
     ]);
     expect(Object.keys(api.job).sort()).toEqual(['cancel', 'create', 'get', 'list', 'retry']);
@@ -26,7 +27,8 @@ describe('Job Provider Events Preload Contract', () => {
       'testCredential',
     ]);
     expect(Object.keys(api.events)).toEqual(['subscribeJobUpdates']);
-    for (const value of [api, api.job, api.provider, api.events, api.video]) {
+    expect(Object.keys(api.transfer).sort()).toEqual(['exportProject', 'importProject']);
+    for (const value of [api, api.job, api.provider, api.events, api.video, api.transfer]) {
       expect(Object.isFrozen(value)).toBe(true);
       for (const name of ['invoke', 'send', 'on']) expect(Reflect.has(value, name)).toBe(false);
     }

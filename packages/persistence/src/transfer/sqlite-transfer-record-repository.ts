@@ -243,9 +243,7 @@ export class SqliteTransferRecordRepository implements TransferRecordRepositoryP
           record.sourceRef,
           record.sourceSha256,
           record.status,
-          record.validationErrors.length === 0
-            ? null
-            : JSON.stringify(record.validationErrors),
+          record.validationErrors.length === 0 ? null : JSON.stringify(record.validationErrors),
           record.idMapping === null ? null : JSON.stringify(record.idMapping),
           record.createdAt,
           record.finishedAt,

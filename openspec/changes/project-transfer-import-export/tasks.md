@@ -18,13 +18,13 @@
 
 ## 4. Main, Preload and Renderer
 
-- [ ] 4.1 实现 Main Transfer IPC、sender/READY gate/singleflight、系统 Open/Save Dialog 和原子文件 sink；路径不得进入 Renderer 或回执。
+- [x] 4.1 实现 Main Transfer IPC、sender/READY gate/singleflight、系统 Open/Save Dialog 和原子文件 sink；路径不得进入 Renderer 或回执。
 - [x] 4.2 实现 Preload 冻结 `transfer` 白名单和双端 strict DTO/result 校验，补未授权/未知字段/异常脱敏 Contract 测试。
 - [x] 4.3 在项目设置/项目列表接入导入导出 UI，展示校验状态、冲突、媒体缺失警告、Hash 和 IMPORTED_SNAPSHOT 门禁。
 
 ## 5. Verification and documentation
 
-- [ ] 5.1 补 Unit、Contract、Integration 和 Electron E2E：合法导出、损坏/Hash/引用错误、NEW_PROJECT、RETURN_TO_ORIGIN、冲突、取消、幂等和回滚。
+- [x] 5.1 补 Unit、Contract、Integration 和 Electron E2E：合法导出、损坏/Hash/引用错误、NEW_PROJECT、RETURN_TO_ORIGIN、冲突、取消、幂等和回滚。
 - [ ] 5.2 更新 README、TECH_DESIGN 验收追踪和 packaged smoke，确认 Transfer IPC、Schema、无路径/Key泄漏和不自动重启媒体任务。
 - [ ] 5.3 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:e2e`、`pnpm package:win` 与 `openspec validate project-transfer-import-export --strict`。
 - [ ] 5.4 执行 OpenSpec Verify；通过后 Sync Specs、Archive Change，并记录实际验证证据。

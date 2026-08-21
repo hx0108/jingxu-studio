@@ -25,7 +25,12 @@ export interface TransferFileSnapshot {
 }
 
 export type TransferFileWriteOutcome =
-  | Readonly<{ readonly outcome: 'written'; readonly byteSize: number; readonly sha256: string; readonly targetRef: TransferFileRef }>
+  | Readonly<{
+      readonly outcome: 'written';
+      readonly byteSize: number;
+      readonly sha256: string;
+      readonly targetRef: TransferFileRef;
+    }>
   | Readonly<{ readonly outcome: 'cancelled' }>
   /** 目标已存在且未显式确认覆盖（默认拒绝；非 I/O 故障）。 */
   | Readonly<{ readonly outcome: 'refused' }>

@@ -4,11 +4,17 @@ import { assembleTransferBundle, stableTransferJson } from './transfer-bundle';
 
 const storyboardInput = {
   episode_id: 'episode_0001',
-  format_profile: { aspect_ratio: '9:16', fps: 30, height: 1920, id: 'format_0001', language: 'zh-CN', subtitle_safe_area: { bottom_pct: 12, left_pct: 5, right_pct: 5, top_pct: 5 }, width: 1080 },
+  format_profile: {
+    aspect_ratio: '9:16',
+    fps: 30,
+    height: 1920,
+    id: 'format_0001',
+    language: 'zh-CN',
+    subtitle_safe_area: { bottom_pct: 12, left_pct: 5, right_pct: 5, top_pct: 5 },
+    width: 1080,
+  },
   project_id: 'project_0001',
-  shot_contracts: [
-    { continuity: {}, shot_id: 'shot_0001', version_id: 'scv_0001' },
-  ],
+  shot_contracts: [{ continuity: {}, shot_id: 'shot_0001', version_id: 'scv_0001' }],
 } as const;
 
 const assemblyInput = {
@@ -61,7 +67,11 @@ describe('assembleTransferBundle（project-transfer-import-export 2.1/2.2）', (
       episodeStoryboard: {
         ...storyboardInput,
         shot_contracts: [
-          { continuity: { asset_version_ids: ['assetv_0001'] }, shot_id: 'shot_0001', version_id: 'scv_0001' },
+          {
+            continuity: { asset_version_ids: ['assetv_0001'] },
+            shot_id: 'shot_0001',
+            version_id: 'scv_0001',
+          },
         ],
       },
     });

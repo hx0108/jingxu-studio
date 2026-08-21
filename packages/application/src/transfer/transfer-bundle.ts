@@ -43,7 +43,9 @@ const hasAssetReference = (value: unknown): boolean => {
   if (Array.isArray(value)) return value.some(hasAssetReference);
   if (typeof value !== 'object' || value === null) return false;
   return Object.entries(value).some(
-    ([key, nested]) => (MEDIA_REFERENCE_KEYS.has(key) && Array.isArray(nested) && nested.length > 0) || hasAssetReference(nested),
+    ([key, nested]) =>
+      (MEDIA_REFERENCE_KEYS.has(key) && Array.isArray(nested) && nested.length > 0) ||
+      hasAssetReference(nested),
   );
 };
 

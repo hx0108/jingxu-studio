@@ -157,6 +157,7 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
         'runtime',
         'script',
         'storyboard',
+        'transfer',
         'video',
       ],
       contentSecurityPolicy:

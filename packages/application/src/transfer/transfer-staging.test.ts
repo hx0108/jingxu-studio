@@ -196,7 +196,10 @@ describe('确定性 ID Mapping 与文档重写（project-transfer-import-export 
     expect(sourceIds.shotVersionIds).toEqual(['scv_0001', 'scv_0002']);
 
     let counter = 0;
-    const mapping = buildTransferIdMapping(sourceIds, (kind) => `${kind}_${String((counter += 1))}`);
+    const mapping = buildTransferIdMapping(
+      sourceIds,
+      (kind) => `${kind}_${String((counter += 1))}`,
+    );
     // 生成顺序固定：project→episode→format→bible→4 阶段→镜头→镜头版本。
     expect(mapping.project_0001).toBe('project_project_1');
     expect(mapping.sbv_0001).toBe('sbv_storyBible_4');

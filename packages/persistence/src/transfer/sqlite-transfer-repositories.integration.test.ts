@@ -132,11 +132,11 @@ describe('SqliteTransferRecordRepository + 0016（project-transfer-import-export
         expect.arrayContaining(['request_id', 'result_json']),
       );
       const indexes = database
-        .prepare(
-          "SELECT name FROM sqlite_master WHERE type = 'index' AND name IN (?, ?)",
-        )
-        .all('ux_export_records_request_id', 'ux_import_records_request_id') as unknown as readonly
-          { readonly name: string }[];
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name IN (?, ?)")
+        .all(
+          'ux_export_records_request_id',
+          'ux_import_records_request_id',
+        ) as unknown as readonly { readonly name: string }[];
       expect(indexes.map(({ name }) => name).sort()).toEqual([
         'ux_export_records_request_id',
         'ux_import_records_request_id',
@@ -177,9 +177,7 @@ describe('SqliteTransferRecordRepository + 0016（project-transfer-import-export
       insertExportForeignKeyChain(database);
       const repository = new SqliteTransferRecordRepository(database);
       await repository.insertExport(exportRecord());
-      await expect(
-        repository.insertExport(exportRecord({ id: 'export_dup' })),
-      ).rejects.toThrow();
+      await expect(repository.insertExport(exportRecord({ id: 'export_dup' }))).rejects.toThrow();
       // FAILED 行不受 SUCCEEDED 唯一约束影响（导入失败可重复留证）。
       await expect(
         repository.insertImport(importRecord({ id: 'import_failed_a' })),
@@ -240,9 +238,9 @@ describe('SqliteTransferRecordRepository + 0016（project-transfer-import-export
       // 回滚后零残留：import_records 无该 requestId 行。
       const repository = new SqliteTransferRecordRepository(database);
       expect(await repository.findImportByRequestId('req_import_1')).toBeNull();
-      expect(
-        database.prepare('SELECT COUNT(*) AS total FROM import_records').get(),
-      ).toEqual({ total: 0 });
+      expect(database.prepare('SELECT COUNT(*) AS total FROM import_records').get()).toEqual({
+        total: 0,
+      });
     });
   });
 });
