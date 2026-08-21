@@ -89,3 +89,7 @@ export {
   type ScriptGenerationRuntime,
   type ScriptGenerationRuntimeDependencies,
 } from './script-generation-runtime';
+export {
+  computeShotSetHash,
+  type ShotSetHashEntry,
+} from './shot-set-hash';
