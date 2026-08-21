@@ -1,10 +1,15 @@
 import {
   IMAGE_IPC_CHANNELS,
   PROJECT_IPC_CHANNELS,
+  VIDEO_IPC_CHANNELS,
   type AppResultDto,
   type CreateProjectInputDto,
   type JingxuApi,
+  type MediaBatchViewDto,
+  type MediaTaskViewDto,
   type ProjectDetailDto,
+  type StoryboardVideoStatesDto,
+  type VideoCandidateViewDto,
 } from '@jingxu/contracts';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
@@ -88,6 +93,7 @@ describe('window.jingxu 白名单 Contract', () => {
       'runtime',
       'script',
       'storyboard',
+      'video',
     ]);
     expect(Object.isFrozen(api.storyboard)).toBe(true);
     expect(Object.keys(api.script).sort()).toEqual([
@@ -157,6 +163,7 @@ describe('window.jingxu 白名单 Contract', () => {
       expect(Reflect.has(api.provider, methodName)).toBe(false);
       expect(Reflect.has(api.events, methodName)).toBe(false);
       expect(Reflect.has(api.image, methodName)).toBe(false);
+      expect(Reflect.has(api.video, methodName)).toBe(false);
     },
   );
 
@@ -325,6 +332,169 @@ describe('window.jingxu 白名单 Contract', () => {
       createJingxuApi(
         vi.fn(() => Promise.resolve({ data: { ...task, sql: 'SELECT 1' }, ok: true })),
       ).image.getMediaTask(taskInput),
+    ).rejects.toThrow();
+  });
+
+  it('Video Change—video 恰有冻结的七方法白名单—零路径/SQL/存储入口', () => {
+    const api = createJingxuApi(vi.fn());
+
+    expect(Object.isFrozen(api.video)).toBe(true);
+    expect(Object.keys(api.video).sort()).toEqual([
+      'cancelVideoBatch',
+      'generateVideoCandidates',
+      'generateVideosForShots',
+      'getVideoTask',
+      'listStoryboardVideoStates',
+      'listVideoCandidates',
+      'selectVideoCandidate',
+    ]);
+    for (const forbidden of ['path', 'sql', 'database', 'repository', 'node', 'persistence']) {
+      expect(Reflect.has(api.video, forbidden)).toBe(false);
+    }
+  });
+
+  it('调用七个 video 方法—输入合法—只 invoke 固定 channel 且校验输出（首帧/模型指纹不透出）', async () => {
+    const now = '2026-08-16T00:00:00.000Z';
+    const hash = 'a'.repeat(64);
+    const task: MediaTaskViewDto = {
+      candidateCount: 2,
+      createdAt: now,
+      errorCode: null,
+      generationInputHash: hash,
+      id: 'task_12345678',
+      phase: 'SUBMITTED',
+      shotId: 'shot_12345678',
+      shotVersionId: 'scv_12345678',
+      updatedAt: now,
+    };
+    const candidate: VideoCandidateViewDto = {
+      actualDurationSec: 8,
+      byteSize: 2048,
+      continuationSegmentCount: 0,
+      createdAt: now,
+      errorCode: null,
+      firstFrameCandidateId: 'cand_12345678',
+      generationInputHash: hash,
+      height: 1920,
+      id: 'vcand_12345678',
+      indexInRound: 0,
+      mediaUrl: 'jingxu://media/video-candidate/vcand_12345678',
+      mimeType: 'video/mp4',
+      requestedDurationSec: 8,
+      roundNo: 1,
+      selectedAt: null,
+      shotId: 'shot_12345678',
+      shotVersionId: 'scv_12345678',
+      status: 'SUCCEEDED',
+      trimRange: null,
+      width: 1080,
+    };
+    const batch: MediaBatchViewDto = {
+      batchId: 'batch_12345678',
+      createdAt: now,
+      errorCode: null,
+      members: [{ errorCode: null, phase: null, shotId: 'shot_12345678', taskId: null }],
+      skippedShotIds: [],
+      status: 'RUNNING',
+      updatedAt: now,
+    };
+    const states: StoryboardVideoStatesDto = {
+      batches: [batch],
+      shots: [
+        {
+          activeTaskPhase: null,
+          currentGenSucceededCount: 1,
+          latestTaskErrorCode: null,
+          queuedInBatchId: 'batch_12345678',
+          shotId: 'shot_12345678',
+        },
+      ],
+    };
+    const invoke = vi.fn((channel: string) => {
+      switch (channel) {
+        case VIDEO_IPC_CHANNELS.generateVideoCandidates:
+        case VIDEO_IPC_CHANNELS.getVideoTask:
+          return Promise.resolve({ data: task, ok: true });
+        case VIDEO_IPC_CHANNELS.listVideoCandidates:
+        case VIDEO_IPC_CHANNELS.selectVideoCandidate:
+          return Promise.resolve({ data: [candidate], ok: true });
+        case VIDEO_IPC_CHANNELS.generateVideosForShots:
+        case VIDEO_IPC_CHANNELS.cancelVideoBatch:
+          return Promise.resolve({ data: batch, ok: true });
+        default:
+          return Promise.resolve({ data: states, ok: true });
+      }
+    });
+    const api = createJingxuApi(invoke);
+    const generateInput = {
+      projectId: 'project_12345678',
+      requestId: 'request_vgen_00001',
+      shotId: 'shot_12345678',
+    };
+    const listInput = { projectId: 'project_12345678', shotId: 'shot_12345678' };
+    const selectInput = {
+      candidateId: 'vcand_12345678',
+      projectId: 'project_12345678',
+      requestId: 'request_vsel_00001',
+    };
+    const taskInput = { projectId: 'project_12345678', taskId: 'task_12345678' };
+    const batchInput = {
+      projectId: 'project_12345678',
+      requestId: 'request_vbatch_0001',
+      shotIds: ['shot_12345678'],
+    };
+    const cancelInput = {
+      batchId: 'batch_12345678',
+      projectId: 'project_12345678',
+      requestId: 'request_vcancel_001',
+    };
+    const statesInput = { projectId: 'project_12345678' };
+
+    await expect(api.video.generateVideoCandidates(generateInput)).resolves.toEqual({
+      data: task,
+      ok: true,
+    });
+    await expect(api.video.listVideoCandidates(listInput)).resolves.toEqual({
+      data: [candidate],
+      ok: true,
+    });
+    await expect(api.video.selectVideoCandidate(selectInput)).resolves.toEqual({
+      data: [candidate],
+      ok: true,
+    });
+    await expect(api.video.getVideoTask(taskInput)).resolves.toEqual({ data: task, ok: true });
+    await expect(api.video.generateVideosForShots(batchInput)).resolves.toEqual({
+      data: batch,
+      ok: true,
+    });
+    await expect(api.video.cancelVideoBatch(cancelInput)).resolves.toEqual({
+      data: batch,
+      ok: true,
+    });
+    await expect(api.video.listStoryboardVideoStates(statesInput)).resolves.toEqual({
+      data: states,
+      ok: true,
+    });
+    expect(invoke.mock.calls).toEqual([
+      [VIDEO_IPC_CHANNELS.generateVideoCandidates, generateInput],
+      [VIDEO_IPC_CHANNELS.listVideoCandidates, listInput],
+      [VIDEO_IPC_CHANNELS.selectVideoCandidate, selectInput],
+      [VIDEO_IPC_CHANNELS.getVideoTask, taskInput],
+      [VIDEO_IPC_CHANNELS.generateVideosForShots, batchInput],
+      [VIDEO_IPC_CHANNELS.cancelVideoBatch, cancelInput],
+      [VIDEO_IPC_CHANNELS.listStoryboardVideoStates, statesInput],
+    ]);
+
+    // 输出校验：越权字段（文件指纹/路径）的视频候选不得进入 Renderer。
+    await expect(
+      createJingxuApi(
+        vi.fn(() =>
+          Promise.resolve({
+            data: [{ ...candidate, firstFrameFileSha256: hash, sql: 'SELECT 1' }],
+            ok: true,
+          }),
+        ),
+      ).video.listVideoCandidates(listInput),
     ).rejects.toThrow();
   });
 

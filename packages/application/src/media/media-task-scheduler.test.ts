@@ -11,6 +11,7 @@ import type { NormalizedModelError } from '../ports/text-model/text-model-types'
 import type { MediaUnitOfWorkPort } from '../ports/media/media-repository';
 import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
+import { InMemoryVideoMediaRepository } from './in-memory-video-media-repository';
 import type { MediaFileStorePort, MediaTaskScheduler } from './media-task-scheduler';
 import { createMediaTaskScheduler } from './media-task-scheduler';
 
@@ -244,12 +245,17 @@ const buildFixture = (
   const repository = new InMemoryMediaRepository();
   const invocationRepository = new InMemoryMediaInvocationRepository();
   const unitOfWork: MediaUnitOfWorkPort = {
-    run: (work) => work({ invocations: invocationRepository, media: repository }),
+    run: (work) =>
+      work({
+        invocations: invocationRepository,
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const port = new FakeImageModel(portOptions);
   const writes: { byteSize: number; storageRelPath: string }[] = [];
   const fileStore: MediaFileStorePort = {
-    writeImage: ({ bytes, projectId }) => {
+    writeMedia: ({ bytes, projectId }) => {
       const sha256 = hash64(`stored_${String(writes.length + 1)}`);
       const record = {
         byteSize: bytes.byteLength,
@@ -266,7 +272,7 @@ const buildFixture = (
   const scheduler = createMediaTaskScheduler({
     fileStore,
     hashText: hash64,
-    imageModel: port,
+    model: port,
     mediaUnitOfWork: unitOfWork,
     ...(onProjectIdle === undefined ? {} : { onProjectIdle }),
     newId: (() => {
@@ -282,11 +288,22 @@ const buildFixture = (
     requestBuilder: {
       build: () =>
         Promise.resolve({
+          buildRequest: (invocationId: string) => ({
+            invocationId,
+            modelId: MODEL_ID,
+            prompt: '雨巷中的少女',
+            referenceImages: [],
+            size: { height: 2560, width: 1440 },
+          }),
           modelId: MODEL_ID,
-          prompt: '雨巷中的少女',
-          referenceImageSha256s: [],
-          referenceImages: [],
-          size: { height: 2560, width: 1440 },
+          submitSnapshotJson: JSON.stringify({
+            modelId: MODEL_ID,
+            prompt: '雨巷中的少女',
+            referenceImageSha256s: [],
+            responseFormat: 'url',
+            size: { height: 2560, width: 1440 },
+            watermark: true,
+          }),
         }),
     },
     segmentTimeoutMs,
@@ -302,7 +319,11 @@ const seedTask = async (
 ): Promise<string> => {
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const shotId = options.shotId ?? 'shot_1';
   const task = await unitOfWork.run(({ media }) =>
@@ -678,7 +699,11 @@ describe('MediaTaskScheduler 启动恢复（recover）', () => {
     const taskId = await seedTask(fixture.repository);
     const unitOfWork: MediaUnitOfWorkPort = {
       run: (work) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: fixture.repository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: fixture.repository,
+          video: new InMemoryVideoMediaRepository(),
+        }),
     };
     await unitOfWork.run(({ media }) =>
       media.assignCandidateProviderTask('task_1_c_1', 'pt_partial'),
@@ -747,14 +772,18 @@ describe('MediaTaskScheduler 队列语义', () => {
     const repository = fixture.repository;
     const unitOfWork: MediaUnitOfWorkPort = {
       run: (work) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: repository,
+          video: new InMemoryVideoMediaRepository(),
+        }),
     };
     const failing = createMediaTaskScheduler({
       fileStore: {
-        writeImage: () => Promise.reject(new Error('unreachable')),
+        writeMedia: () => Promise.reject(new Error('unreachable')),
       },
       hashText: hash64,
-      imageModel: fixture.port,
+      model: fixture.port,
       mediaUnitOfWork: unitOfWork,
       newId: () => 'inv_x',
       nowMs: () => 0,

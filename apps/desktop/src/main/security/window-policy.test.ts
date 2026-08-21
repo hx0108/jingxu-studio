@@ -41,9 +41,9 @@ describe('安全桌面运行时基线', () => {
     expect(shouldPreventNavigation('https://example.com', 'jingxu://app')).toBe(true);
   });
 
-  it('生产 Renderer 加载时—应用 CSP—拒绝连接、对象和非受信脚本', () => {
+  it('生产 Renderer 加载时—应用 CSP—拒绝连接、对象和非受信脚本，媒体仅限 jingxu 协议', () => {
     expect(PRODUCTION_CSP).toBe(
-      "default-src 'self'; script-src 'self'; style-src 'self'; img-src jingxu:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+      "default-src 'self'; script-src 'self'; style-src 'self'; img-src jingxu:; media-src jingxu:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
     );
   });
 });

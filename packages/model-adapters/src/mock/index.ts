@@ -5,6 +5,12 @@ export {
 } from './mock-image-model-adapter';
 export type { MockImageModelAdapterOptions, MockImageSubmitStep } from './mock-image-model-adapter';
 export {
+  MOCK_VIDEO_MP4_BYTES,
+  MockVideoModelAdapter,
+  MockVideoModelError,
+} from './mock-video-model-adapter';
+export type { MockVideoModelAdapterOptions, MockVideoSubmitStep } from './mock-video-model-adapter';
+export {
   MockTextModelAdapter,
   MockTextModelError,
   createMockModelError,

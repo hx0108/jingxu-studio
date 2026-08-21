@@ -26,6 +26,7 @@ export type {
 } from './image-api-service';
 export { InMemoryMediaRepository } from './in-memory-media-repository';
 export { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
+export { InMemoryVideoMediaRepository } from './in-memory-video-media-repository';
 export { createMediaRequestBlueprintBuilder } from './media-request-blueprint';
 export type {
   MediaReferenceImageReader,
@@ -42,3 +43,38 @@ export type {
   MediaTaskSchedulerDependencies,
 } from './media-task-scheduler';
 export { mediaFailure, mediaPersistenceFailure } from './media-service-error';
+export {
+  buildVideoParametersFingerprint,
+  buildVideoPrompt,
+  computeVideoGenerationInputHash,
+  extractVideoShotFields,
+  resolveVideoDurationTier,
+  resolveVideoSize,
+} from './video-generation-input';
+export type {
+  VideoDurationRange,
+  VideoDurationTier,
+  VideoFirstFrameDimensions,
+  VideoGenerationInputDescriptor,
+  VideoParametersFingerprintInput,
+  VideoShotMotionFields,
+  VideoSize,
+} from './video-generation-input';
+export {
+  createVideoGenerationService,
+  resolveVideoGenerationInput,
+} from './video-generation-service';
+export type {
+  ResolvedVideoGenerationInput,
+  VideoGenerationService,
+  VideoGenerationServiceDependencies,
+} from './video-generation-service';
+export { createVideoRequestBlueprintBuilder } from './video-request-blueprint';
+export type {
+  VideoRequestBlueprintBuilder,
+  VideoRequestBlueprintBuilderDependencies,
+} from './video-request-blueprint';
+export { createVideoBatchService } from './video-batch-service';
+export type { VideoBatchService, VideoBatchServiceDependencies } from './video-batch-service';
+export { createVideoApiService } from './video-api-service';
+export type { VideoApiService, VideoApiServiceDependencies } from './video-api-service';

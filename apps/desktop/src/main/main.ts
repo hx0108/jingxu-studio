@@ -22,6 +22,10 @@ import {
   type ImageFeatureRegistration,
 } from './composition/register-image-features';
 import {
+  createVideoFeatureRegistration,
+  type VideoFeatureRegistration,
+} from './composition/register-video-features';
+import {
   createProjectFeatureRegistration,
   type ProjectFeatureRegistration,
 } from './composition/register-project-features';
@@ -54,6 +58,7 @@ let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null
 let scriptFeatureRegistration: ScriptFeatureRegistration | null = null;
 let storyboardFeatureRegistration: StoryboardFeatureRegistration | null = null;
 let imageFeatureRegistration: ImageFeatureRegistration | null = null;
+let videoFeatureRegistration: VideoFeatureRegistration | null = null;
 let shutdownStarted = false;
 
 const createSafeStorageFacade = (): SafeStorageFacade => ({
@@ -68,6 +73,8 @@ protocol.registerSchemesAsPrivileged([
       corsEnabled: false,
       secure: true,
       standard: true,
+      // jingxu://media/video-candidate 需要 Range/206 流式播放（<video> 拖动）。
+      stream: true,
       supportFetchAPI: true,
     },
     scheme: APP_SCHEME,
@@ -120,36 +127,54 @@ const createMainWindow = async (): Promise<void> => {
     registerAppProtocol({
       fetchResource: (url) => net.fetch(url),
       handleMediaRequest: (request) =>
-        handleMediaProtocolRequest(request, {
-          locator: {
-            // 运行时不可读（启动故障）时反查直接落空，协议统一 404——不区分存在性。
-            findAssetVersionMedia: async (versionId) => {
-              const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
-              if (unitOfWork === null) return null;
-              try {
-                return await unitOfWork.run(({ media }) =>
-                  media.findAssetVersionMediaById(versionId),
-                );
-              } catch {
-                return null;
-              }
-            },
-            findCandidateMedia: async (candidateId) => {
-              const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
-              if (unitOfWork === null) return null;
-              try {
-                return await unitOfWork.run(({ media }) =>
-                  media.findCandidateMediaById(candidateId),
-                );
-              } catch {
-                return null;
-              }
-            },
+        handleMediaProtocolRequest(
+          {
+            method: request.method,
+            rangeHeader: request.headers?.get('range') ?? null,
+            url: request.url,
           },
-          readFile: (absolutePath) => readFile(absolutePath),
-          resolveWithinProjects:
-            createContentAddressedStore(getManagedRoot()).resolvePathWithinProjects,
-        }),
+          {
+            locator: {
+              // 运行时不可读（启动故障）时反查直接落空，协议统一 404——不区分存在性。
+              findAssetVersionMedia: async (versionId) => {
+                const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+                if (unitOfWork === null) return null;
+                try {
+                  return await unitOfWork.run(({ media }) =>
+                    media.findAssetVersionMediaById(versionId),
+                  );
+                } catch {
+                  return null;
+                }
+              },
+              findCandidateMedia: async (candidateId) => {
+                const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+                if (unitOfWork === null) return null;
+                try {
+                  return await unitOfWork.run(({ media }) =>
+                    media.findCandidateMediaById(candidateId),
+                  );
+                } catch {
+                  return null;
+                }
+              },
+              findVideoCandidateMedia: async (candidateId) => {
+                const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+                if (unitOfWork === null) return null;
+                try {
+                  return await unitOfWork.run(({ video }) =>
+                    video.findCandidateMediaById(candidateId),
+                  );
+                } catch {
+                  return null;
+                }
+              },
+            },
+            readFile: (absolutePath) => readFile(absolutePath),
+            resolveWithinProjects:
+              createContentAddressedStore(getManagedRoot()).resolvePathWithinProjects,
+          },
+        ),
       protocol,
       rendererRoot: path.join(__dirname, '..', 'renderer', rendererName),
       trustedHost: APP_HOST,
@@ -247,18 +272,29 @@ if (!singleInstanceLockAcquired) {
           trustedUrl: getTrustedUrl(),
           useE2eMock: process.env.JINGXU_E2E === '1',
         });
+        videoFeatureRegistration = createVideoFeatureRegistration({
+          clock: () => new Date().toISOString(),
+          ipcRegistrar,
+          managedRoot,
+          persistenceRuntime,
+          safeStorage: createSafeStorageFacade(),
+          trustedUrl: getTrustedUrl(),
+          useE2eMock: process.env.JINGXU_E2E === '1',
+        });
         registerRuntimeIpc(ipcRegistrar, persistenceRuntime.startupService, getTrustedUrl(), () => {
           projectFeatureRegistration?.ensureRegistered();
           jobProviderFeatureRegistration?.ensureRegistered();
           scriptFeatureRegistration?.ensureRegistered();
           storyboardFeatureRegistration?.ensureRegistered();
           imageFeatureRegistration?.ensureRegistered();
+          videoFeatureRegistration?.ensureRegistered();
         });
         projectFeatureRegistration.ensureRegistered();
         jobProviderFeatureRegistration.ensureRegistered();
         scriptFeatureRegistration.ensureRegistered();
         storyboardFeatureRegistration.ensureRegistered();
         imageFeatureRegistration.ensureRegistered();
+        videoFeatureRegistration.ensureRegistered();
       }
       await createMainWindow();
     })
@@ -278,6 +314,7 @@ if (!singleInstanceLockAcquired) {
       event.preventDefault();
       shutdownStarted = true;
       void imageFeatureRegistration?.stop();
+      void videoFeatureRegistration?.stop();
       void jobProviderFeatureRegistration.stop().finally(() => {
         app.quit();
       });
@@ -288,6 +325,7 @@ if (!singleInstanceLockAcquired) {
     scriptFeatureRegistration = null;
     storyboardFeatureRegistration = null;
     imageFeatureRegistration = null;
+    videoFeatureRegistration = null;
     persistenceRuntime?.close();
     persistenceRuntime = null;
   });

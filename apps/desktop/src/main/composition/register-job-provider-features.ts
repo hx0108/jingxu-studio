@@ -12,8 +12,10 @@ import type { AppResultDto } from '@jingxu/contracts';
 import {
   QWEN_MODEL_ID,
   QwenTextModelAdapter,
+  SEEDANCE_MODEL_ID,
   SEEDREAM_MODEL_ID,
   deriveQwenBaseUrl,
+  deriveSeedanceBaseUrl,
   deriveSeedreamBaseUrl,
 } from '@jingxu/model-adapters';
 
@@ -33,6 +35,7 @@ import {
   PRIMARY_QWEN_PROFILE_ID,
 } from './create-script-generation-runtime';
 import { IMAGE_CREDENTIAL_ID } from './register-image-features';
+import { VIDEO_CREDENTIAL_ID } from './register-video-features';
 import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
 
 export interface RegisterJobProviderFeaturesOptions {
@@ -74,6 +77,21 @@ const IMAGE_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
   // 取自锁定 model id 的 yymmdd 版本段：doubao-seedream-5-0-lite-260128 → 2026-01-28。
   modelSnapshotDate: '2026-01-28',
   provider: 'VOLCARK_SEEDREAM',
+  workspaceId: 'ark',
+};
+
+/**
+ * 视频档（shot-video-generation D2）：与图片档同构——profileId 与固定凭据引用同名；
+ * Seedance 生成路径不读该行（按 VIDEO_CREDENTIAL_ID 直读密文），行只承载配置状态/
+ * 末 4 位/审计。同 ARK 平台无工作区概念，workspace_id 为 DB NOT NULL 惰性占位。
+ */
+const VIDEO_PROFILE_ID = VIDEO_CREDENTIAL_ID;
+const VIDEO_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
+  baseUrl: deriveSeedanceBaseUrl(),
+  modelId: SEEDANCE_MODEL_ID,
+  // 取自锁定 model id 的 yymmdd 版本段：doubao-seedance-1-5-pro-251215 → 2025-12-15。
+  modelSnapshotDate: '2025-12-15',
+  provider: 'VOLCARK_SEEDANCE',
   workspaceId: 'ark',
 };
 
@@ -185,6 +203,33 @@ export const createJobProviderFeatureRegistration = ({
         textModelFactory: () => imageCredentialValidator,
         unitOfWork: providerUnitOfWork,
       });
+      // 视频档凭据：与图片档同构（固定 id + 覆写轮换；Seedance 同 ARK Key 体系）。
+      const videoCredentials = new CredentialAdapter({
+        clock,
+        createId: () => VIDEO_PROFILE_ID,
+        overwriteExisting: true,
+        safeStorage,
+        secretsDirectory: path.join(managedRoot, 'secrets'),
+      });
+      // 视频档 testCredential 同为解密加载校验（零计费请求）。
+      const videoCredentialValidator = {
+        validateCredential: async (): Promise<CredentialCheck> => {
+          try {
+            await videoCredentials.loadCredential(VIDEO_PROFILE_ID);
+            return { ok: true };
+          } catch {
+            return { detail: null, errorCode: 'MODEL_CREDENTIAL_INVALID', ok: false };
+          }
+        },
+      };
+      const videoProviderService = new ProviderService({
+        clock,
+        credentials: videoCredentials,
+        defaults: VIDEO_PROVIDER_DEFAULTS,
+        profiles,
+        textModelFactory: () => videoCredentialValidator,
+        unitOfWork: providerUnitOfWork,
+      });
       const scriptRuntime = createDesktopScriptGenerationRuntime({
         clock,
         registry,
@@ -207,6 +252,7 @@ export const createJobProviderFeatureRegistration = ({
         newSubscriptionId: subscriptionId,
         newTraceId: traceId,
         provider: providerService,
+        video: { profileId: VIDEO_PROFILE_ID, service: videoProviderService },
       });
       registered = true;
       stopRuntime = () => scriptRuntime.stop();

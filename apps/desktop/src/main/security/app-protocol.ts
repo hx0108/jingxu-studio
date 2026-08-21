@@ -2,8 +2,10 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 export interface AppProtocolRequest {
-  method: string;
-  url: string;
+  /** Electron Request 自带头访问器（Range 透传给媒体协议）；测试桩可缺省。 */
+  readonly headers?: { readonly get: (name: string) => string | null };
+  readonly method: string;
+  readonly url: string;
 }
 
 export interface AppProtocolHost {

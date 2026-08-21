@@ -5,7 +5,11 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type { FormatProfile } from '@jingxu/domain';
-import { InMemoryMediaInvocationRepository, InMemoryMediaRepository } from '@jingxu/application';
+import {
+  InMemoryMediaInvocationRepository,
+  InMemoryMediaRepository,
+  InMemoryVideoMediaRepository,
+} from '@jingxu/application';
 import type { MediaRepositories } from '@jingxu/application';
 import { IMAGE_IPC_CHANNELS } from '@jingxu/contracts';
 import type { IpcEvent } from '../ipc/ipc-boundary';
@@ -137,7 +141,11 @@ const buildHarness = (writeEnabled = true, shotCount = 1): Harness => {
     getFormatProfileRepository: () => repositories.formatProfiles,
     getMediaUnitOfWork: () => ({
       run: <T>(work: (repos: MediaRepositories) => Promise<T>) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: mediaRepository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: mediaRepository,
+          video: new InMemoryVideoMediaRepository(mediaRepository.candidates),
+        }),
     }),
     getProjectUnitOfWork: () => ({
       run: <T>(work: (repos: typeof repositories) => Promise<T>) => work(repositories),

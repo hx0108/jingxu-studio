@@ -54,10 +54,27 @@ import {
   scriptWorkspaceSchema,
   startupStatusSchema,
   storyboardImageStatesSchema,
+  storyboardVideoStatesSchema,
   subscriptionResultSchema,
   updateProjectInputSchema,
   uploadAssetReferenceInputSchema,
   uploadAssetReferenceResultSchema,
+  VIDEO_IPC_CHANNELS,
+  cancelVideoBatchInputSchema,
+  generateVideoCandidatesInputSchema,
+  generateVideosForShotsInputSchema,
+  getVideoTaskInputSchema,
+  listStoryboardVideoStatesInputSchema,
+  listVideoCandidatesInputSchema,
+  selectVideoCandidateInputSchema,
+  videoCandidateViewSchema,
+  type CancelVideoBatchInputDto,
+  type GenerateVideoCandidatesInputDto,
+  type GenerateVideosForShotsInputDto,
+  type GetVideoTaskInputDto,
+  type ListStoryboardVideoStatesInputDto,
+  type ListVideoCandidatesInputDto,
+  type SelectVideoCandidateInputDto,
   type CreateProjectInputDto,
   type GenerateCandidatesForShotsInputDto,
   type GenerateCandidatesInputDto,
@@ -105,6 +122,7 @@ export {
   RUNTIME_IPC_CHANNELS,
   SCRIPT_IPC_CHANNELS,
   STORYBOARD_IPC_CHANNELS,
+  VIDEO_IPC_CHANNELS,
 };
 
 export type InvokeIpc = (channel: string, ...arguments_: readonly unknown[]) => Promise<unknown>;
@@ -332,6 +350,54 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
           await invoke(
             STORYBOARD_IPC_CHANNELS.unlockShot,
             storyboardUnlockShotInputSchema.parse(input),
+          ),
+        ),
+    }),
+    video: Object.freeze({
+      generateVideoCandidates: async (input: GenerateVideoCandidatesInputDto) =>
+        appResultSchema(mediaTaskViewSchema).parse(
+          await invoke(
+            VIDEO_IPC_CHANNELS.generateVideoCandidates,
+            generateVideoCandidatesInputSchema.parse(input),
+          ),
+        ),
+      listVideoCandidates: async (input: ListVideoCandidatesInputDto) =>
+        appResultSchema(videoCandidateViewSchema.array()).parse(
+          await invoke(
+            VIDEO_IPC_CHANNELS.listVideoCandidates,
+            listVideoCandidatesInputSchema.parse(input),
+          ),
+        ),
+      selectVideoCandidate: async (input: SelectVideoCandidateInputDto) =>
+        appResultSchema(videoCandidateViewSchema.array()).parse(
+          await invoke(
+            VIDEO_IPC_CHANNELS.selectVideoCandidate,
+            selectVideoCandidateInputSchema.parse(input),
+          ),
+        ),
+      getVideoTask: async (input: GetVideoTaskInputDto) =>
+        appResultSchema(mediaTaskViewSchema).parse(
+          await invoke(VIDEO_IPC_CHANNELS.getVideoTask, getVideoTaskInputSchema.parse(input)),
+        ),
+      generateVideosForShots: async (input: GenerateVideosForShotsInputDto) =>
+        appResultSchema(mediaBatchViewSchema).parse(
+          await invoke(
+            VIDEO_IPC_CHANNELS.generateVideosForShots,
+            generateVideosForShotsInputSchema.parse(input),
+          ),
+        ),
+      cancelVideoBatch: async (input: CancelVideoBatchInputDto) =>
+        appResultSchema(mediaBatchViewSchema).parse(
+          await invoke(
+            VIDEO_IPC_CHANNELS.cancelVideoBatch,
+            cancelVideoBatchInputSchema.parse(input),
+          ),
+        ),
+      listStoryboardVideoStates: async (input: ListStoryboardVideoStatesInputDto) =>
+        appResultSchema(storyboardVideoStatesSchema).parse(
+          await invoke(
+            VIDEO_IPC_CHANNELS.listStoryboardVideoStates,
+            listStoryboardVideoStatesInputSchema.parse(input),
           ),
         ),
     }),

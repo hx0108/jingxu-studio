@@ -14,8 +14,8 @@ import path from 'node:path';
 
 import { PersistenceRuntimeError } from '../runtime/persistence-error';
 
-/** 媒体命名空间：生成候选图与资产参考图共用同一内容寻址布局（design D3）。 */
-export type MediaNamespace = 'images' | 'assets';
+/** 媒体命名空间：生成候选图与资产参考图共用同一内容寻址布局（design D3）；视频段独立命名空间（shot-video-generation design A1）。 */
+export type MediaNamespace = 'images' | 'assets' | 'videos';
 
 export interface StoredMediaFile {
   readonly byteSize: number;
@@ -30,12 +30,13 @@ const PROJECT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/u;
 const MIME_TO_EXTENSION: Readonly<Record<string, string>> = Object.freeze({
   'image/jpeg': 'jpg',
   'image/png': 'png',
+  'video/mp4': 'mp4',
   'image/webp': 'webp',
 });
 
 /** storage_rel_path 的规范形态；白名单字符集本身排除 `..` 与分隔符注入。 */
 const STORAGE_REL_PATH_PATTERN =
-  /^projects\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})\/(images|assets)\/([0-9a-f]{2})\/([0-9a-f]{64})\.(png|jpg|webp)$/u;
+  /^projects\/([A-Za-z0-9][A-Za-z0-9_-]{0,63})\/(images|assets|videos)\/([0-9a-f]{2})\/([0-9a-f]{64})\.(png|jpg|webp|mp4)$/u;
 
 const isWithin = (root: string, candidate: string): boolean => {
   const relative = path.relative(root, candidate);

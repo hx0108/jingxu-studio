@@ -12,6 +12,7 @@ import type {
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
 import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
+import { InMemoryVideoMediaRepository } from './in-memory-video-media-repository';
 import { createMediaRequestBlueprintBuilder } from './media-request-blueprint';
 
 const NOW = '2026-08-16T00:00:00.000Z';
@@ -84,7 +85,11 @@ const fixture = (snapshot: ScriptWorkspaceSnapshot | null): Fixture => {
   const repository = new InMemoryMediaRepository();
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const workspaceQuery: ScriptWorkspaceQueryPort & {
     snapshot: ScriptWorkspaceSnapshot | null;
@@ -162,7 +167,11 @@ const snapshotOf = (
 const seedTask = async (repository: InMemoryMediaRepository): Promise<string> => {
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const task = await unitOfWork.run(({ media }) =>
     media.insertTask({
@@ -196,7 +205,11 @@ const seedAsset = async (
 ): Promise<void> => {
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const asset = await unitOfWork.run(({ media }) =>
     media.createAsset({
@@ -234,13 +247,23 @@ describe('createMediaRequestBlueprintBuilder', () => {
     await seedAsset(fixture_.repository, 'SCENE', 'scene_alley');
     const blueprint = await fixture_.build(await unitOfWorkTask(fixture_.repository));
     expect(blueprint.modelId).toBe(MODEL_ID);
-    expect(blueprint.size).toEqual({ height: 2560, width: 1440 });
-    expect(blueprint.prompt).toContain('白裙少女');
-    expect(blueprint.prompt).toContain('青石板雨巷');
-    expect(blueprint.referenceImages).toEqual([
+    const request = blueprint.buildRequest('inv_1');
+    expect(request.invocationId).toBe('inv_1');
+    expect(request.size).toEqual({ height: 2560, width: 1440 });
+    expect(request.prompt).toContain('白裙少女');
+    expect(request.prompt).toContain('青石板雨巷');
+    expect(request.referenceImages).toEqual([
       { bytes: Uint8Array.from([1, 2, 3]), mimeType: 'image/png' },
       { bytes: Uint8Array.from([1, 2, 3]), mimeType: 'image/png' },
     ]);
+    expect(JSON.parse(blueprint.submitSnapshotJson)).toEqual({
+      modelId: MODEL_ID,
+      prompt: request.prompt,
+      referenceImageSha256s: [hash64('file_char_hero'), hash64('file_scene_alley')],
+      responseFormat: 'url',
+      size: { height: 2560, width: 1440 },
+      watermark: true,
+    });
     expect(fixture_.reads.map((read) => read.fileSha256)).toEqual([
       hash64('file_char_hero'),
       hash64('file_scene_alley'),
@@ -252,9 +275,10 @@ describe('createMediaRequestBlueprintBuilder', () => {
     await seedTask(fixture_.repository);
     await seedAsset(fixture_.repository, 'CHARACTER', 'char_hero');
     const blueprint = await fixture_.build(await unitOfWorkTask(fixture_.repository));
-    expect(blueprint.prompt).toContain('雨巷中的少女');
-    expect(blueprint.prompt).not.toContain('白裙少女');
-    expect(blueprint.referenceImages).toHaveLength(1);
+    const request = blueprint.buildRequest('inv_1');
+    expect(request.prompt).toContain('雨巷中的少女');
+    expect(request.prompt).not.toContain('白裙少女');
+    expect(request.referenceImages).toHaveLength(1);
   });
 
   it('绑定超过契约上限 14—参考图读取截断到前 14', async () => {
@@ -280,7 +304,7 @@ describe('createMediaRequestBlueprintBuilder', () => {
     }
     const blueprint = await fixture_.build(await unitOfWorkTask(fixture_.repository));
     expect(fixture_.reads).toHaveLength(14);
-    expect(blueprint.referenceImages).toHaveLength(14);
+    expect(blueprint.buildRequest('inv_1').referenceImages).toHaveLength(14);
   });
 
   it('工作区缺失 / 分镜版本不一致—稳定 message 标记', async () => {
@@ -296,7 +320,11 @@ describe('createMediaRequestBlueprintBuilder', () => {
     const repository = fixture_.repository;
     const unitOfWork: MediaUnitOfWorkPort = {
       run: (work) =>
-        work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+        work({
+          invocations: new InMemoryMediaInvocationRepository(),
+          media: repository,
+          video: new InMemoryVideoMediaRepository(),
+        }),
     };
     const task = await unitOfWork.run(({ media }) =>
       media.insertTask({
@@ -317,7 +345,11 @@ describe('createMediaRequestBlueprintBuilder', () => {
 const unitOfWorkTask = async (repository: InMemoryMediaRepository): Promise<MediaTaskRecord> => {
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
-      work({ invocations: new InMemoryMediaInvocationRepository(), media: repository }),
+      work({
+        invocations: new InMemoryMediaInvocationRepository(),
+        media: repository,
+        video: new InMemoryVideoMediaRepository(),
+      }),
   };
   const task = await unitOfWork.run(({ media }) => media.findTaskById('project_1', 'task_1'));
   if (task === null) throw new Error('task_1 not seeded');

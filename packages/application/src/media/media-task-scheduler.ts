@@ -1,7 +1,11 @@
 /**
  * 媒体任务调度器（shot-first-frame-image-generation 任务 4.2，design D4）。
  *
- * 确定性状态机驱动——不调用模型做决策，模型只做单段 HTTP（ImageModelPort）：
+ * shot-video-generation 任务 3.3（design A2）二次实例化：`generation` 选择器
+ * 重定向生成域仓储（缺省图片仓，视频实例注入 video 三表仓）、`recordPollEvidence`
+ * 开关按次落 POLL 证据行（图片缺省关闭）、`resultMetaOf` 摊入成功载荷域扩展键。
+ *
+ * 确定性状态机驱动——不调用模型做决策，模型只做单段 HTTP（MediaModelPort）：
  * - 同项目任务严格串行（与文本 Job 一致的并发模型），不同项目互不阻塞；
  * - 取消先落 CANCELLED 再中止在飞段，迟到下载经相位复核不落库；
  * - 每段 Provider 调用（submit/poll/download）独立超时；
@@ -11,7 +15,6 @@
  *   MEDIA_TASK_INTERRUPTED 标记失败待人工，绝不自动重发（spec 不变式）。
  */
 
-import type { ImageModelPort } from '../ports/image-model/image-model-port';
 import type {
   ImageGenerationRequest,
   ImageGenerationUsage,
@@ -21,18 +24,24 @@ import type {
   ImageTaskSubmission,
 } from '../ports/image-model/image-model-types';
 import type { MediaModelInvocationRecord } from '../ports/media/media-invocation-repository';
+import type { MediaModelPort } from '../ports/media/media-model-port';
 import type {
   MediaCandidateRecord,
   MediaRepositories,
+  MediaRepository,
   MediaTaskPhase,
   MediaTaskRecord,
   MediaUnitOfWorkPort,
+  VideoMediaRepository,
 } from '../ports/media/media-repository';
 import type { MediaRequestBlueprint } from './media-request-blueprint';
 
-/** 候选图字节落盘（组合根包装 ContentAddressedStore.write 的 images 命名空间）。 */
+/**
+ * 候选媒体字节落盘（组合根包装 ContentAddressedStore.write 并按实例绑定
+ * 域命名空间 images|videos——调度器不感知目录布局，视频走 videos）。
+ */
 export interface MediaFileStorePort {
-  readonly writeImage: (input: {
+  readonly writeMedia: (input: {
     readonly bytes: Uint8Array;
     readonly mimeType: string;
     readonly projectId: string;
@@ -65,12 +74,18 @@ export interface MediaTaskScheduler {
   whenIdle(projectId: string): Promise<void>;
 }
 
-export interface MediaTaskSchedulerDependencies {
-  /** 候选图字节落盘（内容寻址，sha256 校验后才登记）。 */
+export interface MediaTaskSchedulerDependencies<R = ImageGenerationRequest> {
+  /** 候选媒体字节落盘（内容寻址，sha256 校验后才登记；命名空间由组合根绑定）。 */
   readonly fileStore: MediaFileStorePort;
+  /**
+   * 生成域仓储选择器（shot-video-generation 任务 3.3，design A2 二次实例化）：
+   * 缺省图片仓；视频实例注入 `(repos) => repos.video`。图片实例行为零变化。
+   */
+  readonly generation?: (repos: MediaRepositories) => MediaRepository | VideoMediaRepository;
   /** 证据快照/响应原文 sha256（组合根注入；本包不引 node: 模块）。 */
   readonly hashText: (input: string) => string;
-  readonly imageModel: ImageModelPort;
+  /** 媒体模型 Port（shot-video-generation 任务 1.2 泛化：图片/视频实例同构注入）。 */
+  readonly model: MediaModelPort<R>;
   /**
    * 项目队列排空后的批次推进钩子（batch-first-frame-generation 任务 3.2）：
    * 返回 true = 已为批次下一镜头建档（新任务已入列），排空循环继续。
@@ -82,9 +97,20 @@ export interface MediaTaskSchedulerDependencies {
   /** 异步 Provider 单候选轮询截止（超时候选级 MODEL_TIMEOUT）。 */
   readonly pollDeadlineMs: number;
   readonly pollIntervalMs: number;
+  /**
+   * 轮询段证据行开关（shot-video-generation design A6「POLL 行数=轮询次数实录」）：
+   * 每次轮询调用两段式落一行（快照只含 providerTaskId，不含凭据）。图片实例
+   * 缺省 false——Seedream 恒 SYNC 无轮询段，证据面零变化。
+   */
+  readonly recordPollEvidence?: boolean;
   readonly requestBuilder: {
-    readonly build: (task: MediaTaskRecord) => Promise<MediaRequestBlueprint>;
+    readonly build: (task: MediaTaskRecord) => Promise<MediaRequestBlueprint<R>>;
   };
+  /**
+   * 成功载荷域扩展通道：返回键摊入 completeCandidateSucceeded 入参（视频实例
+   * 注入 actualDurationSec；图片缺省空对象零变化）。
+   */
+  readonly resultMetaOf?: (result: ImageResultRef) => Readonly<Record<string, unknown>>;
   /** 单段 Provider 调用（submit/poll/download）超时上限。 */
   readonly segmentTimeoutMs: number;
   readonly sleep: (ms: number) => Promise<void>;
@@ -118,20 +144,28 @@ type SubmitOutcomeEvidence = Readonly<{
   usage: ImageGenerationUsage;
 }>;
 
-export const createMediaTaskScheduler = (
-  dependencies: MediaTaskSchedulerDependencies,
+export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
+  dependencies: MediaTaskSchedulerDependencies<R>,
 ): MediaTaskScheduler => {
   const { mediaUnitOfWork } = dependencies;
   const drains = new Map<string, Promise<void>>();
   const aborts = new Map<string, AbortController>();
   let stopped = false;
+  // 生成域重定向（design A2）：图片实例缺省 repos.media，视频实例注入 repos.video。
+  const generationOf = dependencies.generation ?? ((repos: MediaRepositories) => repos.media);
+  const recordPollEvidence = dependencies.recordPollEvidence ?? false;
+  const resultMetaOf = dependencies.resultMetaOf ?? ((): Readonly<Record<string, unknown>> => ({}));
+  /** 生成域仓储事务入口（与全仓储共用同一 UnitOfWork/FIFO）。 */
+  const runGeneration = <T>(
+    work: (generation: MediaRepository | VideoMediaRepository) => Promise<T>,
+  ): Promise<T> => mediaUnitOfWork.run((repos) => work(generationOf(repos)));
 
   const readTask = (projectId: string, taskId: string): Promise<MediaTaskRecord | null> =>
-    mediaUnitOfWork.run(({ media }) => media.findTaskById(projectId, taskId));
+    runGeneration((generation) => generation.findTaskById(projectId, taskId));
 
   const attemptFailTask = async (taskId: string, errorCode: string): Promise<void> => {
     try {
-      await mediaUnitOfWork.run(({ media }) => media.failTask(taskId, errorCode));
+      await runGeneration((generation) => generation.failTask(taskId, errorCode));
     } catch {
       // 已终态或持久化异常：排空循环的停滞护栏负责暴露后者。
     }
@@ -139,7 +173,7 @@ export const createMediaTaskScheduler = (
 
   const finishDriving = async (taskId: string): Promise<void> => {
     try {
-      await mediaUnitOfWork.run(({ media }) => media.completeTask(taskId));
+      await runGeneration((generation) => generation.completeTask(taskId));
     } catch {
       // 已终态（取消/失败竞态）——幂等收尾。
     }
@@ -164,7 +198,7 @@ export const createMediaTaskScheduler = (
   ): Promise<boolean> =>
     mediaUnitOfWork
       .run(async (repos) => {
-        const fresh = await repos.media.findTaskById(projectId, taskId);
+        const fresh = await generationOf(repos).findTaskById(projectId, taskId);
         if (fresh === null || isTerminal(fresh.phase)) return false;
         await write(repos);
         return true;
@@ -238,16 +272,16 @@ export const createMediaTaskScheduler = (
       await stopForAbort(projectId, taskId);
       return true;
     }
-    const normalized = dependencies.imageModel.normalizeError(caught);
+    const normalized = dependencies.model.normalizeError(caught);
     if (normalized.code === 'MODEL_CANCELLED') {
       await stopForAbort(projectId, taskId);
       return true;
     }
     // Provider 归一化错误：候选级失败，同轮其余候选继续（spec 不变式）；
     // 失败段证据行与候选终态同一事务收尾（design D4，原文入 blob）。
-    const evidence = dependencies.imageModel.evidenceOf(caught);
+    const evidence = dependencies.model.evidenceOf(caught);
     await writeCandidateOutcome(projectId, taskId, async (repos) => {
-      await repos.media.completeCandidateFailed(candidateId, {
+      await generationOf(repos).completeCandidateFailed(candidateId, {
         errorCode: normalized.code,
         invocationEvidenceRef: submitRowId,
       });
@@ -301,7 +335,7 @@ export const createMediaTaskScheduler = (
     try {
       await mediaUnitOfWork.run(async (repos) => {
         // 懒转移 DOWNLOADING（幂等）：首次进入下载段的候选负责推进相位。
-        await repos.media.markTaskDownloading(task.id);
+        await generationOf(repos).markTaskDownloading(task.id);
         await repos.invocations.insert({
           candidateId: candidate.id,
           id: downloadInvocationId,
@@ -316,12 +350,12 @@ export const createMediaTaskScheduler = (
       await stopForAbort(task.projectId, task.id);
       return false;
     }
-    let stored: Awaited<ReturnType<MediaFileStorePort['writeImage']>>;
+    let stored: Awaited<ReturnType<MediaFileStorePort['writeMedia']>>;
     try {
       const download = await runSegment(signal, (segment) =>
-        dependencies.imageModel.download(result, segment),
+        dependencies.model.download(result, segment),
       );
-      stored = await dependencies.fileStore.writeImage({
+      stored = await dependencies.fileStore.writeMedia({
         bytes: download.bytes,
         mimeType: download.mimeType,
         projectId: task.projectId,
@@ -348,7 +382,7 @@ export const createMediaTaskScheduler = (
         await repos.invocations.listByTaskId(task.id),
         candidate.id,
       );
-      await repos.media.completeCandidateSucceeded(candidate.id, {
+      await generationOf(repos).completeCandidateSucceeded(candidate.id, {
         byteSize: stored.byteSize,
         fileSha256: stored.sha256,
         height: result.height,
@@ -356,6 +390,8 @@ export const createMediaTaskScheduler = (
         mimeType: stored.mimeType,
         storageRelPath: stored.storageRelPath,
         width: result.width,
+        // 域扩展通道（任务 3.3）：视频实例由此携带 actualDurationSec，图片摊空对象。
+        ...resultMetaOf(result),
       });
       if (submitRowId !== null) {
         await finishSubmitSucceeded(repos, submitRowId, submitOutcome);
@@ -383,10 +419,34 @@ export const createMediaTaskScheduler = (
         await stopForAbort(task.projectId, task.id);
         return false;
       }
+      // 每次轮询调用两段式落 POLL 行（design A6「POLL 行数=轮询次数实录」）；
+      // 图片实例缺省不记录（Seedream 恒 SYNC 无轮询段）。快照只含 providerTaskId。
+      let pollRowId: string | null = null;
+      if (recordPollEvidence) {
+        const pollInvocationId = dependencies.newId();
+        pollRowId = pollInvocationId;
+        const pollSnapshot = JSON.stringify({ providerTaskId });
+        try {
+          await mediaUnitOfWork.run(({ invocations }) =>
+            invocations.insert({
+              candidateId: candidate.id,
+              id: pollInvocationId,
+              mediaTaskId: task.id,
+              modelId: candidate.modelId,
+              requestSha256: dependencies.hashText(pollSnapshot),
+              requestSnapshotJson: pollSnapshot,
+              segmentKind: 'POLL',
+            }),
+          );
+        } catch {
+          await stopForAbort(task.projectId, task.id);
+          return false;
+        }
+      }
       let status: ImageTaskStatus;
       try {
         status = await runSegment(signal, (segment) =>
-          dependencies.imageModel.poll(providerTaskId, segment),
+          dependencies.model.poll(providerTaskId, segment),
         );
       } catch (caught) {
         const stop = await onSegmentFailure(
@@ -394,11 +454,24 @@ export const createMediaTaskScheduler = (
           task.id,
           candidate.id,
           submitRef,
-          // 轮询段无证据行（POLL 枚举预留，Seedream 恒 SYNC 不触发）。
-          null,
+          pollRowId,
           caught,
         );
         return !stop;
+      }
+      if (pollRowId !== null) {
+        // 轮询 HTTP 调用成功即收尾（PENDING 也是成功的轮询）；生成结局由候选行承载。
+        try {
+          await mediaUnitOfWork.run(({ invocations }) =>
+            invocations.finishTerminal(pollRowId, {
+              status: 'SUCCEEDED',
+              finishedAt: new Date(dependencies.nowMs()).toISOString(),
+            }),
+          );
+        } catch {
+          await stopForAbort(task.projectId, task.id);
+          return false;
+        }
       }
       if (status.state === 'SUCCEEDED') {
         return settleDownload(task, candidate, submitRef, status.result, signal, {
@@ -408,16 +481,16 @@ export const createMediaTaskScheduler = (
         });
       }
       if (status.state === 'FAILED') {
-        return writeCandidateOutcome(task.projectId, task.id, ({ media }) =>
-          media.completeCandidateFailed(candidate.id, {
+        return writeCandidateOutcome(task.projectId, task.id, (repos) =>
+          generationOf(repos).completeCandidateFailed(candidate.id, {
             errorCode: status.errorCode,
             invocationEvidenceRef: submitRef,
           }),
         );
       }
       if (dependencies.nowMs() >= deadline) {
-        return writeCandidateOutcome(task.projectId, task.id, ({ media }) =>
-          media.completeCandidateFailed(candidate.id, {
+        return writeCandidateOutcome(task.projectId, task.id, (repos) =>
+          generationOf(repos).completeCandidateFailed(candidate.id, {
             errorCode: 'MODEL_TIMEOUT',
             invocationEvidenceRef: submitRef,
           }),
@@ -430,8 +503,8 @@ export const createMediaTaskScheduler = (
   /** 证据驱动循环：逐个推进 PENDING 且已留证候选；证据缺失即按中断停机。 */
   const driveFromEvidence = async (task: MediaTaskRecord, signal: AbortSignal): Promise<void> => {
     for (;;) {
-      const candidates = await mediaUnitOfWork.run(({ media }) =>
-        media.listCandidates(task.shotId),
+      const candidates = await runGeneration((generation) =>
+        generation.listCandidates(task.shotId),
       );
       const pending = candidates.filter(
         (entry) => entry.roundNo === task.roundNo && entry.status === 'PENDING',
@@ -455,7 +528,7 @@ export const createMediaTaskScheduler = (
     pending: readonly MediaCandidateRecord[],
     signal: AbortSignal,
   ): Promise<void> => {
-    let blueprint: MediaRequestBlueprint;
+    let blueprint: MediaRequestBlueprint<R>;
     try {
       blueprint = await dependencies.requestBuilder.build(task);
     } catch {
@@ -466,22 +539,10 @@ export const createMediaTaskScheduler = (
     const providerTaskIds = new Map<string, string>();
     for (const candidate of pending) {
       const invocationId = dependencies.newId();
-      const request: ImageGenerationRequest = {
-        invocationId,
-        modelId: blueprint.modelId,
-        prompt: blueprint.prompt,
-        referenceImages: blueprint.referenceImages,
-        size: blueprint.size,
-      };
-      // D4 第一段：submit 段前短事务插 SUBMIT STARTED（快照=D3 口径，不含字节与凭据）。
-      const submitSnapshot = JSON.stringify({
-        modelId: blueprint.modelId,
-        prompt: blueprint.prompt,
-        referenceImageSha256s: blueprint.referenceImageSha256s,
-        responseFormat: 'url',
-        size: blueprint.size,
-        watermark: true,
-      });
+      const request = blueprint.buildRequest(invocationId);
+      // D4 第一段：submit 段前短事务插 SUBMIT STARTED（快照=D3 口径，不含字节与凭据；
+      // 快照字段集由域构建器产出——视频含首帧哈希/时长，图片含参考图哈希/尺寸）。
+      const submitSnapshot = blueprint.submitSnapshotJson;
       try {
         await mediaUnitOfWork.run(({ invocations }) =>
           invocations.insert({
@@ -501,7 +562,7 @@ export const createMediaTaskScheduler = (
       let submission: ImageTaskSubmission;
       try {
         submission = await runSegment(signal, (segment) =>
-          dependencies.imageModel.submit(request, segment),
+          dependencies.model.submit(request, segment),
         );
       } catch (caught) {
         const stop = await onSegmentFailure(
@@ -543,8 +604,8 @@ export const createMediaTaskScheduler = (
       mode = 'ASYNC';
       try {
         // spec 不变式：taskId 先持久化再轮询；assign 失败即留证缺失，按中断停机。
-        await mediaUnitOfWork.run(({ media }) =>
-          media.assignCandidateProviderTask(candidate.id, submission.providerTaskId),
+        await runGeneration((generation) =>
+          generation.assignCandidateProviderTask(candidate.id, submission.providerTaskId),
         );
         providerTaskIds.set(candidate.id, submission.providerTaskId);
       } catch {
@@ -556,7 +617,7 @@ export const createMediaTaskScheduler = (
       const firstTaskId = [...providerTaskIds.values()][0];
       if (firstTaskId !== undefined) {
         try {
-          await mediaUnitOfWork.run(({ media }) => media.markTaskPolling(task.id, firstTaskId));
+          await runGeneration((generation) => generation.markTaskPolling(task.id, firstTaskId));
         } catch {
           // 已转移/终态竞态：证据已落，继续由证据驱动接管。
         }
@@ -570,7 +631,7 @@ export const createMediaTaskScheduler = (
   const advance = async (projectId: string, taskId: string, signal: AbortSignal): Promise<void> => {
     const task = await readTask(projectId, taskId);
     if (task === null || isTerminal(task.phase)) return;
-    const candidates = await mediaUnitOfWork.run(({ media }) => media.listCandidates(task.shotId));
+    const candidates = await runGeneration((generation) => generation.listCandidates(task.shotId));
     const pending = candidates.filter(
       (entry) => entry.roundNo === task.roundNo && entry.status === 'PENDING',
     );
@@ -585,7 +646,7 @@ export const createMediaTaskScheduler = (
         const firstTaskId = evidenced[0]?.providerTaskId;
         if (typeof firstTaskId === 'string') {
           try {
-            await mediaUnitOfWork.run(({ media }) => media.markTaskPolling(taskId, firstTaskId));
+            await runGeneration((generation) => generation.markTaskPolling(taskId, firstTaskId));
           } catch {
             // 已转移/终态竞态：证据驱动自行接管。
           }
@@ -625,7 +686,7 @@ export const createMediaTaskScheduler = (
     let lastTaskId: string | null = null;
     let repeats = 0;
     for (;;) {
-      const tasks = await mediaUnitOfWork.run(({ media }) => media.listUnfinishedTasks(projectId));
+      const tasks = await runGeneration((generation) => generation.listUnfinishedTasks(projectId));
       if (stopped) return;
       const next = tasks[0];
       if (next === undefined) {
@@ -652,7 +713,7 @@ export const createMediaTaskScheduler = (
     cancel: async (projectId, taskId) => {
       // 先落 CANCELLED（幂等）再中止在飞段；迟到下载由事务内相位复核拦下。
       try {
-        await mediaUnitOfWork.run(({ media }) => media.cancelTask(taskId));
+        await runGeneration((generation) => generation.cancelTask(taskId));
       } catch {
         // 已终态——幂等取消。
       }
@@ -666,11 +727,11 @@ export const createMediaTaskScheduler = (
     },
 
     recover: async (projectId) => {
-      const tasks = await mediaUnitOfWork.run(({ media }) => media.listUnfinishedTasks(projectId));
+      const tasks = await runGeneration((generation) => generation.listUnfinishedTasks(projectId));
       const outcomes: MediaRecoveryOutcome[] = [];
       for (const task of tasks) {
-        const candidates = await mediaUnitOfWork.run(({ media }) =>
-          media.listCandidates(task.shotId),
+        const candidates = await runGeneration((generation) =>
+          generation.listCandidates(task.shotId),
         );
         const pending = candidates.filter(
           (entry) => entry.roundNo === task.roundNo && entry.status === 'PENDING',

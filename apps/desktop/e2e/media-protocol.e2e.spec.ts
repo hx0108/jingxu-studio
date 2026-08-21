@@ -96,10 +96,37 @@ test('§5.2 受限取图协议—越权标识一律拒绝—CSP 阻止外部图�
       uri: 'https://external.invalid/csp-probe.png',
     });
 
+    // 视频同样只能由受限 jingxu: 协议提供；外部 URL 不可借 <video> 绕过 CSP。
+    const mediaViolation = await page.evaluate(async () => {
+      const reported = new Promise<{ readonly directive: string; readonly uri: string }>(
+        (resolve) => {
+          document.addEventListener(
+            'securitypolicyviolation',
+            (event) => {
+              resolve({
+                directive: event.violatedDirective,
+                uri: event.blockedURI,
+              });
+            },
+            { once: true },
+          );
+        },
+      );
+      const video = document.createElement('video');
+      video.src = 'https://external.invalid/csp-probe.mp4';
+      document.body.append(video);
+      return reported;
+    });
+    expect(mediaViolation).toMatchObject({
+      directive: 'media-src',
+      uri: 'https://external.invalid/csp-probe.mp4',
+    });
+
     const policy = await page.evaluate(() =>
       document.querySelector('meta[http-equiv="Content-Security-Policy"]')?.getAttribute('content'),
     );
     expect(policy).toContain('img-src jingxu:');
+    expect(policy).toContain('media-src jingxu:');
     expect(policy).not.toMatch(/img-src[^;]*https?/u);
   } finally {
     await application.close();

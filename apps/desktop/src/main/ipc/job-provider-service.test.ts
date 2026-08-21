@@ -537,3 +537,133 @@ describe('createJobProviderIpcService — 图片档分发（image-credential-man
     expect(textResult.error.userAction).not.toContain('图片');
   });
 });
+
+describe('createJobProviderIpcService — 视频档分发（shot-video-generation 4.4）', () => {
+  const VIDEO_PROFILE_ID = 'profile-video-primary';
+  const videoView: ProviderProfileView = {
+    configured: false,
+    enabled: true,
+    last4: null,
+    lastValidatedAt: null,
+    modelId: 'doubao-seedance-1-0-lite-i2v-250428',
+    modelSnapshotDate: '2025-04-28',
+    provider: 'VOLCARK_SEEDANCE',
+    region: 'cn-beijing',
+    versionId: VIDEO_PROFILE_ID,
+    workspaceId: 'ark',
+  };
+
+  const createVideoHarness = () => {
+    const text = {
+      getProfile: vi.fn(() => Promise.resolve(configuredView)),
+      saveCredential: vi.fn(() => Promise.resolve(configuredView)),
+      testCredential: vi.fn((): Promise<CredentialCheck> => Promise.resolve({ ok: true })),
+      deleteCredential: vi.fn(() => Promise.resolve(defaultView)),
+    };
+    const image = {
+      getProfile: vi.fn(() => Promise.resolve(configuredView)),
+      saveCredential: vi.fn(() => Promise.resolve(configuredView)),
+      testCredential: vi.fn((): Promise<CredentialCheck> => Promise.resolve({ ok: true })),
+      deleteCredential: vi.fn(() => Promise.resolve(configuredView)),
+    };
+    const video = {
+      getProfile: vi.fn(() => Promise.resolve(videoView)),
+      saveCredential: vi.fn(() => Promise.resolve(videoView)),
+      testCredential: vi.fn((): Promise<CredentialCheck> => Promise.resolve({ ok: true })),
+      deleteCredential: vi.fn(() => Promise.resolve(videoView)),
+    };
+    const service = createJobProviderIpcService({
+      image: { profileId: 'profile-image-primary', service: image as unknown as ProviderService },
+      jobs: {} as JobService,
+      newSubscriptionId: () => SUBSCRIPTION_ID,
+      newTraceId: () => TRACE_ID,
+      provider: text as unknown as ProviderService,
+      video: { profileId: VIDEO_PROFILE_ID, service: video as unknown as ProviderService },
+    });
+    return { image, service, text, video };
+  };
+
+  it('视频档 profileId—五通道分发到视频 ProviderService，图片与文本档不受影响', async () => {
+    const h = createVideoHarness();
+    const videoGet: ProviderGetInputDto = { profileId: VIDEO_PROFILE_ID };
+    const videoSaveCredential: ProviderCredentialCommandDto = {
+      apiKey: 'ark-secret-1234567890',
+      expectedVersionId: VIDEO_PROFILE_ID,
+      profileId: VIDEO_PROFILE_ID,
+      requestId: 'request-video-save',
+    };
+    const videoMutation: ProviderMutationInputDto = {
+      expectedVersionId: VIDEO_PROFILE_ID,
+      profileId: VIDEO_PROFILE_ID,
+      requestId: 'request-video-mutate',
+    };
+
+    await expect(h.service.invoke(PROVIDER_IPC_CHANNELS.getProfile, videoGet)).resolves.toEqual({
+      data: expectedDto(videoView),
+      ok: true,
+    });
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.saveCredential, videoSaveCredential),
+    ).resolves.toEqual({ data: expectedDto(videoView), ok: true });
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.testCredential, videoMutation),
+    ).resolves.toEqual({ data: expectedDto(videoView), ok: true });
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.deleteCredential, videoMutation),
+    ).resolves.toEqual({ data: expectedDto(videoView), ok: true });
+
+    expect(h.video.getProfile).toHaveBeenCalledWith(VIDEO_PROFILE_ID);
+    expect(h.video.saveCredential).toHaveBeenCalledWith(VIDEO_PROFILE_ID, 'ark-secret-1234567890');
+    expect(h.video.testCredential).toHaveBeenCalledWith(VIDEO_PROFILE_ID);
+    expect(h.video.deleteCredential).toHaveBeenCalledWith(VIDEO_PROFILE_ID);
+    expect(h.image.getProfile).not.toHaveBeenCalled();
+    expect(h.text.saveCredential).not.toHaveBeenCalled();
+    expect(h.text.testCredential).not.toHaveBeenCalled();
+  });
+
+  it('视频档解密失败—MODEL_CREDENTIAL_INVALID—文案按档覆盖并指向视频配置入口', async () => {
+    const h = createVideoHarness();
+    h.video.testCredential.mockResolvedValueOnce({
+      detail: 'CREDENTIAL_NOT_FOUND',
+      errorCode: 'MODEL_CREDENTIAL_INVALID' as const,
+      ok: false,
+    });
+    const videoMutation: ProviderMutationInputDto = {
+      expectedVersionId: VIDEO_PROFILE_ID,
+      profileId: VIDEO_PROFILE_ID,
+      requestId: 'request-video-test',
+    };
+
+    const result = (await h.service.invoke(
+      PROVIDER_IPC_CHANNELS.testCredential,
+      videoMutation,
+    )) as {
+      ok: false;
+      error: { code: string; message: string; userAction: string | null };
+    };
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('MODEL_CREDENTIAL_INVALID');
+    expect(result.error.message).toContain('密文无法解密');
+    expect(result.error.userAction).toContain('视频 Provider 设置');
+    // 存储层原因码不回显。
+    expect(JSON.stringify(result)).not.toContain('CREDENTIAL_NOT_FOUND');
+
+    // 图片档同码文案仍指向图片配置入口（三档覆盖互不串扰）。
+    const imageMutation: ProviderMutationInputDto = {
+      expectedVersionId: 'profile-image-primary',
+      profileId: 'profile-image-primary',
+      requestId: 'request-image-test',
+    };
+    h.image.testCredential.mockResolvedValueOnce({
+      detail: null,
+      errorCode: 'MODEL_CREDENTIAL_INVALID' as const,
+      ok: false,
+    });
+    const imageResult = (await h.service.invoke(
+      PROVIDER_IPC_CHANNELS.testCredential,
+      imageMutation,
+    )) as { ok: false; error: { userAction: string | null } };
+    expect(imageResult.error.userAction).toContain('图片 Provider 设置');
+  });
+});

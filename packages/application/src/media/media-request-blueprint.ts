@@ -12,7 +12,10 @@
 
 import type { FormatProfileRepository } from '../ports/project/format-profile-repository';
 import type { MediaTaskRecord, MediaUnitOfWorkPort } from '../ports/media/media-repository';
-import type { ImageReferencePayload } from '../ports/image-model/image-model-types';
+import type {
+  ImageGenerationRequest,
+  ImageReferencePayload,
+} from '../ports/image-model/image-model-types';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
 import {
   buildFirstFramePrompt,
@@ -20,14 +23,16 @@ import {
   resolveImageSize,
 } from './media-generation-prompt';
 
-/** 调度器按候选落位的 Provider 请求公共部分（design D2：业务层组装，Adapter 只映射）。 */
-export interface MediaRequestBlueprint {
+/**
+ * 调度器提交计划（shot-video-generation 任务 1.2 泛化）：请求载荷与证据快照
+ * 由域构建器产出——调度器只按候选落位 invocationId，不感知图片/视频专属字段。
+ */
+export interface MediaRequestBlueprint<R = ImageGenerationRequest> {
   readonly modelId: string;
-  readonly prompt: string;
-  /** 参考图 CAS 身份清单（与 referenceImages 同序）——证据快照只存哈希不存字节（D3）。 */
-  readonly referenceImageSha256s: readonly string[];
-  readonly referenceImages: readonly ImageReferencePayload[];
-  readonly size: Readonly<{ height: number; width: number }>;
+  /** 逐候选 Provider 请求（invocationId 由调度器注入＝SUBMIT 证据行 id）。 */
+  readonly buildRequest: (invocationId: string) => R;
+  /** submit 段证据快照（确定性 JSON；只含参数/哈希，不含字节与凭据）。 */
+  readonly submitSnapshotJson: string;
 }
 
 /**
@@ -151,12 +156,25 @@ export const createMediaRequestBlueprintBuilder = (
       referenceImageSha256s.push(version.fileSha256);
     }
 
+    const prompt = buildFirstFramePrompt({ boundCharacters, creative, scene });
     return {
+      buildRequest: (invocationId) => ({
+        invocationId,
+        modelId,
+        prompt,
+        referenceImages,
+        size,
+      }),
       modelId,
-      prompt: buildFirstFramePrompt({ boundCharacters, creative, scene }),
-      referenceImageSha256s,
-      referenceImages,
-      size,
+      // 字段序冻结（requestSha256 稳定性）：modelId/prompt/参考图哈希/responseFormat/size/watermark。
+      submitSnapshotJson: JSON.stringify({
+        modelId,
+        prompt,
+        referenceImageSha256s,
+        responseFormat: 'url',
+        size,
+        watermark: true,
+      }),
     };
   },
 });

@@ -1,4 +1,5 @@
 export type { MediaRepositories } from './media-repository';
+export type { MediaModelPort } from './media-model-port';
 export type {
   MediaInvocationRepository,
   MediaInvocationSegment,
@@ -16,8 +17,11 @@ export type {
   MediaBatchMemberTask,
   MediaBatchRecord,
   MediaBatchStatus,
+  MediaCandidateInsertInput,
   MediaCandidateRecord,
   MediaCandidateStatus,
+  MediaCandidateSucceededInput,
+  MediaGenerationRepository,
   MediaRepository,
   MediaStaleAffectedShot,
   MediaStoredFileRef,
@@ -25,4 +29,8 @@ export type {
   MediaTaskPhase,
   MediaTaskRecord,
   MediaUnitOfWorkPort,
+  VideoCandidateInsertInput,
+  VideoCandidateRecord,
+  VideoCandidateSucceededInput,
+  VideoMediaRepository,
 } from './media-repository';

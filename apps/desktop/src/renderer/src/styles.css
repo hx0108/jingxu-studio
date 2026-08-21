@@ -369,9 +369,39 @@ textarea {
   color: #ff8f82;
 }
 
+.status-video_ready {
+  color: #8de7ae;
+}
+
+.status-video_active,
+.status-video_queued {
+  color: #9fc6ff;
+}
+
+.status-video_failed {
+  color: #ff8f82;
+}
+
 .shot-first-frame-badge {
   grid-column: 1 / -1;
   justify-self: start;
+}
+
+.shot-video-badge {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+.video-panel video {
+  width: 100%;
+  max-height: 260px;
+  border-radius: 8px;
+  background: #090b12;
+}
+
+.selected-first-frame-preview img {
+  max-width: min(260px, 100%);
+  border-radius: 8px;
 }
 
 .batch-progress {

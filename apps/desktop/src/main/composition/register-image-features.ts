@@ -270,11 +270,11 @@ export const createImageFeatureRegistration = ({
       });
       const scheduler = createMediaTaskScheduler({
         fileStore: {
-          writeImage: ({ bytes, mimeType, projectId }) =>
+          writeMedia: ({ bytes, mimeType, projectId }) =>
             store.write({ bytes, mimeType, namespace: 'images', projectId }),
         },
         hashText: (value) => createHash('sha256').update(value, 'utf8').digest('hex'),
-        imageModel,
+        model: imageModel,
         mediaUnitOfWork,
         newId: randomUUID,
         nowMs: Date.now,
