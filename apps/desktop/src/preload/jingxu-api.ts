@@ -60,6 +60,7 @@ import {
   uploadAssetReferenceInputSchema,
   uploadAssetReferenceResultSchema,
   VIDEO_IPC_CHANNELS,
+  TRANSFER_IPC_CHANNELS,
   cancelVideoBatchInputSchema,
   generateVideoCandidatesInputSchema,
   generateVideosForShotsInputSchema,
@@ -68,6 +69,10 @@ import {
   listVideoCandidatesInputSchema,
   selectVideoCandidateInputSchema,
   videoCandidateViewSchema,
+  transferExportProjectInputSchema,
+  transferImportProjectInputSchema,
+  transferExportResultSchema,
+  transferImportResultSchema,
   type CancelVideoBatchInputDto,
   type GenerateVideoCandidatesInputDto,
   type GenerateVideosForShotsInputDto,
@@ -111,6 +116,8 @@ import {
   type StartupCommandDto,
   type UpdateProjectInputDto,
   type UploadAssetReferenceInputDto,
+  type TransferExportProjectInputDto,
+  type TransferImportProjectInputDto,
 } from '@jingxu/contracts';
 
 export {
@@ -123,6 +130,7 @@ export {
   SCRIPT_IPC_CHANNELS,
   STORYBOARD_IPC_CHANNELS,
   VIDEO_IPC_CHANNELS,
+  TRANSFER_IPC_CHANNELS,
 };
 
 export type InvokeIpc = (channel: string, ...arguments_: readonly unknown[]) => Promise<unknown>;
@@ -398,6 +406,22 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
           await invoke(
             VIDEO_IPC_CHANNELS.listStoryboardVideoStates,
             listStoryboardVideoStatesInputSchema.parse(input),
+          ),
+        ),
+    }),
+    transfer: Object.freeze({
+      exportProject: async (input: TransferExportProjectInputDto) =>
+        appResultSchema(transferExportResultSchema).parse(
+          await invoke(
+            TRANSFER_IPC_CHANNELS.exportProject,
+            transferExportProjectInputSchema.parse(input),
+          ),
+        ),
+      importProject: async (input: TransferImportProjectInputDto) =>
+        appResultSchema(transferImportResultSchema).parse(
+          await invoke(
+            TRANSFER_IPC_CHANNELS.importProject,
+            transferImportProjectInputSchema.parse(input),
           ),
         ),
     }),

@@ -93,6 +93,7 @@ describe('window.jingxu 白名单 Contract', () => {
       'runtime',
       'script',
       'storyboard',
+      'transfer',
       'video',
     ]);
     expect(Object.isFrozen(api.storyboard)).toBe(true);
@@ -164,6 +165,7 @@ describe('window.jingxu 白名单 Contract', () => {
       expect(Reflect.has(api.events, methodName)).toBe(false);
       expect(Reflect.has(api.image, methodName)).toBe(false);
       expect(Reflect.has(api.video, methodName)).toBe(false);
+      expect(Reflect.has(api.transfer, methodName)).toBe(false);
     },
   );
 
@@ -512,6 +514,15 @@ describe('window.jingxu 白名单 Contract', () => {
     ]);
     for (const forbidden of ['path', 'sql', 'database', 'repository', 'node', 'persistence']) {
       expect(Reflect.has(api.project, forbidden)).toBe(false);
+    }
+  });
+
+  it('Transfer Change—transfer 恰有两个冻结方法且不暴露路径或存储入口', () => {
+    const api = createJingxuApi(vi.fn());
+    expect(Object.isFrozen(api.transfer)).toBe(true);
+    expect(Object.keys(api.transfer).sort()).toEqual(['exportProject', 'importProject']);
+    for (const forbidden of ['path', 'sql', 'database', 'repository', 'node', 'persistence']) {
+      expect(Reflect.has(api.transfer, forbidden)).toBe(false);
     }
   });
 
