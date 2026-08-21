@@ -162,6 +162,8 @@ flowchart LR
 
 `staged-script-generation` Active Change 已在代码层接入 SourceInput/Consent/Episode、五阶段不可变版本链、五份 `*/v1` Prompt、Script JobRunner/恢复、`script` IPC 与剧本工作区，并通过 `openspec validate --strict`、全量门禁与 clean Windows x64 packaged smoke（离线 Mock）。真实 Qwen 连通性、真实用户试用和 AC-V1-01 完整链路仍待人工核验。
 
+`project-transfer-import-export` 已在代码层接入项目快照导入导出（2026-08-22）：ProjectTransferBundle 1.0.0 CURRENT_ONLY 组装与 staging 校验链、NEW_PROJECT（ID Mapping + 引用重写）/RETURN_TO_ORIGIN（基线规范化比对 + expected head 校验）双模式同事务导入（中途失败零残留）、0016 request_id partial 唯一索引幂等、`transfer` IPC 白名单 + Main 系统 Dialog 原子文件 sink、项目列表/设置双入口 UI，路径红线（文件路径不进 Renderer/回执/审计）经专用 E2E 与关进程查库审计断言钉死。全量门禁（Unit 879 / Contract 147 / Integration 230 / E2E 25 passed + 3 skipped / Windows x64 packaged smoke）与 `openspec validate --strict` 通过；评测业务用例与 AC-V1 验收仍待后续 Change。
+
 ---
 
 ## 4. 推荐技术栈与工程结构
@@ -761,6 +763,8 @@ erDiagram
 | `evaluation_samples` | `id PK, project_id FK NULL, sample_type, input_json, expected_json, authorization_status, dedup_key, dataset_split, created_at` | V1 20–40 个结构化分镜样本 |
 | `evaluation_annotations` | `id PK, sample_id FK, guideline_version, label_json, rationale, annotator, created_at` | 保存人工结论和依据 |
 | `analytics_events` | `id PK, project_id FK NULL, event_name, session_id, properties_json, occurred_at` | V1 仅本地；用户内容、Prompt、密钥不得进入 properties |
+
+`project-transfer-import-export`（2026-08-22）为上表 `export_records`/`import_records` 增补迁移 0016：两表各加 `request_id` 与 `result_json`（回放摘要，`json_valid` 约束；历史行保持 NULL 不回填），并建 partial 唯一索引（仅 `status='SUCCEEDED' AND request_id IS NOT NULL` 行按 `request_id` 唯一，FAILED 证据行可与成功行同 request_id 并存）；Transfer 导入导出经此实现 requestId 幂等（同 requestId 同载荷重放返回原摘要，载荷漂移报 `TRANSFER_IDEMPOTENCY_CONFLICT`）。
 
 `generation_constraints.budget_estimate` 由领域校验器执行以下不变量：
 
