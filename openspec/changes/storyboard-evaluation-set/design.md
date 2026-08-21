@@ -40,12 +40,12 @@ Renderer 评测集页面（全局主导航 + 项目菜单筛选入口）
 `expected_json` 形状：
 
 ```json
-{ "acceptable": false, "expected_issue_codes": ["EVAL_RULE_MISSING_REQUIRED"], "reference_contract": null }
+{ "acceptable": false, "expectedIssueCodes": ["EVAL_ISSUE_MISSING_REQUIRED"], "referenceContract": null }
 ```
 
 - `candidate.kind` ∈ `SCRIPT_STAGE | SHOT_CONTRACT | EPISODE_STORYBOARD`（对齐 0001 `sample_type` CHECK）。
 - `context` 按 kind 裁剪：SCRIPT_STAGE 仅需阶段标识；SHOT_CONTRACT 需 dialogue_render_mode/characters/scenes/previous_shot_summary；EPISODE_STORYBOARD 需 target_duration_sec 与角色/场景清单（序列规则）。
-- 问题类型常量表（九类 ↔ 稳定 issue code 映射）随 contracts 导出，供种子、标注与 UI 共用。
+- 问题类型常量表（九类 ↔ `EVAL_ISSUE_*` 稳定码映射）随 contracts 导出（`evaluationIssueCodeSchema`），供种子、标注与 UI 共用；另有引擎级补充码 `EVAL_ISSUE_SCHEMA_INVALID`（信封结构非法）与 `EVAL_ISSUE_PRODUCIBILITY_WARN`（可生产性 WARN 如正脸长对白）。
 
 ## Application Ports
 
@@ -56,15 +56,16 @@ Renderer 评测集页面（全局主导航 + 项目菜单筛选入口）
 - `EvaluationUnitOfWorkPort.run(repositories => ...)`：`EvaluationRepositories` 含 `samples`（list/insert/delete/find-by-dedup）与 `annotations`（list/insert）。
 - 不暴露 Row/连接/SQL；文件 I/O 只在 Main。
 
-## IPC / DTO 面（`evaluation` 六方法）
+## IPC / DTO 面（`evaluation` 七方法）
 
 | 方法 | 入参要点 | 回执 |
 |---|---|---|
-| `listSamples` | `{ scope: 'ALL'|'GLOBAL'|'PROJECT', projectId?, sampleType?, datasetSplit? }` | 样本摘要列表（id/type/split/authorization/acceptable/hitCount/projectId/createdAt + 最新标注摘要） |
-| `createSample` | 样本信封 + dedupKey + authorization + datasetSplit + projectId? | 样本摘要（含规则命中） |
+| `listSamples` | `{ scope: 'ALL'\|'GLOBAL'\|'PROJECT', projectId?, sampleType?, datasetSplit? }` | 样本摘要列表（id/type/split/authorization/acceptable/hitCodes/projectId/createdAt/dedupKey + 最新标注摘要） |
+| `getSample` | `{ sampleId }` | 样本详情（信封/期望/规则命中+版本/全部标注） |
+| `createSample` | 样本信封 + dedupKey + authorization + datasetSplit + projectId? | 样本摘要（含规则命中码） |
 | `createFromEpisode` | `{ projectId, expectedVersionId, shotIndexes?, authorization, datasetSplit, requestId }` | 创建的样本摘要列表 |
 | `importBatch` | `{ requestId }`（文件经 Main Open Dialog） | 逐样本结果数组（CREATED/DUPLICATE/REJECTED+原因） |
-| `deleteSample` | `{ sampleId, requestId }` | 删除回执 |
+| `deleteSample` | `{ sampleId, requestId }` | 删除回执（含级联删除的标注数） |
 | `addAnnotation` | `{ sampleId, guidelineVersion, label, rationale, annotator, requestId }` | 该样本全部标注（时间序） |
 
 - 全部走 AppResultDto 脱敏包装；requestId 幂等仅用于派生/导入/删除/标注写命令（重复同载荷返回原回执——复用命令回执表或 0016 同款模式，按集成测试证明的缺口决定是否新增列）。

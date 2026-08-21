@@ -90,6 +90,12 @@ export const projectErrorCodeSchema = z.enum([
   'TRANSFER_IMPORT_NOT_ALLOWED',
   'TRANSFER_IDEMPOTENCY_CONFLICT',
   'TRANSFER_PERSISTENCE_FAILED',
+  // V1 结构化分镜评测集（storyboard-evaluation-set）。
+  'EVALUATION_SAMPLE_INVALID',
+  'EVALUATION_DEDUP_CONFLICT',
+  'EVALUATION_NOT_FOUND',
+  'EVALUATION_DERIVE_NOT_READY',
+  'EVALUATION_IMPORT_INVALID',
 ]);
 export type ProjectErrorCode = z.infer<typeof projectErrorCodeSchema>;
 
