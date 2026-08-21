@@ -23,10 +23,12 @@ import {
   getJobClient,
   getScriptClient,
   getStoryboardClient,
+  getVideoClient,
   rendererTransportError,
 } from './script-api';
 import { episodeScopeForStage, isTerminalJob } from './script-ui-policy';
 import { useStoryboardImageStates } from './use-storyboard-image-states';
+import { useStoryboardVideoStates } from './use-storyboard-video-states';
 
 const STAGES = [
   ['CONCEPT', '故事概念'],
@@ -59,6 +61,7 @@ export const ScriptWorkspaceView = ({
   const [dirty, setDirty] = useState(false);
   const [pendingStage, setPendingStage] = useState<Stage | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
+  const [videoBatchBusy, setVideoBatchBusy] = useState(false);
   // storyboard-export：成功回执通知（不含路径红线）与 Σ 偏离确认弹层状态（D5）。
   // 弹层携带原请求 format：确认重发必须落在用户最初选择的交付物形态上（deliverables D3）。
   const [exportNotice, setExportNotice] = useState<string | null>(null);
@@ -67,6 +70,7 @@ export const ScriptWorkspaceView = ({
     readonly totalDurationSec: string;
   } | null>(null);
   const imageStates = useStoryboardImageStates(projectId);
+  const videoStates = useStoryboardVideoStates(projectId);
 
   // 整集首帧批次命令（batch-first-frame 5.2）：发起=全量镜头（服务端当前世代跳过，
   // design D3）；取消=仅未建档镜头（D6）；重试失败镜头=失败清单发起新批次（D2）。
@@ -116,6 +120,57 @@ export const ScriptWorkspaceView = ({
       getImageClient().generateCandidatesForShots({
         projectId,
         requestId: createScriptRequestId('image-batch-retry'),
+        shotIds: [...shotIds],
+      }),
+    );
+  };
+
+  const runVideoBatchCommand = (run: () => Promise<AppResultDto<MediaBatchViewDto>>): void => {
+    if (videoBatchBusy) return;
+    setVideoBatchBusy(true);
+    setError(null);
+    void run()
+      .then((result) => {
+        if (result.ok) return videoStates.refresh();
+        setError(result.error);
+        return undefined;
+      })
+      .catch(() => {
+        setError(rendererTransportError());
+      })
+      .finally(() => {
+        setVideoBatchBusy(false);
+      });
+  };
+
+  const generateVideos = (): void => {
+    const shotIds = workspace?.storyboard.shots.map((shot) => shot.shotId) ?? [];
+    if (shotIds.length === 0) return;
+    runVideoBatchCommand(() =>
+      getVideoClient().generateVideosForShots({
+        projectId,
+        requestId: createScriptRequestId('video-batch-create'),
+        shotIds,
+      }),
+    );
+  };
+
+  const cancelVideoBatch = (batchId: string): void => {
+    runVideoBatchCommand(() =>
+      getVideoClient().cancelVideoBatch({
+        batchId,
+        projectId,
+        requestId: createScriptRequestId('video-batch-cancel'),
+      }),
+    );
+  };
+
+  const retryFailedVideoShots = (shotIds: readonly string[]): void => {
+    if (shotIds.length === 0) return;
+    runVideoBatchCommand(() =>
+      getVideoClient().generateVideosForShots({
+        projectId,
+        requestId: createScriptRequestId('video-batch-retry'),
         shotIds: [...shotIds],
       }),
     );
@@ -635,6 +690,9 @@ export const ScriptWorkspaceView = ({
         job={job}
         onBatchCancel={cancelBatch}
         onBatchRetryFailed={retryFailedShots}
+        onGenerateVideos={generateVideos}
+        onVideoBatchCancel={cancelVideoBatch}
+        onVideoBatchRetryFailed={retryFailedVideoShots}
         onConfirm={() => {
           if (globalThis.confirm('确认当前整集分镜为 READY？')) {
             const currentStoryboard = workspace.storyboard.current;
@@ -682,6 +740,8 @@ export const ScriptWorkspaceView = ({
         pending={pending}
         projectId={projectId}
         storyboard={workspace.storyboard}
+        videoBatchBusy={videoBatchBusy}
+        videoStates={videoStates.states}
       />
       <DirtyLeaveDialog
         onCancel={() => {

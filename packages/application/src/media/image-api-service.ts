@@ -213,10 +213,13 @@ export const createImageApiService = (
 
     selectCandidate: async (input, traceId) => {
       try {
-        const updated = await mediaUnitOfWork.run(async ({ media }) => {
+        const updated = await mediaUnitOfWork.run(async ({ media, video }) => {
           const candidate = await media.findCandidateById(input.projectId, input.candidateId);
           if (candidate === null) throw new Error('MEDIA_CANDIDATE_NOT_FOUND');
           await media.selectCandidate(candidate.shotId, input.candidateId);
+          // 首帧选择是视频 i2v 的冻结输入。与选择指针同一 UoW 内标记旧视频，
+          // 才不会留下「已改首帧但旧视频仍当前」的可见竞态；不自动重新生成。
+          await video.markVideoStaleByFirstFrameChange(candidate.shotId);
           return media.listCandidates(candidate.shotId);
         });
         return { data: updated.map(toCandidateView), ok: true };

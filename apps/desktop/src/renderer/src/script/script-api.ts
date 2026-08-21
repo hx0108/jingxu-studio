@@ -1,10 +1,12 @@
-import type { AppErrorDto, ImageApi, ScriptApi, StoryboardApi } from '@jingxu/contracts';
+import type { AppErrorDto, ImageApi, ScriptApi, StoryboardApi, VideoApi } from '@jingxu/contracts';
 
 export const getScriptClient = (): ScriptApi => window.jingxu.script;
 export const getStoryboardClient = (): StoryboardApi => window.jingxu.storyboard;
 export const getJobClient = () => window.jingxu.job;
 export const getProviderClient = () => window.jingxu.provider;
 export const getImageClient = (): ImageApi => window.jingxu.image;
+/** 视频候选只经冻结的 video IPC 白名单访问；Renderer 不接触本地媒体路径。 */
+export const getVideoClient = (): VideoApi => window.jingxu.video;
 export const createScriptRequestId = (operation: string): string =>
   `${operation}_${globalThis.crypto.randomUUID()}`;
 

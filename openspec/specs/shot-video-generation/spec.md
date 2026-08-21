@@ -1,4 +1,10 @@
-## ADDED Requirements
+# shot-video-generation Specification
+
+## Purpose
+
+为结构化分镜提供可追溯的视频候选生成、批量处理、受限播放和失效传播能力，并通过离线 Mock 证据支持本地开发验证；真实 Provider 认证由独立 Change 管理。
+
+## Requirements
 
 ### Requirement: 已选首帧镜头可发起视频段图生视频生成
 
@@ -60,7 +66,7 @@
 
 #### Scenario: 三段证据齐备且字节不入库
 
-- **GIVEN** 视频候选 V 经真实异步链路（submit→poll×N→download）成功落盘 mp4
+- **GIVEN** 视频候选 V 经受控 Mock 异步链路（submit→poll×N→download）成功落盘 mp4
 - **WHEN** 审计证据查询
 - **THEN** V 的证据行 SHALL 含 1 条 SUBMIT（SUCCEEDED，raw+usage）、≥1 条 POLL、1 条 DOWNLOAD（轻量行 blob 恒 NULL、落盘 sha256 与文件一致），invocation_evidence_ref 恒指 SUBMIT 行
 
@@ -92,7 +98,7 @@ mp4 字节 MUST 经内容寻址存储落盘（videos 命名空间、MIME 白名�
 
 #### Scenario: mp4 落盘与受限取流
 
-- **GIVEN** 视频候选 V 下载完成（真实 mp4 字节）
+- **GIVEN** 视频候选 V 下载完成（Mock 提供的有效 mp4 fixture 字节）
 - **WHEN** 落盘与 Renderer 取流
 - **THEN** 文件 SHALL 存于 videos 命名空间内容寻址路径，登记 sha256 与复算一致；Renderer 经协议取流成功且响应含 Range 支持；任何回执/错误信息不含文件系统路径
 

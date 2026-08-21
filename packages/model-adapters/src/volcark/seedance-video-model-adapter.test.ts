@@ -77,6 +77,7 @@ describe('SeedanceVideoModelAdapter', () => {
     expect(Object.keys(body).sort()).toEqual([
       'content',
       'duration',
+      'generate_audio',
       'model',
       'ratio',
       'resolution',
@@ -84,6 +85,7 @@ describe('SeedanceVideoModelAdapter', () => {
       'watermark',
     ]);
     expect(body.duration).toBe(5);
+    expect(body.generate_audio).toBe(false);
     expect(body.model).toBe(SEEDANCE_MODEL_ID);
     expect(body.ratio).toBe('adaptive');
     expect(body.resolution).toBe('720p');
@@ -145,6 +147,7 @@ describe('SeedanceVideoModelAdapter', () => {
       [403, 'MODEL_CREDENTIAL_INVALID', false],
       [429, 'MODEL_RATE_LIMITED', true],
       [500, 'MODEL_PROVIDER_ERROR', true],
+      [404, 'MODEL_PROVIDER_ERROR', false],
     ];
     for (const [status, code, retryable] of cases) {
       const adapter = new SeedanceVideoModelAdapter({

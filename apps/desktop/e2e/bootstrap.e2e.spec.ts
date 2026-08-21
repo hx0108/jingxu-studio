@@ -148,9 +148,19 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
     });
     expect(surface).toEqual({
       apiFrozen: true,
-      apiKeys: ['events', 'image', 'job', 'project', 'provider', 'runtime', 'script', 'storyboard'],
+      apiKeys: [
+        'events',
+        'image',
+        'job',
+        'project',
+        'provider',
+        'runtime',
+        'script',
+        'storyboard',
+        'video',
+      ],
       contentSecurityPolicy:
-        "default-src 'self'; script-src 'self'; style-src 'self'; img-src jingxu:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src jingxu:; media-src jingxu:; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'",
       externalResourceUrls: [],
       hasIpcRenderer: false,
       hasProcess: false,

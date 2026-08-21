@@ -22,8 +22,15 @@
 - `video_candidates`：镜像 image_candidates 约束族（UNIQUE(shot,round,index)、每镜头至多一个 selected 部分唯一索引、SUCCEEDED 必含文件四元组+invocation_evidence_ref）**增列** `requested_duration_sec INTEGER NOT NULL`、`actual_duration_sec INTEGER NULL`（Provider 未回报则 null 如实）、`first_frame_candidate_id TEXT NOT NULL`、`first_frame_file_sha256 TEXT NOT NULL`（STALE 判定依据）；width/height 承视频分辨率；mime CHECK 含 video/mp4。
 - `video_generation_tasks`：镜像 media_generation_tasks（相位机 6 值、UNIQUE(project,idempotency_key)、UNIQUE(shot,round_no)、provider_task_id 可空、batch_id 可空 FK→video_batches）。
 - `video_batches`：镜像 media_generation_batches（RUNNING/COMPLETED/PARTIAL_COMPLETED/CANCELLED、target/pending/skipped JSON、UNIQUE(project,idempotency_key)）。
-- `provider_capability_snapshots` 播种 `volcark-seedance-video/v1`（model id 以官方核验为准记入 canonical JSON；SourceURL 记火山方舟文档；sha256 三处锁死同 Seedream 模式）。
+- `provider_capability_snapshots` 初始播种 `volcark-seedance-video/v1`；官方核验确认 Lite I2V 停服后，以新增 `v2` 快照锁定 `doubao-seedance-1-5-pro-251215`（首帧图生、5/10 秒档、无声），SourceURL 记火山方舟文档，sha256 与 canonical JSON 同步锁死。
 - 旧迁移硬编码版本断言 4 文件 9 处同步（仓库约定）。
+
+#### 实施期迁移更正（0013–0015，最终 head 15）
+
+- `0013_media_invocation_video_references.sql` 重建调用证据表，以同域任务/候选配对触发器替代仅指向图片表的静态 FK；既支持既有图片证据，也支持视频的 SUBMIT/POLL/DOWNLOAD 证据，拒绝跨域与悬空引用。
+- `0014_video_stale_duration.sql` 重建视频候选的时长 CHECK，使 `STALE_INPUT` 保留 Provider 已回报的 `actual_duration_sec`。首帧改选仍只失效旧候选，绝不清空可追溯历史时长或自动再生成。
+- `0015_seedance_video_v2_snapshot.sql` 保留已发布 v1 快照，追加 v2 锁定的 Seedance 能力快照；真实 Model ID/Endpoint 认证不在本 Change 内，不能把离线 Mock 结果写成 Provider 可用性证明。
+- 两项均为发现真实写入路径后的追加修正；0011、0012 及 PRD-owned Schema 均保持字节不变。
 
 ### A2 复用策略：类型别名泛化 + 二次实例化（不复制调度器，不动图片行为）
 
@@ -54,10 +61,10 @@
 - UI：`VideoPanel`（镜头卡视频徽标 + 已选首帧缩略发起 + `<video>` 候选播放比较 + 人工选择）；StoryboardPanel 增「整集生成视频」批次发起与进度行（复用 1s 有界轮询模式 use-storyboard-video-states）；无已选首帧的镜头在批量回执 skipped 如实回告。
 - 协议/CSP：media-protocol 增 `/video-candidate/{id}` 段类型，**实现 Range/206 基本支持**（`<video>` 拖动必需，越界 Range 回 416，异常回退 200 全量）；CSP 增 `media-src jingxu:`；registerSchemesAsPrivileged 确认 stream 支持。
 
-### A6 真实联调（D4=含）
+### A6 真实 Provider 认证（后续 Change）
 
-- 探针 `real-seedance-video-probe.e2e.spec.ts`（JINGXU_REAL_* 三 env 门控 + `--no-proxy-server` 直连 + JINGXU_REAL_REFRESH_CREDENTIAL=1 先例）；前置：账户开通 seedance 模型、model id 官方核验（qwen 核验先例）、时长档位与分辨率上限实测入能力快照（若与声明不符，快照升版并留勘误记录）。
-- SQL 证据断言 `scripts/verify-real-video-evidence.mjs`（node:sqlite 只读查生产库）：SUBMIT/POLL/DOWNLOAD 三段齐、POLL 行数=轮询次数实录、mp4 字节恒不入库（blob 恒 NULL on DOWNLOAD）、usage 落列、候选 ref 无悬空。
+- `seedance-provider-certification` 单独负责 `real-seedance-video-probe.e2e.spec.ts`、真实 Model ID/Endpoint 核验、费用预算与人工授权；本 Change 不运行该探针。
+- 真实 SQL 证据断言（SUBMIT/POLL/DOWNLOAD 三段、mp4 字节不入库、usage/ref 对账）也归属后续 Change；本 Change 只验证等价的 Mock 证据链。
 
 ## 非目标（对齐 proposal）
 
@@ -69,4 +76,4 @@
 - **integration**：迁移 0012 断言（三表约束族+快照行 sha256+旧迁移 4 文件 9 处同步）；SQLite video 仓储全方法；CAS video/mp4 + videos 命名空间；UnitOfWork 聚合 {media,invocations,video} 事务可见性。
 - **contract**：video.* 通道白名单（7 排序）；preload 两契约；IPC zod 脱敏；枚举 VOLCARK_SEEDANCE。
 - **E2E 离线**：T1 单镜头闭环（发起→轮询→下载→`<video>` 面板→选择→改选首帧 STALE→镜头编辑 STALE）；T2 整集批量（跳过回告/失败隔离 PARTIAL/重试新批/取消/重启恢复续跑零重发）；T3 证据三段 node:sqlite 断言；T4 协议/CSP（media-src、Range/206、路径不进 Renderer）；T5 白名单三处（apiKeys 含 video）。
-- **真实联调**：real-seedance-video-probe（六阶段产物→已选首帧→真实视频段→下载 mp4→证据 SQL 断言）。
+- **Provider 认证**：明确延期到 `seedance-provider-certification`；当前仅验证 Mock 六阶段等价链路。

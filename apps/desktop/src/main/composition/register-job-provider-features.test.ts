@@ -368,7 +368,7 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     expect(saved.data).toMatchObject({
       configured: true,
       last4: '7777',
-      modelId: 'doubao-seedance-1-0-lite-i2v-250428',
+      modelId: 'doubao-seedance-1-5-pro-251215',
       provider: 'VOLCARK_SEEDANCE',
     });
     // 密文按视频固定 id 独立落盘（与图片档分存）。

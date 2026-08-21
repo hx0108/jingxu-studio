@@ -89,8 +89,8 @@ const VIDEO_PROFILE_ID = VIDEO_CREDENTIAL_ID;
 const VIDEO_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
   baseUrl: deriveSeedanceBaseUrl(),
   modelId: SEEDANCE_MODEL_ID,
-  // 取自锁定 model id 的 yymmdd 版本段：doubao-seedance-1-0-lite-i2v-250428 → 2025-04-28。
-  modelSnapshotDate: '2025-04-28',
+  // 取自锁定 model id 的 yymmdd 版本段：doubao-seedance-1-5-pro-251215 → 2025-12-15。
+  modelSnapshotDate: '2025-12-15',
   provider: 'VOLCARK_SEEDANCE',
   workspaceId: 'ark',
 };

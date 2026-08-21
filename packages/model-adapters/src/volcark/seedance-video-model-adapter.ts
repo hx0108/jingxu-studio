@@ -18,13 +18,13 @@ import type {
  * API 形态（Ark v3 内容生成任务）：submit = `POST /api/v3/contents/generations/tasks`
  * 返回 {id}；poll = `GET /api/v3/contents/generations/tasks/{id}` 按 status 推进；
  * download = 结果 video_url https 直下并魔数嗅探 mp4（ftyp box）。字段名与档位
- * 以 7.1 官方核验/实测为准锁定（快照 volcark-seedance-video/v1）——当前按方舟
+ * 以 7.1 官方核验/实测为准锁定（快照 volcark-seedance-video/v2）——当前按方舟
  * 公开文档形态实现，真实联调探针负责实证与勘误。Key 经 CredentialPort 在基础
  * 设施边界读取，不进入日志、错误 detail 或任何返回值。
  */
 
-/** 7.1 官方核验锁定（当前为文档候选，未经真实联调实证）。 */
-export const SEEDANCE_MODEL_ID = 'doubao-seedance-1-0-lite-i2v-250428';
+/** 7.1 官方核验锁定：旧 Lite I2V 停服后迁至支持首帧图生的 1.5 Pro。 */
+export const SEEDANCE_MODEL_ID = 'doubao-seedance-1-5-pro-251215';
 export const SEEDANCE_MODEL_IDS: readonly string[] = [SEEDANCE_MODEL_ID];
 /** 单段调用（create/poll/下载）超时上限；整任务轮询截止由调度器 pollDeadlineMs 控制。 */
 export const SEEDANCE_VIDEO_SEGMENT_TIMEOUT_MS = 120_000;
@@ -190,6 +190,8 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
             },
           ],
           duration: request.durationSec,
+          // V1 视频段只生成无声画面；不得让 Provider 默认值悄然改变产品输出边界。
+          generate_audio: false,
           model: this.#modelId,
           // i2v 跟随首帧画幅；分辨率档位按短边就近（1080p/720p，快照 constraints）。
           ratio: 'adaptive',
@@ -428,8 +430,15 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
     }
     if (status === 429) return normalized('MODEL_RATE_LIMITED', true, '等待后重试');
     if (status >= 500) return normalized('MODEL_PROVIDER_ERROR', true, '等待后重试');
-    if (status === 413 || status === 404) {
+    if (status === 413) {
       return normalized('MODEL_INPUT_TOO_LARGE', false, '检查请求参数后重试');
+    }
+    if (status === 404) {
+      return normalized(
+        'MODEL_PROVIDER_ERROR',
+        false,
+        '确认视频模型已开通，或配置对应的方舟推理接入点',
+      );
     }
     return normalized('MODEL_CONTENT_REJECTED', false, '调整提示词或首帧后重试');
   }

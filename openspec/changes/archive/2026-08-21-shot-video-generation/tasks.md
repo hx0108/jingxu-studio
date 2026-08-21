@@ -7,10 +7,12 @@
 - [x] 1.3 `SeedanceVideoModelAdapter`（model-adapters/volcark/）：create task→poll→download 真 ASYNC；错误归一矩阵（401/403/429/5xx/超时/Abort/URL 失效）；mp4 字节魔数嗅探（ftyp）；前置校验（时长档位/分辨率/首帧字节上限）按能力快照；raw/evidenceOf main-only；单测矩阵
 - [x] 1.4 `MockVideoModelAdapter`（声明式步骤 ASYNC pendingPolls/失败/慢异步）；`JINGXU_E2E_VIDEO_STEPS` 令牌解析（组合根，非法令牌启动期抛，缺省预算熔断）
 
-## 2. persistence（迁移 0012，head 11→12）
+## 2. persistence（迁移 0012 + 实施期修正 0013–0015，head 11→15）
 
 - [x] 2.1 迁移 0012：`video_candidates`（镜像约束族 + requested/actual_duration_sec + first_frame_candidate_id + first_frame_file_sha256 + mime CHECK video/mp4）、`video_generation_tasks`（镜像 + UNIQUE(shot,round_no) + batch FK）、`video_batches`（镜像）、能力快照 `volcark-seedance-video/v1` 行（canonical JSON + sha256 三处锁死；model id 以官方核验为准）
 - [x] 2.2 旧迁移硬编码版本断言 4 文件 9 处同步（initial-schema/project-command-receipts×3/script-migration/persistence-runtime-adapter）
+- [x] 2.2a 追加 0013 统一图片/视频调用证据引用防御与 0014 `STALE_INPUT` 视频实际时长保留；迁移集成测试覆盖历史数据保留、跨域拒绝与失效传播。
+- [x] 2.2b 追加 0015 Seedance v2 能力快照：官方核验 Lite I2V 停服后锁定 1.5 Pro；历史 v1/0012 保持不可变。
 - [x] 2.3 `VideoMediaRepository` SQLite + 内存实现（implements 提取出的 `MediaGenerationRepository` 生成域子接口）；`MediaRepositories` 聚合扩 `{ media, invocations, video }`（同一 UnitOfWork/FIFO）；集成测试（约束族/selected 部分唯一/STALE 双触发/世代聚合）
 - [x] 2.4 ContentAddressedStore：MIME 白名单增 video/mp4 + videos 命名空间；集成测试（复算校验/原子 rename/路径防逃逸）
 
@@ -31,18 +33,18 @@
 
 ## 5. renderer：视频面板与批量 UI
 
-- [ ] 5.1 `VideoPanel`（镜头卡视频徽标 + 已选首帧缩略发起 + `<video>` 候选播放比较 + 人工选择 + 世代分组 STALE 呈现）+ 视图测试
-- [ ] 5.2 StoryboardPanel「为整集生成视频」批次发起 + 进度行 + 取消；`use-storyboard-video-states` 1s 有界轮询（有活跃才持续）；徽标优先级 policy + 测试
-- [ ] 5.3 三 bundle 重建（vite.main/preload/renderer）
+- [x] 5.1 `VideoPanel`（镜头卡视频徽标 + 已选首帧缩略发起 + `<video>` 候选播放比较 + 人工选择 + 世代分组 STALE 呈现）+ 视图测试
+- [x] 5.2 StoryboardPanel「为整集生成视频」批次发起 + 进度行 + 取消；`use-storyboard-video-states` 1s 有界轮询（有活跃才持续）；徽标优先级 policy + 测试
+- [x] 5.3 三 bundle 重建（vite.main/preload/renderer）
 
 ## 6. E2E 离线与全量门禁
 
-- [ ] 6.1 T1 单镜头闭环 E2E（发起→轮询→下载→面板 `<video>`→选择→首帧改选 STALE→镜头编辑 STALE）；T2 整集批量 E2E（排队/跳过回告/失败隔离 PARTIAL/重试新批/取消/重启恢复零重发）
-- [ ] 6.2 T3 证据三段 node:sqlite 断言脚本；T4 协议/CSP E2E（media-src、Range/206、路径不进 Renderer）；T5 白名单三处（preload 契约 + bootstrap E2E §9.1 apiKeys 含 video）
-- [ ] 6.3 全量门禁零回归：tsc -b / eslint --max-warnings=0 / prettier / unit / contract / integration / 全量 E2E（基线 763/125/204/19+3skip 之上只增不减）/ openspec validate --all --strict
+- [x] 6.1 T1 单镜头闭环 E2E（发起→轮询→下载→面板 `<video>`→选择→首帧改选 STALE→镜头编辑 STALE）；T2 整集批量 E2E（排队/跳过回告/失败隔离 PARTIAL/重试新批/取消/重启恢复零重发）
+- [x] 6.2 T3 证据三段 node:sqlite 断言脚本；T4 协议/CSP E2E（media-src、Range/206、路径不进 Renderer）；T5 白名单三处（preload 契约 + bootstrap E2E §9.1 apiKeys 含 video）
+- [x] 6.3 全量门禁零回归：format:check、lint、typecheck、Unit 849/849、Contract 143/143、Integration 216/216、Electron E2E 24 passed + 3 门控跳过、Windows x64 packaged smoke 1 passed、openspec validate --all --strict 12/12
 
-## 7. 真实联调 + 文档 + 归档
+## 7. Mock-only 收口 + 文档 + 归档
 
-- [ ] 7.1 联调前置：账户开通 seedance 模型、model id 官方核验（qwen 先例）、时长档位与分辨率上限实测（与快照声明不符则快照升版留勘误）
-- [ ] 7.2 `real-seedance-video-probe.e2e.spec.ts`（JINGXU_REAL_* 门控 + --no-proxy-server）：已选首帧→真实视频段→下载 mp4→UI `<video>` 解码→STALE 实证；`scripts/verify-real-video-evidence.mjs` SQL 断言（三段齐/POLL 实录/字节不入库/usage/ref 无悬空）
-- [ ] 7.3 README（当前已实现 + 最近验证证据新计数 + 尚未实现收窄）→ validate --strict → archive → merge main → 代理推送 → 记忆更新
+- [x] 7.1 将真实 Seedance 认证拆出为后续 `seedance-provider-certification` Change；本 Change 禁止真实收费请求，保留 Mock Provider 和离线证据链。
+- [x] 7.2 不创建或运行真实探针；真实 Model ID/Endpoint、费用预算、真实视频下载和生产库证据由后续 Change 验收。
+- [x] 7.3 README 已同步 Mock-only 边界与当前验证计数；`openspec validate --all --strict` 12/12；真实 Provider 认证明确延期至后续 Change。归档前不执行 merge/push。

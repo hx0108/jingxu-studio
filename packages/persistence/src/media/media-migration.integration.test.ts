@@ -195,6 +195,9 @@ describe('0009_media_assets_images.sql', () => {
           { version: 10 },
           { version: 11 },
           { version: 12 },
+          { version: 13 },
+          { version: 14 },
+          { version: 15 },
         ]);
         const objects = database
           .prepare(
@@ -279,7 +282,7 @@ describe('0009_media_assets_images.sql', () => {
     });
   });
 
-  it('v8 库—升级到 head 12—既有资产图保留且新表可写', async () => {
+  it('v8 库—升级到 head 14—既有资产图保留且新表可写', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const database = await openMigratedDatabase(root, 'media_upgrade.sqlite', 8);
       try {
@@ -287,7 +290,7 @@ describe('0009_media_assets_images.sql', () => {
         applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 12 });
+        ).toEqual({ version: 15 });
         // v8 既有行在升级后原样保留。
         expect(
           database.prepare("SELECT id, lifecycle_status FROM shots WHERE id = 'shot_media'").get(),
@@ -313,7 +316,7 @@ describe('0009_media_assets_images.sql', () => {
     });
   });
 
-  it('v8 受管理库—performManagedMigration 升级—先备份 schema v8 再到 head 12', async () => {
+  it('v8 受管理库—performManagedMigration 升级—先备份 schema v8 再到 head 14', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const migrations = await loadMigrationSet(MIGRATIONS);
       const paths = createManagedPaths(path.join(root, 'managed'));
@@ -337,7 +340,7 @@ describe('0009_media_assets_images.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 12 });
+        ).toEqual({ version: 15 });
       } finally {
         database.close();
       }
@@ -567,6 +570,87 @@ describe('0012_shot_video_generation.sql', () => {
         NOW,
       );
   };
+
+  it('0013—统一调用证据允许同域视频 task/candidate，拒绝跨域或悬空引用', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await openMigratedDatabase(root, 'video_invocation_guard.sqlite');
+      try {
+        seedFirstFrame(database);
+        database
+          .prepare(
+            `INSERT INTO video_generation_tasks
+             (id, project_id, shot_id, shot_version_id, idempotency_key, phase,
+              generation_input_hash, candidate_count, round_no, created_at, updated_at)
+             VALUES ('video_task_guard', 'project_media', 'shot_media', 'shotv_media',
+                     'video-task_guard', 'SUBMITTED', ?, 2, 1, ?, ?)`,
+          )
+          .run('c'.repeat(64), NOW, NOW);
+        insertVideoCandidate(database, 'video_candidate_guard', {
+          fileSha256: null,
+          invocationEvidenceRef: null,
+          status: 'PENDING',
+        });
+        const insertEvidence = database.prepare(
+          `INSERT INTO media_model_invocations
+           (id, media_task_id, candidate_id, segment_kind, status, model_id,
+            request_snapshot_json, request_sha256, created_at, updated_at)
+           VALUES (?, ?, ?, 'SUBMIT', 'STARTED', 'seedance', '{}', ?, ?, ?)`,
+        );
+        expect(() =>
+          insertEvidence.run(
+            'invocation_video_guard',
+            'video_task_guard',
+            'video_candidate_guard',
+            'd'.repeat(64),
+            NOW,
+            NOW,
+          ),
+        ).not.toThrow();
+        expect(() =>
+          insertEvidence.run(
+            'invocation_cross_guard',
+            'video_task_guard',
+            'candidate_first_frame',
+            'e'.repeat(64),
+            NOW,
+            NOW,
+          ),
+        ).toThrow('MEDIA_INVOCATION_REFERENCE_INVALID');
+        expect(database.pragma('foreign_key_check')).toEqual([]);
+      } finally {
+        database.close();
+      }
+    });
+  });
+
+  it('0014—首帧改选后 STALE 视频保留已回报真实时长与选择历史', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await openMigratedDatabase(root, 'video_stale_duration.sqlite');
+      try {
+        seedFirstFrame(database);
+        insertVideoCandidate(database, 'video_stale_duration', { selected: true });
+        expect(() =>
+          database
+            .prepare(
+              `UPDATE video_candidates
+               SET status = 'STALE_INPUT', error_code = NULL, updated_at = ?
+               WHERE id = 'video_stale_duration'`,
+            )
+            .run(NOW),
+        ).not.toThrow();
+        expect(
+          database
+            .prepare(
+              `SELECT status, actual_duration_sec, selected_at
+               FROM video_candidates WHERE id = 'video_stale_duration'`,
+            )
+            .get(),
+        ).toMatchObject({ actual_duration_sec: 5, status: 'STALE_INPUT', selected_at: NOW });
+      } finally {
+        database.close();
+      }
+    });
+  });
 
   it('空库—执行完整 migration—三视频表/索引登记且外键链可写', async () => {
     await withSqliteTestContext(async ({ root }) => {

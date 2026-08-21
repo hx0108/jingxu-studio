@@ -144,6 +144,9 @@ describe('0002 migration 资源集合', () => {
       { name: '0010_media_generation_batches.sql', version: 10 },
       { name: '0011_media_model_invocations.sql', version: 11 },
       { name: '0012_shot_video_generation.sql', version: 12 },
+      { name: '0013_media_invocation_video_references.sql', version: 13 },
+      { name: '0014_video_stale_duration.sql', version: 14 },
+      { name: '0015_seedance_video_v2_snapshot.sql', version: 15 },
     ]);
     expect(migrations[0]?.sha256).toBe(FROZEN_0001_SHA256);
     expect(migrations[1]?.sha256).toMatch(/^[a-f0-9]{64}$/u);
@@ -163,11 +166,14 @@ describe('0002 migration 资源集合', () => {
         '0010_media_generation_batches.sql',
         '0011_media_model_invocations.sql',
         '0012_shot_video_generation.sql',
+        '0013_media_invocation_video_references.sql',
+        '0014_video_stale_duration.sql',
+        '0015_seedance_video_v2_snapshot.sql',
       ]),
     );
   });
 
-  it('空库—应用完整集合—终态版本 12 且 command_receipts 登记对象存在', async () => {
+  it('空库—应用完整集合—终态版本 14 且 command_receipts 登记对象存在', async () => {
     await withMigratedDatabase((database) => {
       expect(
         database.prepare('SELECT version FROM schema_migrations ORDER BY version').all(),
@@ -184,6 +190,9 @@ describe('0002 migration 资源集合', () => {
         { version: 10 },
         { version: 11 },
         { version: 12 },
+        { version: 13 },
+        { version: 14 },
+        { version: 15 },
       ]);
       const objects = database
         .prepare(
@@ -214,7 +223,7 @@ describe('0002 migration 资源集合', () => {
         .all();
       expect(after).toEqual(before);
       expect(database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get()).toEqual({
-        count: 12,
+        count: 15,
       });
       database.close();
     });
@@ -413,7 +422,7 @@ describe('0002 受管理升级、备份与回滚', () => {
         .prepare(
           'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
         )
-        .run(13, '0013_future.sql', 'b'.repeat(64), NOW);
+        .run(16, '0016_future.sql', 'b'.repeat(64), NOW);
 
       const before = database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get();
       expect(() => inspectMigrationPlan(database, migrations)).toThrow('DATABASE_VERSION_TOO_NEW');

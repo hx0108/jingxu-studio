@@ -24,6 +24,9 @@ export const withSqliteTestContext = async <T>(
   try {
     return await operation(context);
   } finally {
-    await rm(root, { force: true, recursive: true });
+    // node:sqlite closes synchronously, but Windows can retain a file handle for a
+    // short scheduler turn. Bounded retry keeps cleanup from obscuring a passed
+    // database assertion without weakening any test behaviour.
+    await rm(root, { force: true, maxRetries: 3, recursive: true, retryDelay: 50 });
   }
 };

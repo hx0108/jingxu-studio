@@ -5,6 +5,7 @@ import type {
   StoryboardEditShotInputDto,
   StoryboardExportFormat,
   StoryboardImageStatesDto,
+  StoryboardVideoStatesDto,
   StoryboardLockShotInputDto,
   StoryboardShotSummaryDto,
   StoryboardUnlockShotInputDto,
@@ -13,6 +14,7 @@ import type {
 } from '@jingxu/contracts';
 
 import { FirstFramePanel } from './FirstFramePanel';
+import { VideoPanel } from './VideoPanel';
 import { createScriptRequestId } from './script-api';
 import { isTerminalJob } from './script-ui-policy';
 import {
@@ -20,6 +22,7 @@ import {
   batchProgressOf,
   shotFirstFrameBadge,
 } from './storyboard-image-state-policy';
+import { shotVideoBadge } from './storyboard-video-state-policy';
 
 const SHOT_SIZE_LABELS: Record<StoryboardShotSummaryDto['shotSize'], string> = {
   CLOSE_UP: '近景',
@@ -72,6 +75,8 @@ export interface StoryboardPanelProps {
   readonly episodeTargetDurationSec: number;
   /** 列表级首帧状态底座（design D5）；null 表示尚未载入，不渲染徽标。 */
   readonly imageStates: StoryboardImageStatesDto | null;
+  /** 视频列表状态与首帧状态分域轮询，避免图片终态影响视频刷新。 */
+  readonly videoStates?: StoryboardVideoStatesDto | null;
   /** 首帧面板按 projectId 定界媒体通道调用。 */
   readonly projectId: string;
   /** null 表示当前可生成；否则为不可生成的原因（同时禁用按钮）。 */
@@ -79,8 +84,11 @@ export interface StoryboardPanelProps {
   readonly job: JobSummaryDto | null;
   /** 批次命令（发起/取消/重试）在飞时禁用相关入口。 */
   readonly batchBusy: boolean;
+  readonly videoBatchBusy?: boolean;
   readonly onBatchCancel: (batchId: string) => void;
   readonly onBatchRetryFailed: (shotIds: readonly string[]) => void;
+  readonly onVideoBatchCancel?: (batchId: string) => void;
+  readonly onVideoBatchRetryFailed?: (shotIds: readonly string[]) => void;
   readonly onConfirm: () => void;
   /** 逐镜头编辑/锁定/解锁命令（shot-edit-lock D1/D3）；面板组装完整 DTO 输入。 */
   readonly onEditShot: (input: StoryboardEditShotInputDto) => void;
@@ -89,6 +97,7 @@ export interface StoryboardPanelProps {
   readonly exportNotice: string | null;
   readonly onGenerate: () => void;
   readonly onGenerateFirstFrames: () => void;
+  readonly onGenerateVideos?: () => void;
   readonly onLockShot: (input: StoryboardLockShotInputDto) => void;
   readonly onRestore: (version: StoryboardVersionSummaryDto) => void;
   readonly onUnlockShot: (input: StoryboardUnlockShotInputDto) => void;
@@ -104,6 +113,9 @@ export const StoryboardPanel = ({
   job,
   onBatchCancel,
   onBatchRetryFailed,
+  onGenerateVideos,
+  onVideoBatchCancel,
+  onVideoBatchRetryFailed,
   onConfirm,
   onEditShot,
   onExportEpisode,
@@ -116,6 +128,8 @@ export const StoryboardPanel = ({
   pending,
   projectId,
   storyboard,
+  videoBatchBusy = false,
+  videoStates = null,
 }: StoryboardPanelProps) => {
   const [selectedShotId, setSelectedShotId] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -145,6 +159,11 @@ export const StoryboardPanel = ({
   const latestProgress = latestBatch === null ? null : batchProgressOf(latestBatch);
   const shotStates = new Map((imageStates?.shots ?? []).map((state) => [state.shotId, state]));
   const batchReady = current?.status === 'READY' && storyboard.shots.length > 0;
+  const runningVideoBatch =
+    videoStates?.batches.find((batch) => batch.status === 'RUNNING') ?? null;
+  const latestVideoBatch = runningVideoBatch ?? videoStates?.batches[0] ?? null;
+  const latestVideoProgress = latestVideoBatch === null ? null : batchProgressOf(latestVideoBatch);
+  const shotVideoStates = new Map((videoStates?.shots ?? []).map((state) => [state.shotId, state]));
 
   return (
     <section className="script-card" id="storyboard-panel">
@@ -205,6 +224,14 @@ export const StoryboardPanel = ({
           type="button"
         >
           为整集生成首帧
+        </button>
+        <button
+          disabled={!batchReady || runningVideoBatch !== null || videoBatchBusy}
+          name="generate-videos-batch"
+          onClick={onGenerateVideos}
+          type="button"
+        >
+          为整集生成视频
         </button>
         {/* storyboard-export：READY 才渲染三导出入口（spec：非 READY 不渲染）。 */}
         {current?.status === 'READY' && (
@@ -292,6 +319,47 @@ export const StoryboardPanel = ({
           )}
         </div>
       )}
+      {latestVideoBatch !== null && latestVideoProgress !== null && (
+        <div aria-live="polite" className="batch-progress" id="video-batch-progress">
+          <p>
+            视频批次{MEDIA_BATCH_STATUS_LABELS[latestVideoBatch.status]} · 进度{' '}
+            {String(latestVideoProgress.settled)}/{String(latestVideoProgress.total)}
+            {latestVideoProgress.failedShotIds.length > 0
+              ? ` · 失败 ${String(latestVideoProgress.failedShotIds.length)}`
+              : ''}
+            {latestVideoBatch.skippedShotIds.length > 0
+              ? ` · 跳过 ${String(latestVideoBatch.skippedShotIds.length)}（无首帧或当前世代已有视频）`
+              : ''}
+            {latestVideoBatch.errorCode === null ? '' : ` · ${latestVideoBatch.errorCode}`}
+          </p>
+          {runningVideoBatch !== null ? (
+            <button
+              className="danger-button"
+              disabled={videoBatchBusy}
+              name="cancel-video-batch"
+              onClick={() => {
+                onVideoBatchCancel?.(latestVideoBatch.batchId);
+              }}
+              type="button"
+            >
+              取消剩余视频镜头
+            </button>
+          ) : (
+            latestVideoProgress.failedShotIds.length > 0 && (
+              <button
+                disabled={videoBatchBusy}
+                name="retry-failed-video-shots"
+                onClick={() => {
+                  onVideoBatchRetryFailed?.(latestVideoProgress.failedShotIds);
+                }}
+                type="button"
+              >
+                重试失败视频镜头（新批次）
+              </button>
+            )
+          )}
+        </div>
+      )}
       {job !== null && (
         <p aria-live="polite">
           任务状态：{job.status}
@@ -309,7 +377,9 @@ export const StoryboardPanel = ({
         <ul className="shot-card-list">
           {storyboard.shots.map((shot) => {
             const imageState = shotStates.get(shot.shotId) ?? null;
+            const videoState = shotVideoStates.get(shot.shotId) ?? null;
             const badge = imageState === null ? null : shotFirstFrameBadge(imageState);
+            const videoBadge = videoState === null ? null : shotVideoBadge(videoState);
             return (
               <li key={shot.shotId}>
                 <button
@@ -338,6 +408,11 @@ export const StoryboardPanel = ({
                   {badge !== null && (
                     <span className={`shot-first-frame-badge status-badge ${badge.className}`}>
                       {badge.label}
+                    </span>
+                  )}
+                  {videoBadge !== null && (
+                    <span className={`shot-video-badge status-badge ${videoBadge.className}`}>
+                      {videoBadge.label}
                     </span>
                   )}
                 </button>
@@ -527,6 +602,13 @@ export const StoryboardPanel = ({
             projectId={projectId}
             shot={selectedShot}
             storyboardStatus={current?.status ?? null}
+          />
+          <VideoPanel
+            key={`video-${selectedShot.shotId}`}
+            projectId={projectId}
+            shot={selectedShot}
+            storyboardStatus={current?.status ?? null}
+            videoState={shotVideoStates.get(selectedShot.shotId) ?? null}
           />
         </section>
       )}

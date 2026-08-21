@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type {
   ShotImageStateDto,
   StoryboardImageStatesDto,
+  StoryboardVideoStatesDto,
   StoryboardShotSummaryDto,
   StoryboardVersionSummaryDto,
   StoryboardWorkspaceDto,
@@ -354,6 +355,15 @@ const shotImageState = (overrides: Partial<ShotImageStateDto>): ShotImageStateDt
   ...overrides,
 });
 
+const shotVideoState = (overrides: Partial<StoryboardVideoStatesDto['shots'][number]>) => ({
+  activeTaskPhase: null,
+  currentGenSucceededCount: 0,
+  latestTaskErrorCode: null,
+  queuedInBatchId: null,
+  shotId: 'shot_00000001',
+  ...overrides,
+});
+
 describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () => {
   const storyboardReady: StoryboardWorkspaceDto = {
     current: storyboardVersion({
@@ -538,6 +548,94 @@ describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () 
     expect(html).toContain('为整集生成首帧');
     expect(html).toContain('分镜整集确认 READY 后可为整集批量生成首帧。');
     expect(html).not.toContain('batch-progress');
+  });
+});
+
+describe('Storyboard Panel 视频批次视图（shot-video-generation §5.2）', () => {
+  const storyboardReady: StoryboardWorkspaceDto = {
+    current: storyboardVersion({
+      id: 'episodever_video',
+      shotCount: 2,
+      status: 'READY',
+      versionNo: 1,
+    }),
+    history: [],
+    shots: [1, 2].map((sequence) =>
+      shotSummary({
+        narrativePurpose: `视频镜头 ${String(sequence)}`,
+        sequence,
+        shotId: `shot_video0000${String(sequence)}`,
+        targetDurationSec: 5,
+      }),
+    ),
+    totalDurationSec: 10,
+  };
+
+  it('RUNNING 视频批次—展示视频徽标、禁用批量入口并提供取消', () => {
+    const videoStates: StoryboardVideoStatesDto = {
+      batches: [
+        {
+          batchId: 'batch_video00001',
+          createdAt: NOW,
+          errorCode: null,
+          members: [
+            {
+              errorCode: null,
+              phase: 'COMPLETED',
+              shotId: 'shot_video00001',
+              taskId: 'task_video00001',
+            },
+            {
+              errorCode: null,
+              phase: 'POLLING',
+              shotId: 'shot_video00002',
+              taskId: 'task_video00002',
+            },
+          ],
+          skippedShotIds: [],
+          status: 'RUNNING',
+          updatedAt: NOW,
+        },
+      ],
+      shots: [
+        shotVideoState({ currentGenSucceededCount: 2, shotId: 'shot_video00001' }),
+        shotVideoState({ activeTaskPhase: 'POLLING', shotId: 'shot_video00002' }),
+      ],
+    };
+    const html = renderToStaticMarkup(
+      <StoryboardPanel
+        batchBusy={false}
+        episodeTargetDurationSec={90}
+        exportNotice={null}
+        generateHint={null}
+        imageStates={{ batches: [], shots: [] }}
+        job={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onConfirm={vi.fn()}
+        onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        onGenerate={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
+        onGenerateVideos={vi.fn()}
+        onLockShot={vi.fn()}
+        onRestore={vi.fn()}
+        onUnlockShot={vi.fn()}
+        onVideoBatchCancel={vi.fn()}
+        onVideoBatchRetryFailed={vi.fn()}
+        pending={false}
+        projectId="project_12345678"
+        storyboard={storyboardReady}
+        videoBatchBusy={false}
+        videoStates={videoStates}
+      />,
+    );
+    expect(html).toContain('视频就绪 2 段');
+    expect(html).toContain('视频生成中');
+    expect(html).toContain('视频批次进行中 · 进度 1/2');
+    expect(html).toContain('取消剩余视频镜头');
+    const button = /<button[^>]*name="generate-videos-batch"[^>]*>/.exec(html)?.[0];
+    expect(button).toContain('disabled=""');
   });
 });
 
