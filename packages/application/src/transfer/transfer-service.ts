@@ -13,7 +13,10 @@ import type { TransferFilePort, TransferUnitOfWorkPort } from '../ports/transfer
 import type { TransferJson } from '../ports/transfer/transfer-types';
 import { assembleStoryboardExport } from '../script/storyboard-export-service';
 import { assembleTransferBundle, stableTransferJson } from './transfer-bundle';
-import { restoreOriginProjectFromBundle, writeNewProjectFromBundle } from './transfer-import-writer';
+import {
+  restoreOriginProjectFromBundle,
+  writeNewProjectFromBundle,
+} from './transfer-import-writer';
 import {
   decodeTransferBytes,
   parseTransferJson,
@@ -116,18 +119,14 @@ export const createTransferService = (
     if (replayed?.status === 'SUCCEEDED') {
       const stored = replayed.resultSummary;
       if (stored?.inputFingerprint !== inputFingerprint) {
-        return failure(
-          'TRANSFER_IDEMPOTENCY_CONFLICT',
-          '请求标识已用于不同导出命令',
-          traceId,
-        );
+        return failure('TRANSFER_IDEMPOTENCY_CONFLICT', '请求标识已用于不同导出命令', traceId);
       }
       return {
         data: {
           byteSize: replayed.byteSize,
           exportId: replayed.id,
           fileSha256: replayed.payloadSha256,
-          warningCodes: [...(stored.warningCodes)],
+          warningCodes: [...stored.warningCodes],
         },
         ok: true,
       };
@@ -172,7 +171,10 @@ export const createTransferService = (
         beatSheet === null ||
         sceneScript === null
       ) {
-        return deny('EXPORT_NOT_READY', '项目尚未形成可导出的完整快照（缺少已确认的圣经/脚本阶段）');
+        return deny(
+          'EXPORT_NOT_READY',
+          '项目尚未形成可导出的完整快照（缺少已确认的圣经/脚本阶段）',
+        );
       }
       const storyboardHead = await repositories.stageHeads.find(
         input.projectId,
@@ -356,7 +358,11 @@ export const createTransferService = (
     const sourceProjectId = String((bundle.project_snapshot as TransferJson).project_id);
     try {
       const result = await dependencies.unitOfWork.run(
-        async (repositories): Promise<{ readonly replay: TransferImportResultDto | null } & TransferImportResultDto> => {
+        async (
+          repositories,
+        ): Promise<
+          { readonly replay: TransferImportResultDto | null } & TransferImportResultDto
+        > => {
           const replayed = await repositories.transfer.findImportByRequestId(input.requestId);
           if (
             replayed !== null &&
@@ -413,7 +419,17 @@ export const createTransferService = (
       if (result.replay !== null) {
         return { data: result.replay, ok: true };
       }
-      return { data: result, ok: true };
+      // 首次成功：剥离内部 replay 标记，回执恰为 DTO 5 键（preload strict parse）。
+      return {
+        data: {
+          createdObjectCount: result.createdObjectCount,
+          importId: result.importId,
+          projectId: result.projectId,
+          sourceProjectId: result.sourceProjectId,
+          warningCodes: result.warningCodes,
+        },
+        ok: true,
+      };
     } catch (caught) {
       if (caught instanceof TransferValidationError) {
         const message =

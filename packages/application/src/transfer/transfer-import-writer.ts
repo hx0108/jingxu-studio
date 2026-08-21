@@ -11,6 +11,7 @@ import type {
 } from '../ports/script';
 import { computeShotSetHash, type ShotSetHashEntry } from '../script/shot-set-hash';
 import { isProjectStage } from '../script/script-dependency-graph';
+import { stableTransferJson } from './transfer-bundle';
 import {
   buildTransferIdMapping,
   collectTransferSourceIds,
@@ -288,13 +289,12 @@ export const writeNewProjectFromBundle = async (
     const parentVersionId = stringField(shot.parent_version_id);
     shotVersionRows.push({
       createdAt: at,
-      dialogueRenderMode: dialogueRenderModeFrom(
-        shot,
-        String(snapshot.dialogue_render_mode),
-      ),
+      dialogueRenderMode: dialogueRenderModeFrom(shot, String(snapshot.dialogue_render_mode)),
       document: JSON.stringify(shot),
       documentSha256: documentSha,
-      externalParentVersionId: null,
+      // Bundle 外父版本：文档保留原 parent_version_id，行记录同一外部引用（EXTERNAL_UNRESOLVED
+      // 分支要求 external_parent_version_id 非空且与文档一致）。
+      externalParentVersionId: parentVersionId,
       formatProfileId: newFormatProfileId,
       id: shotVersionId,
       lineageResolutionStatus: parentVersionId === null ? 'ROOT' : 'EXTERNAL_UNRESOLVED',
@@ -347,9 +347,7 @@ export const writeNewProjectFromBundle = async (
     ...IMPORT_STAGE_CHAIN.map((stage) => ({
       currentVersionId: versionIdsByStage.get(stage) ?? '',
       currentVersionType:
-        stage === 'STORY_BIBLE'
-          ? ('STORY_BIBLE_VERSION' as const)
-          : ('SCRIPT_VERSION' as const),
+        stage === 'STORY_BIBLE' ? ('STORY_BIBLE_VERSION' as const) : ('SCRIPT_VERSION' as const),
       episodeId: isProjectStage(stage) ? null : newEpisodeId,
       projectId: newProjectId,
       stage,
@@ -395,13 +393,7 @@ export const writeNewProjectFromBundle = async (
   });
 
   const createdObjectCount =
-    4 +
-    stages.length +
-    shotRows.length +
-    shotVersionRows.length +
-    heads.length +
-    edgeCount +
-    1;
+    4 + stages.length + shotRows.length + shotVersionRows.length + heads.length + edgeCount + 1;
   return { createdObjectCount, idMapping: mapping, projectId: newProjectId };
 };
 
@@ -442,16 +434,31 @@ export const restoreOriginProjectFromBundle = async (
   );
   if (currentEpisodeVersion === null) conflict('TRANSFER_PROJECT_CONFLICT');
 
-  // 基线 Hash：Bundle 原始（未重写）镜头集合哈希须等于目标当前整集哈希。
-  const baselineEntries: ShotSetHashEntry[] = shotContracts.map((shot) => {
+  // 基线校验：Bundle 镜头集合须就是目标当前整集版本。文档与库内对应版本按键序无关的
+  // 规范化形式逐字比对（Bundle 落盘经 stableTransferJson 排键，重哈希会因键序分歧误判），
+  // 集合哈希取行 document_sha256——确认时 shot_set_hash 即由行哈希计算。
+  const baselineEntries: ShotSetHashEntry[] = [];
+  for (const shot of shotContracts) {
     if (!isRecord(shot)) conflict('TRANSFER_BUNDLE_INVALID');
-    return {
-      documentSha256: documentSha256(dependencies, shot),
+    const shotVersionId = String(shot.version_id);
+    const storedVersion = await repositories.shotContractVersions.findById(shotVersionId);
+    if (storedVersion === null) conflict('TRANSFER_PROJECT_CONFLICT');
+    let storedDocument: unknown;
+    try {
+      storedDocument = JSON.parse(storedVersion.document);
+    } catch {
+      conflict('TRANSFER_PROJECT_CONFLICT');
+    }
+    if (stableTransferJson(storedDocument) !== stableTransferJson(shot)) {
+      conflict('TRANSFER_PROJECT_CONFLICT');
+    }
+    baselineEntries.push({
+      documentSha256: storedVersion.documentSha256,
       sequence: numberField(shot.sequence) ?? 0,
       shotId: String(shot.shot_id),
-      shotVersionId: String(shot.version_id),
-    };
-  });
+      shotVersionId,
+    });
+  }
   if (
     computeShotSetHash(baselineEntries, dependencies.hashText) !== currentEpisodeVersion.shotSetHash
   ) {
@@ -527,7 +534,9 @@ export const restoreOriginProjectFromBundle = async (
     const existing = await repositories.shots.findById(shotId);
     const previousVersionId = existing?.currentVersionId ?? null;
     const previousVersion =
-      previousVersionId === null ? null : await repositories.shotContractVersions.findById(previousVersionId);
+      previousVersionId === null
+        ? null
+        : await repositories.shotContractVersions.findById(previousVersionId);
     const versionNo =
       previousVersion === null
         ? Math.max(1, Math.trunc(numberField(shot.contract_version) ?? 1))
