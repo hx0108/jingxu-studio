@@ -12,9 +12,9 @@
 
 ## 3. Persistence and transaction
 
-- [ ] 3.1 实现 Transfer Repository/UnitOfWork，复用 `export_records`/`import_records`，覆盖状态、Hash、mapping、错误证据和 requestId 幂等。
-- [ ] 3.2 将导入版本、阶段头、依赖、审计、回执和记录写入同一 runtime Transaction Coordinator；补中途故障零残留集成测试。
-- [ ] 3.3 运行空库、0015 现有库、100+历史版本、重复导入和旧数据无损测试；仅在结构缺口被测试证明后新增 0016 migration。
+- [x] 3.1 实现 Transfer Repository/UnitOfWork，复用 `export_records`/`import_records`，覆盖状态、Hash、mapping、错误证据和 requestId 幂等。
+- [x] 3.2 将导入版本、阶段头、依赖、审计、回执和记录写入同一 runtime Transaction Coordinator；补中途故障零残留集成测试。
+- [x] 3.3 运行空库、0015 现有库、100+历史版本、重复导入和旧数据无损测试；仅在结构缺口被测试证明后新增 0016 migration。
 
 ## 4. Main, Preload and Renderer
 
