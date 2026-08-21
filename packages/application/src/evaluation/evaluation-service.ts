@@ -8,15 +8,22 @@
  */
 
 import {
+  EVALUATION_GUIDELINE_VERSION,
+  evaluationAuthorizationSchema,
+  evaluationDatasetSplitSchema,
   evaluationDedupKeySchema,
   evaluationExpectedSchema,
   evaluationSampleInputSchema,
 } from '@jingxu/contracts';
 import type {
   AppResultDto,
+  EvaluationAddAnnotationInputDto,
+  EvaluationAnnotationDto,
   EvaluationCreateFromEpisodeInputDto,
   EvaluationCreateFromEpisodeResultDto,
   EvaluationCreateSampleInputDto,
+  EvaluationImportBatchResultDto,
+  EvaluationImportItemResultDto,
   EvaluationIssueCode,
   EvaluationListSamplesInputDto,
   EvaluationListSamplesResultDto,
@@ -29,9 +36,11 @@ import type {
 
 import type {
   EvaluationAnnotationRecord,
+  EvaluationImportEnvelopeItem,
   EvaluationSampleRecord,
 } from '../ports/evaluation/evaluation-types';
 import type {
+  EvaluationImportFilePort,
   EvaluationRepositories,
   EvaluationRulesPort,
   EvaluationUnitOfWorkPort,
@@ -39,6 +48,7 @@ import type {
 import { PRODUCIBILITY_RULES_VERSION } from '../script/storyboard-export-markdown';
 
 export interface EvaluationServiceDependencies {
+  readonly file: EvaluationImportFilePort;
   readonly newId: () => string;
   readonly now: () => string;
   readonly rules: EvaluationRulesPort;
@@ -66,7 +76,84 @@ export interface EvaluationService {
     input: Readonly<{ requestId: string; sampleId: string }>,
     traceId: string,
   ): Promise<AppResultDto<Readonly<{ deletedAnnotations: number; sampleId: string }>>>;
+  addAnnotation(
+    input: EvaluationAddAnnotationInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<Readonly<{ annotations: readonly EvaluationAnnotationDto[] }>>>;
+  importBatch(
+    input: Readonly<{ requestId: string }>,
+    traceId: string,
+  ): Promise<AppResultDto<EvaluationImportBatchResultDto>>;
 }
+
+const IMPORT_MAX_SAMPLES = 256;
+const REASON_MAX = 280;
+
+const boundedReason = (parts: readonly string[]): string => {
+  const joined = parts.filter((part) => part.length > 0).join('; ');
+  return (joined.length > 0 ? joined : '样本信封非法').slice(0, REASON_MAX - 1) + '…';
+};
+
+type StagedImportItem =
+  | { readonly valid: true; readonly item: EvaluationImportEnvelopeItem }
+  | { readonly valid: false; readonly dedupKey: string | null; readonly reason: string };
+
+/** staging（事务外）：文件级损坏整体拒绝；条目级问题降级为逐样本 REJECTED 原因。 */
+const stageImportEnvelope = (bytes: Uint8Array): readonly StagedImportItem[] | null => {
+  let text: string;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.samples)) return null;
+  if (parsed.samples.length > IMPORT_MAX_SAMPLES) return null;
+  return parsed.samples.map((raw): StagedImportItem => {
+    if (!isRecord(raw)) {
+      return { dedupKey: null, reason: '样本条目不是对象', valid: false };
+    }
+    const dedupKey = typeof raw.dedupKey === 'string' ? raw.dedupKey : null;
+    const fieldErrors = envelopeFieldErrors(raw);
+    const authorization = evaluationAuthorizationSchema.safeParse(raw.authorization);
+    const datasetSplit = evaluationDatasetSplitSchema.safeParse(raw.datasetSplit);
+    if (
+      fieldErrors !== null ||
+      !authorization.success ||
+      !datasetSplit.success ||
+      (raw.projectId != null && typeof raw.projectId !== 'string')
+    ) {
+      const parts: string[] = [];
+      if (fieldErrors !== null) {
+        for (const [field, message] of Object.entries(fieldErrors)) {
+          parts.push(`${field}: ${message}`);
+        }
+      }
+      if (!authorization.success) parts.push('authorization: 授权状态非法');
+      if (!datasetSplit.success) parts.push('datasetSplit: 数据拆分非法');
+      if (raw.projectId != null && typeof raw.projectId !== 'string') {
+        parts.push('projectId: 类型非法');
+      }
+      return { dedupKey, reason: boundedReason(parts), valid: false };
+    }
+    return {
+      item: {
+        authorization: authorization.data,
+        datasetSplit: datasetSplit.data,
+        dedupKey: raw.dedupKey as string,
+        input: raw.input as EvaluationSampleInputDto,
+        projectId: raw.projectId ?? null,
+        expected: raw.expected as EvaluationSampleRecord['expected'],
+      },
+      valid: true,
+    };
+  });
+};
 
 const failure = <T>(
   code: ProjectErrorCode,
@@ -492,5 +579,137 @@ export const createEvaluationService = (
         ok: true as const,
       };
     });
+  },
+
+  async addAnnotation(input, traceId) {
+    if (input.guidelineVersion !== EVALUATION_GUIDELINE_VERSION) {
+      return failure('EVALUATION_SAMPLE_INVALID', '标注指南版本不受支持', traceId, {
+        guidelineVersion: `仅支持当前指南版本 ${EVALUATION_GUIDELINE_VERSION}`,
+      });
+    }
+    return dependencies.unitOfWork.run(async (repositories) => {
+      const sample = await repositories.samples.findById(input.sampleId);
+      if (sample === null) {
+        return failure('EVALUATION_NOT_FOUND', '样本不存在', traceId);
+      }
+      const record: EvaluationAnnotationRecord = {
+        id: `anno_${dependencies.newId()}`,
+        sampleId: input.sampleId,
+        guidelineVersion: input.guidelineVersion,
+        label: input.label,
+        rationale: input.rationale,
+        annotator: input.annotator,
+        createdAt: dependencies.now(),
+      };
+      await repositories.annotations.insert(record);
+      await repositories.audit.record({
+        id: `audit_${dependencies.newId()}`,
+        projectId: sample.projectId,
+        actor: 'USER',
+        action: 'EVALUATION_ANNOTATION_ADDED',
+        objectType: 'EVALUATION_ANNOTATION',
+        objectId: record.id,
+        objectVersionId: null,
+        beforeSha256: null,
+        afterSha256: null,
+        metadata: {
+          guidelineVersion: input.guidelineVersion,
+          sampleId: input.sampleId,
+          verdict: input.label.verdict,
+        },
+        traceId: input.requestId,
+        createdAt: dependencies.now(),
+      });
+      const annotations = await repositories.annotations.listBySampleId(input.sampleId);
+      return { data: { annotations: annotations.map(annotationDto) }, ok: true as const };
+    });
+  },
+
+  async importBatch(input, traceId) {
+    // ① 文件选择（事务外，Main Open Dialog）；取消直接返回，路径不进入任何回执。
+    const selected = await dependencies.file.readSelectedJson();
+    if (selected === null) {
+      return failure('TRANSFER_FILE_CANCELLED', '已取消导入', traceId);
+    }
+    // ② staging：文件级损坏整体拒绝（零入库）。
+    const stagedItems = stageImportEnvelope(selected.bytes);
+    if (stagedItems === null) {
+      return failure('EVALUATION_IMPORT_INVALID', '导入文件不是有效的评测集导入信封', traceId);
+    }
+    // ③ 逐样本独立短事务：合法入库、重复/非法拒绝，聚合回执。
+    const items: EvaluationImportItemResultDto[] = [];
+    for (const staged of stagedItems) {
+      const outcome = await dependencies.unitOfWork.run(async (repositories) => {
+        if (!staged.valid) {
+          return {
+            dedupKey: staged.dedupKey,
+            reason: staged.reason,
+            sampleId: null,
+            status: 'REJECTED' as const,
+          };
+        }
+        const existing = await repositories.samples.findByDedupKey(staged.item.dedupKey);
+        if (existing !== null) {
+          return {
+            dedupKey: staged.item.dedupKey,
+            reason: 'dedup_key 已存在',
+            sampleId: existing.id,
+            status: 'DUPLICATE' as const,
+          };
+        }
+        if (staged.item.projectId != null) {
+          const project = await repositories.projects.findById(staged.item.projectId, 'ACTIVE');
+          if (project === null) {
+            return {
+              dedupKey: staged.item.dedupKey,
+              reason: '归属项目不存在',
+              sampleId: null,
+              status: 'REJECTED' as const,
+            };
+          }
+        }
+        const evaluation = dependencies.rules.evaluate(staged.item.input);
+        const record = await insertAuditedSample(repositories, dependencies, {
+          authorization: staged.item.authorization,
+          datasetSplit: staged.item.datasetSplit,
+          dedupKey: staged.item.dedupKey,
+          envelope: staged.item.input,
+          expected: staged.item.expected,
+          hits: evaluation.hits,
+          projectId: staged.item.projectId ?? null,
+          ruleVersion: evaluation.ruleVersion,
+          traceId: input.requestId,
+        });
+        return {
+          dedupKey: staged.item.dedupKey,
+          reason: null,
+          sampleId: record.id,
+          status: 'CREATED' as const,
+        };
+      });
+      items.push(outcome);
+    }
+    // ④ 批次审计（一次）：回执计数入 metadata，不含路径。
+    await dependencies.unitOfWork.run(async (repositories) => {
+      await repositories.audit.record({
+        id: `audit_${dependencies.newId()}`,
+        projectId: null,
+        actor: 'USER',
+        action: 'EVALUATION_BATCH_IMPORTED',
+        objectType: 'EVALUATION_SAMPLE',
+        objectId: `batch_${dependencies.newId()}`,
+        objectVersionId: null,
+        beforeSha256: null,
+        afterSha256: null,
+        metadata: {
+          created: items.filter((item) => item.status === 'CREATED').length,
+          duplicate: items.filter((item) => item.status === 'DUPLICATE').length,
+          rejected: items.filter((item) => item.status === 'REJECTED').length,
+        },
+        traceId: input.requestId,
+        createdAt: dependencies.now(),
+      });
+    });
+    return { data: { items }, ok: true };
   },
 });

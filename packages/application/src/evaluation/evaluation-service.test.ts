@@ -1,4 +1,8 @@
-import type { EvaluationCreateSampleInputDto, EvaluationRuleHitDto } from '@jingxu/contracts';
+import type {
+  EvaluationAddAnnotationInputDto,
+  EvaluationCreateSampleInputDto,
+  EvaluationRuleHitDto,
+} from '@jingxu/contracts';
 import type { Project } from '@jingxu/domain';
 import { describe, expect, it } from 'vitest';
 
@@ -46,6 +50,8 @@ interface Harness {
 const createHarness = (
   options: {
     hits?: readonly EvaluationRuleHitDto[];
+    /** 未提供时文件 Port 返回 null（等价用户取消）。 */
+    importBytes?: Uint8Array;
     versionStatus?: EpisodeVersion['status'];
   } = {},
 ): Harness => {
@@ -220,6 +226,10 @@ const createHarness = (
   };
 
   const service = createEvaluationService({
+    file: {
+      readSelectedJson: () =>
+        Promise.resolve(options.importBytes === undefined ? null : { bytes: options.importBytes }),
+    },
     newId,
     now: () => NOW,
     rules: {
@@ -487,5 +497,200 @@ describe('EvaluationService 删除与读取', () => {
     expect(missing.ok).toBe(false);
     if (missing.ok) return;
     expect(missing.error.code).toBe('EVALUATION_NOT_FOUND');
+  });
+});
+
+const envelopeBytes = (envelope: unknown): Uint8Array =>
+  new TextEncoder().encode(JSON.stringify(envelope));
+
+describe('EvaluationService 人工标注追加', () => {
+  const annotationInput = (
+    sampleId: string,
+    overrides: Record<string, unknown> = {},
+  ): EvaluationAddAnnotationInputDto => ({
+    annotator: '贺星',
+    guidelineVersion: 'jingxu-annotation-guideline/1',
+    label: { issueCodes: [], severity: null, verdict: 'ACCEPTABLE' },
+    rationale: '符合指南 v1 的可接受样本',
+    requestId: 'req-anno-0001',
+    sampleId,
+    ...overrides,
+  });
+
+  it('追加标注—历史不可变/回执为时间序全集/审计留痕 traceId=requestId', async () => {
+    const harness = createHarness();
+    const created = await harness.service.createSample(createInput(), 'trace-1');
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const first = await harness.service.addAnnotation(
+      annotationInput(created.data.sampleId),
+      'trace-2',
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.data.annotations).toHaveLength(1);
+
+    const second = await harness.service.addAnnotation(
+      annotationInput(created.data.sampleId, {
+        label: { issueCodes: ['EVAL_ISSUE_LOCK_CONFLICT'], severity: 'WARN', verdict: 'PROBLEM' },
+        rationale: '复核发现锁定冲突，升级为问题',
+        requestId: 'req-anno-0002',
+      }),
+      'trace-3',
+    );
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.data.annotations).toHaveLength(2);
+    expect(second.data.annotations[0]?.id).toBe(first.data.annotations[0]?.id);
+    expect(second.data.annotations[1]?.label.verdict).toBe('PROBLEM');
+
+    const annotationAudits = harness.audits.filter(
+      (entry) => entry.action === 'EVALUATION_ANNOTATION_ADDED',
+    );
+    expect(annotationAudits).toHaveLength(2);
+    const audit = annotationAudits.at(-1);
+    expect(audit?.actor).toBe('USER');
+    expect(audit?.projectId).toBe(null);
+    expect(audit?.traceId).toBe('req-anno-0002');
+    expect((audit?.metadata as Record<string, unknown> | undefined)?.sampleId).toBe(
+      created.data.sampleId,
+    );
+  });
+
+  it('指南版本不受支持—EVALUATION_SAMPLE_INVALID 携字段原因且零写入', async () => {
+    const harness = createHarness();
+    const created = await harness.service.createSample(createInput(), 'trace-1');
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const result = await harness.service.addAnnotation(
+      annotationInput(created.data.sampleId, {
+        guidelineVersion: 'jingxu-annotation-guideline/2',
+      }),
+      'trace-2',
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('EVALUATION_SAMPLE_INVALID');
+    expect(result.error.fieldErrors?.guidelineVersion).toBeDefined();
+    expect(harness.annotations).toHaveLength(0);
+    expect(harness.audits.some((entry) => entry.action === 'EVALUATION_ANNOTATION_ADDED')).toBe(
+      false,
+    );
+  });
+
+  it('样本不存在—EVALUATION_NOT_FOUND', async () => {
+    const harness = createHarness();
+    const result = await harness.service.addAnnotation(annotationInput('eval_missing0'), 'trace-1');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('EVALUATION_NOT_FOUND');
+  });
+});
+
+describe('EvaluationService JSON 批量导入', () => {
+  it('混合批次—逐样本短事务：CREATED/DUPLICATE/REJECTED 样本级原因 + 批次审计计数', async () => {
+    const envelope = {
+      version: 1,
+      samples: [
+        createInput({ dedupKey: 'import-good-0001' }),
+        createInput({ dedupKey: 'manual-shot-0001' }),
+        {
+          ...createInput({ dedupKey: 'import-bad-0001' }),
+          expected: {
+            acceptable: true,
+            expectedIssueCodes: ['EVAL_ISSUE_NOT_A_CODE'],
+            referenceContract: null,
+          },
+        },
+      ],
+    };
+    const harness = createHarness({ importBytes: envelopeBytes(envelope) });
+    const precreated = await harness.service.createSample(createInput(), 'trace-1');
+    expect(precreated.ok).toBe(true);
+    if (!precreated.ok) return;
+
+    const result = await harness.service.importBatch({ requestId: 'req-import-0001' }, 'trace-2');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.items).toHaveLength(3);
+
+    const [created, duplicate, rejected] = result.data.items;
+    expect(created?.status).toBe('CREATED');
+    expect(created?.reason).toBeNull();
+    expect(created?.sampleId).not.toBeNull();
+    expect(duplicate?.status).toBe('DUPLICATE');
+    expect(duplicate?.sampleId).toBe(precreated.data.sampleId);
+    expect(duplicate?.reason).not.toBeNull();
+    expect(rejected?.status).toBe('REJECTED');
+    expect(rejected?.dedupKey).toBe('import-bad-0001');
+    expect(rejected?.sampleId).toBeNull();
+    expect(rejected?.reason).toContain('expected');
+
+    expect(harness.samples).toHaveLength(2);
+    const batchAudit = harness.audits.find((entry) => entry.action === 'EVALUATION_BATCH_IMPORTED');
+    expect(batchAudit?.projectId).toBe(null);
+    expect(batchAudit?.traceId).toBe('req-import-0001');
+    expect(batchAudit?.metadata).toEqual({
+      created: 1,
+      duplicate: 1,
+      rejected: 1,
+    });
+    expect(
+      harness.audits.filter((entry) => entry.action === 'EVALUATION_SAMPLE_CREATED'),
+    ).toHaveLength(2);
+  });
+
+  it('取消文件选择—TRANSFER_FILE_CANCELLED 且零入库零审计', async () => {
+    const harness = createHarness();
+    const result = await harness.service.importBatch({ requestId: 'req-import-0002' }, 'trace-1');
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('TRANSFER_FILE_CANCELLED');
+    expect(harness.samples).toHaveLength(0);
+    expect(harness.audits).toHaveLength(0);
+  });
+
+  it('文件级损坏（非法 JSON/版本不识别）—EVALUATION_IMPORT_INVALID 零入库零审计', async () => {
+    const broken = createHarness({ importBytes: new TextEncoder().encode('{ broken') });
+    const brokenResult = await broken.service.importBatch({ requestId: 'req-import-0003' }, 't-1');
+    expect(brokenResult.ok).toBe(false);
+    if (brokenResult.ok) return;
+    expect(brokenResult.error.code).toBe('EVALUATION_IMPORT_INVALID');
+    expect(broken.samples).toHaveLength(0);
+    expect(broken.audits).toHaveLength(0);
+
+    const wrongVersion = createHarness({
+      importBytes: envelopeBytes({ version: 2, samples: [createInput()] }),
+    });
+    const wrongResult = await wrongVersion.service.importBatch(
+      { requestId: 'req-import-0004' },
+      't-2',
+    );
+    expect(wrongResult.ok).toBe(false);
+    if (wrongResult.ok) return;
+    expect(wrongResult.error.code).toBe('EVALUATION_IMPORT_INVALID');
+    expect(wrongVersion.samples).toHaveLength(0);
+    expect(wrongVersion.audits).toHaveLength(0);
+  });
+
+  it('条目归属项目不存在—该条 REJECTED 其余照常入库', async () => {
+    const envelope = {
+      version: 1,
+      samples: [
+        createInput({ dedupKey: 'import-orphan-0001', projectId: 'project_missing0' }),
+        createInput({ dedupKey: 'import-global-0001' }),
+      ],
+    };
+    const harness = createHarness({ importBytes: envelopeBytes(envelope) });
+    const result = await harness.service.importBatch({ requestId: 'req-import-0005' }, 'trace-1');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.items).toHaveLength(2);
+    expect(result.data.items[0]?.status).toBe('REJECTED');
+    expect(result.data.items[0]?.reason).toBe('归属项目不存在');
+    expect(result.data.items[0]?.dedupKey).toBe('import-orphan-0001');
+    expect(result.data.items[1]?.status).toBe('CREATED');
+    expect(harness.samples).toHaveLength(1);
+    expect(harness.samples[0]?.projectId).toBeNull();
   });
 });
