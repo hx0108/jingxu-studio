@@ -99,7 +99,8 @@ export interface ScriptDependency {
 
 export interface ScriptAuditEntry {
   readonly id: string;
-  readonly projectId: string;
+  /** 0001 audit_events.project_id 可空（全局对象无项目归属，如全局评测样本）。 */
+  readonly projectId: string | null;
   readonly actor: 'USER' | 'SYSTEM' | 'AI';
   readonly action: string;
   readonly objectType: string;

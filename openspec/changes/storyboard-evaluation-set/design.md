@@ -40,7 +40,11 @@ Renderer 评测集页面（全局主导航 + 项目菜单筛选入口）
 `expected_json` 形状：
 
 ```json
-{ "acceptable": false, "expectedIssueCodes": ["EVAL_ISSUE_MISSING_REQUIRED"], "referenceContract": null }
+{
+  "acceptable": false,
+  "expectedIssueCodes": ["EVAL_ISSUE_MISSING_REQUIRED"],
+  "referenceContract": null
+}
 ```
 
 - `candidate.kind` ∈ `SCRIPT_STAGE | SHOT_CONTRACT | EPISODE_STORYBOARD`（对齐 0001 `sample_type` CHECK）。
@@ -58,17 +62,18 @@ Renderer 评测集页面（全局主导航 + 项目菜单筛选入口）
 
 ## IPC / DTO 面（`evaluation` 七方法）
 
-| 方法 | 入参要点 | 回执 |
-|---|---|---|
-| `listSamples` | `{ scope: 'ALL'\|'GLOBAL'\|'PROJECT', projectId?, sampleType?, datasetSplit? }` | 样本摘要列表（id/type/split/authorization/acceptable/hitCodes/projectId/createdAt/dedupKey + 最新标注摘要） |
-| `getSample` | `{ sampleId }` | 样本详情（信封/期望/规则命中+版本/全部标注） |
-| `createSample` | 样本信封 + dedupKey + authorization + datasetSplit + projectId? | 样本摘要（含规则命中码） |
-| `createFromEpisode` | `{ projectId, expectedVersionId, shotIndexes?, authorization, datasetSplit, requestId }` | 创建的样本摘要列表 |
-| `importBatch` | `{ requestId }`（文件经 Main Open Dialog） | 逐样本结果数组（CREATED/DUPLICATE/REJECTED+原因） |
-| `deleteSample` | `{ sampleId, requestId }` | 删除回执（含级联删除的标注数） |
-| `addAnnotation` | `{ sampleId, guidelineVersion, label, rationale, annotator, requestId }` | 该样本全部标注（时间序） |
+| 方法                | 入参要点                                                                                 | 回执                                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `listSamples`       | `{ scope: 'ALL'\|'GLOBAL'\|'PROJECT', projectId?, sampleType?, datasetSplit? }`          | 样本摘要列表（id/type/split/authorization/acceptable/hitCodes/projectId/createdAt/dedupKey + 最新标注摘要） |
+| `getSample`         | `{ sampleId }`                                                                           | 样本详情（信封/期望/规则命中+版本/全部标注）                                                                |
+| `createSample`      | 样本信封 + dedupKey + authorization + datasetSplit + projectId?                          | 样本摘要（含规则命中码）                                                                                    |
+| `createFromEpisode` | `{ projectId, expectedVersionId, shotIndexes?, authorization, datasetSplit, requestId }` | 创建的样本摘要列表                                                                                          |
+| `importBatch`       | `{ requestId }`（文件经 Main Open Dialog）                                               | 逐样本结果数组（CREATED/DUPLICATE/REJECTED+原因）                                                           |
+| `deleteSample`      | `{ sampleId, requestId }`                                                                | 删除回执（含级联删除的标注数）                                                                              |
+| `addAnnotation`     | `{ sampleId, guidelineVersion, label, rationale, annotator, requestId }`                 | 该样本全部标注（时间序）                                                                                    |
 
 - 全部走 AppResultDto 脱敏包装；requestId 幂等仅用于派生/导入/删除/标注写命令（重复同载荷返回原回执——复用命令回执表或 0016 同款模式，按集成测试证明的缺口决定是否新增列）。
+- **requestId 幂等拍板（实施期补充）**：V1 不做持久化重放。集成矩阵未证明缺口——命令回执表 `command_receipts` 的 `command_name` 带 CHECK 约束（扩展须重建表），为评测新增回执列超出 0017 冻结范围。requestId 仅作为审计 `traceId` 落 `audit_events`，Main 侧以 singleflight 防并发重放；派生命令另由确定性 `dedup_key`（`derive:<projectId>:<versionId>:<shotId>`）提供天然幂等（重派生返回既有样本，零新增行）。
 
 ## 事务边界
 
