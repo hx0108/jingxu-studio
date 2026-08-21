@@ -5,6 +5,7 @@ export type {
   PersistenceRuntimePort,
 } from './ports/persistence/persistence-runtime-port';
 export type * from './ports/credential/index';
+export type * from './ports/evaluation/index';
 export type * from './ports/image-model/index';
 export type * from './ports/media/index';
 export type * from './ports/persistence/job/index';
