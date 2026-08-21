@@ -7,8 +7,8 @@
 
 - [x] 2.1 测试先行实现 ProjectTransferBundle CURRENT_ONLY 组装，覆盖四个 Script 阶段、StoryBible、Episode Storyboard、Hash 和媒体缺失警告。
 - [x] 2.2 实现离线 Schema、跨对象引用、版本头、项目归属、UTF-8、大小和 Hash staging 校验；为每个非法输入保留单一错误 Fixture。
-- [ ] 2.3 实现确定性 ID Mapping 与 NEW_PROJECT 文档引用重写；验证不创建 SourceInput/ConsentRecord 且导入项目进入 IMPORTED_SNAPSHOT。
-- [ ] 2.4 实现 RETURN_TO_ORIGIN 基线 Hash/expected head 并发校验，并保证新版本写入不修改历史行。
+- [x] 2.3 实现确定性 ID Mapping 与 NEW_PROJECT 文档引用重写；验证不创建 SourceInput/ConsentRecord 且导入项目进入 IMPORTED_SNAPSHOT。
+- [x] 2.4 实现 RETURN_TO_ORIGIN 基线 Hash/expected head 并发校验，并保证新版本写入不修改历史行。
 
 ## 3. Persistence and transaction
 
@@ -25,6 +25,8 @@
 ## 5. Verification and documentation
 
 - [x] 5.1 补 Unit、Contract、Integration 和 Electron E2E：合法导出、损坏/Hash/引用错误、NEW_PROJECT、RETURN_TO_ORIGIN、冲突、取消、幂等和回滚。
-- [ ] 5.2 更新 README、TECH_DESIGN 验收追踪和 packaged smoke，确认 Transfer IPC、Schema、无路径/Key泄漏和不自动重启媒体任务。
-- [ ] 5.3 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:e2e`、`pnpm package:win` 与 `openspec validate project-transfer-import-export --strict`。
-- [ ] 5.4 执行 OpenSpec Verify；通过后 Sync Specs、Archive Change，并记录实际验证证据。
+- [x] 5.2 更新 README、TECH_DESIGN 验收追踪和 packaged smoke，确认 Transfer IPC、Schema、无路径/Key泄漏和不自动重启媒体任务。
+- [x] 5.3 运行 `pnpm format:check`、`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm test:contract`、`pnpm test:integration`、`pnpm test:e2e`、`pnpm package:win` 与 `openspec validate project-transfer-import-export --strict`。
+- [x] 5.4 执行 OpenSpec Verify；通过后 Sync Specs、Archive Change，并记录实际验证证据。
+  - 结果（2026-08-22）：Verify 逐 Requirement 对照绿色证据（6 条 Requirement 均有 E2E/contract/integration/unit 映射，无阻断项）；spec delta 归档创建 `openspec/specs/project-transfer-import-export/spec.md`（+6 Requirement）；全量门禁 head 计数：unit 879/879（101 文件）、contract 147/147（20 文件）、integration 230/230（41 文件）、E2E 25 passed + 3 skipped（24+1 新 spec；real-probe 按凭据门控跳过）、format:check/lint/typecheck 零错误、Windows x64 离线打包（本地 dist 重建 zip 经 `JINGXU_ELECTRON_ZIP_DIR`，sha256 dc0391…）+ packaged smoke、`openspec validate --strict` 通过。
+  - E2E 额外揪出并修复三处真实缺陷（详见提交 8811b9c）：NEW_PROJECT 镜头版本行 externalParentVersionId 误置 null 违反血统 CHECK；首次导入回执携带内部 replay 标记致 preload strict parse 拒绝；RTO 基线重哈希因键序分歧误判冲突。
