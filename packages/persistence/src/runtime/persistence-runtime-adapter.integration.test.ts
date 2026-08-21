@@ -226,8 +226,8 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
     await createOnlineBackup({
       backupId: 'backup_invalidaudit',
       clock: () => '2026-08-08T00:00:00.000Z',
-      // 迁移 head 0015 后备份基线为 15（Seedance 能力快照升版）。
-      currentVersion: 15,
+      // 迁移 head 0016 后备份基线为 16（Transfer request_id 结构缺口补齐）。
+      currentVersion: 16,
       database,
       paths,
     });

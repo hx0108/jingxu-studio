@@ -19,3 +19,5 @@ export * from './runtime/persistence-runtime-adapter';
 export * from './runtime/sqlite-connection';
 export * from './runtime/sqlite-runtime';
 export * from './schema-manifest/sqlite-schema-manifest-unit-of-work';
+export * from './transfer/sqlite-transfer-record-repository';
+export * from './transfer/sqlite-transfer-unit-of-work';
