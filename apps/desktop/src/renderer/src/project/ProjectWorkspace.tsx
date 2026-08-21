@@ -11,6 +11,8 @@ import { ProjectListView } from './ProjectList';
 import { createRequestId } from './project-api';
 import { describeProjectError } from './project-error';
 import { useProjectCommands, useProjectDetail, useProjectList } from './project-hooks';
+import { getTransferClient } from './transfer-api';
+import { formatTransferWarnings } from './transfer-copy';
 import { ScriptWorkspaceView } from '../script/ScriptWorkspace';
 
 type Screen = 'list' | 'create' | 'detail' | 'edit' | 'script';
@@ -46,6 +48,9 @@ export const ProjectWorkspace = () => {
   const [pendingScreen, setPendingScreen] = useState<PendingTarget | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [commandError, setCommandError] = useState<AppErrorDto | null>(null);
+  // project-transfer 4.3：列表导入（NEW_PROJECT）回执与在飞状态；取消静默。
+  const [importNotice, setImportNotice] = useState<string | null>(null);
+  const [importPending, setImportPending] = useState(false);
   const list = useProjectList(listScope, listFilter.trim());
   const detail = useProjectDetail(
     selectedProjectId === null ? null : { projectId: selectedProjectId, scope: listScope },
@@ -151,6 +156,39 @@ export const ProjectWorkspace = () => {
     setScreen('list');
   };
 
+  // 列表导入项目快照（NEW_PROJECT）：文件由 Main Open Dialog 选择（路径不出 Main）。
+  const performTransferImport = async (): Promise<void> => {
+    if (importPending) return;
+    setImportPending(true);
+    setCommandError(null);
+    setImportNotice(null);
+    try {
+      const result = await getTransferClient().importProject({
+        importMode: 'NEW_PROJECT',
+        requestId: createRequestId('transfer-import'),
+      });
+      if (result.ok) {
+        const warnings = formatTransferWarnings(result.data.warningCodes);
+        setImportNotice(
+          `快照已导入为新项目（${String(result.data.createdObjectCount)} 个对象，来源 ${result.data.sourceProjectId}）${warnings.length > 0 ? `；${warnings.join('；')}` : ''}`,
+        );
+        await list.refetch();
+      } else if (result.error.code !== 'TRANSFER_FILE_CANCELLED') {
+        setCommandError(result.error);
+      }
+    } catch {
+      setCommandError({
+        code: 'TRANSFER_PERSISTENCE_FAILED',
+        fieldErrors: null,
+        message: '主进程未返回可验证的结果',
+        retryable: true,
+        traceId: 'renderer_transport_failure',
+        userAction: '请稍后重试。',
+      });
+    }
+    setImportPending(false);
+  };
+
   const pending = commands.deleteProject.isPending || commands.restore.isPending;
   return (
     <main className="project-shell">
@@ -208,7 +246,24 @@ export const ProjectWorkspace = () => {
                 创建项目
               </button>
             )}
+            {listScope === 'ACTIVE' && (
+              <button
+                disabled={importPending}
+                name="import-project-snapshot"
+                onClick={() => {
+                  void performTransferImport();
+                }}
+                type="button"
+              >
+                {importPending ? '正在导入…' : '导入项目快照'}
+              </button>
+            )}
           </div>
+          {importNotice !== null && (
+            <p className="action-hint" role="status">
+              {importNotice}
+            </p>
+          )}
           <ProjectListView
             errorMessage={
               listFailure?.ok === false

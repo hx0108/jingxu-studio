@@ -95,6 +95,10 @@ export interface StoryboardPanelProps {
   /** storyboard-export：READY 整集三导出入口（deliverables D3；非 READY 不渲染）。 */
   readonly onExportEpisode: (format: StoryboardExportFormat) => void;
   readonly exportNotice: string | null;
+  /** project-transfer 4.3：项目快照导出（CURRENT_ONLY）与按快照恢复本项目（RTO）。 */
+  readonly onExportSnapshot?: () => void;
+  readonly onRestoreSnapshot?: () => void;
+  readonly snapshotNotice?: string | null;
   readonly onGenerate: () => void;
   readonly onGenerateFirstFrames: () => void;
   readonly onGenerateVideos?: () => void;
@@ -120,6 +124,9 @@ export const StoryboardPanel = ({
   onEditShot,
   onExportEpisode,
   exportNotice,
+  onExportSnapshot,
+  onRestoreSnapshot,
+  snapshotNotice = null,
   onGenerate,
   onGenerateFirstFrames,
   onLockShot,
@@ -266,12 +273,38 @@ export const StoryboardPanel = ({
             >
               导出报告
             </button>
+            {/* project-transfer 4.3：项目快照（CURRENT_ONLY）导出与 RTO 恢复同门禁。 */}
+            {onExportSnapshot !== undefined && (
+              <button
+                disabled={pending}
+                name="export-project-snapshot"
+                onClick={onExportSnapshot}
+                type="button"
+              >
+                导出项目快照
+              </button>
+            )}
+            {onRestoreSnapshot !== undefined && (
+              <button
+                disabled={pending}
+                name="restore-project-snapshot"
+                onClick={onRestoreSnapshot}
+                type="button"
+              >
+                从快照恢复本项目
+              </button>
+            )}
           </>
         )}
       </div>
       {exportNotice !== null && (
         <p className="action-hint" role="status">
           {exportNotice}
+        </p>
+      )}
+      {snapshotNotice != null && snapshotNotice !== '' && (
+        <p className="action-hint" role="status">
+          {snapshotNotice}
         </p>
       )}
       {generateHint !== null && <p className="action-hint">{generateHint}</p>}

@@ -20,7 +20,7 @@
 
 - [ ] 4.1 实现 Main Transfer IPC、sender/READY gate/singleflight、系统 Open/Save Dialog 和原子文件 sink；路径不得进入 Renderer 或回执。
 - [x] 4.2 实现 Preload 冻结 `transfer` 白名单和双端 strict DTO/result 校验，补未授权/未知字段/异常脱敏 Contract 测试。
-- [ ] 4.3 在项目设置/项目列表接入导入导出 UI，展示校验状态、冲突、媒体缺失警告、Hash 和 IMPORTED_SNAPSHOT 门禁。
+- [x] 4.3 在项目设置/项目列表接入导入导出 UI，展示校验状态、冲突、媒体缺失警告、Hash 和 IMPORTED_SNAPSHOT 门禁。
 
 ## 5. Verification and documentation
 
