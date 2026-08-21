@@ -17,6 +17,8 @@ import { OriginalInput } from './OriginalInput';
 import { StoryboardPanel } from './StoryboardPanel';
 import { ProviderSettings } from './ProviderSettings';
 import { DirtyLeaveDialog } from '../project/DirtyLeaveDialog';
+import { getTransferClient } from '../project/transfer-api';
+import { formatTransferWarnings } from '../project/transfer-copy';
 import {
   createScriptRequestId,
   getImageClient,
@@ -65,6 +67,8 @@ export const ScriptWorkspaceView = ({
   // storyboard-export：成功回执通知（不含路径红线）与 Σ 偏离确认弹层状态（D5）。
   // 弹层携带原请求 format：确认重发必须落在用户最初选择的交付物形态上（deliverables D3）。
   const [exportNotice, setExportNotice] = useState<string | null>(null);
+  // project-transfer 4.3：项目快照导出/恢复回执（同样只含 Hash/大小/警告，无路径）。
+  const [snapshotNotice, setSnapshotNotice] = useState<string | null>(null);
   const [deviation, setDeviation] = useState<{
     readonly format: StoryboardExportFormat;
     readonly totalDurationSec: string;
@@ -428,6 +432,74 @@ export const ScriptWorkspaceView = ({
     setPending(false);
   };
 
+  // 项目快照导出（project-transfer 4.3）：默认拒绝覆盖；refused（retryable=false）
+  // 时经 globalThis.confirm 显式确认后以新 requestId 覆盖重试。取消静默。
+  const performTransferExport = async (overwriteConfirmed: boolean): Promise<void> => {
+    const currentStoryboard = workspace?.storyboard.current ?? null;
+    if (workspace === null || currentStoryboard === null || pending) return;
+    setPending(true);
+    setError(null);
+    setSnapshotNotice(null);
+    try {
+      const result = await getTransferClient().exportProject({
+        episodeId: workspace.episode.id,
+        expectedVersionId: currentStoryboard.id,
+        overwriteConfirmed,
+        projectId,
+        requestId: createScriptRequestId('transfer-export'),
+      });
+      if (result.ok) {
+        const warnings = formatTransferWarnings(result.data.warningCodes);
+        setSnapshotNotice(
+          `项目快照已导出：${result.data.exportId}（sha256 …${result.data.fileSha256.slice(-4)}，${String(result.data.byteSize)} 字节）${warnings.length > 0 ? `；${warnings.join('；')}` : ''}`,
+        );
+      } else if (
+        result.error.code === 'TRANSFER_FILE_WRITE_FAILED' &&
+        !result.error.retryable &&
+        !overwriteConfirmed &&
+        globalThis.confirm('目标文件已存在。确认覆盖后重新导出？')
+      ) {
+        setPending(false);
+        await performTransferExport(true);
+        return;
+      } else if (result.error.code !== 'TRANSFER_FILE_CANCELLED') {
+        setError(result.error);
+      }
+    } catch {
+      setError(rendererTransportError());
+    }
+    setPending(false);
+  };
+
+  // 按快照恢复本项目（RETURN_TO_ORIGIN）：追加新版本、不改历史行；取消静默。
+  const performTransferRestore = async (): Promise<void> => {
+    if (workspace === null || pending) return;
+    if (!globalThis.confirm('将按快照恢复本项目：以不可变新版本追加，不修改历史版本。继续？')) {
+      return;
+    }
+    setPending(true);
+    setError(null);
+    setSnapshotNotice(null);
+    try {
+      const result = await getTransferClient().importProject({
+        importMode: 'RETURN_TO_ORIGIN',
+        requestId: createScriptRequestId('transfer-restore'),
+      });
+      if (result.ok) {
+        const warnings = formatTransferWarnings(result.data.warningCodes);
+        setSnapshotNotice(
+          `已按快照恢复：新增 ${String(result.data.createdObjectCount)} 个对象${warnings.length > 0 ? `；${warnings.join('；')}` : ''}`,
+        );
+        await refresh();
+      } else if (result.error.code !== 'TRANSFER_FILE_CANCELLED') {
+        setError(result.error);
+      }
+    } catch {
+      setError(rendererTransportError());
+    }
+    setPending(false);
+  };
+
   if (loading) return <p aria-live="polite">正在加载剧本工作区…</p>;
   if (workspace === null) {
     return (
@@ -704,6 +776,13 @@ export const ScriptWorkspaceView = ({
         onExportEpisode={(format) => {
           void performStoryboardExport({ format });
         }}
+        onExportSnapshot={() => {
+          void performTransferExport(false);
+        }}
+        onRestoreSnapshot={() => {
+          void performTransferRestore();
+        }}
+        snapshotNotice={snapshotNotice}
         onGenerate={() => {
           if (sceneScriptCurrent?.status !== 'READY') return;
           setError(null);

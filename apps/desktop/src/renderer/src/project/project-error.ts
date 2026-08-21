@@ -78,6 +78,17 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
     '所选镜头当前世代均已有首帧',
     '如需重新生成，请在镜头详情中单独发起。',
   ],
+  TRANSFER_BUNDLE_INVALID: ['项目快照格式无效', '选择有效的 ProjectTransferBundle 文件后重试。'],
+  TRANSFER_BUNDLE_UNSUPPORTED: ['项目快照版本不受支持', '使用当前版本导出的 Bundle 后重试。'],
+  TRANSFER_FILE_READ_FAILED: ['项目快照读取失败', '检查文件权限后重试。'],
+  TRANSFER_FILE_WRITE_FAILED: ['项目快照写入失败', '检查保存位置可用后重试。'],
+  TRANSFER_FILE_CANCELLED: ['已取消项目导入导出', '需要时可重新发起操作。'],
+  TRANSFER_HASH_MISMATCH: ['项目快照完整性校验失败', '重新导出文件后再导入。'],
+  TRANSFER_REFERENCE_INVALID: ['项目快照引用无效', '修复源项目后重新导出。'],
+  TRANSFER_PROJECT_CONFLICT: ['目标项目已发生变化', '刷新目标项目后重新导入。'],
+  TRANSFER_IMPORT_NOT_ALLOWED: ['当前项目状态不允许导入', '完成启动检查或补充原始输入后重试。'],
+  TRANSFER_IDEMPOTENCY_CONFLICT: ['导入导出请求标识已被复用', '重新发起操作。'],
+  TRANSFER_PERSISTENCE_FAILED: ['项目快照保存失败', '原项目未修改，请稍后重试。'],
 };
 
 /** 只按稳定 code 映射文案，绝不展示来自基础设施的 message。 */

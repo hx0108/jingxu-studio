@@ -15,6 +15,7 @@ import type {
   SchemaManifestUnitOfWorkPort,
   ScriptUnitOfWorkPort,
   ScriptWorkspaceQueryPort,
+  TransferUnitOfWorkPort,
 } from '@jingxu/application';
 import {
   startupErrorCodeSchema,
@@ -37,6 +38,7 @@ import { SqliteProviderUnitOfWork } from '../provider/sqlite-provider-unit-of-wo
 import { SqliteSchemaManifestUnitOfWork } from '../schema-manifest/sqlite-schema-manifest-unit-of-work';
 import { SqliteScriptUnitOfWork } from '../script/sqlite-script-unit-of-work';
 import { SqliteScriptWorkspaceQuery } from '../script/sqlite-script-workspace-query';
+import { SqliteTransferUnitOfWork } from '../transfer/sqlite-transfer-unit-of-work';
 import { createManagedDirectories, createManagedPaths, type ManagedPaths } from './managed-paths';
 import { PersistenceRuntimeError } from './persistence-error';
 import { SqliteConnectionManager, type SqliteConnectionOptions } from './sqlite-connection';
@@ -171,6 +173,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   #providerProfileRepository: ProviderProfileRepositoryPort | null = null;
   #scriptUnitOfWork: ScriptUnitOfWorkPort | null = null;
   #scriptWorkspaceQuery: ScriptWorkspaceQueryPort | null = null;
+  #transferUnitOfWork: TransferUnitOfWorkPort | null = null;
   #mediaUnitOfWork: MediaUnitOfWorkPort | null = null;
   #transactionCoordinator: SqliteTransactionCoordinator | null = null;
 
@@ -198,6 +201,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
     this.#providerProfileRepository = null;
     this.#scriptUnitOfWork = null;
     this.#scriptWorkspaceQuery = null;
+    this.#transferUnitOfWork = null;
     this.#mediaUnitOfWork = null;
     this.#transactionCoordinator = null;
     this.#manager.close();
@@ -244,6 +248,11 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
 
   public getScriptWorkspaceQuery(): ScriptWorkspaceQueryPort | null {
     return this.#scriptWorkspaceQuery;
+  }
+
+  /** Returns the Transfer UnitOfWork after READY; shares the process-wide FIFO coordinator. */
+  public getTransferUnitOfWork(): TransferUnitOfWorkPort | null {
+    return this.#transferUnitOfWork;
   }
 
   /** Returns the Media UnitOfWork (asset/candidate/task transactions) after READY. */
@@ -332,6 +341,8 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
       this.#providerProfileRepository ??= new SqliteProviderProfileRepository(database);
       this.#scriptUnitOfWork ??= new SqliteScriptUnitOfWork(database, coordinator);
       this.#scriptWorkspaceQuery ??= new SqliteScriptWorkspaceQuery(database);
+      // Transfer 导入必须与其余写入共用同一 FIFO 队列（同 SqliteTransferUnitOfWork 注释）。
+      this.#transferUnitOfWork ??= new SqliteTransferUnitOfWork(database, coordinator);
       // 媒体域必须共用进程级 FIFO 事务队列：自建协调器会与其它 UoW 在同一连接上
       // 交错 BEGIN（"cannot start a transaction within a transaction"，5.3 E2E 实证）。
       this.#mediaUnitOfWork ??= new SqliteMediaUnitOfWork(database, this.#clock, coordinator);
@@ -347,6 +358,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
       this.#providerProfileRepository = null;
       this.#scriptUnitOfWork = null;
       this.#scriptWorkspaceQuery = null;
+      this.#transferUnitOfWork = null;
       this.#mediaUnitOfWork = null;
       this.#transactionCoordinator = null;
       this.#manager.close();

@@ -40,6 +40,11 @@ import {
   type StoryboardFeatureRegistration,
 } from './composition/register-storyboard-features';
 import { createDialogStoryboardExportSink } from './composition/storyboard-export-file-sink';
+import {
+  createTransferFeatureRegistration,
+  type TransferFeatureRegistration,
+} from './composition/register-transfer-features';
+import { createTransferFileSink } from './composition/transfer-file-sink';
 import { registerRuntimeIpc } from './ipc/runtime-ipc';
 import { registerAppProtocol } from './security/app-protocol';
 import { handleMediaProtocolRequest } from './security/media-protocol';
@@ -57,6 +62,7 @@ let projectFeatureRegistration: ProjectFeatureRegistration | null = null;
 let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null;
 let scriptFeatureRegistration: ScriptFeatureRegistration | null = null;
 let storyboardFeatureRegistration: StoryboardFeatureRegistration | null = null;
+let transferFeatureRegistration: TransferFeatureRegistration | null = null;
 let imageFeatureRegistration: ImageFeatureRegistration | null = null;
 let videoFeatureRegistration: VideoFeatureRegistration | null = null;
 let shutdownStarted = false;
@@ -263,6 +269,15 @@ if (!singleInstanceLockAcquired) {
           persistenceRuntime,
           trustedUrl: getTrustedUrl(),
         });
+        transferFeatureRegistration = createTransferFeatureRegistration({
+          file: createTransferFileSink({
+            exportDirectory: process.env.JINGXU_E2E_EXPORT_DIR,
+            importFile: process.env.JINGXU_E2E_IMPORT_FILE,
+          }),
+          ipcRegistrar,
+          persistenceRuntime,
+          trustedUrl: getTrustedUrl(),
+        });
         imageFeatureRegistration = createImageFeatureRegistration({
           clock: () => new Date().toISOString(),
           ipcRegistrar,
@@ -286,6 +301,7 @@ if (!singleInstanceLockAcquired) {
           jobProviderFeatureRegistration?.ensureRegistered();
           scriptFeatureRegistration?.ensureRegistered();
           storyboardFeatureRegistration?.ensureRegistered();
+          transferFeatureRegistration?.ensureRegistered();
           imageFeatureRegistration?.ensureRegistered();
           videoFeatureRegistration?.ensureRegistered();
         });
@@ -293,6 +309,7 @@ if (!singleInstanceLockAcquired) {
         jobProviderFeatureRegistration.ensureRegistered();
         scriptFeatureRegistration.ensureRegistered();
         storyboardFeatureRegistration.ensureRegistered();
+        transferFeatureRegistration.ensureRegistered();
         imageFeatureRegistration.ensureRegistered();
         videoFeatureRegistration.ensureRegistered();
       }
@@ -324,6 +341,7 @@ if (!singleInstanceLockAcquired) {
     jobProviderFeatureRegistration = null;
     scriptFeatureRegistration = null;
     storyboardFeatureRegistration = null;
+    transferFeatureRegistration = null;
     imageFeatureRegistration = null;
     videoFeatureRegistration = null;
     persistenceRuntime?.close();
