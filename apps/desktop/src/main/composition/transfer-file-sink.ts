@@ -10,6 +10,11 @@ export interface TransferFileSinkOptions {
   readonly importFile?: string | undefined;
 }
 
+/**
+ * Main 侧 Transfer 文件 Port（design.md D3）：导入走系统 Open Dialog，导出走 Save Dialog
+ * + 同目录临时文件 + fsync 后原子 rename，目标已存在且未确认覆盖时返回 refused。
+ * 路径只在本实现内部存在；对外仅以 targetRef/sourceRef 不透明代称落库，绝不回传 Renderer。
+ */
 const hashBytes = (bytes: Uint8Array): string => createHash('sha256').update(bytes).digest('hex');
 
 export const createTransferFileSink = (options: TransferFileSinkOptions): TransferFilePort => ({
@@ -17,7 +22,7 @@ export const createTransferFileSink = (options: TransferFileSinkOptions): Transf
     let selectedPath = options.importFile;
     if (selectedPath === undefined) {
       const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
-      const result =
+      const picked =
         window === null
           ? await dialog.showOpenDialog({
               filters: [{ extensions: ['json'], name: 'JSON' }],
@@ -27,20 +32,20 @@ export const createTransferFileSink = (options: TransferFileSinkOptions): Transf
               filters: [{ extensions: ['json'], name: 'JSON' }],
               properties: ['openFile'],
             });
-      if (result.canceled || result.filePaths[0] === undefined) return null;
-      selectedPath = result.filePaths[0];
+      if (picked.canceled || picked.filePaths[0] === undefined) return null;
+      selectedPath = picked.filePaths[0];
     }
     const bytes = await readFile(selectedPath);
-    return { bytes, sha256: hashBytes(bytes) };
+    return { bytes, sha256: hashBytes(bytes), sourceRef: selectedPath };
   },
   writeJsonAtomically: async (defaultFileName, bytes, overwriteConfirmed) => {
-    let selectedPath: string | undefined;
+    let selectedPath: string;
     if (options.exportDirectory !== undefined) {
       await mkdir(options.exportDirectory, { recursive: true });
       selectedPath = path.join(options.exportDirectory, defaultFileName);
     } else {
       const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? null;
-      const result =
+      const picked =
         window === null
           ? await dialog.showSaveDialog({
               defaultPath: defaultFileName,
@@ -50,17 +55,16 @@ export const createTransferFileSink = (options: TransferFileSinkOptions): Transf
               defaultPath: defaultFileName,
               filters: [{ extensions: ['json'], name: 'JSON' }],
             });
-      if (result.canceled)
-        return { byteSize: 0, outcome: 'cancelled', sha256: '' };
-      selectedPath = result.filePath;
+      if (picked.canceled) return { outcome: 'cancelled' };
+      selectedPath = picked.filePath;
     }
     if (!overwriteConfirmed) {
       try {
         const existing = await open(selectedPath, 'r');
         await existing.close();
-        return { byteSize: 0, outcome: 'failed', sha256: '' };
+        return { outcome: 'refused' };
       } catch {
-        // The target does not exist; continue with an atomic write.
+        // 目标不存在：继续原子写入。
       }
     }
     const temporaryPath = `${selectedPath}.${String(process.pid)}.tmp`;
@@ -70,10 +74,15 @@ export const createTransferFileSink = (options: TransferFileSinkOptions): Transf
       await handle.sync();
       await handle.close();
       await rename(temporaryPath, selectedPath);
-      return { byteSize: bytes.byteLength, outcome: 'written', sha256: hashBytes(bytes) };
+      return {
+        byteSize: bytes.byteLength,
+        outcome: 'written',
+        sha256: hashBytes(bytes),
+        targetRef: selectedPath,
+      };
     } catch {
       await unlink(temporaryPath).catch(() => undefined);
-      return { byteSize: 0, outcome: 'failed', sha256: '' };
+      return { outcome: 'failed' };
     }
   },
 });
