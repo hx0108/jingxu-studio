@@ -199,6 +199,7 @@ describe('0009_media_assets_images.sql', () => {
           { version: 14 },
           { version: 15 },
           { version: 16 },
+          { version: 17 },
         ]);
         const objects = database
           .prepare(
@@ -291,7 +292,7 @@ describe('0009_media_assets_images.sql', () => {
         applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 16 });
+        ).toEqual({ version: 17 });
         // v8 既有行在升级后原样保留。
         expect(
           database.prepare("SELECT id, lifecycle_status FROM shots WHERE id = 'shot_media'").get(),
@@ -341,7 +342,7 @@ describe('0009_media_assets_images.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 16 });
+        ).toEqual({ version: 17 });
       } finally {
         database.close();
       }

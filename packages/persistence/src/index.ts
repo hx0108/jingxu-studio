@@ -2,6 +2,8 @@ export const PERSISTENCE_PACKAGE_MARKER = '@jingxu/persistence';
 
 export * from './audit/database-audit';
 export * from './backup/backup-manager';
+export * from './evaluation/sqlite-evaluation-repositories';
+export * from './evaluation/sqlite-evaluation-unit-of-work';
 export * from './migrations/migration-loader';
 export * from './migrations/migration-runner';
 export * from './job/sqlite-job-unit-of-work';
