@@ -44,6 +44,11 @@ const withMigratedDatabase = async <T>(
     }
   });
 
+/** 0017 播种后计数敏感用例先清种子行（种子核对独立用例保留原样）。 */
+const clearEvaluationRows = (database: SqliteTestDatabase): void => {
+  database.exec('DELETE FROM evaluation_annotations; DELETE FROM evaluation_samples;');
+};
+
 const insertProjectRow = (database: SqliteTestDatabase): void => {
   database
     .prepare(
@@ -60,9 +65,9 @@ const sampleRecord = (overrides: Partial<EvaluationSampleRecord> = {}): Evaluati
   authorization: 'SYNTHETIC',
   createdAt: NOW,
   datasetSplit: 'TRAIN',
-  dedupKey: 'seed-synthetic-shot-1',
+  dedupKey: 'ut-shot-0001',
   expected: { acceptable: true, expectedIssueCodes: [], referenceContract: null },
-  id: 'eval_seed0001',
+  id: 'eval_ut0001',
   input: {
     candidate: {
       document: {
@@ -120,6 +125,89 @@ describe('SqliteEvaluation 仓储 + 0017（storyboard-evaluation-set 3.1）', ()
     });
   });
 
+  it('0017 播种—24 SYNTHETIC 样本 + SYSTEM_SEED 标注，九类全覆盖且零审计', async () => {
+    await withMigratedDatabase((database) => {
+      interface SeedRow {
+        readonly dataset_split: string;
+        readonly dedup_key: string;
+        readonly expected_json: string;
+        readonly id: string;
+        readonly rule_hits_json: string;
+        readonly rule_version: string;
+        readonly sample_type: string;
+      }
+      const samples = database
+        .prepare(
+          'SELECT id, sample_type, dedup_key, dataset_split, expected_json, rule_hits_json, rule_version FROM evaluation_samples',
+        )
+        .all() as unknown as readonly SeedRow[];
+      expect(samples).toHaveLength(24);
+      expect(new Set(samples.map((row) => row.dedup_key)).size).toBe(24);
+      expect(samples.every((row) => row.dedup_key.startsWith('seed-synthetic-shot-'))).toBe(true);
+      expect(samples.every((row) => row.rule_version === RULE_VERSION)).toBe(true);
+      expect(new Set(samples.map((row) => row.dataset_split))).toEqual(
+        new Set(['TRAIN', 'VALIDATION', 'TEST']),
+      );
+      expect(new Set(samples.map((row) => row.sample_type))).toEqual(
+        new Set(['SHOT_CONTRACT', 'SCRIPT_STAGE', 'EPISODE_STORYBOARD']),
+      );
+
+      const expected = samples.map(
+        (row) =>
+          JSON.parse(row.expected_json) as {
+            acceptable: boolean;
+            expectedIssueCodes: string[];
+          },
+      );
+      // 11 可接受（含 1 例正脸长对白 WARN 非阻断判可接受）+ 13 问题，均超 spec ≥10 门槛。
+      expect(expected.filter((item) => item.acceptable)).toHaveLength(11);
+      expect(expected.filter((item) => !item.acceptable)).toHaveLength(13);
+      const nineCategories = [
+        'EVAL_ISSUE_MISSING_REQUIRED',
+        'EVAL_ISSUE_ENUM_INVALID',
+        'EVAL_ISSUE_DURATION_DEVIATION',
+        'EVAL_ISSUE_CHARACTER_OVERFLOW',
+        'EVAL_ISSUE_COMPLEX_ACTION',
+        'EVAL_ISSUE_DIALOGUE_MODE_CONFLICT',
+        'EVAL_ISSUE_CONTINUITY_INVALID',
+        'EVAL_ISSUE_CAPABILITY_UNKNOWN',
+        'EVAL_ISSUE_LOCK_CONFLICT',
+      ];
+      const labeledCodes = new Set(expected.flatMap((item) => item.expectedIssueCodes));
+      for (const code of nineCategories) expect(labeledCodes.has(code), code).toBe(true);
+      // 命中预计算与期望结论一致：问题样本零命中即矛盾，可接受样本仅允许 WARN。
+      for (const [index, row] of samples.entries()) {
+        const hits = JSON.parse(row.rule_hits_json) as { code: string }[];
+        if (expected[index]?.acceptable) {
+          expect(
+            hits.every((hit) => hit.code === 'EVAL_ISSUE_PRODUCIBILITY_WARN'),
+            `seed ${row.dedup_key}`,
+          ).toBe(true);
+        } else {
+          expect(hits.length, `seed ${row.dedup_key}`).toBeGreaterThan(0);
+        }
+      }
+
+      const annotations = database
+        .prepare('SELECT sample_id, guideline_version, annotator FROM evaluation_annotations')
+        .all() as unknown as readonly Record<string, string>[];
+      expect(annotations).toHaveLength(24);
+      expect(
+        annotations.every(
+          (row) =>
+            row.annotator === 'SYSTEM_SEED' &&
+            row.guideline_version === 'jingxu-annotation-guideline/1',
+        ),
+      ).toBe(true);
+      expect(new Set(annotations.map((row) => row.sample_id)).size).toBe(24);
+
+      const seedAudits = database
+        .prepare("SELECT COUNT(*) AS count FROM audit_events WHERE action LIKE 'EVALUATION_%'")
+        .get() as { readonly count: number };
+      expect(seedAudits.count).toBe(0);
+    });
+  });
+
   it('样本插入/回读往返—信封、期望、规则命中与版本逐字段一致', async () => {
     await withMigratedDatabase(async (database) => {
       const repository = new SqliteEvaluationSampleRepository(database);
@@ -140,7 +228,7 @@ describe('SqliteEvaluation 仓储 + 0017（storyboard-evaluation-set 3.1）', ()
            (id, project_id, sample_type, input_json, expected_json, authorization_status,
             dedup_key, dataset_split, rule_hits_json, rule_version, created_at)
            VALUES ('eval_legacy001', NULL, 'SHOT_CONTRACT', ?, ?, 'SYNTHETIC',
-                   'seed-synthetic-shot-legacy', 'TRAIN', NULL, NULL, ?)`,
+                   'ut-shot-legacy', 'TRAIN', NULL, NULL, ?)`,
         )
         .run(JSON.stringify(sampleRecord().input), JSON.stringify(sampleRecord().expected), NOW);
       const loaded = await new SqliteEvaluationSampleRepository(database).findById(
@@ -153,23 +241,24 @@ describe('SqliteEvaluation 仓储 + 0017（storyboard-evaluation-set 3.1）', ()
 
   it('list 过滤—scope/sampleType/datasetSplit 组合', async () => {
     await withMigratedDatabase(async (database) => {
+      clearEvaluationRows(database);
       insertProjectRow(database);
       const repository = new SqliteEvaluationSampleRepository(database);
-      await repository.insert(sampleRecord({ dedupKey: 'seed-synthetic-shot-1' }));
+      await repository.insert(sampleRecord({ dedupKey: 'ut-shot-0001' }));
       await repository.insert(
         sampleRecord({
-          id: 'eval_seed0002',
+          id: 'eval_ut0002',
           projectId: 'project_eval1',
           datasetSplit: 'VALIDATION',
-          dedupKey: 'seed-synthetic-shot-2',
+          dedupKey: 'ut-shot-0002',
           sampleType: 'EPISODE_STORYBOARD',
         }),
       );
       await repository.insert(
         sampleRecord({
-          id: 'eval_seed0003',
+          id: 'eval_ut0003',
           datasetSplit: 'TEST',
-          dedupKey: 'seed-synthetic-shot-3',
+          dedupKey: 'ut-shot-0003',
         }),
       );
 
@@ -188,40 +277,42 @@ describe('SqliteEvaluation 仓储 + 0017（storyboard-evaluation-set 3.1）', ()
       expect(global).toHaveLength(2);
       expect(global.every((record) => record.projectId === null)).toBe(true);
       expect(projectScoped).toHaveLength(1);
-      expect(projectScoped[0]?.id).toBe('eval_seed0002');
+      expect(projectScoped[0]?.id).toBe('eval_ut0002');
       expect(shotTrain).toHaveLength(1);
-      expect(shotTrain[0]?.id).toBe('eval_seed0001');
+      expect(shotTrain[0]?.id).toBe('eval_ut0001');
     });
   });
 
   it('dedup_key 唯一约束—重复插入被数据库拒绝且零残留', async () => {
     await withMigratedDatabase(async (database) => {
+      clearEvaluationRows(database);
       const repository = new SqliteEvaluationSampleRepository(database);
       await repository.insert(sampleRecord());
       await expect(repository.insert(sampleRecord({ id: 'eval_seed0009' }))).rejects.toThrow();
       const remaining = await repository.list({ scope: 'ALL' });
       expect(remaining).toHaveLength(1);
-      expect(remaining[0]?.id).toBe('eval_seed0001');
+      expect(remaining[0]?.id).toBe('eval_ut0001');
     });
   });
 
   it('删除级联—标注随样本删除并返回行数；不存在返回 null', async () => {
     await withMigratedDatabase(async (database) => {
+      clearEvaluationRows(database);
       const samples = new SqliteEvaluationSampleRepository(database);
       const annotations = new SqliteEvaluationAnnotationRepository(database);
       await samples.insert(sampleRecord());
-      await annotations.insert(annotationRecord('eval_seed0001'));
+      await annotations.insert(annotationRecord('eval_ut0001'));
       await annotations.insert(
-        annotationRecord('eval_seed0001', { id: 'anno_second001', createdAt: NOW }),
+        annotationRecord('eval_ut0001', { id: 'anno_second001', createdAt: NOW }),
       );
 
       const missing = await samples.deleteById('eval_missing0');
       expect(missing).toBeNull();
 
-      const deleted = await samples.deleteById('eval_seed0001');
+      const deleted = await samples.deleteById('eval_ut0001');
       expect(deleted).toBe(2);
       expect(await samples.list({ scope: 'ALL' })).toHaveLength(0);
-      expect(await annotations.listBySampleId('eval_seed0001')).toHaveLength(0);
+      expect(await annotations.listBySampleId('eval_ut0001')).toHaveLength(0);
     });
   });
 
@@ -231,18 +322,18 @@ describe('SqliteEvaluation 仓储 + 0017（storyboard-evaluation-set 3.1）', ()
       const annotations = new SqliteEvaluationAnnotationRepository(database);
       await samples.insert(sampleRecord());
       await annotations.insert(
-        annotationRecord('eval_seed0001', {
+        annotationRecord('eval_ut0001', {
           id: 'anno_late0001',
           createdAt: '2026-08-22T02:00:00.000Z',
         }),
       );
       await annotations.insert(
-        annotationRecord('eval_seed0001', {
+        annotationRecord('eval_ut0001', {
           id: 'anno_early001',
           createdAt: '2026-08-22T01:00:00.000Z',
         }),
       );
-      const listed = await annotations.listBySampleId('eval_seed0001');
+      const listed = await annotations.listBySampleId('eval_ut0001');
       expect(listed.map((record) => record.id)).toEqual(['anno_early001', 'anno_late0001']);
       expect(listed[0]?.label.verdict).toBe('ACCEPTABLE');
     });
@@ -250,6 +341,7 @@ describe('SqliteEvaluation 仓储 + 0017（storyboard-evaluation-set 3.1）', ()
 
   it('UnitOfWork—审计与样本同事务提交；中途抛出全量回滚零残留', async () => {
     await withMigratedDatabase(async (database) => {
+      clearEvaluationRows(database);
       const unitOfWork = new SqliteEvaluationUnitOfWork(database);
 
       await unitOfWork.run(async (repositories) => {
@@ -260,11 +352,11 @@ describe('SqliteEvaluation 仓储 + 0017（storyboard-evaluation-set 3.1）', ()
           actor: 'USER',
           action: 'EVALUATION_SAMPLE_CREATED',
           objectType: 'EVALUATION_SAMPLE',
-          objectId: 'eval_seed0001',
+          objectId: 'eval_ut0001',
           objectVersionId: null,
           beforeSha256: null,
           afterSha256: null,
-          metadata: { dedupKey: 'seed-synthetic-shot-1' },
+          metadata: { dedupKey: 'ut-shot-0001' },
           traceId: 'req-eval-0001',
           createdAt: NOW,
         });
@@ -277,7 +369,7 @@ describe('SqliteEvaluation 仓储 + 0017（storyboard-evaluation-set 3.1）', ()
       await expect(
         unitOfWork.run(async (repositories) => {
           await repositories.samples.insert(
-            sampleRecord({ id: 'eval_seed0099', dedupKey: 'seed-synthetic-shot-99' }),
+            sampleRecord({ id: 'eval_seed0099', dedupKey: 'ut-shot-0099' }),
           );
           await repositories.annotations.insert(annotationRecord('eval_seed0099'));
           throw new Error('boom');
@@ -302,7 +394,7 @@ describe('SqliteEvaluation 仓储 + 0017（storyboard-evaluation-set 3.1）', ()
       input_json: JSON.stringify(sampleRecord().input),
       expected_json: JSON.stringify(sampleRecord().expected),
       authorization_status: 'SYNTHETIC',
-      dedup_key: 'seed-synthetic-shot-row',
+      dedup_key: 'ut-shot-row',
       dataset_split: 'TRAIN',
       rule_hits_json: JSON.stringify(sampleRecord().ruleHits),
       rule_version: RULE_VERSION,
