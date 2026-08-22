@@ -250,6 +250,52 @@ textarea {
   gap: 18px;
 }
 
+.evaluation-workspace,
+.evaluation-create,
+.evaluation-layout,
+.evaluation-toolbar,
+.form-grid,
+.evaluation-hits {
+  display: grid;
+  gap: 14px;
+}
+
+.evaluation-toolbar {
+  grid-template-columns: repeat(auto-fit, minmax(128px, max-content));
+  align-items: end;
+  margin-block: 20px;
+}
+
+.evaluation-layout {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 20px;
+}
+
+.form-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.evaluation-list {
+  padding-left: 0;
+  list-style: none;
+}
+
+.evaluation-list li {
+  align-items: start;
+  flex-direction: column;
+}
+
+.evaluation-hits {
+  padding-left: 20px;
+  color: #c7d0e5;
+}
+
+@media (width <= 760px) {
+  .evaluation-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .script-card {
   padding: 20px;
   border: 1px solid rgb(150 168 220 / 22%);

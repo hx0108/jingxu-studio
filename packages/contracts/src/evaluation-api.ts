@@ -51,7 +51,11 @@ export const evaluationGuidelineVersionSchema = z
   .string()
   .regex(/^jingxu-annotation-guideline\/\d+$/u);
 
-export const evaluationDedupKeySchema = z.string().regex(/^[\w:.-]{3,96}$/u);
+/**
+ * 派生键固定为 derive:<projectId>:<episodeVersionId>:<shotId>；三个带前缀 UUID
+ * 的本地标识合计可超过 96 字符，故上限必须覆盖该确定性、可回放格式。
+ */
+export const evaluationDedupKeySchema = z.string().regex(/^[\w:.-]{3,192}$/u);
 
 export const evaluationCandidateSchema = z
   .object({
@@ -160,6 +164,9 @@ export const evaluationListSamplesInputSchema = z
   .strict();
 export type EvaluationListSamplesInputDto = z.infer<typeof evaluationListSamplesInputSchema>;
 
+export const evaluationGetSampleInputSchema = z.object({ sampleId: idSchema }).strict();
+export type EvaluationGetSampleInputDto = z.infer<typeof evaluationGetSampleInputSchema>;
+
 export const evaluationListSamplesResultSchema = z
   .object({ samples: z.array(evaluationSampleSummarySchema) })
   .strict();
@@ -240,6 +247,11 @@ export const evaluationAddAnnotationInputSchema = z
   })
   .strict();
 export type EvaluationAddAnnotationInputDto = z.infer<typeof evaluationAddAnnotationInputSchema>;
+
+export const evaluationAddAnnotationResultSchema = z
+  .object({ annotations: z.array(evaluationAnnotationSchema) })
+  .strict();
+export type EvaluationAddAnnotationResultDto = z.infer<typeof evaluationAddAnnotationResultSchema>;
 
 export interface EvaluationApi {
   addAnnotation(

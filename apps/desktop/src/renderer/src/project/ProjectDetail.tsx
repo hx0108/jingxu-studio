@@ -6,6 +6,7 @@ export interface ProjectDetailViewProps {
   readonly onDelete: () => void;
   readonly onRestore: () => void;
   readonly onOpenScript?: () => void;
+  readonly onOpenEvaluation?: () => void;
 }
 
 const ProfileCard = ({
@@ -48,6 +49,7 @@ export const ProjectDetailView = ({
   onDelete,
   onRestore,
   onOpenScript = () => undefined,
+  onOpenEvaluation = () => undefined,
 }: ProjectDetailViewProps) => (
   <section className="detail-panel" aria-labelledby="detail-title">
     <header className="detail-header">
@@ -65,6 +67,9 @@ export const ProjectDetailView = ({
     <div className="capability-grid" aria-label="后续创作能力">
       <button onClick={onOpenScript} type="button">
         进入剧本工作区
+      </button>
+      <button onClick={onOpenEvaluation} type="button">
+        当前项目评测集
       </button>
       <button aria-describedby="storyboard-disabled-reason" disabled type="button">
         分镜工作台

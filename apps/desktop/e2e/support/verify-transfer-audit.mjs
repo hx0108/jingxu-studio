@@ -12,7 +12,7 @@
 //   C. audit_events：PROJECT_IMPORTED 恰 2 + PROJECT_RESTORED_FROM_BUNDLE 恰 1，
 //      actor=USER、after_sha256 64 位十六进制、metadata.importMode 与 action 对应；
 //   D. 零残留：projects 恰 3 行（播种 + 两次 NEW_PROJECT；全部失败导入零项目）、
-//      无软删除项目、schema_migrations 含 16（transfer request_id 迁移已应用）；
+//      无软删除项目、schema_migrations 含 17（含评测 rule_hits 迁移）；
 //   E. 路径红线：audit 列 + result_json/validation_errors_json 不含 .json/反斜杠/
 //      incoming/exports 片段（export_records.target_path 与 import_records.source_path
 //      按设计存 Main 内不透明路径代称，不在检查范围，也绝不回传 Renderer）。
@@ -180,7 +180,7 @@ try {
   if (projects?.total !== 3) violations.push(`PROJECTS:${String(projects?.total)} != 3`);
   if (deleted?.total !== 0) violations.push(`DELETED:${String(deleted?.total)} != 0`);
   const migrations = database.prepare('SELECT MAX(version) AS latest FROM schema_migrations').get();
-  if (migrations?.latest !== 16) violations.push(`MIGRATIONS:${String(migrations?.latest)} != 16`);
+  if (migrations?.latest !== 17) violations.push(`MIGRATIONS:${String(migrations?.latest)} != 17`);
 
   // E. 路径红线：审计列 + 回执/校验 JSON 不携带文件路径痕迹
   //    （target_path/source_path 按设计落库，不在检查范围）。

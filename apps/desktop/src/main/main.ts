@@ -41,6 +41,11 @@ import {
 } from './composition/register-storyboard-features';
 import { createDialogStoryboardExportSink } from './composition/storyboard-export-file-sink';
 import {
+  createEvaluationFeatureRegistration,
+  type EvaluationFeatureRegistration,
+} from './composition/register-evaluation-features';
+import { createEvaluationImportFileSink } from './composition/evaluation-import-file-sink';
+import {
   createTransferFeatureRegistration,
   type TransferFeatureRegistration,
 } from './composition/register-transfer-features';
@@ -63,6 +68,7 @@ let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null
 let scriptFeatureRegistration: ScriptFeatureRegistration | null = null;
 let storyboardFeatureRegistration: StoryboardFeatureRegistration | null = null;
 let transferFeatureRegistration: TransferFeatureRegistration | null = null;
+let evaluationFeatureRegistration: EvaluationFeatureRegistration | null = null;
 let imageFeatureRegistration: ImageFeatureRegistration | null = null;
 let videoFeatureRegistration: VideoFeatureRegistration | null = null;
 let shutdownStarted = false;
@@ -278,6 +284,14 @@ if (!singleInstanceLockAcquired) {
           persistenceRuntime,
           trustedUrl: getTrustedUrl(),
         });
+        evaluationFeatureRegistration = createEvaluationFeatureRegistration({
+          file: createEvaluationImportFileSink({
+            importFile: process.env.JINGXU_E2E_EVALUATION_IMPORT_FILE,
+          }),
+          ipcRegistrar,
+          persistenceRuntime,
+          trustedUrl: getTrustedUrl(),
+        });
         imageFeatureRegistration = createImageFeatureRegistration({
           clock: () => new Date().toISOString(),
           ipcRegistrar,
@@ -302,6 +316,7 @@ if (!singleInstanceLockAcquired) {
           scriptFeatureRegistration?.ensureRegistered();
           storyboardFeatureRegistration?.ensureRegistered();
           transferFeatureRegistration?.ensureRegistered();
+          evaluationFeatureRegistration?.ensureRegistered();
           imageFeatureRegistration?.ensureRegistered();
           videoFeatureRegistration?.ensureRegistered();
         });
@@ -310,6 +325,7 @@ if (!singleInstanceLockAcquired) {
         scriptFeatureRegistration.ensureRegistered();
         storyboardFeatureRegistration.ensureRegistered();
         transferFeatureRegistration.ensureRegistered();
+        evaluationFeatureRegistration.ensureRegistered();
         imageFeatureRegistration.ensureRegistered();
         videoFeatureRegistration.ensureRegistered();
       }

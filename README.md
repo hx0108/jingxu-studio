@@ -2,7 +2,7 @@
 
 镜序 Studio 是面向个人 AI 漫剧创作者的本地优先质量工作台，当前开发目标为 V1“AI 剧本与结构化分镜”。项目尝试把模型生成转化为可编辑、可锁定、可恢复、可追溯的阶段化工作流，而不是直接承诺生成图片、视频或成片。
 
-截至 2026-08-21，仓库已具备可运行的 Windows x64 Electron/React 工程、SQLite 启动与恢复运行时、Project/FormatProfile 管理、离线 Schema Registry、JobRunner、文本模型 Adapter、凭据安全、剧本五阶段链路、结构化分镜、首帧图片和视频 Mock 工作流；项目仍处于开发验证阶段，尚未上线、完成真实用户试用或通过 PRD v1.4 全量验收。
+截至 2026-08-22，仓库已具备可运行的 Windows x64 Electron/React 工程、SQLite 启动与恢复运行时、Project/FormatProfile 管理、离线 Schema Registry、JobRunner、文本模型 Adapter、凭据安全、剧本五阶段链路、结构化分镜、评测集与标注闭环、首帧图片和视频 Mock 工作流；项目仍处于开发验证阶段，尚未上线、完成真实用户试用或通过 PRD v1.4 全量验收。
 
 ## 支持环境
 
@@ -81,7 +81,7 @@ pnpm package:win
 Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 ```
 
-当前没有 Active Change；最近归档的 Change 为 `2026-08-21-shot-video-generation`，已完成 Mock-only 视频候选、批量、证据链、协议、UI 和 E2E。真实 Seedance Model ID/Endpoint 认证、费用预算和真实视频证据已拆出后续 `seedance-provider-certification` Change，尚未开始。更早的归档 Change 为 `shot-speaker-id-repair`（2026-08-20，spoken 非旁白镜头 speaker_id 空值漂移修复：多角色候选层跨字段值校验接入修复轮 + 单角色确定性派生，零迁移零接口改动）。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
+当前没有 Active Change。最近归档的 `2026-08-22-storyboard-evaluation-set` 已完成本地评测闭环：24 个离线 SYNTHETIC 种子、规则命中持久化、项目 READY 分镜派生、手工/JSON staging 导入、追加式标注、路径脱敏 IPC 与全局/项目双入口 UI。它不等同于真实用户试用或 PRD 全量发布验收。完整规则见 `docs/SDD_WORKFLOW.md` 和 `AGENTS.md`。
 
 ## 当前已实现
 
@@ -226,6 +226,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - Playwright Electron E2E 7/7 通过（bootstrap 4 + staged-script 2 + packaged-smoke 1）。
 - Windows x64 clean packaged smoke 通过；`openspec validate staged-script-generation --strict` 通过；四根 Schema 与 0001/0002 字节未变。
 - 真实 Qwen 凭据连通性、真实用户生成链路和 AC-V1-01 至 AC-V1-06 仍待人工核验。
+- `storyboard-evaluation-set` 已归档：评测样本与标注 Repository/UnitOfWork、0017 的 24 个 SYNTHETIC 种子与指南版本、九类规则命中、`evaluation` 冻结 IPC、JSON staging 导入和评测集页面；验证记录见归档 Change。
 
 2026-08-13 归档的 `jobrunner-qwen-text-adapter` Change 记录：
 
@@ -238,7 +239,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 
 ## 当前尚未实现
 
-- 分镜导入导出和评测业务用例（整集 JSON 文件导出已随 `storyboard-export`（2026-08-20）落地；Markdown 分镜表与可生产性报告已随 `storyboard-export-deliverables`（2026-08-20）落地；项目快照导入导出（ProjectTransferBundle 1.0.0、NEW_PROJECT/RETURN_TO_ORIGIN）已随 `project-transfer-import-export`（2026-08-22）落地；评测业务用例仍在后续 Change）
+- 评测结果的云端协作、跨机交换和回归集管理；当前评测集只在本地 SQLite 中运行，JSON 导入为内部 staging 格式，不是公开评测交换协议。
 - 真实用户使用和发布验收（真实 Qwen 六阶段与真实 Seedream 首帧生成连通性已分别于 2026-08-16、2026-08-17 通过开发者环境全流程联调）
 - TTS、口型、FFmpeg 成片合成、视频时间线和视频后续真实 Provider 认证（Mock-only 视频工作流已在 `shot-video-generation` 落地；真实 Seedance 认证另立 Change）
 - AC-V1-01 至 AC-V1-06 尚未全部完成；AC-V1-04 目前具备可重复的 Mock 自动化证据与一次真实 Qwen 开发者环境全流程运行，仍不能据此声称真实用户使用或 V1 发布验收已经完成

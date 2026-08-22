@@ -5,6 +5,7 @@ import type {
   EpisodeRepositoryPort,
   EpisodeVersionRepositoryPort,
   ShotContractVersionRepositoryPort,
+  StageHeadRepositoryPort,
 } from '../script/script-repositories';
 import type { ScriptAuditRepositoryPort } from '../script/script-repositories';
 import type {
@@ -64,6 +65,8 @@ export interface EvaluationRepositories {
   readonly projects: Pick<ProjectRepository, 'findById'>;
   readonly episodes: Pick<EpisodeRepositoryPort, 'findById'>;
   readonly episodeVersions: Pick<EpisodeVersionRepositoryPort, 'findById' | 'listShotLinks'>;
+  /** SHOT_CONTRACT 的当前版本事实源；episodes.current_version_id 不参与分镜工作流。 */
+  readonly stageHeads: Pick<StageHeadRepositoryPort, 'find'>;
   readonly shotContractVersions: Pick<ShotContractVersionRepositoryPort, 'findById'>;
 }
 

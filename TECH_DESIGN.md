@@ -153,7 +153,7 @@ flowchart LR
 | 切片 | 当前实现 | 尚未实现边界 |
 |---|---|---|
 | Project/FormatProfile | `ProjectService` 已实现稳定列表与详情、原子创建、乐观并发更新、FormatProfile 不可变版本链、软删除、恢复、名称冲突检查和 requestId 幂等；Application 通过 ProjectUnitOfWork Port 持有事务边界 | 授权改编声明仍是后续独立能力 |
-| Persistence | SQLite Project/FormatProfile/Audit/Analytics/CommandReceipt、SourceInput/Consent/Episode/Script/StoryBible/Job/ModelInvocation Repository、单连接 `BEGIN IMMEDIATE` UnitOfWork、Row mapper 错误归一化和 Project/Script invariant audit 已实现 | 分镜、导入导出和评测表尚无业务 Repository/UnitOfWork 用例 |
+| Persistence | SQLite Project/FormatProfile/Audit/Analytics/CommandReceipt、SourceInput/Consent/Episode/Script/StoryBible/Job/ModelInvocation、分镜、Transfer 与评测 Repository；单连接 `BEGIN IMMEDIATE` UnitOfWork、Row mapper 错误归一化和 Project/Script invariant audit 已实现 | 发布用户试用、云端同步与 V2+ 评测回归集 |
 | Main/Preload | Composition Root 只在启动 `READY/writeEnabled=true` 后注入目录 Adapter、ProjectUnitOfWork、ProjectService、ScriptService 和 JobRunner 生产接线；`project`、`script`、`job`、`provider`、`events` 逐方法 IPC 已完成 sender、strict Zod DTO、AppResult 输出和启动写门校验；Preload 逐方法暴露 | `storyboard` 命名空间尚未实现 |
 | Renderer | Project 列表/真实空态/筛选空态/回收站、创建与设置、详情与 FormatProfile 历史、软删除恢复、错误提示和 dirty 离开保护已实现；剧本工作区、原创初始化（SourceInput/Consent/Episode）、Provider 设置、五阶段导航与阶段编辑器已实现 | 分镜工作台和导入导出页面没有业务入口，不生成伪造数据 |
 | AI/契约 | 四份 PRD-owned Schema 已复制到受控资源目录并由离线 Registry 核对 `$id`、Draft、版本、SHA-256 和 `$ref` 闭包；manifest 短事务提交后才发布四个校验器；JobRunner 状态机、ModelInvocation 证据、重试/取消/超时/恢复、Mock 失败矩阵、Qwen Adapter 与五份 `*/v1` Prompt 已实现，五阶段版本链经离线 Mock 闭环验证 | EpisodeValidator、真实 Qwen 阶段生成连通性和 AC-V1-01 至 AC-V1-06 验收尚未完成 |
@@ -163,6 +163,8 @@ flowchart LR
 `staged-script-generation` Active Change 已在代码层接入 SourceInput/Consent/Episode、五阶段不可变版本链、五份 `*/v1` Prompt、Script JobRunner/恢复、`script` IPC 与剧本工作区，并通过 `openspec validate --strict`、全量门禁与 clean Windows x64 packaged smoke（离线 Mock）。真实 Qwen 连通性、真实用户试用和 AC-V1-01 完整链路仍待人工核验。
 
 `project-transfer-import-export` 已在代码层接入项目快照导入导出（2026-08-22）：ProjectTransferBundle 1.0.0 CURRENT_ONLY 组装与 staging 校验链、NEW_PROJECT（ID Mapping + 引用重写）/RETURN_TO_ORIGIN（基线规范化比对 + expected head 校验）双模式同事务导入（中途失败零残留）、0016 request_id partial 唯一索引幂等、`transfer` IPC 白名单 + Main 系统 Dialog 原子文件 sink、项目列表/设置双入口 UI，路径红线（文件路径不进 Renderer/回执/审计）经专用 E2E 与关进程查库审计断言钉死。全量门禁（Unit 879 / Contract 147 / Integration 230 / E2E 25 passed + 3 skipped / Windows x64 packaged smoke）与 `openspec validate --strict` 通过；评测业务用例与 AC-V1 验收仍待后续 Change。
+
+`storyboard-evaluation-set` 已于 2026-08-22 归档：评测样本、追加式标注与离线规则命中均已接入；0017 迁移播种 24 个 SYNTHETIC 样本和首批标注；`evaluation` 七方法 IPC 以系统文件选择与路径脱敏为边界；项目 READY 分镜派生以 `stage_heads` 的 `SHOT_CONTRACT` 指针复核并使用确定性 dedup_key；Renderer 提供全局/项目双入口、筛选、创建、派生、导入、标注和删除确认。
 
 ---
 
@@ -760,7 +762,7 @@ erDiagram
 |---|---|---|
 | `export_records` | `id PK, project_id FK, episode_id FK, episode_version_id FK, export_type, status, target_path, temp_path, overwrite_policy, payload_sha256, byte_size, schema_version, lineage_completeness, warning_overrides_json, file_ready_at, created_at, finished_at, error_code` | 状态 PREPARING/FILE_READY/SUCCEEDED/FAILED；启动时文件/数据库对账 |
 | `import_records` | `id PK, project_id FK NULL, import_mode, source_path, source_sha256, status, validation_errors_json, id_mapping_json, created_at, finished_at` | staging 全量通过后才原子写入正式表；成功重导按 source/mode/target 幂等 |
-| `evaluation_samples` | `id PK, project_id FK NULL, sample_type, input_json, expected_json, authorization_status, dedup_key, dataset_split, created_at` | V1 20–40 个结构化分镜样本 |
+| `evaluation_samples` | `id PK, project_id FK NULL, sample_type, input_json, expected_json, authorization_status, dedup_key, dataset_split, rule_hits_json, rule_version, created_at` | V1 20–40 个结构化分镜样本；0017 固化规则命中与规则版本 |
 | `evaluation_annotations` | `id PK, sample_id FK, guideline_version, label_json, rationale, annotator, created_at` | 保存人工结论和依据 |
 | `analytics_events` | `id PK, project_id FK NULL, event_name, session_id, properties_json, occurred_at` | V1 仅本地；用户内容、Prompt、密钥不得进入 properties |
 
@@ -1465,6 +1467,8 @@ PRAGMA foreign_key_check;
 - 本地指标、诊断包和已知限制。
 
 完成门槛：AC-V1-03 通过；Fixture 矩阵完整。
+
+`storyboard-evaluation-set` 将评测部分实现为本地闭环：CURRENT READY 分镜派生、手工样本、JSON staging 导入、去重、追加式标注、规则命中落库、24 个离线种子和 Renderer 双入口均进入同一事务与审计边界；真实用户试用和 AC-V1 发布验收仍属于 Sprint 6，不因离线种子而视为完成。
 
 ### Sprint 6：发布验收
 

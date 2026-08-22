@@ -1,4 +1,5 @@
 import {
+  EVALUATION_IPC_CHANNELS,
   IMAGE_IPC_CHANNELS,
   PROJECT_IPC_CHANNELS,
   VIDEO_IPC_CHANNELS,
@@ -85,6 +86,7 @@ describe('window.jingxu 白名单 Contract', () => {
     expect(Object.isFrozen(api.runtime)).toBe(true);
     expect(Object.isFrozen(api.project)).toBe(true);
     expect(Object.keys(api).sort()).toEqual([
+      'evaluation',
       'events',
       'image',
       'job',
@@ -97,6 +99,16 @@ describe('window.jingxu 白名单 Contract', () => {
       'video',
     ]);
     expect(Object.isFrozen(api.storyboard)).toBe(true);
+    expect(Object.isFrozen(api.evaluation)).toBe(true);
+    expect(Object.keys(api.evaluation).sort()).toEqual([
+      'addAnnotation',
+      'createFromEpisode',
+      'createSample',
+      'deleteSample',
+      'getSample',
+      'importBatch',
+      'listSamples',
+    ]);
     expect(Object.keys(api.script).sort()).toEqual([
       'confirmVersion',
       'getWorkspace',
@@ -524,6 +536,39 @@ describe('window.jingxu 白名单 Contract', () => {
     for (const forbidden of ['path', 'sql', 'database', 'repository', 'node', 'persistence']) {
       expect(Reflect.has(api.transfer, forbidden)).toBe(false);
     }
+  });
+
+  it('Evaluation Change—七方法冻结、strict 输入输出校验且零路径泄漏', async () => {
+    const invoke = vi.fn(() =>
+      Promise.resolve({
+        data: { samples: [] },
+        ok: true,
+      }),
+    );
+    const api = createJingxuApi(invoke);
+    expect(Object.isFrozen(api.evaluation)).toBe(true);
+    expect(Object.keys(api.evaluation).sort()).toEqual([
+      'addAnnotation',
+      'createFromEpisode',
+      'createSample',
+      'deleteSample',
+      'getSample',
+      'importBatch',
+      'listSamples',
+    ]);
+    await expect(api.evaluation.listSamples({ scope: 'ALL' })).resolves.toEqual({
+      data: { samples: [] },
+      ok: true,
+    });
+    expect(invoke).toHaveBeenCalledWith(EVALUATION_IPC_CHANNELS.listSamples, { scope: 'ALL' });
+    await expect(
+      api.evaluation.listSamples({ scope: 'ALL', path: 'C:\\private\\samples.json' } as never),
+    ).rejects.toThrow();
+    await expect(
+      createJingxuApi(
+        vi.fn(() => Promise.resolve({ data: { samples: [], path: 'C:\\private' }, ok: true })),
+      ).evaluation.listSamples({ scope: 'ALL' }),
+    ).rejects.toThrow();
   });
 
   it('调用六个 Project 方法—输入合法—只 invoke 对应固定 channel 并校验输出', async () => {

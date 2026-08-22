@@ -18,10 +18,11 @@ import {
 import type {
   AppResultDto,
   EvaluationAddAnnotationInputDto,
-  EvaluationAnnotationDto,
+  EvaluationAddAnnotationResultDto,
   EvaluationCreateFromEpisodeInputDto,
   EvaluationCreateFromEpisodeResultDto,
   EvaluationCreateSampleInputDto,
+  EvaluationDeleteSampleResultDto,
   EvaluationImportBatchResultDto,
   EvaluationImportItemResultDto,
   EvaluationIssueCode,
@@ -75,11 +76,11 @@ export interface EvaluationService {
   deleteSample(
     input: Readonly<{ requestId: string; sampleId: string }>,
     traceId: string,
-  ): Promise<AppResultDto<Readonly<{ deletedAnnotations: number; sampleId: string }>>>;
+  ): Promise<AppResultDto<EvaluationDeleteSampleResultDto>>;
   addAnnotation(
     input: EvaluationAddAnnotationInputDto,
     traceId: string,
-  ): Promise<AppResultDto<Readonly<{ annotations: readonly EvaluationAnnotationDto[] }>>>;
+  ): Promise<AppResultDto<EvaluationAddAnnotationResultDto>>;
   importBatch(
     input: Readonly<{ requestId: string }>,
     traceId: string,
@@ -192,7 +193,7 @@ const envelopeFieldErrors = (
   const errors: Record<string, string> = {};
   const dedupKey = evaluationDedupKeySchema.safeParse(input.dedupKey);
   if (!dedupKey.success) {
-    errors.dedupKey = 'dedup_key 需为 3–96 位字母数字与 :._- 组合';
+    errors.dedupKey = 'dedup_key 需为 3–192 位字母数字与 :._- 组合';
   }
   const envelope = evaluationSampleInputSchema.safeParse(input.input);
   if (!envelope.success) {
@@ -325,10 +326,16 @@ const freezeDerivation = async (
     };
   }
   const episode = await repositories.episodes.findById(version.episodeId);
+  const storyboardHead = await repositories.stageHeads.find(
+    input.projectId,
+    version.episodeId,
+    'SHOT_CONTRACT',
+  );
   if (
     episode?.deletedAt !== null ||
     episode.projectId !== input.projectId ||
-    episode.currentVersionId !== input.expectedVersionId
+    storyboardHead?.currentVersionType !== 'EPISODE_VERSION' ||
+    storyboardHead.currentVersionId !== input.expectedVersionId
   ) {
     return {
       denial: failure('SCRIPT_VERSION_CONFLICT', '当前整集版本已变化，请刷新后重试', traceId),

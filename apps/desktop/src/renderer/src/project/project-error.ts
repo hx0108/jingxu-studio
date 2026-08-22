@@ -89,6 +89,11 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   TRANSFER_IMPORT_NOT_ALLOWED: ['当前项目状态不允许导入', '完成启动检查或补充原始输入后重试。'],
   TRANSFER_IDEMPOTENCY_CONFLICT: ['导入导出请求标识已被复用', '重新发起操作。'],
   TRANSFER_PERSISTENCE_FAILED: ['项目快照保存失败', '原项目未修改，请稍后重试。'],
+  EVALUATION_SAMPLE_INVALID: ['评测样本不符合要求', '检查样本 JSON、期望结论和授权状态后重试。'],
+  EVALUATION_DEDUP_CONFLICT: ['评测样本已存在', '修改去重键，或查看已有样本。'],
+  EVALUATION_NOT_FOUND: ['找不到评测样本', '刷新样本列表后重试。'],
+  EVALUATION_DERIVE_NOT_READY: ['当前分镜尚未确认 READY', '在剧本工作区确认整集分镜后再派生。'],
+  EVALUATION_IMPORT_INVALID: ['评测集导入文件无效', '选择符合内部评测样本格式的 JSON 文件。'],
 };
 
 /** 只按稳定 code 映射文案，绝不展示来自基础设施的 message。 */

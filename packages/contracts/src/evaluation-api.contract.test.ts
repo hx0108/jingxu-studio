@@ -155,6 +155,25 @@ describe('evaluation contracts', () => {
         referenceContract: null,
       }),
     ).toThrow();
+    // project/version/shot 均可为带前缀 UUID；正式派生键必须通过回执复验。
+    expect(
+      evaluationCreateSampleInputSchema.parse({
+        authorization: 'SYNTHETIC',
+        datasetSplit: 'TRAIN',
+        dedupKey: `derive:project_${'a'.repeat(36)}:episode_${'b'.repeat(36)}:shot_${'c'.repeat(36)}`,
+        expected: { acceptable: false, expectedIssueCodes: [], referenceContract: null },
+        input: sampleInput,
+      }).dedupKey,
+    ).toMatch(/^derive:/u);
+    expect(() =>
+      evaluationCreateSampleInputSchema.parse({
+        authorization: 'SYNTHETIC',
+        datasetSplit: 'TRAIN',
+        dedupKey: 'd'.repeat(193),
+        expected: { acceptable: false, expectedIssueCodes: [], referenceContract: null },
+        input: sampleInput,
+      }),
+    ).toThrow();
     expect(() =>
       evaluationCreateSampleInputSchema.parse({
         authorization: 'SYNTHETIC',

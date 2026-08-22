@@ -41,6 +41,7 @@ export class SqliteEvaluationUnitOfWork implements EvaluationUnitOfWorkPort {
         projects: this.projectRepository,
         samples: this.sampleRepository,
         shotContractVersions: scriptRepositories.shotContractVersions,
+        stageHeads: scriptRepositories.stageHeads,
       }),
     );
   }

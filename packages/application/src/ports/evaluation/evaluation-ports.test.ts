@@ -54,12 +54,13 @@ describe('Evaluation Application Ports', () => {
       episodes: {} as EvaluationRepositories['episodes'],
       episodeVersions: {} as EvaluationRepositories['episodeVersions'],
       shotContractVersions: {} as EvaluationRepositories['shotContractVersions'],
+      stageHeads: {} as EvaluationRepositories['stageHeads'],
     } satisfies EvaluationRepositories;
     const unitOfWork: EvaluationUnitOfWorkPort = {
       run: async (work) => work(repositories),
     };
     await expect(
-      unitOfWork.run((repo) => Promise.resolve(Object.keys(repo).length >= 7)),
+      unitOfWork.run((repo) => Promise.resolve(Object.keys(repo).length >= 8)),
     ).resolves.toBe(true);
   });
 

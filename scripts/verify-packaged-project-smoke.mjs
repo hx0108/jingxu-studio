@@ -138,6 +138,13 @@ const migrationSeven = await readFile(
 const migrationEight = await readFile(
   path.join(migrationRoot, '0008_prompt_templates_shot_contract.sql'),
 );
+const migrationSeventeen = await readFile(
+  path.join(migrationRoot, '0017_evaluation_rule_hits.sql'),
+);
+const expectedMigrations = (await readdir(migrationRoot, { withFileTypes: true }))
+  .filter((entry) => entry.isFile() && /^\d{4}_.+\.sql$/u.test(entry.name))
+  .map((entry) => ({ version: Number.parseInt(entry.name.slice(0, 4), 10), name: entry.name }))
+  .sort((left, right) => left.version - right.version);
 if (!migrationOne.includes(Buffer.from('CREATE TABLE projects'))) {
   throw new Error('PACKAGED_MIGRATION_0001_INVALID');
 }
@@ -183,6 +190,12 @@ if (
   !migrationEight.includes(Buffer.from('SHOT_CONTRACT'))
 ) {
   throw new Error('PACKAGED_MIGRATION_0008_INVALID');
+}
+if (
+  !migrationSeventeen.includes(Buffer.from('rule_hits_json')) ||
+  !migrationSeventeen.includes(Buffer.from("'eval_seed0024'"))
+) {
+  throw new Error('PACKAGED_MIGRATION_0017_INVALID');
 }
 // prompt 锁改为首启后对 prompt_templates 表的运行时校验（见 afterFirstRun 证据段）：
 // 模板 ID 与 candidateSchemaId 在 bundle 中均为运行时拼接（script-prompts.ts 模板字符串），
@@ -293,6 +306,7 @@ try {
     jobProviderSurface = await page.evaluate(
       async ({ credential, original, projectId }) => {
         const api = window.jingxu;
+        const evaluation = await api.evaluation.listSamples({ scope: 'ALL' });
         const provider = await api.provider.getProfile({ profileId: 'profile_qwen_default' });
         const scriptWorkspace = await api.script.getWorkspace({ projectId });
         const credentialSaved = provider.ok
@@ -312,10 +326,21 @@ try {
         const jobs = await api.job.list({ limit: 10, projectId });
         return {
           apiFrozen: Object.isFrozen(api),
-          childApisFrozen: ['events', 'job', 'project', 'provider', 'runtime', 'script'].every(
-            (key) => Object.isFrozen(api[key]),
-          ),
+          childApisFrozen: [
+            'evaluation',
+            'events',
+            'image',
+            'job',
+            'project',
+            'provider',
+            'runtime',
+            'script',
+            'storyboard',
+            'transfer',
+            'video',
+          ].every((key) => Object.isFrozen(api[key])),
           credentialSaved,
+          evaluation,
           initialized,
           jobs,
           keys: Object.keys(api).sort(),
@@ -330,7 +355,19 @@ try {
       !jobProviderSurface.apiFrozen ||
       !jobProviderSurface.childApisFrozen ||
       JSON.stringify(jobProviderSurface.keys) !==
-        JSON.stringify(['events', 'job', 'project', 'provider', 'runtime', 'script']) ||
+        JSON.stringify([
+          'evaluation',
+          'events',
+          'image',
+          'job',
+          'project',
+          'provider',
+          'runtime',
+          'script',
+          'storyboard',
+          'transfer',
+          'video',
+        ]) ||
       JSON.stringify(jobProviderSurface.scriptKeys) !==
         JSON.stringify([
           'confirmVersion',
@@ -353,6 +390,15 @@ try {
     ) {
       throw new Error(
         `PACKAGED_PROVIDER_DTO_INVALID:${JSON.stringify(jobProviderSurface.provider)}`,
+      );
+    }
+    if (
+      !jobProviderSurface.evaluation.ok ||
+      jobProviderSurface.evaluation.data.samples.length < 24 ||
+      JSON.stringify(jobProviderSurface.evaluation).includes('\\')
+    ) {
+      throw new Error(
+        `PACKAGED_EVALUATION_SURFACE_INVALID:${JSON.stringify(jobProviderSurface.evaluation)}`,
       );
     }
     if (
@@ -426,19 +472,7 @@ try {
       .all(),
   };
   afterFirstRun.close();
-  if (
-    JSON.stringify(applied) !==
-    JSON.stringify([
-      { version: 1, name: '0001_initial.sql' },
-      { version: 2, name: '0002_project_command_receipts.sql' },
-      { version: 3, name: '0003_script_version_receipts.sql' },
-      { version: 4, name: '0004_prompt_templates_v2.sql' },
-      { version: 5, name: '0005_prompt_templates_story_bible_v3.sql' },
-      { version: 6, name: '0006_model_invocations_profile_ref.sql' },
-      { version: 7, name: '0007_snapshot_tables_profile_ref.sql' },
-      { version: 8, name: '0008_prompt_templates_shot_contract.sql' },
-    ])
-  ) {
+  if (JSON.stringify(applied) !== JSON.stringify(expectedMigrations)) {
     throw new Error(`PACKAGED_MIGRATION_SET_INVALID:${JSON.stringify(applied)}`);
   }
   if (
@@ -557,7 +591,7 @@ try {
         scriptWorkspaceError: jobProviderSurface.scriptWorkspace.error.code,
         providerConfigured: jobProviderSurface.provider.data.configured,
       },
-      migrationVersions: [1, 2, 3, 4, 5, 6, 7, 8],
+      migrationVersions: expectedMigrations.map((migration) => migration.version),
       mockClosureEntryObserved: true,
       nativeAddonCount: nativeAddons.length,
       projectLifecycle: ['create', 'update', 'delete', 'restart', 'restore'],

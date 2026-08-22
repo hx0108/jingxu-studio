@@ -3,6 +3,21 @@ import {
   assetViewSchema,
   cancelBatchInputSchema,
   EVENTS_IPC_CHANNELS,
+  EVALUATION_IPC_CHANNELS,
+  evaluationAddAnnotationInputSchema,
+  evaluationAddAnnotationResultSchema,
+  evaluationCreateFromEpisodeInputSchema,
+  evaluationCreateFromEpisodeResultSchema,
+  evaluationCreateSampleInputSchema,
+  evaluationDeleteSampleInputSchema,
+  evaluationDeleteSampleResultSchema,
+  evaluationGetSampleInputSchema,
+  evaluationImportBatchInputSchema,
+  evaluationImportBatchResultSchema,
+  evaluationListSamplesInputSchema,
+  evaluationListSamplesResultSchema,
+  evaluationSampleDetailSchema,
+  evaluationSampleSummarySchema,
   generateCandidatesForShotsInputSchema,
   generateCandidatesInputSchema,
   getMediaTaskInputSchema,
@@ -74,6 +89,13 @@ import {
   transferExportResultSchema,
   transferImportResultSchema,
   type CancelVideoBatchInputDto,
+  type EvaluationAddAnnotationInputDto,
+  type EvaluationCreateFromEpisodeInputDto,
+  type EvaluationCreateSampleInputDto,
+  type EvaluationDeleteSampleInputDto,
+  type EvaluationGetSampleInputDto,
+  type EvaluationImportBatchInputDto,
+  type EvaluationListSamplesInputDto,
   type GenerateVideoCandidatesInputDto,
   type GenerateVideosForShotsInputDto,
   type GetVideoTaskInputDto,
@@ -122,6 +144,7 @@ import {
 
 export {
   EVENTS_IPC_CHANNELS,
+  EVALUATION_IPC_CHANNELS,
   IMAGE_IPC_CHANNELS,
   JOB_IPC_CHANNELS,
   PROJECT_IPC_CHANNELS,
@@ -144,6 +167,57 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
           await invoke(EVENTS_IPC_CHANNELS.subscribeJobUpdates, validated),
         );
       },
+    }),
+    evaluation: Object.freeze({
+      listSamples: async (input: EvaluationListSamplesInputDto) =>
+        appResultSchema(evaluationListSamplesResultSchema).parse(
+          await invoke(
+            EVALUATION_IPC_CHANNELS.listSamples,
+            evaluationListSamplesInputSchema.parse(input),
+          ),
+        ),
+      getSample: async (input: EvaluationGetSampleInputDto) =>
+        appResultSchema(evaluationSampleDetailSchema).parse(
+          await invoke(
+            EVALUATION_IPC_CHANNELS.getSample,
+            evaluationGetSampleInputSchema.parse(input),
+          ),
+        ),
+      createSample: async (input: EvaluationCreateSampleInputDto) =>
+        appResultSchema(evaluationSampleSummarySchema).parse(
+          await invoke(
+            EVALUATION_IPC_CHANNELS.createSample,
+            evaluationCreateSampleInputSchema.parse(input),
+          ),
+        ),
+      createFromEpisode: async (input: EvaluationCreateFromEpisodeInputDto) =>
+        appResultSchema(evaluationCreateFromEpisodeResultSchema).parse(
+          await invoke(
+            EVALUATION_IPC_CHANNELS.createFromEpisode,
+            evaluationCreateFromEpisodeInputSchema.parse(input),
+          ),
+        ),
+      importBatch: async (input: EvaluationImportBatchInputDto) =>
+        appResultSchema(evaluationImportBatchResultSchema).parse(
+          await invoke(
+            EVALUATION_IPC_CHANNELS.importBatch,
+            evaluationImportBatchInputSchema.parse(input),
+          ),
+        ),
+      deleteSample: async (input: EvaluationDeleteSampleInputDto) =>
+        appResultSchema(evaluationDeleteSampleResultSchema).parse(
+          await invoke(
+            EVALUATION_IPC_CHANNELS.deleteSample,
+            evaluationDeleteSampleInputSchema.parse(input),
+          ),
+        ),
+      addAnnotation: async (input: EvaluationAddAnnotationInputDto) =>
+        appResultSchema(evaluationAddAnnotationResultSchema).parse(
+          await invoke(
+            EVALUATION_IPC_CHANNELS.addAnnotation,
+            evaluationAddAnnotationInputSchema.parse(input),
+          ),
+        ),
     }),
     image: Object.freeze({
       generateCandidates: async (input: GenerateCandidatesInputDto) =>

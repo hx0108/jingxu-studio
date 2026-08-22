@@ -52,6 +52,7 @@ const createHarness = (
     hits?: readonly EvaluationRuleHitDto[];
     /** 未提供时文件 Port 返回 null（等价用户取消）。 */
     importBytes?: Uint8Array;
+    storyboardHeadVersionId?: string;
     versionStatus?: EpisodeVersion['status'];
   } = {},
 ): Harness => {
@@ -216,6 +217,21 @@ const createHarness = (
     episodeVersions: {
       findById: (id) => Promise.resolve(id === episodeVersion.id ? episodeVersion : null),
       listShotLinks: (id) => Promise.resolve(id === episodeVersion.id ? links : []),
+    },
+    stageHeads: {
+      find: (projectId, episodeId, stage) =>
+        Promise.resolve(
+          projectId === project.id && episodeId === episode.id && stage === 'SHOT_CONTRACT'
+            ? {
+                currentVersionId: options.storyboardHeadVersionId ?? episodeVersion.id,
+                currentVersionType: 'EPISODE_VERSION' as const,
+                episodeId: episode.id,
+                projectId: project.id,
+                stage: 'SHOT_CONTRACT' as const,
+                updatedAt: NOW,
+              }
+            : null,
+        ),
     },
     shotContractVersions: {
       findById: (id) => Promise.resolve(shotVersions[id] ?? null),
@@ -391,6 +407,15 @@ describe('EvaluationService 项目派生样本', () => {
       deriveInput({ expectedVersionId: 'epv_stale0001' }),
       'trace-5',
     );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe('SCRIPT_VERSION_CONFLICT');
+    expect(harness.samples).toHaveLength(0);
+  });
+
+  it('阶段头已推进—即使 episode 行保留旧指针也拒绝过期派生', async () => {
+    const harness = createHarness({ storyboardHeadVersionId: 'epv_new_current' });
+    const result = await harness.service.createFromEpisode(deriveInput(), 'trace-6');
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.error.code).toBe('SCRIPT_VERSION_CONFLICT');

@@ -81,7 +81,7 @@ Renderer 评测集页面（全局主导航 + 项目菜单筛选入口）
 - `importBatch`：staging 读文件/解析在事务外；逐样本独立短事务（合法入库、非法拒绝），结束后聚合回执——满足「样本级原因」且无部分字段写入；整体损坏（非法 JSON/信封）零入库。
 - `addAnnotation`：单事务 insert + audit；历史行不可变（无 UPDATE 路径）。
 - `deleteSample`：单事务 delete samples + delete annotations（FK）+ audit。
-- 派生读取（当前整集版本 + FormatProfile + bible 清单）在只读事务内冻结快照后逐样本走创建事务。
+- 派生读取以 `stage_heads(project_id, episode_id, SHOT_CONTRACT)` 为当前整集版本事实源；`episodes.current_version_id` 不参与分镜版本并发判定。阶段头、整集版本、项目归属与 READY 状态在同一只读事务内复核后，逐样本走创建事务。
 
 ## 错误码（新增，ProjectErrorCode 扩展）
 

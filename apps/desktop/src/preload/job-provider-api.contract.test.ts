@@ -7,6 +7,7 @@ describe('Job Provider Events Preload Contract', () => {
   it('创建 API—冻结三个逐方法 namespace—无通用 invoke/send/on', () => {
     const api = createJingxuApi(vi.fn());
     expect(Object.keys(api).sort()).toEqual([
+      'evaluation',
       'events',
       'image',
       'job',
@@ -28,7 +29,15 @@ describe('Job Provider Events Preload Contract', () => {
     ]);
     expect(Object.keys(api.events)).toEqual(['subscribeJobUpdates']);
     expect(Object.keys(api.transfer).sort()).toEqual(['exportProject', 'importProject']);
-    for (const value of [api, api.job, api.provider, api.events, api.video, api.transfer]) {
+    for (const value of [
+      api,
+      api.job,
+      api.provider,
+      api.events,
+      api.evaluation,
+      api.video,
+      api.transfer,
+    ]) {
       expect(Object.isFrozen(value)).toBe(true);
       for (const name of ['invoke', 'send', 'on']) expect(Reflect.has(value, name)).toBe(false);
     }

@@ -14,8 +14,9 @@ import { useProjectCommands, useProjectDetail, useProjectList } from './project-
 import { getTransferClient } from './transfer-api';
 import { formatTransferWarnings } from './transfer-copy';
 import { ScriptWorkspaceView } from '../script/ScriptWorkspace';
+import { EvaluationWorkspace } from '../evaluation/EvaluationWorkspace';
 
-type Screen = 'list' | 'create' | 'detail' | 'edit' | 'script';
+type Screen = 'list' | 'create' | 'detail' | 'edit' | 'script' | 'evaluation';
 type PendingTarget = Screen | 'close';
 interface ConfirmState {
   readonly action: 'delete' | 'restore';
@@ -218,9 +219,26 @@ export const ProjectWorkspace = () => {
           >
             回收站
           </button>
+          <button
+            className={screen === 'evaluation' ? 'active-tab' : 'secondary-button'}
+            onClick={() => {
+              moveTo('evaluation');
+            }}
+            type="button"
+          >
+            评测集
+          </button>
         </nav>
       </header>
       {commandError !== null && <ProjectErrorBanner error={commandError} />}
+      {screen === 'evaluation' && (
+        <EvaluationWorkspace
+          onBack={() => {
+            moveTo(selectedProjectId === null ? 'list' : 'detail');
+          }}
+          projectId={selectedProjectId}
+        />
+      )}
       {screen === 'list' && (
         <section>
           <div className="list-toolbar">
@@ -382,6 +400,9 @@ export const ProjectWorkspace = () => {
             }}
             onOpenScript={() => {
               setScreen('script');
+            }}
+            onOpenEvaluation={() => {
+              setScreen('evaluation');
             }}
           />
         ))}
