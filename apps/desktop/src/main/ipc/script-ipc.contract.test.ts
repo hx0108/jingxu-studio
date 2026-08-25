@@ -96,6 +96,26 @@ const createHarness = (ready = true) => {
     confirmVersion: vi.fn(() => Promise.resolve(okVersion)),
     getWorkspace: vi.fn(() => Promise.resolve(okWorkspace)),
     initializeOriginal: vi.fn(() => Promise.resolve(okWorkspace)),
+    lockPath: vi.fn(() =>
+      Promise.resolve({
+        data: {
+          lockedPaths: [],
+          objectType: 'SCRIPT_VERSION' as const,
+          objectVersionId: version.id,
+        },
+        ok: true as const,
+      }),
+    ),
+    listLocks: vi.fn(() =>
+      Promise.resolve({
+        data: {
+          lockedPaths: [],
+          objectType: 'SCRIPT_VERSION' as const,
+          objectVersionId: version.id,
+        },
+        ok: true as const,
+      }),
+    ),
     restoreVersion: vi.fn(() => Promise.resolve(okVersion)),
     saveDraft: vi.fn(() => Promise.resolve(okVersion)),
   };

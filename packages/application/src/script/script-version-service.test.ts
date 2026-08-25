@@ -5,6 +5,7 @@ import type {
   ScriptCommandReceipt,
   ScriptDependency,
   ScriptJobRepositories,
+  LockRecord,
   ScriptVersion,
   StageHead,
   StoryBibleVersion,
@@ -20,13 +21,18 @@ const document = (stage: ScriptVersion['stage'], episodeId: string | null = null
   stage,
 });
 
-const version = (id: string, stage: ScriptVersion['stage'], status: ScriptVersion['status']) =>
+const version = (
+  id: string,
+  stage: ScriptVersion['stage'],
+  status: ScriptVersion['status'],
+  episodeId: string | null = null,
+) =>
   ({
     changeSummary: null,
     createdAt: '2026-08-13T00:00:00.000Z',
-    document: JSON.stringify(document(stage)),
+    document: JSON.stringify(document(stage, episodeId)),
     documentSha256: id.padEnd(64, 'a').slice(0, 64),
-    episodeId: null,
+    episodeId,
     id,
     parentId: null,
     projectId: 'project-0001',
@@ -38,14 +44,19 @@ const version = (id: string, stage: ScriptVersion['stage'], status: ScriptVersio
     versionNo: 1,
   }) satisfies ScriptVersion;
 
-const createHarness = () => {
-  const current = version('version-draft', 'CONCEPT', 'DRAFT');
+const createHarness = (
+  stage: ScriptVersion['stage'] = 'CONCEPT',
+  episodeId: string | null = null,
+) => {
+  const current = version('version-draft', stage, 'DRAFT', episodeId);
   const stored = new Map<string, ScriptVersion>([[current.id, current]]);
   const inserted: ScriptVersion[] = [];
+  const receipts = new Map<string, ScriptCommandReceipt>();
+  const locks: LockRecord[] = [];
   let head: StageHead = {
     currentVersionId: current.id,
     currentVersionType: 'SCRIPT_VERSION',
-    episodeId: null,
+    episodeId,
     projectId: current.projectId,
     stage: current.stage,
     updatedAt: current.createdAt,
@@ -56,7 +67,13 @@ const createHarness = () => {
       insertMany: () => Promise.resolve(),
       listByUpstreamVersionIds: () => Promise.resolve([]),
     },
-    receipts: { findByRequestId: () => Promise.resolve(null), insert: () => Promise.resolve() },
+    receipts: {
+      findByRequestId: (requestId: string) => Promise.resolve(receipts.get(requestId) ?? null),
+      insert: (receipt: ScriptCommandReceipt) => {
+        receipts.set(receipt.requestId, receipt);
+        return Promise.resolve();
+      },
+    },
     scriptVersions: {
       findById: (id: string) => Promise.resolve(stored.get(id) ?? null),
       findMaxVersionNo: () => Promise.resolve(inserted.length + 1),
@@ -66,9 +83,36 @@ const createHarness = () => {
         return Promise.resolve();
       },
     },
+    locks: {
+      insert: (lock: LockRecord) => {
+        locks.push(lock);
+        return Promise.resolve();
+      },
+      listActive: () => Promise.resolve(locks.filter((lock) => lock.unlockedAt === null)),
+      listActiveByObject: (
+        _projectId: string,
+        objectType: LockRecord['objectType'],
+        objectId: string,
+      ) =>
+        Promise.resolve(
+          locks.filter(
+            (lock) =>
+              lock.unlockedAt === null &&
+              lock.objectType === objectType &&
+              lock.objectId === objectId,
+          ),
+        ),
+      unlock: (id: string, unlockedAt: string) => {
+        const lock = locks.find((candidate) => candidate.id === id);
+        if (lock === undefined) return Promise.resolve(false);
+        const index = locks.indexOf(lock);
+        locks[index] = { ...lock, unlockedAt };
+        return Promise.resolve(true);
+      },
+    },
     stageHeads: {
       find: (_projectId: string, _episodeId: string | null, stage: string) =>
-        Promise.resolve(stage === 'CONCEPT' ? head : null),
+        Promise.resolve(stage === current.stage ? head : null),
       listByProjectId: () => Promise.resolve([head]),
       upsert: (candidate: StageHead, expected: string | null) => {
         if (head.currentVersionId !== expected) return Promise.resolve(false);
@@ -85,7 +129,7 @@ const createHarness = () => {
     unitOfWork: { run: (work) => work(repositories) },
     validateDocument: () => true,
   });
-  return { current, inserted, service };
+  return { current, inserted, locks, service };
 };
 
 describe('ScriptVersionService', () => {
@@ -126,6 +170,81 @@ describe('ScriptVersionService', () => {
     );
     expect(result).toMatchObject({ ok: false, error: { code: 'SCRIPT_VERSION_CONFLICT' } });
     expect(harness.inserted).toEqual([]);
+  });
+
+  it('条件—合法选区改写—推进 current pointer、保留父版本并按 requestId 幂等重放', async () => {
+    const harness = createHarness('EPISODE_OUTLINE', 'episode-0001');
+    const input = {
+      episodeId: 'episode-0001',
+      expectedVersionId: harness.current.id,
+      operationType: 'STRENGTHEN_CONFLICT' as const,
+      projectId: 'project-0001',
+      requestId: 'rewrite-request-0001',
+      selection: ['/data/title'],
+      stage: 'EPISODE_OUTLINE' as const,
+      writeSet: ['/data/title'],
+    };
+
+    const first = await harness.service.rewriteSelection(input, 'trace-rewrite');
+    const replay = await harness.service.rewriteSelection(input, 'trace-rewrite');
+    const stale = await harness.service.rewriteSelection(
+      { ...input, requestId: 'rewrite-request-stale' },
+      'trace-rewrite',
+    );
+
+    expect(first).toMatchObject({
+      ok: true,
+      data: {
+        parentId: harness.current.id,
+        status: 'DRAFT',
+      },
+    });
+    if (!first.ok || !replay.ok) throw new Error('rewrite should succeed');
+    expect((first.data.document.data as { title: string }).title).toContain(
+      '[STRENGTHEN_CONFLICT]',
+    );
+    expect(replay.data.id).toBe(first.data.id);
+    expect(harness.inserted).toHaveLength(1);
+    expect(stale).toMatchObject({ ok: false, error: { code: 'STALE_INPUT' } });
+  });
+
+  it('条件—Script 关键字段已锁定—改写被整次阻断且解锁后可继续', async () => {
+    const harness = createHarness('EPISODE_OUTLINE', 'episode-0001');
+    const lockInput = {
+      action: 'LOCK' as const,
+      episodeId: 'episode-0001',
+      expectedVersionId: harness.current.id,
+      jsonPointer: '/data/title',
+      note: '关键剧情字段',
+      objectType: 'SCRIPT_VERSION' as const,
+      projectId: 'project-0001',
+      requestId: 'lock-request-0001',
+      stage: 'EPISODE_OUTLINE' as const,
+    };
+    const locked = await harness.service.lockPath(lockInput, 'trace-lock');
+    expect(locked).toMatchObject({ ok: true, data: { lockedPaths: ['/data/title'] } });
+
+    const rewrite = await harness.service.rewriteSelection(
+      {
+        episodeId: 'episode-0001',
+        expectedVersionId: harness.current.id,
+        operationType: 'REWRITE' as const,
+        projectId: 'project-0001',
+        requestId: 'rewrite-locked-0001',
+        selection: ['/data/title'],
+        stage: 'EPISODE_OUTLINE' as const,
+        writeSet: ['/data/title'],
+      },
+      'trace-lock',
+    );
+    expect(rewrite).toMatchObject({ ok: false, error: { code: 'SHOT_LOCK_CONFLICT' } });
+    expect(harness.inserted).toHaveLength(0);
+
+    const unlocked = await harness.service.lockPath(
+      { ...lockInput, action: 'UNLOCK', requestId: 'unlock-request-0001' },
+      'trace-lock',
+    );
+    expect(unlocked).toMatchObject({ ok: true, data: { lockedPaths: [] } });
   });
 });
 

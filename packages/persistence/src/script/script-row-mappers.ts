@@ -8,7 +8,8 @@ import type {
   ScriptVersion,
   Shot,
   ShotContractVersion,
-  ShotLockRecord,
+  ShotDerivation,
+  LockRecord,
   StageHead,
   StoryBibleVersion,
   SourceInput,
@@ -29,7 +30,6 @@ const nullableText = (row: ScriptRow, key: string): string | null => {
   const value = row[key];
   return value === null ? null : typeof value === 'string' ? value : invalid();
 };
-const nullValue = (row: ScriptRow, key: string): null => (row[key] === null ? null : invalid());
 const number = (row: ScriptRow, key: string): number => {
   const value = row[key];
   return typeof value === 'number' && Number.isFinite(value) ? value : invalid();
@@ -57,10 +57,12 @@ export const mapSourceInput = (row: ScriptRow): SourceInput => {
   const content = text(row, 'content_text');
   const charCount = number(row, 'char_count');
   const sha256 = text(row, 'sha256');
+  const inputKind = text(row, 'input_kind');
   if (
-    text(row, 'input_kind') !== 'CREATIVE' ||
-    charCount < 20 ||
-    charCount > 2_000 ||
+    !['CREATIVE', 'TXT', 'MARKDOWN'].includes(inputKind) ||
+    charCount < (inputKind === 'CREATIVE' ? 20 : 1) ||
+    charCount > (inputKind === 'CREATIVE' ? 2_000 : 30_000) ||
+    content.trim().length === 0 ||
     Array.from(content).length !== charCount ||
     createHash('sha256').update(content, 'utf8').digest('hex') !== sha256
   ) {
@@ -70,10 +72,10 @@ export const mapSourceInput = (row: ScriptRow): SourceInput => {
     charCount,
     content,
     createdAt: text(row, 'created_at'),
-    encoding: nullValue(row, 'encoding'),
-    fileName: nullValue(row, 'file_name'),
+    encoding: nullableText(row, 'encoding') as SourceInput['encoding'],
+    fileName: nullableText(row, 'file_name'),
     id: text(row, 'id'),
-    inputKind: 'CREATIVE',
+    inputKind: inputKind as SourceInput['inputKind'],
     projectId: text(row, 'project_id'),
     sha256,
   };
@@ -156,6 +158,12 @@ export const mapShot = (row: ScriptRow): Shot => ({
   updatedAt: text(row, 'updated_at'),
   deletedAt: nullableText(row, 'deleted_at'),
 });
+export const mapShotDerivation = (row: ScriptRow): ShotDerivation => ({
+  newShotId: text(row, 'new_shot_id'),
+  sourceShotId: text(row, 'source_shot_id'),
+  operation: text(row, 'operation') as ShotDerivation['operation'],
+  createdAt: text(row, 'created_at'),
+});
 export const mapShotContractVersion = (row: ScriptRow): ShotContractVersion => ({
   id: text(row, 'id'),
   shotId: text(row, 'shot_id'),
@@ -185,9 +193,17 @@ export const mapEpisodeVersionShot = (row: ScriptRow): EpisodeVersionShot => ({
   shotVersionId: text(row, 'shot_version_id'),
   sequence: number(row, 'sequence'),
 });
-export const mapLockRecord = (row: ScriptRow): ShotLockRecord => {
+export const mapLockRecord = (row: ScriptRow): LockRecord => {
   const lockedBy = text(row, 'locked_by');
   if (lockedBy !== 'USER' && lockedBy !== 'SYSTEM') return invalid();
+  const objectType = text(row, 'object_type');
+  if (
+    objectType !== 'STORY_BIBLE' &&
+    objectType !== 'SCRIPT_VERSION' &&
+    objectType !== 'SHOT_CONTRACT' &&
+    objectType !== 'EPISODE_VERSION'
+  )
+    return invalid();
   return {
     id: text(row, 'id'),
     jsonPointer: text(row, 'json_pointer'),
@@ -195,7 +211,7 @@ export const mapLockRecord = (row: ScriptRow): ShotLockRecord => {
     lockedBy,
     note: nullableText(row, 'note'),
     objectId: text(row, 'object_id'),
-    objectType: 'SHOT_CONTRACT',
+    objectType,
     objectVersionId: text(row, 'object_version_id'),
     projectId: text(row, 'project_id'),
     unlockedAt: nullableText(row, 'unlocked_at'),

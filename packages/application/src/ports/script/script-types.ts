@@ -7,9 +7,9 @@ export type ScriptVersionSource = 'AI' | 'USER' | 'IMPORT' | 'SYSTEM_INVALIDATIO
 export interface SourceInput {
   readonly id: string;
   readonly projectId: string;
-  readonly inputKind: 'CREATIVE';
-  readonly fileName: null;
-  readonly encoding: null;
+  readonly inputKind: 'CREATIVE' | 'TXT' | 'MARKDOWN';
+  readonly fileName: string | null;
+  readonly encoding: 'UTF-8' | null;
   /** Exact user-supplied string. Application and adapters must not trim or truncate it. */
   readonly content: string;
   readonly charCount: number;
@@ -21,8 +21,8 @@ export interface ConsentRecord {
   readonly id: string;
   readonly projectId: string;
   readonly sourceInputId: string;
-  readonly consentType: 'DATA_PROCESSING';
-  readonly contentSource: 'SELF_OWNED';
+  readonly consentType: 'DATA_PROCESSING' | 'ADAPTATION_AUTHORIZATION';
+  readonly contentSource: 'SELF_OWNED' | 'AUTHORIZED' | 'PUBLIC_DOMAIN' | 'UNKNOWN';
   readonly scope: 'SOURCE_INPUT';
   readonly statement: string;
   readonly confirmedAt: string;
@@ -115,7 +115,12 @@ export interface ScriptAuditEntry {
 }
 
 export type ScriptCommandName =
-  'INITIALIZE_ORIGINAL' | 'SAVE_SCRIPT_DRAFT' | 'CONFIRM_SCRIPT_VERSION' | 'RESTORE_SCRIPT_VERSION';
+  | 'INITIALIZE_ORIGINAL'
+  | 'INITIALIZE_INPUT'
+  | 'REWRITE_SELECTION'
+  | 'SAVE_SCRIPT_DRAFT'
+  | 'CONFIRM_SCRIPT_VERSION'
+  | 'RESTORE_SCRIPT_VERSION';
 
 export interface ScriptCommandReceipt {
   readonly requestId: string;
@@ -212,11 +217,11 @@ export interface ShotContractVersion {
   readonly createdAt: string;
 }
 
-/** lock_records 行（shot-edit-lock）；镜头锁 objectType 恒 SHOT_CONTRACT、objectId=shotId。 */
-export interface ShotLockRecord {
+/** lock_records 行；Script/StoryBible/Shot 共用同一锁事实源。 */
+export interface LockRecord {
   readonly id: string;
   readonly projectId: string;
-  readonly objectType: 'SHOT_CONTRACT';
+  readonly objectType: 'STORY_BIBLE' | 'SCRIPT_VERSION' | 'SHOT_CONTRACT' | 'EPISODE_VERSION';
   readonly objectId: string;
   /** 锁建立时的镜头版本 id（溯源用；有效性与版本无关）。 */
   readonly objectVersionId: string;
@@ -226,6 +231,7 @@ export interface ShotLockRecord {
   readonly lockedAt: string;
   readonly unlockedAt: string | null;
 }
+export type ShotLockRecord = LockRecord & { readonly objectType: 'SHOT_CONTRACT' };
 
 /** episode_version 与镜头版本的集合快照关联（0001 episode_version_shots 行）。 */
 export interface EpisodeVersionShot {
@@ -233,6 +239,13 @@ export interface EpisodeVersionShot {
   readonly shotId: string;
   readonly shotVersionId: string;
   readonly sequence: number;
+}
+export type ShotDerivationOperation = 'COPY' | 'SPLIT' | 'MERGE';
+export interface ShotDerivation {
+  readonly newShotId: string;
+  readonly sourceShotId: string;
+  readonly operation: ShotDerivationOperation;
+  readonly createdAt: string;
 }
 
 /** 工作区镜头摘要所需的最小快照：sequence 关联 + 不可变镜头契约版本行。 */

@@ -4,6 +4,10 @@ import type {
   RestoreScriptVersionInputDto,
   SaveScriptDraftInputDto,
   ScriptVersionDto,
+  ScriptLockInputDto,
+  ScriptLockListInputDto,
+  ScriptLockSummaryDto,
+  RewriteSelectionInputDto,
 } from '@jingxu/contracts';
 
 import type {
@@ -54,6 +58,15 @@ export interface ScriptVersionService {
     input: StagedRestoreInput,
     traceId: string,
   ): Promise<AppResultDto<ScriptVersionDto>>;
+  rewriteSelection(
+    input: RewriteSelectionInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptVersionDto>>;
+  lockPath(input: ScriptLockInputDto, traceId: string): Promise<AppResultDto<ScriptLockSummaryDto>>;
+  listLocks(
+    input: ScriptLockListInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptLockSummaryDto>>;
 }
 
 const readVersion = async (
@@ -89,6 +102,37 @@ const assertScope = (
   if (version.projectId !== projectId) return false;
   if (stage === 'STORY_BIBLE') return episodeId === null;
   return 'stage' in version && version.stage === stage && version.episodeId === episodeId;
+};
+
+const pointerTokens = (pointer: string): string[] | null => {
+  if (!pointer.startsWith('/')) return null;
+  if (/~(?![01])/u.test(pointer)) return null;
+  return pointer
+    .slice(1)
+    .split('/')
+    .map((token) => token.replaceAll('~1', '/').replaceAll('~0', '~'));
+};
+const pointersConflict = (left: string, right: string): boolean => {
+  const a = pointerTokens(left);
+  const b = pointerTokens(right);
+  if (a === null || b === null) return true;
+  return (
+    a.every((token, index) => b[index] === token) || b.every((token, index) => a[index] === token)
+  );
+};
+const writeAt = (root: Record<string, unknown>, pointer: string, value: unknown): boolean => {
+  const tokens = pointerTokens(pointer);
+  if (tokens === null || tokens.length === 0) return false;
+  let current = root;
+  for (const token of tokens.slice(0, -1)) {
+    const next = current[token];
+    if (typeof next !== 'object' || next === null || Array.isArray(next)) return false;
+    current = next as Record<string, unknown>;
+  }
+  const last = tokens.at(-1);
+  if (last === undefined || !(last in current)) return false;
+  current[last] = value;
+  return true;
 };
 
 const createVersion = async (
@@ -406,9 +450,252 @@ export const createScriptVersionService = (
     }
   };
 
+  const rewriteSelection = async (
+    input: RewriteSelectionInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptVersionDto>> => {
+    try {
+      const version = await dependencies.unitOfWork.run(async (repositories) => {
+        const payloadSha256 = dependencies.hashPayload(input);
+        const priorReceipt = await repositories.receipts.findByRequestId(input.requestId);
+        if (priorReceipt !== null) {
+          if (
+            priorReceipt.commandName !== 'REWRITE_SELECTION' ||
+            priorReceipt.projectId !== input.projectId ||
+            priorReceipt.payloadSha256 !== payloadSha256
+          ) {
+            throw new Error('REQUEST_ID_REUSED');
+          }
+          const replayId = priorReceipt.resultRef.versionId;
+          if (typeof replayId !== 'string') throw new Error('RECEIPT_INVALID');
+          const replayed = await readVersion(repositories, input.stage, replayId);
+          if (replayed === null) throw new Error('RECEIPT_INVALID');
+          return replayed;
+        }
+        const head = await repositories.stageHeads.find(
+          input.projectId,
+          input.episodeId,
+          input.stage,
+        );
+        if (head?.currentVersionId !== input.expectedVersionId)
+          throw new Error('SCRIPT_VERSION_CONFLICT');
+        const current = await readVersion(repositories, input.stage, input.expectedVersionId);
+        if (
+          current === null ||
+          !assertScope(current, input.projectId, input.episodeId, input.stage)
+        )
+          throw new Error('SCRIPT_VERSION_NOT_FOUND');
+        const original = parseDocument(current);
+        const locked = (
+          await repositories.locks.listActiveByObject(
+            input.projectId,
+            input.stage === 'STORY_BIBLE' ? 'STORY_BIBLE' : 'SCRIPT_VERSION',
+            current.id,
+          )
+        ).map((lock) => lock.jsonPointer);
+        if (
+          input.writeSet.some((writePath) =>
+            locked.some((lockPath) => pointersConflict(writePath, lockPath)),
+          )
+        )
+          throw new Error('SHOT_LOCK_CONFLICT');
+        const document = JSON.parse(JSON.stringify(original)) as Record<string, unknown>;
+        for (const path of input.writeSet) {
+          const currentValue = pointerTokens(path)?.reduce<unknown>(
+            (value, token) =>
+              typeof value === 'object' && value !== null
+                ? (value as Record<string, unknown>)[token]
+                : undefined,
+            document,
+          );
+          if (
+            currentValue === undefined ||
+            !writeAt(
+              document,
+              path,
+              `${typeof currentValue === 'string' ? currentValue : JSON.stringify(currentValue)}\n[${input.operationType}]`,
+            )
+          )
+            throw new Error('SCRIPT_WRITE_SET_INVALID');
+        }
+        const next = await createVersion(repositories, dependencies, {
+          document,
+          episodeId: input.episodeId,
+          parentId: current.id,
+          projectId: input.projectId,
+          source: 'USER',
+          sourceInputId: 'sourceInputId' in current ? current.sourceInputId : null,
+          sourceInvocationId: null,
+          stage: input.stage,
+          status: 'DRAFT',
+        });
+        if (
+          !(await repositories.stageHeads.upsert(
+            headFor(next, input.episodeId, input.stage, dependencies.now()),
+            current.id,
+          ))
+        ) {
+          throw new Error('SCRIPT_VERSION_CONFLICT');
+        }
+        await repositories.audit.record({
+          action: 'SCRIPT_VERSION_REWRITE_SELECTION',
+          actor: 'USER',
+          afterSha256: next.documentSha256,
+          beforeSha256: current.documentSha256,
+          createdAt: dependencies.now(),
+          id: dependencies.newId(),
+          metadata: {
+            operationType: input.operationType,
+            selection: input.selection,
+            writeSet: input.writeSet,
+          },
+          objectId: input.stage,
+          objectType: 'SCRIPT_STAGE',
+          objectVersionId: next.id,
+          projectId: input.projectId,
+          traceId,
+        });
+        await repositories.receipts.insert({
+          commandName: 'REWRITE_SELECTION',
+          committedAt: dependencies.now(),
+          payloadSha256,
+          projectId: input.projectId,
+          requestId: input.requestId,
+          resultRef: { versionId: next.id },
+          traceId,
+        });
+        return next;
+      });
+      return { data: toDto(version), ok: true };
+    } catch (caught: unknown) {
+      if (caught instanceof Error && caught.message === 'REQUEST_ID_REUSED')
+        return scriptFailure('REQUEST_ID_REUSED', 'requestId 已用于不同命令', traceId);
+      if (caught instanceof Error && caught.message === 'SCRIPT_VERSION_CONFLICT')
+        return scriptFailure('STALE_INPUT', '输入版本或锁已变化，请刷新后重试', traceId);
+      if (caught instanceof Error && caught.message === 'SCRIPT_VERSION_NOT_FOUND')
+        return scriptFailure('SCRIPT_VERSION_NOT_FOUND', '指定版本不存在', traceId);
+      if (caught instanceof Error && caught.message === 'SHOT_LOCK_CONFLICT')
+        return scriptFailure('SHOT_LOCK_CONFLICT', '改写范围包含已锁定字段', traceId);
+      if (caught instanceof Error && caught.message === 'SCRIPT_WRITE_SET_INVALID')
+        return scriptFailure('SCRIPT_SCHEMA_INVALID', '改写范围不是当前版本中的可写字段', traceId);
+      return scriptPersistenceFailure(traceId);
+    }
+  };
+  const listLocks = async (
+    input: ScriptLockListInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptLockSummaryDto>> => {
+    try {
+      const locks = await dependencies.unitOfWork.run((repositories) =>
+        repositories.locks.listActiveByObject(
+          input.projectId,
+          input.objectType,
+          input.objectVersionId,
+        ),
+      );
+      return {
+        data: {
+          lockedPaths: locks.map((lock) => lock.jsonPointer),
+          objectType: input.objectType,
+          objectVersionId: input.objectVersionId,
+        },
+        ok: true,
+      };
+    } catch {
+      return scriptPersistenceFailure(traceId);
+    }
+  };
+  const lockPath = async (
+    input: ScriptLockInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptLockSummaryDto>> => {
+    try {
+      const result = await dependencies.unitOfWork.run(async (repositories) => {
+        const currentHead = await repositories.stageHeads.find(
+          input.projectId,
+          input.episodeId,
+          input.stage,
+        );
+        if (currentHead?.currentVersionId !== input.expectedVersionId)
+          throw new Error('SCRIPT_VERSION_CONFLICT');
+        const current = await readVersion(repositories, input.stage, input.expectedVersionId);
+        if (
+          current === null ||
+          !assertScope(current, input.projectId, input.episodeId, input.stage)
+        )
+          throw new Error('SCRIPT_VERSION_NOT_FOUND');
+        const tokens = pointerTokens(input.jsonPointer);
+        if (tokens === null || tokens.length === 0) throw new Error('SHOT_LOCK_POINTER_INVALID');
+        const value = tokens.reduce<unknown>(
+          (candidate, token) =>
+            typeof candidate === 'object' && candidate !== null
+              ? (candidate as Record<string, unknown>)[token]
+              : undefined,
+          parseDocument(current),
+        );
+        if (
+          value === undefined ||
+          (Array.isArray(value) && /^\/data\/[^/]+\/\d+(?:\/|$)/u.test(input.jsonPointer))
+        )
+          throw new Error('SHOT_LOCK_POINTER_INVALID');
+        const active = await repositories.locks.listActiveByObject(
+          input.projectId,
+          input.objectType,
+          current.id,
+        );
+        if (input.action === 'LOCK') {
+          if (active.some((lock) => pointersConflict(lock.jsonPointer, input.jsonPointer)))
+            throw new Error('SHOT_LOCK_CONFLICT');
+          await repositories.locks.insert({
+            id: `lock_${dependencies.newId()}`,
+            jsonPointer: input.jsonPointer,
+            lockedAt: dependencies.now(),
+            lockedBy: 'USER',
+            note: input.note,
+            objectId: current.id,
+            objectType: input.objectType,
+            objectVersionId: current.id,
+            projectId: input.projectId,
+            unlockedAt: null,
+          });
+        } else {
+          const target = active.find((lock) => lock.jsonPointer === input.jsonPointer);
+          if (target !== undefined) await repositories.locks.unlock(target.id, dependencies.now());
+        }
+        const locks = await repositories.locks.listActiveByObject(
+          input.projectId,
+          input.objectType,
+          current.id,
+        );
+        return {
+          lockedPaths: locks.map((lock) => lock.jsonPointer),
+          objectType: input.objectType,
+          objectVersionId: current.id,
+        } satisfies ScriptLockSummaryDto;
+      });
+      return { data: result, ok: true };
+    } catch (caught: unknown) {
+      if (caught instanceof Error && caught.message === 'SCRIPT_VERSION_CONFLICT')
+        return scriptFailure('STALE_INPUT', '当前版本已变化，请刷新后重试', traceId);
+      if (caught instanceof Error && caught.message === 'SCRIPT_VERSION_NOT_FOUND')
+        return scriptFailure('SCRIPT_VERSION_NOT_FOUND', '指定剧本版本不存在', traceId);
+      if (caught instanceof Error && caught.message === 'SHOT_LOCK_CONFLICT')
+        return scriptFailure('SHOT_LOCK_CONFLICT', '锁路径存在父子或同路径冲突', traceId);
+      if (caught instanceof Error && caught.message === 'SHOT_LOCK_POINTER_INVALID')
+        return scriptFailure(
+          'SHOT_LOCK_POINTER_INVALID',
+          '锁路径无效或指向不允许的数组下标',
+          traceId,
+        );
+      return scriptPersistenceFailure(traceId);
+    }
+  };
   return {
     confirmVersion: (input, traceId) => mutate(input, 'CONFIRM', traceId),
     restoreVersion: (input, traceId) => mutate(input, 'RESTORE', traceId),
     saveDraft: (input, traceId) => mutate(input, 'SAVE', traceId),
+    rewriteSelection,
+    lockPath,
+    listLocks,
   };
 };

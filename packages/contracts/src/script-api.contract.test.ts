@@ -16,12 +16,17 @@ const episodeId = 'episode_12345678';
 const versionId = 'version_12345678';
 
 describe('Script IPC Contract', () => {
-  it('频道白名单—五个逐方法接口—名称固定且 API 类型公开', () => {
+  it('频道白名单—逐方法接口—名称固定且 API 类型公开', () => {
     expect(Object.values(SCRIPT_IPC_CHANNELS).sort()).toEqual([
       'script.confirmVersion',
       'script.getWorkspace',
+      'script.importInput',
+      'script.initializeInput',
       'script.initializeOriginal',
+      'script.listLocks',
+      'script.lockPath',
       'script.restoreVersion',
+      'script.rewriteSelection',
       'script.saveDraft',
     ]);
     expectTypeOf<ScriptApi>().toBeObject();

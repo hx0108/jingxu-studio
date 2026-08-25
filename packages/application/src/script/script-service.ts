@@ -3,8 +3,13 @@ import type {
   ConfirmScriptVersionInputDto,
   GetScriptWorkspaceInputDto,
   InitializeOriginalInputDto,
+  InitializeInputDto,
   JobSummaryDto,
   RestoreScriptVersionInputDto,
+  RewriteSelectionInputDto,
+  ScriptLockInputDto,
+  ScriptLockListInputDto,
+  ScriptLockSummaryDto,
   SaveScriptDraftInputDto,
   ScriptMutationResultDto,
   ScriptVersionDto,
@@ -23,12 +28,19 @@ import type {
   StoryboardWorkspace,
 } from '../ports/script/index';
 import type { OriginalInitializationService } from './original-initialization-service';
+import type { ExistingScriptInitializationCommand } from './existing-script-initialization-service';
 import { scriptFailure, scriptPersistenceFailure } from './script-service-error';
 import type { ScriptVersionService } from './script-version-service';
 import type { StoryboardVersionService } from './storyboard-version-service';
 
 export interface ScriptServiceDependencies {
   readonly initialization: OriginalInitializationService;
+  readonly existingInitialization?: {
+    initialize(
+      command: ExistingScriptInitializationCommand,
+      traceId: string,
+    ): Promise<AppResultDto<ScriptWorkspaceSnapshot>>;
+  };
   readonly storyboard: StoryboardVersionService;
   readonly versions: ScriptVersionService;
   readonly workspaceQuery: ScriptWorkspaceQueryPort;
@@ -40,6 +52,18 @@ export interface ScriptService {
     input: InitializeOriginalInputDto,
     traceId: string,
   ): Promise<AppResultDto<ScriptWorkspaceDto>>;
+  initializeInput(
+    input: InitializeInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptWorkspaceDto>>;
+  importInput(
+    input: InitializeInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptWorkspaceDto>>;
+  rewriteSelection(
+    input: RewriteSelectionInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptVersionDto>>;
   getWorkspace(
     input: GetScriptWorkspaceInputDto,
     traceId: string,
@@ -56,6 +80,11 @@ export interface ScriptService {
     input: RestoreScriptVersionInputDto,
     traceId: string,
   ): Promise<AppResultDto<ScriptMutationResultDto>>;
+  lockPath(input: ScriptLockInputDto, traceId: string): Promise<AppResultDto<ScriptLockSummaryDto>>;
+  listLocks(
+    input: ScriptLockListInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ScriptLockSummaryDto>>;
 }
 
 const stageToDto = async (
@@ -96,7 +125,8 @@ const stageToDto = async (
             versionNo: stage.current.versionNo,
           },
     history: history.filter((version): version is ScriptVersionDto => version !== null),
-    prerequisiteReady: stage.stage === 'CONCEPT',
+    // 依赖集合需要在所有阶段当前状态读取完成后统一计算，避免把非 CONCEPT 阶段误报为不可生成。
+    prerequisiteReady: false,
     stage: stage.stage,
   };
 };
@@ -181,7 +211,14 @@ const toWorkspaceDto = async (
     SCENE_SCRIPT: ['STORY_BIBLE', 'BEAT_SHEET'],
     STORY_BIBLE: ['CONCEPT'],
   } as const;
-  const prerequisites = stages.map((stage) => {
+  const stagesWithPrerequisites = stages.map((stage) => {
+    const missing = requiredByStage[stage.stage].filter((required) => !ready.has(required));
+    return {
+      ...stage,
+      prerequisiteReady: missing.length === 0,
+    };
+  });
+  const prerequisites = stagesWithPrerequisites.map((stage) => {
     const missing = requiredByStage[stage.stage].filter((required) => !ready.has(required));
     return {
       message:
@@ -204,11 +241,14 @@ const toWorkspaceDto = async (
       characterCount: snapshot.sourceInput.charCount,
       contentHash: snapshot.sourceInput.sha256,
       creativeText: snapshot.sourceInput.content,
+      encoding: snapshot.sourceInput.encoding,
+      fileName: snapshot.sourceInput.fileName,
       id: snapshot.sourceInput.id,
+      inputKind: snapshot.sourceInput.inputKind,
       projectId: snapshot.sourceInput.projectId,
     },
     storyboard: storyboardToDto(snapshot.storyboard),
-    stages,
+    stages: stagesWithPrerequisites,
   };
 };
 
@@ -254,6 +294,25 @@ export const createScriptService = (dependencies: ScriptServiceDependencies): Sc
       if (!initialized.ok) return initialized;
       return getWorkspace({ projectId: input.projectId }, traceId);
     },
+    initializeInput: async (input, traceId) => {
+      if (dependencies.existingInitialization === undefined) {
+        return scriptFailure('SCRIPT_INPUT_UNSUPPORTED', '已有剧本输入暂不可用', traceId);
+      }
+      const initialized = await dependencies.existingInitialization.initialize(input, traceId);
+      if (!initialized.ok) return initialized;
+      return getWorkspace({ projectId: input.projectId }, traceId);
+    },
+    importInput: async (input, traceId) => {
+      if (dependencies.existingInitialization === undefined) {
+        return scriptFailure('SCRIPT_INPUT_UNSUPPORTED', '已有剧本输入暂不可用', traceId);
+      }
+      const initialized = await dependencies.existingInitialization.initialize(input, traceId);
+      if (!initialized.ok) return initialized;
+      return getWorkspace({ projectId: input.projectId }, traceId);
+    },
+    rewriteSelection: (input, traceId) => dependencies.versions.rewriteSelection(input, traceId),
+    lockPath: (input, traceId) => dependencies.versions.lockPath(input, traceId),
+    listLocks: (input, traceId) => dependencies.versions.listLocks(input, traceId),
     restoreVersion: (input, traceId) =>
       input.stage === 'SHOT_CONTRACT'
         ? dependencies.storyboard.restoreStoryboard(

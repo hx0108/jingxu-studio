@@ -5,6 +5,7 @@ import { scriptWorkspaceSchema } from '@jingxu/contracts';
 import type {
   EpisodeVersion,
   ShotContractVersion,
+  ScriptStageWorkspace,
   ScriptWorkspaceQueryPort,
   ScriptWorkspaceSnapshot,
   StoryboardWorkspace,
@@ -68,7 +69,10 @@ const episodeVersion = (id: string, status: EpisodeVersion['status']): EpisodeVe
   versionNo: 1,
 });
 
-const createSnapshot = (storyboard: StoryboardWorkspace): ScriptWorkspaceSnapshot => ({
+const createSnapshot = (
+  storyboard: StoryboardWorkspace,
+  stages: readonly ScriptStageWorkspace[] = [],
+): ScriptWorkspaceSnapshot => ({
   episode: {
     createdAt: '2026-08-13T00:00:00.000Z',
     currentVersionId: null,
@@ -91,17 +95,27 @@ const createSnapshot = (storyboard: StoryboardWorkspace): ScriptWorkspaceSnapsho
     projectId: 'project-0001',
     sha256: 'a'.repeat(64),
   },
-  stages: [],
+  stages,
   storyboard,
 });
 
-const createHarness = (storyboard: StoryboardWorkspace) => {
+const createHarness = (
+  storyboard: StoryboardWorkspace,
+  stages: readonly ScriptStageWorkspace[] = [],
+) => {
   const workspaceQuery: ScriptWorkspaceQueryPort = {
     getVersionDocument: () => Promise.resolve(null),
-    getWorkspace: () => Promise.resolve(createSnapshot(storyboard)),
+    getWorkspace: () => Promise.resolve(createSnapshot(storyboard, stages)),
   };
   const storyboardService = { confirmStoryboard: vi.fn(), restoreStoryboard: vi.fn() };
-  const versions = { confirmVersion: vi.fn(), restoreVersion: vi.fn(), saveDraft: vi.fn() };
+  const versions = {
+    confirmVersion: vi.fn(),
+    listLocks: vi.fn(),
+    lockPath: vi.fn(),
+    restoreVersion: vi.fn(),
+    saveDraft: vi.fn(),
+    rewriteSelection: vi.fn(),
+  };
   const service = createScriptService({
     findCurrentJob: () => Promise.resolve(null),
     initialization: { initialize: vi.fn() },
@@ -112,7 +126,160 @@ const createHarness = (storyboard: StoryboardWorkspace) => {
   return { service, storyboardService, versions };
 };
 
+const readyConceptStage = (): ScriptStageWorkspace => ({
+  current: {
+    changeSummary: null,
+    createdAt: '2026-08-14T00:00:00.000Z',
+    document: JSON.stringify({ stage: 'CONCEPT' }),
+    documentSha256: 'e'.repeat(64),
+    episodeId: null,
+    id: 'concept-0001',
+    parentId: null,
+    projectId: 'project-0001',
+    source: 'AI',
+    sourceInputId: 'source-0001',
+    sourceInvocationId: 'invocation-0001',
+    stage: 'CONCEPT',
+    status: 'READY',
+    versionNo: 1,
+  },
+  episodeId: null,
+  head: null,
+  history: [],
+  historyTruncated: false,
+  stage: 'CONCEPT',
+});
+
+const emptyStoryBibleStage = (): ScriptStageWorkspace => ({
+  current: null,
+  episodeId: null,
+  head: null,
+  history: [],
+  historyTruncated: false,
+  stage: 'STORY_BIBLE',
+});
+
+const readyStoryBibleStage = (): ScriptStageWorkspace => ({
+  current: {
+    createdAt: '2026-08-14T00:00:00.000Z',
+    document: JSON.stringify({ stage: 'STORY_BIBLE' }),
+    documentSha256: 'f'.repeat(64),
+    id: 'bible-0001',
+    parentId: null,
+    projectId: 'project-0001',
+    source: 'AI',
+    sourceInvocationId: 'invocation-0002',
+    status: 'READY',
+    versionNo: 1,
+  },
+  episodeId: null,
+  head: null,
+  history: [],
+  historyTruncated: false,
+  stage: 'STORY_BIBLE',
+});
+
+const readyEpisodeScriptStage = (
+  stage: 'EPISODE_OUTLINE' | 'BEAT_SHEET' | 'SCENE_SCRIPT',
+  id: string,
+): ScriptStageWorkspace => ({
+  current: {
+    changeSummary: null,
+    createdAt: '2026-08-14T00:00:00.000Z',
+    document: JSON.stringify({ stage }),
+    documentSha256: 'g'.repeat(64),
+    episodeId: 'episode-0001',
+    id,
+    parentId: null,
+    projectId: 'project-0001',
+    source: 'AI',
+    sourceInputId: 'source-0001',
+    sourceInvocationId: 'invocation-0003',
+    stage,
+    status: 'READY',
+    versionNo: 1,
+  },
+  episodeId: 'episode-0001',
+  head: null,
+  history: [],
+  historyTruncated: false,
+  stage,
+});
+
+const emptyEpisodeScriptStage = (
+  stage: 'EPISODE_OUTLINE' | 'BEAT_SHEET' | 'SCENE_SCRIPT',
+): ScriptStageWorkspace => ({
+  current: null,
+  episodeId: 'episode-0001',
+  head: null,
+  history: [],
+  historyTruncated: false,
+  stage,
+});
+
 describe('ScriptService getWorkspace storyboard 节（shot-contract-generation §5.2）', () => {
+  it('条件—故事概念已确认 READY—故事圣经 prerequisiteReady 为 true，供 Renderer 解锁生成', async () => {
+    const { service } = createHarness(
+      { current: null, currentShots: [], history: [], historyTruncated: false },
+      [
+        readyConceptStage(),
+        emptyStoryBibleStage(),
+        emptyEpisodeScriptStage('EPISODE_OUTLINE'),
+        emptyEpisodeScriptStage('BEAT_SHEET'),
+        emptyEpisodeScriptStage('SCENE_SCRIPT'),
+      ],
+    );
+
+    const result = await service.getWorkspace({ projectId: 'project-0001' }, 'trace-0000');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.stages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ stage: 'CONCEPT', prerequisiteReady: true }),
+        expect.objectContaining({ stage: 'STORY_BIBLE', prerequisiteReady: true }),
+      ]),
+    );
+    expect(result.data.prerequisites).toContainEqual({
+      message: '前置条件已满足',
+      ready: true,
+      stage: 'STORY_BIBLE',
+    });
+    expect(result.data.stages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ stage: 'EPISODE_OUTLINE', prerequisiteReady: false }),
+        expect.objectContaining({ stage: 'BEAT_SHEET', prerequisiteReady: false }),
+        expect.objectContaining({ stage: 'SCENE_SCRIPT', prerequisiteReady: false }),
+      ]),
+    );
+  });
+
+  it('条件—上游链均为 READY—单集大纲、节拍表和场景剧本均按各自依赖解锁', async () => {
+    const { service } = createHarness(
+      { current: null, currentShots: [], history: [], historyTruncated: false },
+      [
+        readyConceptStage(),
+        readyStoryBibleStage(),
+        readyEpisodeScriptStage('EPISODE_OUTLINE', 'outline-0001'),
+        readyEpisodeScriptStage('BEAT_SHEET', 'beat-0001'),
+        emptyEpisodeScriptStage('SCENE_SCRIPT'),
+      ],
+    );
+
+    const result = await service.getWorkspace({ projectId: 'project-0001' }, 'trace-0000b');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.stages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ stage: 'STORY_BIBLE', prerequisiteReady: true }),
+        expect.objectContaining({ stage: 'EPISODE_OUTLINE', prerequisiteReady: true }),
+        expect.objectContaining({ stage: 'BEAT_SHEET', prerequisiteReady: true }),
+        expect.objectContaining({ stage: 'SCENE_SCRIPT', prerequisiteReady: true }),
+      ]),
+    );
+  });
+
   it('条件—存在 DRAFT 整集与镜头集合—输出当前版本摘要、sequence 升序镜头摘要与时长汇总，且整体通过 strict 契约', async () => {
     const current = episodeVersion('ev-000001', 'DRAFT');
     const { service } = createHarness({

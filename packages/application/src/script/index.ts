@@ -5,6 +5,11 @@ export {
   type OriginalInitializationService,
 } from './original-initialization-service';
 export {
+  createExistingScriptInitializationService,
+  type ExistingScriptInitializationCommand,
+  type ExistingScriptInitializationDependencies,
+} from './existing-script-initialization-service';
+export {
   createScriptVersionService,
   type ScriptVersionService,
   type ScriptVersionServiceDependencies,
@@ -19,6 +24,15 @@ export {
   type StoryboardVersionServiceDependencies,
   type StoryboardVersionSummary,
 } from './storyboard-version-service';
+export {
+  createStoryboardStructuralEditService,
+  type StructuralInput,
+  type StructuralService,
+} from './storyboard-structural-edit-service';
+export {
+  createProducibilityReportService,
+  type ProducibilityReportService,
+} from './producibility-report-service';
 export {
   createShotEditLockService,
   type ShotEditInput,

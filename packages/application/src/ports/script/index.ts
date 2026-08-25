@@ -18,8 +18,10 @@ export type {
   ScriptWorkspaceSnapshot,
   Shot,
   ShotContractVersion,
+  ShotDerivation,
   ShotLifecycleStatus,
   ShotLockRecord,
+  LockRecord,
   StoryboardHistoryEntry,
   StoryboardShotSnapshot,
   StoryboardWorkspace,
@@ -30,6 +32,13 @@ export type {
   StagedScriptStage,
   StoryBibleVersion,
 } from './script-types';
+export type {
+  FindingOverrideRecord,
+  ProducibilityFindingRecord,
+  ProducibilityReportRecord,
+  ProducibilityReportSnapshot,
+  ProducibilityRepositoryPort,
+} from './script-repositories';
 export type {
   ConsentRepositoryPort,
   EpisodeRepositoryPort,
@@ -47,6 +56,8 @@ export type {
   StageHeadRepositoryPort,
   StoryBibleVersionRepositoryPort,
   StoryboardRepositories,
+  ShotDerivationRepositoryPort,
 } from './script-repositories';
 export type { ScriptJobRepositories, ScriptUnitOfWorkPort } from './script-unit-of-work-port';
 export type { ScriptWorkspaceQueryPort } from './script-workspace-query-port';
+export type { ScriptInputFile, ScriptInputFilePort } from './script-input-file-port';

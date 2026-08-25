@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import {
   createOriginalInitializationService,
+  createExistingScriptInitializationService,
   createScriptService,
   createScriptVersionService,
   createStoryboardVersionService,
@@ -12,6 +13,7 @@ import type {
   ProjectUnitOfWorkPort,
   ScriptUnitOfWorkPort,
   ScriptWorkspaceQueryPort,
+  ScriptInputFilePort,
 } from '@jingxu/application';
 import type { AppResultDto, JobSummaryDto } from '@jingxu/contracts';
 
@@ -36,6 +38,7 @@ export interface RegisterScriptFeaturesOptions {
   readonly ipcRegistrar: ScriptIpcRegistrar;
   readonly newTraceId?: ScriptIpcTraceIds['newTraceId'];
   readonly persistenceRuntime: DesktopPersistenceRuntime;
+  readonly inputFile?: ScriptInputFilePort;
   readonly trustedUrl: string;
 }
 
@@ -94,6 +97,15 @@ export const createProductionScriptService = (handles: ScriptRuntimeHandles): Sc
     unitOfWork: handles.unitOfWork,
     workspaceQuery: handles.workspaceQuery,
   });
+  const existingInitialization = createExistingScriptInitializationService({
+    getProjectDefaults,
+    hashPayload,
+    hashText,
+    newId: randomUUID,
+    now,
+    unitOfWork: handles.unitOfWork,
+    workspaceQuery: handles.workspaceQuery,
+  });
   const versions = createScriptVersionService({
     hashPayload,
     newId: randomUUID,
@@ -115,6 +127,7 @@ export const createProductionScriptService = (handles: ScriptRuntimeHandles): Sc
       return toJobSummary(jobs.find((job) => job.projectId === projectId) ?? null);
     },
     initialization,
+    existingInitialization,
     storyboard,
     versions,
     workspaceQuery: handles.workspaceQuery,
@@ -130,6 +143,7 @@ export const createScriptFeatureRegistration = ({
   ipcRegistrar,
   newTraceId,
   persistenceRuntime,
+  inputFile,
   trustedUrl,
 }: RegisterScriptFeaturesOptions): ScriptFeatureRegistration => {
   let registered = false;
@@ -151,6 +165,29 @@ export const createScriptFeatureRegistration = ({
     getWorkspace: (input, traceId) => activeService?.getWorkspace(input, traceId) ?? blocked(),
     initializeOriginal: (input, traceId) =>
       activeService?.initializeOriginal(input, traceId) ?? blocked(),
+    initializeInput: (input, traceId) =>
+      activeService?.initializeInput?.(input, traceId) ?? blocked(),
+    importInput: async (input, traceId) => {
+      const selected = inputFile === undefined ? null : await inputFile.readSelectedText();
+      if (selected === null) {
+        return {
+          error: {
+            code: 'SCRIPT_INPUT_FILE_CANCELLED',
+            fieldErrors: null,
+            message: '已取消文件导入。',
+            retryable: false,
+            traceId,
+            userAction: '选择 .txt 或 .md 文件后重试。',
+          },
+          ok: false,
+        };
+      }
+      return activeService?.importInput?.({ ...input, ...selected }, traceId) ?? blocked();
+    },
+    lockPath: (input, traceId) => activeService?.lockPath(input, traceId) ?? blocked(),
+    listLocks: (input, traceId) => activeService?.listLocks(input, traceId) ?? blocked(),
+    rewriteSelection: (input, traceId) =>
+      activeService?.rewriteSelection?.(input, traceId) ?? blocked(),
     restoreVersion: (input, traceId) => activeService?.restoreVersion(input, traceId) ?? blocked(),
     saveDraft: (input, traceId) => activeService?.saveDraft(input, traceId) ?? blocked(),
   };

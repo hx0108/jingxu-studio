@@ -72,7 +72,10 @@ export const freezeScriptJobInput = async (
   command: FreezeScriptInputCommand,
   hashPayload: (value: Readonly<Record<string, unknown>>) => string,
 ): Promise<FrozenScriptInput> => {
-  const source = await repositories.sourceInputs.findCreativeByProjectId(command.projectId);
+  const source =
+    repositories.sourceInputs.findLatestByProjectId === undefined
+      ? await repositories.sourceInputs.findCreativeByProjectId(command.projectId)
+      : await repositories.sourceInputs.findLatestByProjectId(command.projectId);
   const episode =
     command.episodeId === null ? null : await repositories.episodes.findById(command.episodeId);
   const requiresEpisode =

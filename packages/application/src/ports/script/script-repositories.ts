@@ -10,13 +10,73 @@ import type {
   ScriptDependency,
   ScriptVersion,
   Shot,
+  ShotDerivation,
   ShotContractVersion,
   ShotLockRecord,
+  LockRecord,
   StageHead,
   StoryBibleVersion,
   SourceInput,
 } from './script-types';
 import type { FormatProfileRepository } from '../project/format-profile-repository';
+
+export interface ProducibilityReportRecord {
+  readonly id: string;
+  readonly projectId: string;
+  readonly episodeId: string;
+  readonly episodeVersionId: string;
+  readonly scope: 'EPISODE' | 'SHOT';
+  readonly shotVersionId: string | null;
+  readonly ruleSetVersion: 'jingxu-producibility-rules/1';
+  readonly capabilitySnapshotId: string;
+  readonly referencePriceSnapshotId: string | null;
+  readonly status: 'PASS' | 'WARN' | 'BLOCK';
+  readonly disclaimer: string;
+  readonly createdAt: string;
+}
+
+export interface ProducibilityFindingRecord {
+  readonly id: string;
+  readonly reportId: string;
+  readonly ruleId: string;
+  readonly ruleVersion: string;
+  readonly severity: 'INFO' | 'WARN' | 'BLOCK';
+  readonly jsonPointer: string;
+  readonly observation: string;
+  readonly recommendation: string;
+  readonly evidenceJson: string;
+  readonly sourceType: 'RULE' | 'LLM';
+  readonly createdAt: string;
+}
+
+export interface FindingOverrideRecord {
+  readonly id: string;
+  readonly findingId: string;
+  readonly decision: 'ACCEPT_RISK' | 'DISMISS';
+  readonly reason: string;
+  readonly actor: 'USER' | 'SYSTEM';
+  readonly createdAt: string;
+}
+
+export interface ProducibilityReportSnapshot {
+  readonly report: ProducibilityReportRecord;
+  readonly findings: readonly ProducibilityFindingRecord[];
+  readonly overrides: readonly FindingOverrideRecord[];
+}
+
+export interface ProducibilityRepositoryPort {
+  insertReport(report: ProducibilityReportRecord): Promise<void>;
+  insertFindings(findings: readonly ProducibilityFindingRecord[]): Promise<void>;
+  insertOverride(override: FindingOverrideRecord): Promise<void>;
+  findReport(id: string): Promise<ProducibilityReportSnapshot | null>;
+  findFinding(id: string): Promise<Readonly<{
+    readonly finding: ProducibilityFindingRecord;
+    readonly report: ProducibilityReportRecord;
+    readonly overrides: readonly FindingOverrideRecord[];
+  }> | null>;
+  findLatestCapabilitySnapshotId(): Promise<string | null>;
+  findLatestReferencePriceSnapshotId(): Promise<string | null>;
+}
 
 /** Script input freezing only needs the current immutable FormatProfile snapshot. */
 export type ScriptFormatProfileRepositoryPort = Pick<FormatProfileRepository, 'findCurrent'>;
@@ -24,6 +84,7 @@ export type ScriptFormatProfileRepositoryPort = Pick<FormatProfileRepository, 'f
 export interface SourceInputRepositoryPort {
   findById(id: string): Promise<SourceInput | null>;
   findCreativeByProjectId(projectId: string): Promise<SourceInput | null>;
+  readonly findLatestByProjectId?: (projectId: string) => Promise<SourceInput | null>;
   insert(sourceInput: SourceInput): Promise<void>;
 }
 
@@ -100,6 +161,7 @@ export interface ScriptRepositories {
   readonly audit: ScriptAuditRepositoryPort;
   readonly receipts: ScriptCommandReceiptRepositoryPort;
   readonly formatProfiles: ScriptFormatProfileRepositoryPort;
+  readonly producibility?: ProducibilityRepositoryPort;
 }
 
 // ---- SHOT_CONTRACT 分镜仓储（shot-contract-generation）----
@@ -125,6 +187,14 @@ export interface ShotRepositoryPort {
   updateCurrentVersionIds(
     entries: readonly Readonly<{ shotId: string; currentVersionId: string; updatedAt: string }>[],
   ): Promise<void>;
+  readonly updateLifecycleStatuses?: (
+    entries: readonly Readonly<{
+      shotId: string;
+      status: Shot['lifecycleStatus'];
+      updatedAt: string;
+      deletedAt: string | null;
+    }>[],
+  ) => Promise<void>;
 }
 
 export interface ShotContractVersionRepositoryPort {
@@ -132,11 +202,20 @@ export interface ShotContractVersionRepositoryPort {
   insertMany(versions: readonly ShotContractVersion[]): Promise<void>;
 }
 
+export interface ShotDerivationRepositoryPort {
+  insertMany(values: readonly ShotDerivation[]): Promise<void>;
+}
+
 /** lock_records 读写的唯一可写事实源（TECH §9.2；locked_paths 只是投影）。 */
 export interface ShotLockRepositoryPort {
   /** 有效（未解锁）锁，按 locked_at 升序；objectType 恒 SHOT_CONTRACT。 */
   listActive(projectId: string, shotId: string): Promise<readonly ShotLockRecord[]>;
-  insert(record: ShotLockRecord): Promise<void>;
+  listActiveByObject(
+    projectId: string,
+    objectType: LockRecord['objectType'],
+    objectId: string,
+  ): Promise<readonly LockRecord[]>;
+  insert(record: LockRecord): Promise<void>;
   /** 显式解锁置 unlocked_at；行不存在或已解锁返回 false（并发竞态由调用方收口）。 */
   unlock(id: string, unlockedAt: string): Promise<boolean>;
 }
@@ -149,5 +228,6 @@ export interface StoryboardRepositories {
   readonly episodeVersions: EpisodeVersionRepositoryPort;
   readonly shots: ShotRepositoryPort;
   readonly shotContractVersions: ShotContractVersionRepositoryPort;
+  readonly derivations?: ShotDerivationRepositoryPort;
   readonly locks: ShotLockRepositoryPort;
 }

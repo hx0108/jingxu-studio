@@ -149,6 +149,7 @@ export interface CreateDesktopScriptGenerationRuntimeOptions {
   readonly registry: CompiledSchemaRegistry;
   readonly textModel: TextModelPort;
   readonly unitOfWork: ScriptUnitOfWorkPort;
+  readonly forceStaleInput?: boolean;
 }
 
 /** Main composition adapter: loads frozen project data and injects infrastructure Ports. */
@@ -157,6 +158,7 @@ export const createDesktopScriptGenerationRuntime = ({
   registry,
   textModel,
   unitOfWork,
+  forceStaleInput,
 }: CreateDesktopScriptGenerationRuntimeOptions): ScriptGenerationRuntime =>
   createScriptGenerationRuntime({
     createInvocationId: () => randomUUID(),
@@ -199,6 +201,7 @@ export const createDesktopScriptGenerationRuntime = ({
     },
     textModel,
     unitOfWork,
+    ...(forceStaleInput === undefined ? {} : { forceStaleInput }),
     validateCandidate: (job, value) => {
       if (job.stage === 'SHOT_CONTRACT') {
         const result = validateModelShotSetCandidate(value);

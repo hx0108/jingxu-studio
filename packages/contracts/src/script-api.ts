@@ -17,6 +17,17 @@ const originalCreativeTextSchema = z.string().superRefine((value, context) => {
     });
   }
 });
+const existingScriptTextSchema = z.string().superRefine((value, context) => {
+  const characterCount = Array.from(value).length;
+  if (characterCount < 1 || characterCount > 30_000 || value.trim().length === 0) {
+    context.addIssue({
+      code: 'custom',
+      message: '已有剧本必须包含 1–30,000 个 Unicode 字符，且不能只有空白。',
+    });
+  }
+});
+export const scriptInputKindSchema = z.enum(['CREATIVE', 'TXT', 'MARKDOWN']);
+export const scriptCreationModeSchema = z.enum(['AI_OPTIMIZATION', 'AUTHORIZED_ADAPTATION']);
 
 export const stagedScriptStageSchema = z.enum([
   'CONCEPT',
@@ -68,6 +79,74 @@ export const initializeOriginalInputSchema = z
     requestId: requestIdSchema,
   })
   .strict();
+export const initializeInputSchema = z
+  .object({
+    content: existingScriptTextSchema,
+    creationMode: scriptCreationModeSchema,
+    dataProcessingConsent: z.literal(true),
+    fileName: z.string().min(1).max(255).nullable(),
+    inputKind: z.enum(['TXT', 'MARKDOWN']),
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+    authorizationSource: z.string().min(1).max(500).nullable(),
+    authorizationStatement: z.string().min(1).max(2_000).nullable(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.creationMode === 'AUTHORIZED_ADAPTATION') {
+      if (value.authorizationSource === null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['authorizationSource'],
+          message: '授权改编必须填写授权来源。',
+        });
+      }
+      if (value.authorizationStatement === null) {
+        context.addIssue({
+          code: 'custom',
+          path: ['authorizationStatement'],
+          message: '授权改编必须填写授权声明。',
+        });
+      }
+    }
+    if (value.fileName !== null) {
+      const lower = value.fileName.toLowerCase();
+      const expected = value.inputKind === 'TXT' ? '.txt' : '.md';
+      if (!lower.endsWith(expected)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['fileName'],
+          message: '文件扩展名与输入类型不匹配。',
+        });
+      }
+    }
+  });
+export const importInputSchema = z
+  .object({
+    authorizationSource: z.string().min(1).max(500).nullable(),
+    authorizationStatement: z.string().min(1).max(2_000).nullable(),
+    creationMode: scriptCreationModeSchema,
+    dataProcessingConsent: z.literal(true),
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.creationMode === 'AUTHORIZED_ADAPTATION') {
+      if (value.authorizationSource === null)
+        context.addIssue({
+          code: 'custom',
+          path: ['authorizationSource'],
+          message: '授权改编必须填写授权来源。',
+        });
+      if (value.authorizationStatement === null)
+        context.addIssue({
+          code: 'custom',
+          path: ['authorizationStatement'],
+          message: '授权改编必须填写授权声明。',
+        });
+    }
+  });
 export const getScriptWorkspaceInputSchema = z.object({ projectId: projectIdSchema }).strict();
 
 const scriptVersionCommandSchema = z
@@ -99,6 +178,58 @@ export const saveScriptDraftInputSchema = z
   });
 export const confirmScriptVersionInputSchema = scriptVersionCommandSchema;
 export const restoreScriptVersionInputSchema = scriptVersionCommandSchema;
+export const rewriteSelectionInputSchema = z
+  .object({
+    episodeId: episodeIdSchema,
+    expectedVersionId: versionIdSchema,
+    operationType: z.enum(['CONTINUE', 'SHORTEN', 'REWRITE', 'STRENGTHEN_CONFLICT']),
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+    selection: z.array(z.string().min(1).max(256)).min(1).max(32),
+    stage: stagedScriptStageSchema,
+    writeSet: z.array(z.string().regex(/^\//u).max(256)).min(1).max(32),
+  })
+  .strict();
+
+export const scriptLockObjectTypeSchema = z.enum(['STORY_BIBLE', 'SCRIPT_VERSION']);
+export const scriptLockActionSchema = z.enum(['LOCK', 'UNLOCK']);
+export const scriptLockInputSchema = z
+  .object({
+    action: scriptLockActionSchema,
+    episodeId: episodeIdSchema.nullable(),
+    expectedVersionId: versionIdSchema,
+    jsonPointer: z.string().regex(/^\//u).max(256),
+    note: z.string().max(200).nullable(),
+    objectType: scriptLockObjectTypeSchema,
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+    stage: stagedScriptStageSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    addEpisodeScopeIssue(value.episodeId, value.stage, context);
+    const expectedType = value.stage === 'STORY_BIBLE' ? 'STORY_BIBLE' : 'SCRIPT_VERSION';
+    if (value.objectType !== expectedType)
+      context.addIssue({
+        code: 'custom',
+        path: ['objectType'],
+        message: '锁对象类型与阶段不匹配。',
+      });
+  });
+export const scriptLockListInputSchema = z
+  .object({
+    objectType: scriptLockObjectTypeSchema,
+    objectVersionId: versionIdSchema,
+    projectId: projectIdSchema,
+  })
+  .strict();
+export const scriptLockSummarySchema = z
+  .object({
+    objectType: scriptLockObjectTypeSchema,
+    objectVersionId: versionIdSchema,
+    lockedPaths: z.array(z.string().regex(/^\//u)).max(64),
+  })
+  .strict();
 
 export const scriptStageDocumentSchema = z
   .object({
@@ -256,10 +387,13 @@ export const scriptWorkspaceSchema = z
     projectId: projectIdSchema,
     source: z
       .object({
-        characterCount: z.number().int().min(20).max(2_000),
+        characterCount: z.number().int().min(1).max(30_000),
         contentHash: hashSchema,
-        creativeText: originalCreativeTextSchema,
+        creativeText: existingScriptTextSchema,
         id: idSchema,
+        inputKind: scriptInputKindSchema.optional(),
+        fileName: z.string().min(1).max(255).nullable().optional(),
+        encoding: z.enum(['UTF-8']).nullable().optional(),
         projectId: projectIdSchema,
       })
       .strict(),
@@ -319,10 +453,16 @@ export const scriptWorkspaceSchema = z
   });
 
 export type InitializeOriginalInputDto = z.infer<typeof initializeOriginalInputSchema>;
+export type InitializeInputDto = z.infer<typeof initializeInputSchema>;
+export type ImportInputDto = z.infer<typeof importInputSchema>;
 export type GetScriptWorkspaceInputDto = z.infer<typeof getScriptWorkspaceInputSchema>;
 export type SaveScriptDraftInputDto = z.infer<typeof saveScriptDraftInputSchema>;
 export type ConfirmScriptVersionInputDto = z.infer<typeof confirmScriptVersionInputSchema>;
 export type RestoreScriptVersionInputDto = z.infer<typeof restoreScriptVersionInputSchema>;
+export type RewriteSelectionInputDto = z.infer<typeof rewriteSelectionInputSchema>;
+export type ScriptLockInputDto = z.infer<typeof scriptLockInputSchema>;
+export type ScriptLockListInputDto = z.infer<typeof scriptLockListInputSchema>;
+export type ScriptLockSummaryDto = z.infer<typeof scriptLockSummarySchema>;
 export type ScriptWorkspaceDto = z.infer<typeof scriptWorkspaceSchema>;
 export type ScriptVersionDto = z.infer<typeof scriptVersionSchema>;
 export type StoryboardWorkspaceDto = z.infer<typeof storyboardWorkspaceSchema>;
@@ -332,6 +472,11 @@ export type ScriptMutationResultDto = z.infer<typeof scriptMutationResultSchema>
 
 export interface ScriptApi {
   initializeOriginal(input: InitializeOriginalInputDto): Promise<AppResultDto<ScriptWorkspaceDto>>;
+  initializeInput(input: InitializeInputDto): Promise<AppResultDto<ScriptWorkspaceDto>>;
+  importInput(input: ImportInputDto): Promise<AppResultDto<ScriptWorkspaceDto>>;
+  rewriteSelection(input: RewriteSelectionInputDto): Promise<AppResultDto<ScriptVersionDto>>;
+  lockPath(input: ScriptLockInputDto): Promise<AppResultDto<ScriptLockSummaryDto>>;
+  listLocks(input: ScriptLockListInputDto): Promise<AppResultDto<ScriptLockSummaryDto>>;
   getWorkspace(input: GetScriptWorkspaceInputDto): Promise<AppResultDto<ScriptWorkspaceDto>>;
   saveDraft(input: SaveScriptDraftInputDto): Promise<AppResultDto<ScriptVersionDto>>;
   confirmVersion(
@@ -346,6 +491,11 @@ export const SCRIPT_IPC_CHANNELS = {
   confirmVersion: 'script.confirmVersion',
   getWorkspace: 'script.getWorkspace',
   initializeOriginal: 'script.initializeOriginal',
+  initializeInput: 'script.initializeInput',
+  importInput: 'script.importInput',
+  rewriteSelection: 'script.rewriteSelection',
+  lockPath: 'script.lockPath',
+  listLocks: 'script.listLocks',
   restoreVersion: 'script.restoreVersion',
   saveDraft: 'script.saveDraft',
 } as const;

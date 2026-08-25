@@ -14,12 +14,14 @@ import {
   SqliteScriptDependencyRepository,
   SqliteScriptVersionRepository,
   SqliteShotContractVersionRepository,
+  SqliteShotDerivationRepository,
   SqliteShotLockRepository,
   SqliteShotRepository,
   SqliteSourceInputRepository,
   SqliteStageHeadRepository,
   SqliteStoryBibleVersionRepository,
 } from './sqlite-script-repositories';
+import { SqliteProducibilityRepository } from './sqlite-producibility-repository';
 
 export class SqliteScriptUnitOfWork implements ScriptUnitOfWorkPort {
   private readonly repositories: ScriptJobRepositories;
@@ -38,9 +40,11 @@ export class SqliteScriptUnitOfWork implements ScriptUnitOfWorkPort {
       invocations: new SqliteModelInvocationRepository(database),
       jobs: new SqliteJobRepository(database),
       locks: new SqliteShotLockRepository(database),
+      producibility: new SqliteProducibilityRepository(database),
       receipts: new SqliteScriptCommandReceiptRepository(database),
       scriptVersions: new SqliteScriptVersionRepository(database),
       shotContractVersions: new SqliteShotContractVersionRepository(database),
+      derivations: new SqliteShotDerivationRepository(database),
       shots: new SqliteShotRepository(database),
       sourceInputs: new SqliteSourceInputRepository(database),
       stageHeads: new SqliteStageHeadRepository(database),

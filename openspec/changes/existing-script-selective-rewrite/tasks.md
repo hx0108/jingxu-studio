@@ -1,0 +1,4 @@
+- [x] 扩展 SourceInput/Consent 类型、SQLite mapper 和输入长度校验。
+- [x] 接入 `script.initializeInput`、`script.importInput`、`script.rewriteSelection` Contract/IPC/Preload。
+- [x] 实现新版本父链、write_set 校验和锁冲突阻断。
+- [x] Main 系统文件 Dialog 与完整 AC-V1-02 Electron 证据。

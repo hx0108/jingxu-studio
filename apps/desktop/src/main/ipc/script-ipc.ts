@@ -5,8 +5,14 @@ import {
   confirmScriptVersionInputSchema,
   getScriptWorkspaceInputSchema,
   initializeOriginalInputSchema,
+  initializeInputSchema,
+  importInputSchema,
   restoreScriptVersionInputSchema,
   saveScriptDraftInputSchema,
+  rewriteSelectionInputSchema,
+  scriptLockInputSchema,
+  scriptLockListInputSchema,
+  scriptLockSummarySchema,
   SCRIPT_IPC_CHANNELS,
   scriptMutationResultSchema,
   scriptVersionSchema,
@@ -17,8 +23,13 @@ import type {
   ConfirmScriptVersionInputDto,
   GetScriptWorkspaceInputDto,
   InitializeOriginalInputDto,
+  InitializeInputDto,
   RestoreScriptVersionInputDto,
   SaveScriptDraftInputDto,
+  RewriteSelectionInputDto,
+  ScriptLockInputDto,
+  ScriptLockListInputDto,
+  ScriptLockSummaryDto,
   ScriptMutationResultDto,
   ScriptVersionDto,
   ScriptWorkspaceDto,
@@ -42,6 +53,26 @@ export interface ScriptIpcService {
     input: InitializeOriginalInputDto,
     traceId: string,
   ) => Promise<AppResultDto<ScriptWorkspaceDto>>;
+  readonly initializeInput?: (
+    input: InitializeInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ScriptWorkspaceDto>>;
+  readonly importInput?: (
+    input: InitializeInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ScriptWorkspaceDto>>;
+  readonly rewriteSelection?: (
+    input: RewriteSelectionInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ScriptVersionDto>>;
+  readonly lockPath: (
+    input: ScriptLockInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ScriptLockSummaryDto>>;
+  readonly listLocks: (
+    input: ScriptLockListInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ScriptLockSummaryDto>>;
   readonly getWorkspace: (
     input: GetScriptWorkspaceInputDto,
     traceId: string,
@@ -144,6 +175,7 @@ export const registerScriptIpc = (
   const coordinator = new ScriptRequestCoordinator();
   const workspaceResult = appResultSchema(scriptWorkspaceSchema);
   const versionResult = appResultSchema(scriptVersionSchema);
+  const lockResult = appResultSchema(scriptLockSummarySchema);
   // 确认/恢复按 stage 分派：五阶段返回版本文档，SHOT_CONTRACT 返回整集摘要（D6）。
   const mutationResult = appResultSchema(scriptMutationResultSchema);
 
@@ -184,6 +216,43 @@ export const registerScriptIpc = (
     initializeOriginalInputSchema,
     workspaceResult,
     (input, traceId) => service.initializeOriginal(input, traceId),
+  );
+  registerCommand(
+    SCRIPT_IPC_CHANNELS.lockPath,
+    scriptLockInputSchema,
+    lockResult,
+    (input, traceId) => service.lockPath(input, traceId),
+  );
+  registrar.handle(SCRIPT_IPC_CHANNELS.listLocks, (event, ...arguments_) => {
+    assertTrustedIpcSender(event, trustedUrl);
+    const traceId = traceIds.newTraceId();
+    const input = parseSingleIpcArgument(scriptLockListInputSchema, arguments_);
+    if (input === null) return Promise.resolve(errorResult('IPC_INVALID_REQUEST', traceId));
+    return parseOutput(lockResult, () => service.listLocks(input, traceId), traceId);
+  });
+  registerCommand(
+    SCRIPT_IPC_CHANNELS.initializeInput,
+    initializeInputSchema,
+    workspaceResult,
+    (input, traceId) =>
+      service.initializeInput?.(input, traceId) ??
+      Promise.resolve(errorResult('PROJECT_PERSISTENCE_FAILED', traceId)),
+  );
+  registerCommand(
+    SCRIPT_IPC_CHANNELS.importInput,
+    importInputSchema,
+    workspaceResult,
+    (input, traceId) =>
+      service.importInput?.(input as unknown as InitializeInputDto, traceId) ??
+      Promise.resolve(errorResult('PROJECT_PERSISTENCE_FAILED', traceId)),
+  );
+  registerCommand(
+    SCRIPT_IPC_CHANNELS.rewriteSelection,
+    rewriteSelectionInputSchema,
+    versionResult,
+    (input, traceId) =>
+      service.rewriteSelection?.(input, traceId) ??
+      Promise.resolve(errorResult('PROJECT_PERSISTENCE_FAILED', traceId)),
   );
   registerCommand(
     SCRIPT_IPC_CHANNELS.saveDraft,

@@ -8,6 +8,7 @@ import type {
   EpisodeVersion,
   EpisodeVersionRepositoryPort,
   EpisodeVersionShot,
+  LockRecord,
   ScriptAuditEntry,
   ScriptAuditRepositoryPort,
   ScriptCommandReceipt,
@@ -19,6 +20,8 @@ import type {
   Shot,
   ShotContractVersion,
   ShotContractVersionRepositoryPort,
+  ShotDerivation,
+  ShotDerivationRepositoryPort,
   ShotLockRecord,
   ShotLockRepositoryPort,
   ShotRepositoryPort,
@@ -87,11 +90,24 @@ export class SqliteSourceInputRepository implements SourceInputRepositoryPort {
       ),
     );
   }
+  public findLatestByProjectId(projectId: string): Promise<SourceInput | null> {
+    return syncToPromise(() =>
+      get(
+        this.db,
+        'SELECT id, project_id, input_kind, file_name, encoding, content_text, char_count, sha256, created_at FROM source_inputs WHERE project_id=? ORDER BY created_at DESC, id DESC LIMIT 1',
+        [projectId],
+        mapSourceInput,
+      ),
+    );
+  }
   public insert(value: SourceInput): Promise<void> {
     return syncToPromise(() => {
+      const min = value.inputKind === 'CREATIVE' ? 20 : 1;
+      const max = value.inputKind === 'CREATIVE' ? 2_000 : 30_000;
       if (
-        value.charCount < 20 ||
-        value.charCount > 2_000 ||
+        value.charCount < min ||
+        value.charCount > max ||
+        value.content.trim().length === 0 ||
         Array.from(value.content).length !== value.charCount ||
         createHash('sha256').update(value.content, 'utf8').digest('hex') !== value.sha256
       ) {
@@ -596,6 +612,35 @@ export class SqliteShotRepository implements ShotRepositoryPort {
         statement.run(entry.currentVersionId, entry.updatedAt, entry.shotId);
     });
   }
+  public updateLifecycleStatuses(
+    entries: readonly Readonly<{
+      shotId: string;
+      status: Shot['lifecycleStatus'];
+      updatedAt: string;
+      deletedAt: string | null;
+    }>[],
+  ): Promise<void> {
+    return syncToPromise(() => {
+      const statement = this.db.prepare(
+        'UPDATE shots SET lifecycle_status=?, updated_at=?, deleted_at=? WHERE id=?',
+      );
+      for (const entry of entries)
+        statement.run(entry.status, entry.updatedAt, entry.deletedAt, entry.shotId);
+    });
+  }
+}
+
+export class SqliteShotDerivationRepository implements ShotDerivationRepositoryPort {
+  public constructor(private readonly db: SqliteDatabase) {}
+  public insertMany(values: readonly ShotDerivation[]): Promise<void> {
+    return syncToPromise(() => {
+      const statement = this.db.prepare(
+        'INSERT INTO shot_derivations (new_shot_id, source_shot_id, operation, created_at) VALUES (?, ?, ?, ?)',
+      );
+      for (const value of values)
+        statement.run(value.newShotId, value.sourceShotId, value.operation, value.createdAt);
+    });
+  }
 }
 export class SqliteShotContractVersionRepository implements ShotContractVersionRepositoryPort {
   public constructor(private readonly db: SqliteDatabase) {}
@@ -638,17 +683,33 @@ export class SqliteShotContractVersionRepository implements ShotContractVersionR
 export class SqliteShotLockRepository implements ShotLockRepositoryPort {
   public constructor(private readonly db: SqliteDatabase) {}
   public listActive(projectId: string, shotId: string): Promise<readonly ShotLockRecord[]> {
+    return syncToPromise(
+      () =>
+        (
+          this.db
+            .prepare(
+              "SELECT id, project_id, object_type, object_id, object_version_id, json_pointer, locked_by, note, locked_at, unlocked_at FROM lock_records WHERE project_id=? AND object_type='SHOT_CONTRACT' AND object_id=? AND unlocked_at IS NULL ORDER BY locked_at, id",
+            )
+            .all(projectId, shotId) as ScriptRow[]
+        ).map(mapLockRecord) as readonly ShotLockRecord[],
+    );
+  }
+  public listActiveByObject(
+    projectId: string,
+    objectType: LockRecord['objectType'],
+    objectId: string,
+  ): Promise<readonly LockRecord[]> {
     return syncToPromise(() =>
       (
         this.db
           .prepare(
-            "SELECT id, project_id, object_type, object_id, object_version_id, json_pointer, locked_by, note, locked_at, unlocked_at FROM lock_records WHERE project_id=? AND object_type='SHOT_CONTRACT' AND object_id=? AND unlocked_at IS NULL ORDER BY locked_at, id",
+            'SELECT id, project_id, object_type, object_id, object_version_id, json_pointer, locked_by, note, locked_at, unlocked_at FROM lock_records WHERE project_id=? AND object_type=? AND object_id=? AND unlocked_at IS NULL ORDER BY locked_at, id',
           )
-          .all(projectId, shotId) as ScriptRow[]
+          .all(projectId, objectType, objectId) as ScriptRow[]
       ).map(mapLockRecord),
     );
   }
-  public insert(v: ShotLockRecord): Promise<void> {
+  public insert(v: LockRecord): Promise<void> {
     return syncToPromise(() => {
       this.db
         .prepare(

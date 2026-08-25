@@ -119,6 +119,7 @@ describe('Script Application Ports', () => {
       locks: {
         insert: () => Promise.resolve(),
         listActive: () => Promise.resolve([]),
+        listActiveByObject: () => Promise.resolve([]),
         unlock: () => Promise.resolve(true),
       },
       shots: {

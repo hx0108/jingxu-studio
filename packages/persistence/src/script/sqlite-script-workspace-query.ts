@@ -49,7 +49,7 @@ export class SqliteScriptWorkspaceQuery implements ScriptWorkspaceQueryPort {
 
   public async getWorkspace(projectId: string): Promise<ScriptWorkspaceSnapshot | null> {
     const [sourceInput, episode] = await Promise.all([
-      this.sources.findCreativeByProjectId(projectId),
+      this.sources.findLatestByProjectId(projectId),
       this.episodes.findActiveByProjectId(projectId),
     ]);
     if (sourceInput === null && episode === null) return null;

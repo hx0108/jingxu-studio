@@ -1,9 +1,35 @@
 import type {
+  ModelErrorCode,
   NormalizedModelError,
   TextGenerationRequest,
   TextGenerationResult,
   TextModelPort,
 } from '@jingxu/application';
+
+export type E2eFailureScenario =
+  '401' | '429' | '5xx' | 'timeout' | 'invalid-json' | 'repair-failure' | 'stale' | 'late-response';
+
+class E2eScriptModelError extends Error {
+  public constructor(public readonly normalized: NormalizedModelError) {
+    super(normalized.code);
+    this.name = 'E2eScriptModelError';
+  }
+}
+
+const retryable = new Set<ModelErrorCode>([
+  'MODEL_NETWORK_ERROR',
+  'MODEL_PROVIDER_ERROR',
+  'MODEL_RATE_LIMITED',
+  'MODEL_TIMEOUT',
+]);
+
+const failure = (code: ModelErrorCode): NormalizedModelError => ({
+  code,
+  detail: `E2E fixed mock: ${code}`,
+  providerRequestId: null,
+  retryable: retryable.has(code),
+  userAction: null,
+});
 
 const candidateData = (
   stage: TextGenerationRequest['stage'],
@@ -143,6 +169,13 @@ const candidateData = (
 
 /** Deterministic, network-free model used only when Main explicitly enables the E2E harness. */
 export class E2eScriptTextModelAdapter implements TextModelPort {
+  readonly #scenario: E2eFailureScenario | null;
+  #attempt = 0;
+
+  public constructor(scenario: E2eFailureScenario | null = null) {
+    this.#scenario = scenario;
+  }
+
   public validateCredential(): Promise<Readonly<{ ok: true }>> {
     return Promise.resolve({ ok: true });
   }
@@ -151,7 +184,46 @@ export class E2eScriptTextModelAdapter implements TextModelPort {
     request: TextGenerationRequest,
     signal: AbortSignal,
   ): Promise<TextGenerationResult> {
+    this.#attempt += 1;
     if (signal.aborted) return Promise.reject(new Error('MODEL_CANCELLED'));
+    const scenario = this.#scenario;
+    if (scenario === '401')
+      return Promise.reject(new E2eScriptModelError(failure('MODEL_CREDENTIAL_INVALID')));
+    if (scenario === '429' && this.#attempt <= 1)
+      return Promise.reject(new E2eScriptModelError(failure('MODEL_RATE_LIMITED')));
+    if (scenario === '5xx')
+      return Promise.reject(new E2eScriptModelError(failure('MODEL_PROVIDER_ERROR')));
+    if (scenario === 'timeout')
+      return Promise.reject(new E2eScriptModelError(failure('MODEL_TIMEOUT')));
+    if (scenario === 'late-response') {
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve({
+            finishReason: 'stop',
+            modelReported: 'jingxu-e2e-script-model',
+            providerRequestId: `e2e-late-${request.invocationId}`,
+            rawText: JSON.stringify({ data: candidateData(request.stage) }),
+            usage: { inputTokens: 1, outputTokens: 1 },
+          });
+        }, 1_000);
+      });
+    }
+    if (scenario === 'invalid-json' && this.#attempt === 1)
+      return Promise.resolve({
+        finishReason: 'stop',
+        modelReported: 'jingxu-e2e-script-model',
+        providerRequestId: `e2e-invalid-${request.invocationId}`,
+        rawText: '{',
+        usage: { inputTokens: 1, outputTokens: 1 },
+      });
+    if (scenario === 'repair-failure')
+      return Promise.resolve({
+        finishReason: 'stop',
+        modelReported: 'jingxu-e2e-script-model',
+        providerRequestId: `e2e-repair-fail-${request.invocationId}`,
+        rawText: '{',
+        usage: { inputTokens: 1, outputTokens: 1 },
+      });
     return Promise.resolve({
       finishReason: 'stop',
       modelReported: 'jingxu-e2e-script-model',
@@ -162,6 +234,7 @@ export class E2eScriptTextModelAdapter implements TextModelPort {
   }
 
   public normalizeError(error: unknown): NormalizedModelError {
+    if (error instanceof E2eScriptModelError) return error.normalized;
     return {
       code:
         error instanceof Error && error.message === 'MODEL_CANCELLED'
