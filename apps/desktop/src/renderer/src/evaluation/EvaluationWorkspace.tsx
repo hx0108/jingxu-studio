@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   EVALUATION_GUIDELINE_VERSION,
@@ -28,9 +28,9 @@ const EMPTY_INPUT =
 const EMPTY_EXPECTED =
   '{\n  "acceptable": false,\n  "expectedIssueCodes": [],\n  "referenceContract": null\n}';
 
-const safeJson = <T,>(value: string): T | null => {
+const safeJson = (value: string): unknown => {
   try {
-    return JSON.parse(value) as T;
+    return JSON.parse(value);
   } catch {
     return null;
   }
@@ -81,7 +81,7 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
     [projectId, scope],
   );
 
-  const refresh = async (): Promise<void> => {
+  const refresh = useCallback(async (): Promise<void> => {
     setLoading(true);
     const result = await getEvaluationClient().listSamples(filter);
     if (result.ok) {
@@ -91,11 +91,16 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
       setError(result.error);
     }
     setLoading(false);
-  };
+  }, [filter]);
 
   useEffect(() => {
-    void refresh();
-  }, [filter]);
+    const timer = window.setTimeout(() => {
+      void refresh();
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [refresh]);
 
   const showDetail = async (sampleId: string): Promise<void> => {
     setBusy(true);
@@ -110,8 +115,8 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
   };
 
   const createSample = async (): Promise<void> => {
-    const input = safeJson<EvaluationSampleInputDto>(inputText);
-    const expected = safeJson<EvaluationExpectedDto>(expectedText);
+    const input = safeJson(inputText) as EvaluationSampleInputDto | null;
+    const expected = safeJson(expectedText) as EvaluationExpectedDto | null;
     if (input === null || expected === null) {
       setError({
         code: 'EVALUATION_SAMPLE_INVALID',
@@ -249,20 +254,28 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
         <button disabled={busy} onClick={() => void importBatch()} type="button">
           导入 JSON 样本
         </button>
-        <button disabled={busy} onClick={() => setShowCreate((visible) => !visible)} type="button">
+        <button
+          disabled={busy}
+          onClick={() => {
+            setShowCreate((visible) => !visible);
+          }}
+          type="button"
+        >
           {showCreate ? '收起手工创建' : '创建样本'}
         </button>
       </div>
 
       {projectId !== null && (
         <section className="script-card" aria-labelledby="derive-title">
-          <h3 id="derive-title">从当前 READY 分镜派生</h3>
-          <p>输入剧本工作区显示的当前整集版本 ID；非 READY 或版本已变化会被主进程拒绝。</p>
+          <h3 id="derive-title">从当前已确认分镜派生</h3>
+          <p>输入剧本工作区显示的当前整集版本标识；未确认或版本已变化会被主进程拒绝。</p>
           <div className="form-actions">
             <label>
               整集版本 ID
               <input
-                onChange={(event) => setDeriveVersionId(event.target.value)}
+                onChange={(event) => {
+                  setDeriveVersionId(event.target.value);
+                }}
                 value={deriveVersionId}
               />
             </label>
@@ -286,14 +299,19 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
           <div className="form-grid">
             <label>
               去重键
-              <input onChange={(event) => setDedupKey(event.target.value)} value={dedupKey} />
+              <input
+                onChange={(event) => {
+                  setDedupKey(event.target.value);
+                }}
+                value={dedupKey}
+              />
             </label>
             <label>
               授权状态
               <select
-                onChange={(event) =>
-                  setAuthorization(event.target.value as EvaluationAuthorization)
-                }
+                onChange={(event) => {
+                  setAuthorization(event.target.value as EvaluationAuthorization);
+                }}
                 value={authorization}
               >
                 <option value="SYNTHETIC">SYNTHETIC（合成）</option>
@@ -304,7 +322,9 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
             <label>
               数据拆分
               <select
-                onChange={(event) => setDatasetSplit(event.target.value as EvaluationDatasetSplit)}
+                onChange={(event) => {
+                  setDatasetSplit(event.target.value as EvaluationDatasetSplit);
+                }}
                 value={datasetSplit}
               >
                 <option value="TRAIN">Development</option>
@@ -316,7 +336,9 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
           <label>
             样本输入 JSON
             <textarea
-              onChange={(event) => setInputText(event.target.value)}
+              onChange={(event) => {
+                setInputText(event.target.value);
+              }}
               rows={10}
               value={inputText}
             />
@@ -324,7 +346,9 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
           <label>
             期望结论 JSON
             <textarea
-              onChange={(event) => setExpectedText(event.target.value)}
+              onChange={(event) => {
+                setExpectedText(event.target.value);
+              }}
               rows={8}
               value={expectedText}
             />
@@ -394,11 +418,11 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
               <label>
                 标注结论
                 <select
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setAnnotationVerdict(
                       event.target.value as EvaluationAnnotationLabelDto['verdict'],
-                    )
-                  }
+                    );
+                  }}
                   value={annotationVerdict}
                 >
                   <option value="PROBLEM">问题</option>
@@ -408,7 +432,9 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
               <label>
                 标注依据
                 <textarea
-                  onChange={(event) => setAnnotationRationale(event.target.value)}
+                  onChange={(event) => {
+                    setAnnotationRationale(event.target.value);
+                  }}
                   placeholder="说明判断依据（必填）"
                   rows={4}
                   value={annotationRationale}
@@ -425,7 +451,9 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
                 <button
                   className="danger-button"
                   disabled={busy}
-                  onClick={() => setConfirmDelete(detail)}
+                  onClick={() => {
+                    setConfirmDelete(detail);
+                  }}
                   type="button"
                 >
                   删除样本
@@ -447,7 +475,12 @@ export const EvaluationWorkspace = ({ projectId, onBack }: EvaluationWorkspacePr
             <h2 id="evaluation-delete-title">确认删除评测样本？</h2>
             <p>此操作会删除样本及其标注历史，并写入审计记录；该操作不可撤销。</p>
             <div className="dialog-actions">
-              <button onClick={() => setConfirmDelete(null)} type="button">
+              <button
+                onClick={() => {
+                  setConfirmDelete(null);
+                }}
+                type="button"
+              >
                 取消
               </button>
               <button

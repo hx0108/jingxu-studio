@@ -16,7 +16,7 @@ import { ProviderSettings } from './ProviderSettings';
 import { StoryboardPanel } from './StoryboardPanel';
 
 describe('Staged Script Renderer 可观察基线', () => {
-  it('原创初始化—显示字符边界、数据处理确认与明确非目标', () => {
+  it('创作输入—显示原创与已有剧本入口、字符边界和数据处理确认', () => {
     const html = renderToStaticMarkup(
       <OriginalInput
         onDirtyChange={vi.fn()}
@@ -24,16 +24,48 @@ describe('Staged Script Renderer 可观察基线', () => {
         projectId="project_12345678"
       />,
     );
-    expect(html).toContain('0/2,000 个 Unicode 字符');
-    expect(html).toContain('最少 20 个');
-    expect(html).toContain('第三方 Qwen Provider');
-    expect(html).toContain('文件导入、授权改编和 AI 优化尚未开放');
+    expect(html).toContain('0/2,000（最少 20） 个 Unicode 字符');
+    expect(html).toContain('最少 20');
+    expect(html).toContain('第三方 Qwen 模型服务');
+    expect(html).toContain('已有剧本');
+    expect(html).toContain('还需输入 20 个 Unicode 字符');
     expect(html).toContain('disabled=""');
+  });
+
+  it('单集生产工作台提供分镜、画面、视频和合成四个清晰分区', () => {
+    const html = renderToStaticMarkup(
+      <StoryboardPanel
+        batchBusy={false}
+        episodeTargetDurationSec={90}
+        exportNotice={null}
+        generateHint="请先确认场景剧本"
+        imageStates={null}
+        job={null}
+        onBatchCancel={vi.fn()}
+        onBatchRetryFailed={vi.fn()}
+        onConfirm={vi.fn()}
+        onEditShot={vi.fn()}
+        onExportEpisode={vi.fn()}
+        onGenerate={vi.fn()}
+        onGenerateFirstFrames={vi.fn()}
+        onLockShot={vi.fn()}
+        onRestore={vi.fn()}
+        onUnlockShot={vi.fn()}
+        pending={false}
+        projectId="project_12345678"
+        storyboard={{ current: null, history: [], shots: [], totalDurationSec: 0 }}
+      />,
+    );
+    for (const label of ['分镜设计', '画面生成', '视频生成', '合成导出']) {
+      expect(html).toContain(label);
+    }
+    expect(html).toContain('media-context-panel');
+    expect(html).not.toContain('SHOT_CONTRACT');
   });
 
   it('Provider 设置—首次加载不回显 Key 或伪装已验证', () => {
     const html = renderToStaticMarkup(<ProviderSettings onReadyChange={vi.fn()} />);
-    expect(html).toContain('正在加载 Qwen 设置');
+    expect(html).toContain('正在读取文本模型状态');
     expect(html).not.toContain('sk-');
     expect(html).not.toContain('已验证');
   });
@@ -133,7 +165,7 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
       />,
     );
     expect(html).toContain('分镜工作台');
-    expect(html).toContain('● DRAFT');
+    expect(html).toContain('草稿');
     expect(html).toContain('合计 20s / 目标 90s');
     expect(html).toContain('2 个镜头');
     expect(html).toContain('#1');
@@ -151,7 +183,7 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     expect(html).toContain('EXTREME_LONG');
     // 逐镜头首帧面板挂载在详情内：DRAFT 整集下生成首帧按钮禁用并给出提示。
     expect(html).toContain('首帧候选 · 镜头 #1');
-    expect(html).toContain('分镜整集未确认 READY；确认后才能为镜头生成首帧。');
+    expect(html).toContain('分镜整集尚未确认；确认可用后才能为镜头生成首帧。');
     expect(html).toContain('正在加载首帧候选…');
     // 分镜自身操作可执行（首帧按钮的 disabled 属预期，不在此断言）。
     expect(html).toContain('<button type="button">生成整集分镜</button>');
@@ -160,7 +192,7 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     expect(html).toContain('字段锁定');
     expect(html).toContain('锁定 台词');
     expect(html).toContain('七类根字段加锁');
-    expect(html).toContain('v1 · READY · 2 个镜头');
+    expect(html).toContain('v1 · 已确认 · 2 个镜头');
     expect(html).toContain('恢复为新草稿');
     // storyboard-export：非 READY 整集不渲染任何导出入口（spec 工作台入口场景）。
     expect(html).not.toContain('导出整集');
@@ -243,7 +275,7 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         onUnlockShot={vi.fn()}
         onBatchRetryFailed={vi.fn()}
         onGenerateFirstFrames={vi.fn()}
-        generateHint="前置阶段尚未确认 READY：需先确认场景剧本。"
+        generateHint="前置阶段尚未确认：需先确认场景剧本。"
         job={null}
         onConfirm={vi.fn()}
         onGenerate={vi.fn()}
@@ -253,7 +285,7 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         storyboard={{ current: null, history: [], shots: [], totalDurationSec: 0 }}
       />,
     );
-    expect(html).toContain('○ 未生成');
+    expect(html).toContain('未开始');
     expect(html).toContain('尚未生成分镜');
     expect(html).toContain('需先确认场景剧本');
     expect(html).toContain('生成整集分镜');
@@ -290,11 +322,13 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
         storyboard={{ current: null, history: [], shots: [], totalDurationSec: 0 }}
       />,
     );
-    expect(html).toContain('任务状态：FAILED · CONTRACT_VALIDATION_FAILED');
+    expect(html).toContain('任务状态：失败 · 查看失败详情');
+    expect(html).toContain('<summary>查看错误详情</summary>');
+    expect(html).toContain('CONTRACT_VALIDATION_FAILED');
     expect(html).toContain('结构或集合校验');
     // 脱敏红线：JSON Pointer 明细与模型原文永不进入 Renderer。
     expect(html).not.toContain('/shots/0');
-    expect(html).not.toContain('details');
+    expect(html).not.toContain('Provider response');
   });
 
   it('镜头总时长超出单集目标—汇总条越限告警可见', () => {
@@ -546,7 +580,7 @@ describe('Storyboard Panel 批次视图（batch-first-frame §5.2/§5.3）', () 
       />,
     );
     expect(html).toContain('为整集生成首帧');
-    expect(html).toContain('分镜整集确认 READY 后可为整集批量生成首帧。');
+    expect(html).toContain('分镜整集确认可用后，可为整集批量生成首帧。');
     expect(html).not.toContain('batch-progress');
   });
 });

@@ -29,7 +29,7 @@ describe('EvaluationWorkspace — 评测集页面状态矩阵', () => {
       <EvaluationWorkspace onBack={() => undefined} projectId="project_12345678" />,
     );
 
-    expect(html).toContain('从当前 READY 分镜派生');
+    expect(html).toContain('从当前已确认分镜派生');
     expect(html).toContain('整集版本 ID');
     for (const forbidden of [
       'sqlite',

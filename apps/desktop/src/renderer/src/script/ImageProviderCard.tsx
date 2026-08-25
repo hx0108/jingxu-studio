@@ -31,7 +31,7 @@ export const ImageProviderCardView = ({
   profile,
 }: ImageProviderCardViewProps) => (
   <section className="script-card" aria-labelledby="image-provider-title">
-    <h2 id="image-provider-title">图片 Provider 设置（火山方舟 ARK）</h2>
+    <h2 id="image-provider-title">图片模型服务（火山方舟 ARK）</h2>
     <p>
       用于首帧图片生成。模型与端点固定，仅需保存 ARK API Key；完整 Key 不回显、不进入页面长期状态。
     </p>

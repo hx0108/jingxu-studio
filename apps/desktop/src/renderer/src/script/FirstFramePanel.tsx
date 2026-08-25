@@ -11,6 +11,7 @@ import type {
 } from '@jingxu/contracts';
 
 import { describeProjectError } from '../project/project-error';
+import { workspaceStatusLabel } from '../ui/workspace-status';
 import {
   CANDIDATE_STATUS_LABELS,
   candidateImageSrc,
@@ -91,7 +92,7 @@ export const FirstFrameBoard = ({
                   <span className={`status-badge status-${candidate.status.toLowerCase()}`}>
                     {CANDIDATE_STATUS_LABELS[candidate.status]}
                     {candidate.status === 'FAILED' && candidate.errorCode !== null
-                      ? ` · ${candidate.errorCode}`
+                      ? ' · 生成失败'
                       : ''}
                   </span>
                   <small>
@@ -385,9 +386,9 @@ export const FirstFramePanel = ({
   const generateDisabled = storyboardStatus !== 'READY' || shotBusy;
   const generateHint =
     storyboardStatus === null
-      ? '分镜尚未生成；生成整集分镜并确认 READY 后可生成首帧。'
+      ? '分镜尚未生成；生成整集分镜并确认可用后可生成首帧。'
       : storyboardStatus !== 'READY'
-        ? '分镜整集未确认 READY；确认后才能为镜头生成首帧。'
+        ? '分镜整集尚未确认；确认可用后才能为镜头生成首帧。'
         : imageState?.queuedInBatchId != null
           ? '该镜头已在首帧批次队列中，将按顺序自动生成。'
           : shotBusy
@@ -420,9 +421,15 @@ export const FirstFramePanel = ({
       {generateHint !== null && <p className="action-hint">{generateHint}</p>}
       {task !== null && (
         <p aria-live="polite">
-          任务状态：{task.phase}
-          {task.errorCode === null ? '' : ` · ${task.errorCode}`}
+          任务状态：{workspaceStatusLabel(task.phase)}
+          {task.errorCode === null ? '' : ' · 可查看失败详情'}
         </p>
+      )}
+      {task?.errorCode !== null && task?.errorCode !== undefined && (
+        <details className="technical-details">
+          <summary>查看失败详情</summary>
+          <code>{task.errorCode}</code>
+        </details>
       )}
       {candidates === null ? (
         <p aria-live="polite">正在加载首帧候选…</p>

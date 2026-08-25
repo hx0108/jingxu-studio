@@ -12,9 +12,15 @@ const PROFILE_ID = 'profile_qwen_primary';
 
 export interface ProviderSettingsProps {
   readonly onReadyChange: (ready: boolean) => void;
+  readonly mode?: 'settings' | 'status';
+  readonly onOpenSettings?: () => void;
 }
 
-export const ProviderSettings = ({ onReadyChange }: ProviderSettingsProps) => {
+export const ProviderSettings = ({
+  onReadyChange,
+  mode = 'settings',
+  onOpenSettings,
+}: ProviderSettingsProps) => {
   const [profile, setProfile] = useState<ProviderProfileDto | null>(null);
   const [workspaceId, setWorkspaceId] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -76,11 +82,49 @@ export const ProviderSettings = ({ onReadyChange }: ProviderSettingsProps) => {
     onReadyChange(ready);
   }, [onReadyChange, ready]);
 
-  if (profile === null && error === null) return <p aria-live="polite">正在加载 Qwen 设置…</p>;
+  if (profile === null && error === null) return <p aria-live="polite">正在读取文本模型状态…</p>;
+  if (mode === 'status') {
+    return (
+      <section className="model-status-card" aria-labelledby="model-status-title">
+        <div className="section-heading-compact">
+          <div>
+            <small>模型服务</small>
+            <h3 id="model-status-title">创作能力状态</h3>
+          </div>
+          <button className="text-button" onClick={onOpenSettings} type="button">
+            前往配置
+          </button>
+        </div>
+        <ul className="model-status-list">
+          <li>
+            <span>文本模型</span>
+            <strong>{ready ? '已配置' : '未配置'}</strong>
+          </li>
+          <li>
+            <span>图片模型</span>
+            <strong>在设置中管理</strong>
+          </li>
+          <li>
+            <span>视频模型</span>
+            <strong>在设置中管理</strong>
+          </li>
+        </ul>
+        {!ready && <p className="action-hint">配置并验证文本模型后才能生成阶段内容。</p>}
+        {error !== null && (
+          <details className="technical-details">
+            <summary>查看连接问题</summary>
+            <p>{error.message}</p>
+            <code>{error.code}</code>
+          </details>
+        )}
+      </section>
+    );
+  }
   return (
     <>
       <section className="script-card" aria-labelledby="provider-title">
-        <h2 id="provider-title">Qwen Provider 设置</h2>
+        <p className="eyebrow">文本模型</p>
+        <h2 id="provider-title">Qwen 模型服务</h2>
         <p>Workspace 与 API Key 分开保存。完整 Key 不会回显或进入页面长期状态。</p>
         {error !== null && (
           <p className="field-error" role="alert">

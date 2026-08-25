@@ -11,6 +11,7 @@ import type {
 } from '@jingxu/contracts';
 
 import { describeProjectError } from '../project/project-error';
+import { workspaceStatusLabel } from '../ui/workspace-status';
 import { candidateImageSrc, isTerminalMediaTaskPhase } from './first-frame-policy';
 import {
   candidateVideoSrc,
@@ -76,7 +77,7 @@ export const VideoBoard = ({ busy, candidates, onSelect, pendingCandidateId }: V
                   <span className={`status-badge status-${candidate.status.toLowerCase()}`}>
                     {VIDEO_CANDIDATE_STATUS_LABELS[candidate.status]}
                     {candidate.status === 'FAILED' && candidate.errorCode !== null
-                      ? ` · ${candidate.errorCode}`
+                      ? ' · 生成失败'
                       : ''}
                   </span>
                   <small>
@@ -249,9 +250,9 @@ export const VideoPanel = ({ projectId, shot, storyboardStatus, videoState }: Vi
   const disabled = storyboardStatus !== 'READY' || selectedFirstFrame === null || videoBusy;
   const hint =
     storyboardStatus === null
-      ? '分镜尚未生成；确认 READY 后可生成视频段。'
+      ? '分镜尚未生成；确认可用后可生成视频段。'
       : storyboardStatus !== 'READY'
-        ? '分镜整集未确认 READY；确认后才能生成视频段。'
+        ? '分镜整集尚未确认；确认可用后才能生成视频段。'
         : selectedFirstFrame === null
           ? '请先在首帧候选中选择一张当前首帧，再发起图生视频。'
           : videoState?.queuedInBatchId !== null
@@ -285,9 +286,15 @@ export const VideoPanel = ({ projectId, shot, storyboardStatus, videoState }: Vi
       {hint !== null && <p className="action-hint">{hint}</p>}
       {task !== null && (
         <p aria-live="polite">
-          视频任务状态：{task.phase}
-          {task.errorCode === null ? '' : ` · ${task.errorCode}`}
+          视频任务状态：{workspaceStatusLabel(task.phase)}
+          {task.errorCode === null ? '' : ' · 可查看失败详情'}
         </p>
+      )}
+      {task?.errorCode !== null && task?.errorCode !== undefined && (
+        <details className="technical-details">
+          <summary>查看失败详情</summary>
+          <code>{task.errorCode}</code>
+        </details>
       )}
       {candidates === null ? (
         <p aria-live="polite">正在加载视频候选…</p>
