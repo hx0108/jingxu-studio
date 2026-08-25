@@ -17,4 +17,6 @@
 ## 4. 验证与文档
 
 - [x] 4.1 更新相关技术设计/Provider 快照说明，标注该视频扩展不计入 V1 发布验收。
-- [ ] 4.2 运行 format:check、lint、typecheck、相关 unit/contract/integration/E2E 与 Windows 打包，记录实际结果。
+- [x] 4.2 运行 format:check、lint、typecheck、相关 unit/contract/integration/E2E 与 Windows 打包，记录实际结果。
+  - 2026-08-25（main=c5828ff）实测：format:check 通过；lint（--max-warnings=0）通过；typecheck（tsc -b）通过；test:collection 通过（e2e 19 / contract 22 / integration 44 / unit 107 文件，范围互斥）；unit 954/954（111 文件）；contract 162/162（22 文件）；integration 249/249（44 文件）。
+  - E2E 与 Windows 打包未于当日重跑，沿用 2026-08-24 全量门禁日志（docs/V2_VIDEO_COMPOSITION_GATE_LOG_2026-08-24.md：e2e 40 过+3 跳过、V2 定向 7/7、package:win 通过）——自该日志后运行时代码零改动（仅 openspec 规范文本与 .gitignore 变更），引用成立。
