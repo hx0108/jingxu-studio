@@ -1,0 +1,4 @@
+- [x] 固定 `jingxu-producibility-rules/1` 和现有 DialogueRenderMode/长对白规则。
+- [x] 保留 Provider capability/reference price 的数据库结构与离线种子基础。
+- [x] 实现 Report/Finding/Override Application Repository 与 IPC。
+- [x] 完成 AC-V1-05 四种 DialogueRenderMode Electron 证据。

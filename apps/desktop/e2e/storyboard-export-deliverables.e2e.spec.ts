@@ -40,7 +40,7 @@ const launch = async (managedRoot: string, exportDir: string): Promise<ElectronA
 
 /** 重载后从项目列表走真实入口进分镜工作台（复用既有 E2E 驱动路径）。 */
 const openStoryboard = async (page: Page, projectName: string): Promise<void> => {
-  await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
   await page.locator('.project-card-main', { hasText: projectName }).click();
   await page.getByRole('button', { name: '进入剧本工作区' }).click();
   await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
