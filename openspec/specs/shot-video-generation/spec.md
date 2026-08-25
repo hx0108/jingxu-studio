@@ -109,3 +109,14 @@ mp4 字节 MUST 经内容寻址存储落盘（videos 命名空间、MIME 白名�
 - **THEN** V SHALL 记录 requested_duration_sec=5、actual_duration_sec=5.0、续写段数=0、裁剪区间=null
 - **WHEN** Provider 未回报实际时长
 - **THEN** actual_duration_sec SHALL 为 null 如实记录，MUST NOT 伪造估算值
+
+### Requirement: 视频生成界面必须区分结果与任务证据
+
+视频生成界面 SHALL 优先展示可播放候选和用户可执行动作，任务与调用证据 MUST 置于可展开的高级信息中。
+
+#### Scenario: 当前镜头视频已生成
+
+- **GIVEN** 当前镜头存在 SUCCEEDED 且可用的视频候选
+- **WHEN** 用户进入视频生成阶段
+- **THEN** 页面 SHALL 显示受限媒体预览及“选用”状态
+- **THEN** 页面 MUST NOT 显示文件路径或 Provider 原始响应

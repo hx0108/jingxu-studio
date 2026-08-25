@@ -13,6 +13,8 @@ export interface ProviderServiceDependencies {
   readonly credentials: CredentialPort;
   readonly defaults: ProviderProfileDefaults;
   readonly profiles: ProviderProfileRepositoryPort;
+  /** 仅视频档注入受限模型列表；未注入的 Profile 不接受 modelId 修改。 */
+  readonly selectableModels?: readonly Readonly<{ id: string; snapshotDate: string }>[] | undefined;
   /** 仅用于 testCredential；图片档注入解密校验替身即可（D2：零计费请求）。 */
   readonly textModelFactory: (
     profile: ProviderProfile,
@@ -45,20 +47,36 @@ export class ProviderService {
     return toView(profile ?? this.#defaultProfile(profileId));
   }
 
-  /** 更新已存在行的启用状态与工作区；行不存在则拒绝（凭据先于配置）。 */
+  /** 更新配置；视频档首次选择模型时可从默认 Profile 建立配置行。 */
   public async saveProfile(
     profileId: string,
     workspaceId: string,
     enabled: boolean,
+    modelId?: string,
   ): Promise<ProviderProfileView> {
-    const profile = await this.#requireProfile(profileId);
+    const existing = await this.#dependencies.profiles.findById(profileId);
+    // 文本/图片档维持“凭据先于配置”的既有语义。视频模型没有密钥依赖，
+    // 因此允许首次选择时建立默认行，避免 UI 首次配置被锁死。
+    if (existing === null && this.#dependencies.selectableModels === undefined) {
+      throw new Error('PROVIDER_PROFILE_NOT_FOUND');
+    }
+    const profile = existing ?? this.#defaultProfile(profileId);
+    const selected =
+      modelId === undefined
+        ? null
+        : (this.#dependencies.selectableModels?.find((model) => model.id === modelId) ?? null);
+    if (modelId !== undefined && selected === null) throw new Error('PROVIDER_MODEL_NOT_ALLOWED');
+    const modelChanged = selected !== null && selected.id !== profile.modelId;
     const next: ProviderProfile = {
       ...profile,
       config:
-        workspaceId === profile.workspaceId
+        workspaceId === profile.workspaceId && !modelChanged
           ? profile.config
           : { ...profile.config, lastValidatedAt: null },
       enabled,
+      ...(selected === null
+        ? {}
+        : { modelId: selected.id, modelSnapshotDate: selected.snapshotDate }),
       workspaceId,
     };
     await this.#dependencies.unitOfWork.run(async ({ profiles }) => {

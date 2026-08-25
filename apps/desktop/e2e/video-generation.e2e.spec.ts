@@ -40,7 +40,7 @@ const repeat = (token: string, count: number): string[] =>
   Array.from({ length: count }, () => token);
 
 const openStoryboard = async (page: Page, name: string): Promise<void> => {
-  await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
   await page.locator('.project-card-main', { hasText: name }).click();
   await page.getByRole('button', { name: '进入剧本工作区' }).click();
   await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
@@ -103,13 +103,14 @@ test('§6.1-T1 单镜头视频—异步生成、受限 video 比较、选择与�
     await prepareSelectedFirstFrames(page, seeded.projectId, 1);
     await page.reload();
     await openStoryboard(page, '视频单镜头');
+    await page.getByRole('button', { name: '视频生成', exact: true }).click();
     await page.locator('.shot-card', { hasText: '#1' }).click();
 
     const panel = page.locator('#video-panel');
     await expect(panel.getByRole('heading', { name: '视频候选 · 镜头 #1' })).toBeVisible();
     await expect(panel.getByAltText('已选首帧缩略图')).toBeVisible();
     await panel.getByRole('button', { name: '生成视频候选' }).click();
-    await expect(panel.getByText('视频任务状态：COMPLETED')).toBeVisible({ timeout: 30_000 });
+    await expect(panel.getByText('视频任务状态：已完成')).toBeVisible({ timeout: 30_000 });
     await expect(panel.locator('video')).toHaveCount(2);
     // Renderer CSP deliberately has connect-src 'none'. Media is loaded by the
     // video element under media-src jingxu:, while Range/206 belongs to the
@@ -140,6 +141,7 @@ test('§6.1-T1 单镜头视频—异步生成、受限 video 比较、选择与�
     expect(secondFirstFrame).toBeTruthy();
     await page.reload();
     await openStoryboard(page, '视频单镜头');
+    await page.getByRole('button', { name: '视频生成', exact: true }).click();
     await page.locator('.shot-card', { hasText: '#1' }).click();
     await expect(page.locator('#video-panel')).toContainText(
       '历史视频输入世代（输入已变化，仅供追溯）',
@@ -151,7 +153,7 @@ test('§6.1-T1 单镜头视频—异步生成、受限 video 比较、选择与�
 
     // 新世代视频在镜头内容编辑后同样必须失效，且不得自动重发。
     await page.locator('#video-panel').getByRole('button', { name: '生成视频候选' }).click();
-    await expect(page.locator('#video-panel').getByText('视频任务状态：COMPLETED')).toBeVisible({
+    await expect(page.locator('#video-panel').getByText('视频任务状态：已完成')).toBeVisible({
       timeout: 30_000,
     });
     await page.evaluate(

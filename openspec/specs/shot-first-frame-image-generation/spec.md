@@ -241,3 +241,13 @@ Application/Renderer MUST 只依赖 ImageModelPort 与 NormalizedModelError；Da
 - **WHEN** 下次启动恢复扫描
 - **THEN** 证据行 SHALL 停留 STARTED 如实反映中断；候选恢复决策 SHALL 仍只依据 provider_task_id 证据（缺失即 INTERRUPTED 待人工），MUST NOT 因证据行存在而自动重发
 
+### Requirement: 首帧生成界面必须按当前镜头呈现候选
+
+首帧生成界面 SHALL 在当前镜头上下文内展示选中候选、其他候选、任务状态与允许操作，不得要求用户在整页长列表中定位当前结果。
+
+#### Scenario: 当前镜头已有多个首帧候选
+
+- **GIVEN** 当前镜头包含一个已选候选和其他历史候选
+- **WHEN** 用户进入画面生成阶段
+- **THEN** 中间区域 SHALL 优先展示已选候选
+- **THEN** 右侧或候选区 SHALL 提供预览、选用和重新生成动作

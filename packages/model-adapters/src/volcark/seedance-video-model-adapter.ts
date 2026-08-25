@@ -12,6 +12,13 @@ import type {
   VideoTaskSubmission,
 } from '@jingxu/application';
 
+import {
+  DEFAULT_SEEDANCE_VIDEO_MODEL_ID,
+  getSeedanceVideoModel,
+  isSeedanceVideoModelId,
+  SEEDANCE_VIDEO_MODELS,
+} from './seedance-video-models';
+
 /**
  * 火山方舟豆包 Seedance 视频生成（首帧图生视频 i2v，真 ASYNC）。
  *
@@ -23,9 +30,9 @@ import type {
  * 设施边界读取，不进入日志、错误 detail 或任何返回值。
  */
 
-/** 7.1 官方核验锁定：旧 Lite I2V 停服后迁至支持首帧图生的 1.5 Pro。 */
-export const SEEDANCE_MODEL_ID = 'doubao-seedance-1-5-pro-251215';
-export const SEEDANCE_MODEL_IDS: readonly string[] = [SEEDANCE_MODEL_ID];
+/** 默认模型由固定白名单提供；每个任务会冻结保存当次实际选择。 */
+export const SEEDANCE_MODEL_ID = DEFAULT_SEEDANCE_VIDEO_MODEL_ID;
+export const SEEDANCE_MODEL_IDS: readonly string[] = SEEDANCE_VIDEO_MODELS.map((model) => model.id);
 /** 单段调用（create/poll/下载）超时上限；整任务轮询截止由调度器 pollDeadlineMs 控制。 */
 export const SEEDANCE_VIDEO_SEGMENT_TIMEOUT_MS = 120_000;
 /** 时长档位（快照 constraints；就近映射在服务层，本层只做区间守卫）。 */
@@ -138,19 +145,17 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
   readonly #credentialId: string;
   readonly #credentialPort: CredentialPort;
   readonly #fetch: typeof globalThis.fetch;
-  readonly #modelId: string;
   readonly #timeoutSignal: (milliseconds: number) => AbortSignal;
 
   public constructor(options: SeedanceVideoModelAdapterOptions) {
     const modelId = options.modelId ?? SEEDANCE_MODEL_ID;
-    if (!SEEDANCE_MODEL_IDS.includes(modelId)) {
+    if (!isSeedanceVideoModelId(modelId)) {
       throw new Error('MODEL_CONFIGURATION_INVALID');
     }
     this.#baseUrl = options.baseUrl ?? deriveSeedanceBaseUrl();
     this.#credentialId = options.credentialId;
     this.#credentialPort = options.credentialPort;
     this.#fetch = options.fetch ?? globalThis.fetch;
-    this.#modelId = modelId;
     this.#timeoutSignal =
       options.timeoutSignal ?? ((milliseconds) => AbortSignal.timeout(milliseconds));
   }
@@ -192,13 +197,10 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
           duration: request.durationSec,
           // V1 视频段只生成无声画面；不得让 Provider 默认值悄然改变产品输出边界。
           generate_audio: false,
-          model: this.#modelId,
+          model: request.modelId,
           // i2v 跟随首帧画幅；分辨率档位按短边就近（1080p/720p，快照 constraints）。
           ratio: 'adaptive',
-          resolution:
-            Math.min(request.resolution.width, request.resolution.height) >= 1080
-              ? '1080p'
-              : '720p',
+          resolution: this.#resolutionFor(request.modelId, request.resolution),
           return_url: true,
           watermark: true,
         }),
@@ -369,6 +371,12 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
   }
 
   #assertRequestLegal(request: VideoGenerationRequest): void {
+    const model = getSeedanceVideoModel(request.modelId);
+    if (model === null) {
+      throw new SeedanceAdapterError(
+        normalized('MODEL_INPUT_TOO_LARGE', false, '请选择受支持的视频模型后重试'),
+      );
+    }
     const { durationSec, firstFrame, resolution } = request;
     if (
       !Number.isInteger(durationSec) ||
@@ -400,6 +408,15 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
         normalized('MODEL_INPUT_TOO_LARGE', false, '调整首帧格式或大小后重试'),
       );
     }
+  }
+
+  #resolutionFor(
+    modelId: string,
+    resolution: Readonly<{ height: number; width: number }>,
+  ): '720p' | '1080p' {
+    const model = getSeedanceVideoModel(modelId);
+    if (model === null || model.maxResolution === '720p') return '720p';
+    return Math.min(resolution.width, resolution.height) >= 1080 ? '1080p' : '720p';
   }
 
   #wrapTransportError(
@@ -435,7 +452,7 @@ export class SeedanceVideoModelAdapter implements VideoModelPort {
     }
     if (status === 404) {
       return normalized(
-        'MODEL_PROVIDER_ERROR',
+        'MODEL_MODEL_UNAVAILABLE',
         false,
         '确认视频模型已开通，或配置对应的方舟推理接入点',
       );

@@ -63,7 +63,13 @@ const failureErrorCodeOf = async (
 /** 依赖 = 单镜头建档同源解析底座（视频版）+ 建档入口 + 排空触发（组合根晚绑定调度器）。 */
 export interface VideoBatchServiceDependencies extends Pick<
   VideoGenerationServiceDependencies,
-  'durationRange' | 'hashPayload' | 'mediaUnitOfWork' | 'modelId' | 'newId' | 'workspaceQuery'
+  | 'durationRange'
+  | 'hashPayload'
+  | 'mediaUnitOfWork'
+  | 'modelId'
+  | 'newId'
+  | 'resolveModel'
+  | 'workspaceQuery'
 > {
   readonly generation: Pick<VideoGenerationService, 'generateVideoCandidates'>;
   /** 建批后触发项目排空；组合根以晚绑定引用注入以解开与调度器的循环依赖。 */
@@ -140,7 +146,12 @@ const currentGenerationHashOf = async (
   shot: Parameters<typeof resolveVideoGenerationInput>[2],
 ): Promise<string | null> => {
   try {
-    return (await resolveVideoGenerationInput(media, dependencies, shot)).generationInputHash;
+    const model =
+      dependencies.resolveModel === undefined
+        ? { modelId: dependencies.modelId }
+        : await dependencies.resolveModel();
+    return (await resolveVideoGenerationInput(media, { ...dependencies, ...model }, shot))
+      .generationInputHash;
   } catch {
     // MEDIA_FIRST_FRAME_NOT_SELECTED（批量跳过主因）或锚点异常：状态底座如实为 0。
     return null;

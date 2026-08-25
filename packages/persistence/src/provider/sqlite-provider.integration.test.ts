@@ -120,6 +120,19 @@ describe('provider_profiles Repository 与 UnitOfWork（任务 6.4）', () => {
     });
   });
 
+  it('Seedance 视频 Profile—按合法 Provider 枚举读取，不误判为损坏行', () => {
+    const row = validRow();
+    row.provider = 'VOLCARK_SEEDANCE';
+    row.model_id = 'doubao-seedance-2-0-260128';
+    row.model_snapshot_date = '2026-01-28';
+    row.workspace_id = 'ark';
+
+    expect(mapProviderProfileRow(row)).toMatchObject({
+      modelId: 'doubao-seedance-2-0-260128',
+      provider: 'VOLCARK_SEEDANCE',
+    });
+  });
+
   it('upsert：再次 save 更新启用状态、工作区与 config，不产生第二行', async () => {
     await withSqliteTestContext(async (context) => {
       await withProviderDatabase(context, async (unitOfWork, database) => {

@@ -265,6 +265,50 @@ describe('ProviderService', () => {
       'PROVIDER_PROFILE_NOT_FOUND',
     );
   });
+
+  it('视频模型首次保存—无既有 Profile 时创建默认行且不需要先保存 Key', async () => {
+    let saved: ProviderProfile | undefined;
+    const profiles = createProfiles(
+      () => null,
+      (next) => {
+        saved = next;
+      },
+    );
+    const service = new ProviderService({
+      clock: () => '2026-08-12T00:00:00Z',
+      credentials: {
+        ...unusedCredentialMethods(),
+        isAvailable: () => true,
+        saveCredential: vi.fn(() => Promise.reject(new Error('unused'))),
+      },
+      defaults: {
+        ...DEFAULTS,
+        modelId: 'doubao-seedance-2-0-260128',
+        provider: 'VOLCARK_SEEDANCE',
+      },
+      profiles,
+      selectableModels: [
+        { id: 'doubao-seedance-2-0-260128', snapshotDate: '2026-01-28' },
+        { id: 'doubao-seedance-2-5-260628', snapshotDate: '2026-06-28' },
+      ],
+      textModelFactory: vi.fn(),
+      unitOfWork: {
+        run: (work) => work({ audit: { recordCredentialDeleted: vi.fn() }, profiles }),
+      },
+    });
+
+    await expect(
+      service.saveProfile('profile-video-primary', 'ark', true, 'doubao-seedance-2-5-260628'),
+    ).resolves.toMatchObject({
+      modelId: 'doubao-seedance-2-5-260628',
+      versionId: 'profile-video-primary',
+    });
+    expect(saved).toMatchObject({
+      credentialRef: null,
+      modelId: 'doubao-seedance-2-5-260628',
+      modelSnapshotDate: '2026-06-28',
+    });
+  });
 });
 
 const createProfiles = (

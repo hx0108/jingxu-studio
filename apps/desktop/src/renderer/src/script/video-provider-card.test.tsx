@@ -9,7 +9,7 @@ const profile = (overrides: Partial<ProviderProfileDto> = {}): ProviderProfileDt
   configured: true,
   enabled: true,
   last4: '8888',
-  modelId: 'doubao-seedance-1-0-lite-i2v-250428',
+  modelId: 'doubao-seedance-2-0-260128',
   provider: 'VOLCARK_SEEDANCE',
   region: 'cn-beijing',
   validated: true,
@@ -24,8 +24,11 @@ const render = (overrides: Partial<Parameters<typeof VideoProviderCardView>[0]> 
       apiKey=""
       error={null}
       feedback=""
+      modelId="doubao-seedance-2-0-260128"
       onApiKeyChange={vi.fn()}
       onDelete={vi.fn()}
+      onModelChange={vi.fn()}
+      onModelSave={vi.fn()}
       onSave={vi.fn()}
       onTest={vi.fn()}
       pending={false}
@@ -35,11 +38,12 @@ const render = (overrides: Partial<Parameters<typeof VideoProviderCardView>[0]> 
   );
 
 describe('VideoProviderCardView（shot-video-generation 4.4）', () => {
-  it('已配置—末四位与只读模型 id 可见—Key 输入不回显任何已保存值', () => {
+  it('已配置—三个受限模型可见—Key 输入不回显任何已保存值', () => {
     const html = render();
     expect(html).toContain('已配置（末四位 8888）');
-    expect(html).toContain('doubao-seedance-1-0-lite-i2v-250428');
-    expect(html).toContain('readOnly=""');
+    expect(html).toContain('Seedance-2.0-mini');
+    expect(html).toContain('Seedance-2.0');
+    expect(html).toContain('Seedance-2.5');
     expect(html).not.toContain('value="ark');
   });
 
@@ -50,13 +54,22 @@ describe('VideoProviderCardView（shot-video-generation 4.4）', () => {
       profile: profile({ configured: false, last4: null }),
     });
     expect(html).toContain('未配置');
+    expect(html.match(/disabled=""/gu)).toHaveLength(3);
+  });
+
+  it('首次读取 Profile 失败—仍允许选择模型并保存输入的 Key', () => {
+    const html = render({ apiKey: 'ark-secret', profile: null });
+
+    expect(html).toContain('Seedance-2.5');
+    expect(html).not.toContain('<select disabled=""');
+    // 测试/删除没有已保存密文时仍禁用；模型和凭据的首次保存必须可用。
     expect(html.match(/disabled=""/gu)).toHaveLength(2);
   });
 
   it('测试零网络承诺—卡片静态如实文案—指向视频生成前置失败语义', () => {
     const html = render();
     expect(html).toContain('测试仅验证密文可解密读取，不发起计费请求');
-    expect(html).toContain('未配置时生成视频段会前置失败并提示');
+    expect(html).toContain('也不代表模型已开通');
   });
 
   it('Main 侧失败回传—按 AppError 原样展示 code 与 message—不出现密文或堆栈', () => {
@@ -74,8 +87,8 @@ describe('VideoProviderCardView（shot-video-generation 4.4）', () => {
     expect(html).toContain('密文无法解密读取');
   });
 
-  it('pending—三按钮全部禁用—避免重复提交覆盖 expectedVersionId', () => {
+  it('pending—模型与凭据操作均禁用—避免重复提交覆盖 expectedVersionId', () => {
     const html = render({ apiKey: 'ark-secret', pending: true });
-    expect(html.match(/disabled=""/gu)).toHaveLength(3);
+    expect(html.match(/disabled=""/gu)).toHaveLength(5);
   });
 });

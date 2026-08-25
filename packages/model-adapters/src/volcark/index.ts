@@ -10,6 +10,14 @@ export {
 } from './seedance-video-model-adapter';
 export type { SeedanceVideoModelAdapterOptions } from './seedance-video-model-adapter';
 export {
+  DEFAULT_SEEDANCE_VIDEO_MODEL_ID,
+  getSeedanceVideoModel,
+  isSeedanceVideoModelId,
+  SEEDANCE_VIDEO_MODELS,
+  SELECTABLE_SEEDANCE_VIDEO_MODELS,
+} from './seedance-video-models';
+export type { SeedanceVideoModelDefinition, SeedanceVideoModelId } from './seedance-video-models';
+export {
   deriveSeedreamBaseUrl,
   SEEDREAM_IMAGE_MAX_BYTES_EACH,
   SEEDREAM_IMAGE_MAX_COUNT,

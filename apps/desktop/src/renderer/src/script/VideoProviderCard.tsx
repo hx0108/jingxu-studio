@@ -6,13 +6,21 @@ import { createScriptRequestId, getProviderClient, rendererTransportError } from
 
 // 与 Main 侧 VIDEO_CREDENTIAL_ID（register-video-features）同值镜像：视频密文按此固定 id 读写。
 const VIDEO_PROFILE_ID = 'profile-video-primary';
+const VIDEO_MODELS = [
+  { id: 'doubao-seedance-2-0-mini-260615', label: 'Seedance-2.0-mini' },
+  { id: 'doubao-seedance-2-0-260128', label: 'Seedance-2.0' },
+  { id: 'doubao-seedance-2-5-260628', label: 'Seedance-2.5' },
+] as const;
 
 interface VideoProviderCardViewProps {
   readonly apiKey: string;
   readonly error: AppErrorDto | null;
   readonly feedback: string;
+  readonly modelId: string;
   readonly onApiKeyChange: (value: string) => void;
   readonly onDelete: () => void;
+  readonly onModelChange: (value: string) => void;
+  readonly onModelSave: () => void;
   readonly onSave: () => void;
   readonly onTest: () => void;
   readonly pending: boolean;
@@ -23,17 +31,20 @@ export const VideoProviderCardView = ({
   apiKey,
   error,
   feedback,
+  modelId,
   onApiKeyChange,
   onDelete,
+  onModelChange,
+  onModelSave,
   onSave,
   onTest,
   pending,
   profile,
 }: VideoProviderCardViewProps) => (
   <section className="script-card" aria-labelledby="video-provider-title">
-    <h2 id="video-provider-title">视频 Provider 设置（火山方舟 ARK）</h2>
+    <h2 id="video-provider-title">视频模型服务（火山方舟 ARK）</h2>
     <p>
-      用于逐镜头视频段生成（Seedance 首帧图生视频）。模型与端点固定，仅需保存 ARK API Key；完整 Key
+      用于逐镜头视频段生成（Seedance 首帧图生视频）。选择模型后自行保存 ARK API Key；完整 Key
       不回显、不进入页面长期状态。
     </p>
     {error !== null && (
@@ -43,7 +54,19 @@ export const VideoProviderCardView = ({
     )}
     <label>
       模型
-      <input readOnly value={profile?.modelId ?? ''} />
+      <select
+        disabled={pending}
+        onChange={(event) => {
+          onModelChange(event.target.value);
+        }}
+        value={modelId}
+      >
+        {VIDEO_MODELS.map((model) => (
+          <option key={model.id} value={model.id}>
+            {model.label}
+          </option>
+        ))}
+      </select>
     </label>
     <label>
       ARK API Key
@@ -58,10 +81,13 @@ export const VideoProviderCardView = ({
     </label>
     <div className="script-actions">
       <button
-        disabled={pending || profile === null || apiKey === ''}
-        onClick={onSave}
+        disabled={pending || profile?.modelId === modelId}
+        onClick={onModelSave}
         type="button"
       >
+        保存模型选择
+      </button>
+      <button disabled={pending || apiKey === ''} onClick={onSave} type="button">
         保存凭据
       </button>
       <button disabled={pending || profile?.configured !== true} onClick={onTest} type="button">
@@ -81,7 +107,8 @@ export const VideoProviderCardView = ({
       {feedback === '' ? '' : ` · ${feedback}`}
     </p>
     <p className="action-hint">
-      测试仅验证密文可解密读取，不发起计费请求；未配置时生成视频段会前置失败并提示。
+      测试仅验证密文可解密读取，不发起计费请求，也不代表模型已开通。若生成提示模型不可用，请在火山方舟为该
+      API Key 开通所选模型或配置接入点。
     </p>
   </section>
 );
@@ -89,6 +116,7 @@ export const VideoProviderCardView = ({
 export const VideoProviderCard = () => {
   const [profile, setProfile] = useState<ProviderProfileDto | null>(null);
   const [apiKey, setApiKey] = useState('');
+  const [modelId, setModelId] = useState('doubao-seedance-2-0-260128');
   const [error, setError] = useState<AppErrorDto | null>(null);
   const [feedback, setFeedback] = useState('');
   const [pending, setPending] = useState(false);
@@ -100,7 +128,12 @@ export const VideoProviderCard = () => {
       .then((result) => {
         if (!active) return;
         if (!result.ok) setError(result.error);
-        else setProfile(result.data);
+        else {
+          setProfile(result.data);
+          if (VIDEO_MODELS.some((model) => model.id === result.data.modelId)) {
+            setModelId(result.data.modelId);
+          }
+        }
       })
       .catch(() => {
         if (active) setError(rendererTransportError());
@@ -140,6 +173,7 @@ export const VideoProviderCard = () => {
       apiKey={apiKey}
       error={error}
       feedback={feedback}
+      modelId={modelId}
       onApiKeyChange={setApiKey}
       onDelete={() => {
         if (profile === null || !globalThis.confirm('删除已保存的视频 ARK 凭据？')) return;
@@ -153,15 +187,34 @@ export const VideoProviderCard = () => {
           '凭据已删除',
         );
       }}
+      onModelChange={setModelId}
+      onModelSave={() => {
+        const current = profile ?? {
+          enabled: true,
+          versionId: VIDEO_PROFILE_ID,
+          workspaceId: 'ark',
+        };
+        void apply(
+          () =>
+            getProviderClient().saveProfile({
+              enabled: current.enabled,
+              expectedVersionId: current.versionId,
+              modelId,
+              profileId: VIDEO_PROFILE_ID,
+              requestId: createScriptRequestId('video-provider-model'),
+              workspaceId: current.workspaceId,
+            }),
+          '视频模型已保存；新任务将使用该模型',
+        );
+      }}
       onSave={() => {
-        if (profile === null) return;
         const credential = apiKey;
         setApiKey('');
         void apply(
           () =>
             getProviderClient().saveCredential({
               apiKey: credential,
-              expectedVersionId: profile.versionId,
+              expectedVersionId: profile?.versionId ?? VIDEO_PROFILE_ID,
               profileId: VIDEO_PROFILE_ID,
               requestId: createScriptRequestId('video-provider-key'),
             }),

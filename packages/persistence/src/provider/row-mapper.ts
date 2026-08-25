@@ -70,7 +70,9 @@ export const mapProviderProfileRow = (row: ProviderProfileRow): ProviderProfile 
   const enabled = row.enabled;
 
   const providerKind: ProviderProfileKind =
-    provider === 'QWEN' || provider === 'VOLCARK_SEEDREAM' ? provider : invalidRow();
+    provider === 'QWEN' || provider === 'VOLCARK_SEEDREAM' || provider === 'VOLCARK_SEEDANCE'
+      ? provider
+      : invalidRow();
   if (region !== 'cn-beijing') invalidRow();
   if (!HTTPS_BASE_URL.test(baseUrl)) invalidRow();
   if (enabled !== 0 && enabled !== 1) invalidRow();

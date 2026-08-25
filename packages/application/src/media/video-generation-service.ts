@@ -45,6 +45,8 @@ export interface VideoGenerationServiceDependencies {
   readonly mediaUnitOfWork: MediaUnitOfWorkPort;
   /** 视频档 Seedance model id（组合根从视频 profile 读取，服务不自行猜测）。 */
   readonly modelId: string;
+  /** 当前视频 Profile 的模型解析器；每次新建任务读取，任务创建后不再回读 Profile。 */
+  readonly resolveModel?: (() => Promise<Readonly<{ modelId: string }>>) | undefined;
   readonly newId: () => string;
   readonly workspaceQuery: ScriptWorkspaceQueryPort;
 }
@@ -175,7 +177,15 @@ export const createVideoGenerationService = (
           if (prior.shotId !== input.shotId) throw new Error('REQUEST_ID_REUSED');
           return prior;
         }
-        const resolved = await resolveVideoGenerationInput(media, dependencies, shot);
+        const model =
+          dependencies.resolveModel === undefined
+            ? { modelId: dependencies.modelId }
+            : await dependencies.resolveModel();
+        const resolved = await resolveVideoGenerationInput(
+          media,
+          { ...dependencies, ...model },
+          shot,
+        );
         const inserted = await video.insertTask({
           batchId: input.batchId ?? null,
           candidateCount: dependencies.candidateCount,
@@ -193,7 +203,7 @@ export const createVideoGenerationService = (
           firstFrameCandidateId: resolved.firstFrameCandidateId,
           firstFrameFileSha256: resolved.firstFrameFileSha256,
           generationInputHash: resolved.generationInputHash,
-          modelId: dependencies.modelId,
+          modelId: model.modelId,
           projectId: input.projectId,
           requestedDurationSec: resolved.durationSec,
           roundNo: inserted.roundNo,

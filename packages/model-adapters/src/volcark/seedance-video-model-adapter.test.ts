@@ -147,7 +147,7 @@ describe('SeedanceVideoModelAdapter', () => {
       [403, 'MODEL_CREDENTIAL_INVALID', false],
       [429, 'MODEL_RATE_LIMITED', true],
       [500, 'MODEL_PROVIDER_ERROR', true],
-      [404, 'MODEL_PROVIDER_ERROR', false],
+      [404, 'MODEL_MODEL_UNAVAILABLE', false],
     ];
     for (const [status, code, retryable] of cases) {
       const adapter = new SeedanceVideoModelAdapter({
@@ -385,7 +385,13 @@ describe('SeedanceVideoModelAdapter', () => {
           modelId: 'doubao-seedance-9-9-fake',
         }),
     ).toThrow('MODEL_CONFIGURATION_INVALID');
-    expect(SEEDANCE_MODEL_IDS).toHaveLength(1);
+    expect(SEEDANCE_MODEL_IDS).toEqual(
+      expect.arrayContaining([
+        'doubao-seedance-2-0-mini-260615',
+        'doubao-seedance-2-0-260128',
+        'doubao-seedance-2-5-260628',
+      ]),
+    );
   });
 
   it('validateCredential—可解密即 ok—失败归一化 CREDENTIAL_INVALID 且不含 Key', async () => {
