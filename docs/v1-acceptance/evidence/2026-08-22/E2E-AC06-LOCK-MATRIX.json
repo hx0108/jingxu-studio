@@ -1,0 +1,37 @@
+{
+  "locked": {
+    "ok": true,
+    "data": {
+      "episode": {
+        "createdAt": "2026-08-22T15:43:26.282Z",
+        "episodeId": "episode_0e2b0953-0ae3-441d-8b16-b8e8dd9acff7",
+        "formatProfileId": "format_profile_e4b1c1b4-f35e-460c-a988-d2ffa4728246",
+        "id": "77f5a5ac-a004-49f7-9a67-ea3a367f27d7",
+        "parentId": "493cee37-1b6f-4467-ab2d-48e73705cda9",
+        "shotCount": 6,
+        "shotSetHash": "71751d3b72cf2d107cd71a9588baa950bed60a464efcc8a7af1b28c9b7df9b15",
+        "status": "READY",
+        "storyBibleVersionId": "cb85fe0c-29cc-449b-96e1-5a077ecc986d",
+        "targetDurationSec": 90,
+        "versionNo": 3
+      },
+      "lockedPaths": [
+        "/content/action"
+      ],
+      "shotVersionId": "scv_0bd9b06a-44f1-4ad6-a848-fa35bab9dc52_v3"
+    }
+  },
+  "edited": {
+    "ok": false,
+    "error": {
+      "code": "SHOT_LOCK_CONFLICT",
+      "message": "编辑路径已被锁定，请先解锁后再编辑",
+      "retryable": false,
+      "userAction": null,
+      "fieldErrors": {
+        "lockedPaths": "/content/action"
+      },
+      "traceId": "259ace3b-d63a-428a-ab15-4a795eaf3e67"
+    }
+  }
+}

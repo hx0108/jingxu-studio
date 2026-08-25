@@ -1,0 +1,88 @@
+{
+  "ok": true,
+  "data": {
+    "currentJob": null,
+    "episode": {
+      "id": "episode_6668565d-c397-473d-a70c-b6f4ef41af1e",
+      "projectId": "project_305b966a-12d5-4aaf-a057-3365816f65c6",
+      "targetDurationSec": 90,
+      "title": "第 1 集"
+    },
+    "prerequisites": [
+      {
+        "message": "前置条件已满足",
+        "ready": true,
+        "stage": "CONCEPT"
+      },
+      {
+        "message": "请先确认 CONCEPT READY 版本",
+        "ready": false,
+        "stage": "STORY_BIBLE"
+      },
+      {
+        "message": "请先确认 CONCEPT、STORY_BIBLE READY 版本",
+        "ready": false,
+        "stage": "EPISODE_OUTLINE"
+      },
+      {
+        "message": "请先确认 STORY_BIBLE、EPISODE_OUTLINE READY 版本",
+        "ready": false,
+        "stage": "BEAT_SHEET"
+      },
+      {
+        "message": "请先确认 STORY_BIBLE、BEAT_SHEET READY 版本",
+        "ready": false,
+        "stage": "SCENE_SCRIPT"
+      }
+    ],
+    "projectId": "project_305b966a-12d5-4aaf-a057-3365816f65c6",
+    "source": {
+      "characterCount": 27,
+      "contentHash": "c5c310d6f34b0580e3315812715a1f83043b088e3dbb992a1716a5ae508876cd",
+      "creativeText": "午夜列车上的失忆侦探必须在终点前找回乘客被偷走的记忆。",
+      "id": "source_22cb08d3-b760-42c7-922b-fe37e2cb707f",
+      "inputKind": "CREATIVE",
+      "fileName": null,
+      "encoding": null,
+      "projectId": "project_305b966a-12d5-4aaf-a057-3365816f65c6"
+    },
+    "storyboard": {
+      "current": null,
+      "history": [],
+      "shots": [],
+      "totalDurationSec": 0
+    },
+    "stages": [
+      {
+        "current": null,
+        "history": [],
+        "prerequisiteReady": true,
+        "stage": "CONCEPT"
+      },
+      {
+        "current": null,
+        "history": [],
+        "prerequisiteReady": false,
+        "stage": "STORY_BIBLE"
+      },
+      {
+        "current": null,
+        "history": [],
+        "prerequisiteReady": false,
+        "stage": "EPISODE_OUTLINE"
+      },
+      {
+        "current": null,
+        "history": [],
+        "prerequisiteReady": false,
+        "stage": "BEAT_SHEET"
+      },
+      {
+        "current": null,
+        "history": [],
+        "prerequisiteReady": false,
+        "stage": "SCENE_SCRIPT"
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "jobId": "6fd15ecf-ee9a-4f33-ae82-490f0681c00a",
+  "recovered": {
+    "ok": true,
+    "data": {
+      "errorCode": "INTERRUPTED_UNKNOWN_OUTCOME",
+      "id": "6fd15ecf-ee9a-4f33-ae82-490f0681c00a",
+      "projectId": "project_4a38de75-c368-4972-a645-6bea9e26cb5f",
+      "status": "FAILED",
+      "versionId": "6fd15ecf-ee9a-4f33-ae82-490f0681c00a"
+    }
+  }
+}

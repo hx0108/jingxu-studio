@@ -1,0 +1,23 @@
+{
+  "reordered": {
+    "ok": true,
+    "data": {
+      "episode": {
+        "createdAt": "2026-08-22T15:43:11.630Z",
+        "episodeId": "episode_8b03e623-6254-495b-bc2b-3d95cedbe13a",
+        "formatProfileId": "format_profile_8a348567-4263-42e6-a3d4-408852d97fd5",
+        "id": "epv_09f640ed-9c26-4493-9e79-8c5adb38b833",
+        "parentId": "fe221f3c-384f-4982-a8cd-e94afde2e69b",
+        "shotCount": 6,
+        "shotSetHash": "18744c28af43a03f6ff4bbb63885eff24641390ee7f7a0d1c72c6c2bff165554",
+        "status": "DRAFT",
+        "storyBibleVersionId": "5c60eddf-8652-42f3-a955-8e81d60e8cd6",
+        "targetDurationSec": 90,
+        "versionNo": 3
+      },
+      "lockedPaths": [],
+      "shotVersionId": "shot_cf76b507-00b7-42db-a55b-52be18161190"
+    }
+  },
+  "shotCount": 6
+}

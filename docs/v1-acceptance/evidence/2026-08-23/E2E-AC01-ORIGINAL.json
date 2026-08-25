@@ -1,0 +1,1177 @@
+{
+  "ok": true,
+  "data": {
+    "currentJob": null,
+    "episode": {
+      "id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+      "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+      "targetDurationSec": 90,
+      "title": "第 1 集"
+    },
+    "prerequisites": [
+      {
+        "message": "前置条件已满足",
+        "ready": true,
+        "stage": "CONCEPT"
+      },
+      {
+        "message": "前置条件已满足",
+        "ready": true,
+        "stage": "STORY_BIBLE"
+      },
+      {
+        "message": "前置条件已满足",
+        "ready": true,
+        "stage": "EPISODE_OUTLINE"
+      },
+      {
+        "message": "前置条件已满足",
+        "ready": true,
+        "stage": "BEAT_SHEET"
+      },
+      {
+        "message": "前置条件已满足",
+        "ready": true,
+        "stage": "SCENE_SCRIPT"
+      }
+    ],
+    "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+    "source": {
+      "characterCount": 35,
+      "contentHash": "bf3955cb8b55f4cc6d3127400c0cd0c91fb2033365d9638063bed8d892078039",
+      "creativeText": "一名失忆侦探在午夜列车醒来，必须在终点前找出偷走所有乘客被偷走的记忆。",
+      "id": "source_6963d2ea-98cf-4832-88c8-bd54b9c73d36",
+      "inputKind": "CREATIVE",
+      "fileName": null,
+      "encoding": null,
+      "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d"
+    },
+    "storyboard": {
+      "current": {
+        "createdAt": "2026-08-23T12:46:54.273Z",
+        "episodeId": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+        "formatProfileId": "format_profile_32ea347d-3673-4ca4-88ad-860738a231f9",
+        "id": "92872b9c-d8ab-496a-ad45-9621475fbafb",
+        "parentId": "337d64d6-5a4d-4a10-9a66-d0173edd65d7",
+        "shotCount": 6,
+        "shotSetHash": "170750d751b8b8cf032617ddbf7a545c5097c897043e34decfe0513642251d3e",
+        "status": "READY",
+        "storyBibleVersionId": "c356f53c-8c06-4858-916d-7ade6f21a451",
+        "targetDurationSec": 90,
+        "versionNo": 2
+      },
+      "history": [
+        {
+          "createdAt": "2026-08-23T12:46:54.273Z",
+          "episodeId": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+          "formatProfileId": "format_profile_32ea347d-3673-4ca4-88ad-860738a231f9",
+          "id": "92872b9c-d8ab-496a-ad45-9621475fbafb",
+          "parentId": "337d64d6-5a4d-4a10-9a66-d0173edd65d7",
+          "shotCount": 6,
+          "shotSetHash": "170750d751b8b8cf032617ddbf7a545c5097c897043e34decfe0513642251d3e",
+          "status": "READY",
+          "storyBibleVersionId": "c356f53c-8c06-4858-916d-7ade6f21a451",
+          "targetDurationSec": 90,
+          "versionNo": 2
+        },
+        {
+          "createdAt": "2026-08-23T12:46:54.244Z",
+          "episodeId": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+          "formatProfileId": "format_profile_32ea347d-3673-4ca4-88ad-860738a231f9",
+          "id": "337d64d6-5a4d-4a10-9a66-d0173edd65d7",
+          "parentId": null,
+          "shotCount": 6,
+          "shotSetHash": "fc666db82031eb623de8191fe1b13007ac2f5bce72789af24bdd955d6ac108ba",
+          "status": "DRAFT",
+          "storyBibleVersionId": "c356f53c-8c06-4858-916d-7ade6f21a451",
+          "targetDurationSec": 90,
+          "versionNo": 1
+        }
+      ],
+      "shots": [
+        {
+          "cameraMotion": "STATIC",
+          "document": {
+            "acceptance": {
+              "must_include": [
+                "午夜列车车厢"
+              ],
+              "must_not_include": [],
+              "human_review_required": true
+            },
+            "cinematography": {
+              "shot_size": "MEDIUM",
+              "camera_angle": "EYE_LEVEL",
+              "composition": "中景，主体居左",
+              "focus": "人物面部清晰",
+              "camera_motion": "STATIC",
+              "frontal_face": true,
+              "mouth_visible": true
+            },
+            "content": {
+              "character_ids": [
+                "char_lead"
+              ],
+              "scene_id": "scene_train",
+              "prop_ids": [],
+              "action": "镜 1：开场：车厢全景，无人回应",
+              "emotion": "警惕",
+              "spoken_text": "这趟列车，到底要开去哪里？"
+            },
+            "continuity": {
+              "continuity_mode": "SCENE_CHANGE",
+              "first_frame_requirement": "开场：车厢全景，无人回应起帧",
+              "last_frame_requirement": "开场：车厢全景，无人回应止帧",
+              "asset_version_ids": [],
+              "previous_shot_id": null
+            },
+            "contract_version": 2,
+            "dialogue": {
+              "dialogue_render_mode": "NARRATION_FIRST",
+              "speaker_id": "narrator",
+              "estimated_speech_duration_sec": 3,
+              "audio_required": true,
+              "dialogue_mode_source": "PROJECT_DEFAULT",
+              "lip_sync_required": false,
+              "override_reason": null
+            },
+            "derived_from_shot_ids": [],
+            "format_profile_id": "format_profile_32ea347d-3673-4ca4-88ad-860738a231f9",
+            "generation_constraints": {
+              "capability_requirements": [
+                {
+                  "capability": "FIRST_FRAME",
+                  "required": true
+                }
+              ],
+              "image_prompt": "夜行列车车厢，冷色调，中景",
+              "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+              "negative_constraints": [
+                "文字水印"
+              ],
+              "budget_estimate": {
+                "currency_or_credit": "UNKNOWN",
+                "is_estimate": true,
+                "max": null,
+                "min": null,
+                "price_version": null
+              }
+            },
+            "locked_paths": [],
+            "narrative_purpose": "开场：车厢全景，无人回应",
+            "parent_version_id": "scv_bd3ad9da-d257-4c27-96af-a41b113511ef_v1",
+            "provenance": {
+              "last_edit_source": "AI",
+              "source_invocation_id": "8fd8ee7a-426f-4ece-8b76-40daf9b0293e",
+              "source_type": "AI_GENERATED"
+            },
+            "schema_version": "1.1.0",
+            "sequence": 1,
+            "shot_id": "shot_328f2fa2-b12f-4b54-83b2-50101b267c30",
+            "target_duration_sec": 15,
+            "status": "READY",
+            "version_id": "scv_a7fcb5bc-86fe-4ecd-b3e1-36624893c92f_v2"
+          },
+          "dialogueRenderMode": "NARRATION_FIRST",
+          "lockedPaths": [],
+          "narrativePurpose": "开场：车厢全景，无人回应",
+          "sequence": 1,
+          "shotId": "shot_328f2fa2-b12f-4b54-83b2-50101b267c30",
+          "shotSize": "MEDIUM",
+          "targetDurationSec": 15,
+          "versionId": "scv_a7fcb5bc-86fe-4ecd-b3e1-36624893c92f_v2"
+        },
+        {
+          "cameraMotion": "DOLLY",
+          "document": {
+            "acceptance": {
+              "must_include": [
+                "午夜列车车厢"
+              ],
+              "must_not_include": [],
+              "human_review_required": true
+            },
+            "cinematography": {
+              "shot_size": "MEDIUM",
+              "camera_angle": "EYE_LEVEL",
+              "composition": "中景，主体居左",
+              "focus": "人物面部清晰",
+              "camera_motion": "DOLLY",
+              "frontal_face": true,
+              "mouth_visible": true
+            },
+            "content": {
+              "character_ids": [
+                "char_lead"
+              ],
+              "scene_id": "scene_train",
+              "prop_ids": [],
+              "action": "镜 2：林夜攥紧怀表起身，动作连贯",
+              "emotion": "警惕",
+              "spoken_text": "这趟列车，到底要开去哪里？"
+            },
+            "continuity": {
+              "continuity_mode": "CONTINUOUS_ACTION",
+              "first_frame_requirement": "林夜攥紧怀表起身，动作连贯起帧",
+              "last_frame_requirement": "林夜攥紧怀表起身，动作连贯止帧",
+              "asset_version_ids": [],
+              "previous_shot_id": "shot_328f2fa2-b12f-4b54-83b2-50101b267c30"
+            },
+            "contract_version": 2,
+            "dialogue": {
+              "dialogue_render_mode": "NARRATION_FIRST",
+              "speaker_id": "narrator",
+              "estimated_speech_duration_sec": 3,
+              "audio_required": true,
+              "dialogue_mode_source": "PROJECT_DEFAULT",
+              "lip_sync_required": false,
+              "override_reason": null
+            },
+            "derived_from_shot_ids": [],
+            "format_profile_id": "format_profile_32ea347d-3673-4ca4-88ad-860738a231f9",
+            "generation_constraints": {
+              "capability_requirements": [
+                {
+                  "capability": "FIRST_FRAME",
+                  "required": true
+                }
+              ],
+              "image_prompt": "夜行列车车厢，冷色调，中景",
+              "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+              "negative_constraints": [
+                "文字水印"
+              ],
+              "budget_estimate": {
+                "currency_or_credit": "UNKNOWN",
+                "is_estimate": true,
+                "max": null,
+                "min": null,
+                "price_version": null
+              }
+            },
+            "locked_paths": [],
+            "narrative_purpose": "林夜攥紧怀表起身，动作连贯",
+            "parent_version_id": "scv_313c74d2-ca67-4a71-8341-837ad310e4bb_v1",
+            "provenance": {
+              "last_edit_source": "AI",
+              "source_invocation_id": "8fd8ee7a-426f-4ece-8b76-40daf9b0293e",
+              "source_type": "AI_GENERATED"
+            },
+            "schema_version": "1.1.0",
+            "sequence": 2,
+            "shot_id": "shot_046e73f9-2832-4465-b0c9-880dbafa3297",
+            "target_duration_sec": 15,
+            "status": "READY",
+            "version_id": "scv_9d7a0cf5-1278-45d8-92c4-cd3e378ca614_v2"
+          },
+          "dialogueRenderMode": "NARRATION_FIRST",
+          "lockedPaths": [],
+          "narrativePurpose": "林夜攥紧怀表起身，动作连贯",
+          "sequence": 2,
+          "shotId": "shot_046e73f9-2832-4465-b0c9-880dbafa3297",
+          "shotSize": "MEDIUM",
+          "targetDurationSec": 15,
+          "versionId": "scv_9d7a0cf5-1278-45d8-92c4-cd3e378ca614_v2"
+        },
+        {
+          "cameraMotion": "STATIC",
+          "document": {
+            "acceptance": {
+              "must_include": [
+                "午夜列车车厢"
+              ],
+              "must_not_include": [],
+              "human_review_required": true
+            },
+            "cinematography": {
+              "shot_size": "LONG",
+              "camera_angle": "EYE_LEVEL",
+              "composition": "中景，主体居左",
+              "focus": "人物面部清晰",
+              "camera_motion": "STATIC",
+              "frontal_face": true,
+              "mouth_visible": false
+            },
+            "content": {
+              "character_ids": [],
+              "scene_id": "scene_train",
+              "prop_ids": [],
+              "action": "镜 3：空镜：窗外流动的夜色",
+              "emotion": "警惕",
+              "spoken_text": ""
+            },
+            "continuity": {
+              "continuity_mode": "SCENE_CHANGE",
+              "first_frame_requirement": "空镜：窗外流动的夜色起帧",
+              "last_frame_requirement": "空镜：窗外流动的夜色止帧",
+              "asset_version_ids": [],
+              "previous_shot_id": null
+            },
+            "contract_version": 2,
+            "dialogue": {
+              "dialogue_render_mode": "NARRATION_FIRST",
+              "speaker_id": null,
+              "estimated_speech_duration_sec": 0,
+              "audio_required": false,
+              "dialogue_mode_source": "PROJECT_DEFAULT",
+              "lip_sync_required": false,
+              "override_reason": null
+            },
+            "derived_from_shot_ids": [],
+            "format_profile_id": "format_profile_32ea347d-3673-4ca4-88ad-860738a231f9",
+            "generation_constraints": {
+              "capability_requirements": [
+                {
+                  "capability": "FIRST_FRAME",
+                  "required": true
+                }
+              ],
+              "image_prompt": "夜行列车车厢，冷色调，中景",
+              "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+              "negative_constraints": [
+                "文字水印"
+              ],
+              "budget_estimate": {
+                "currency_or_credit": "UNKNOWN",
+                "is_estimate": true,
+                "max": null,
+                "min": null,
+                "price_version": null
+              }
+            },
+            "locked_paths": [],
+            "narrative_purpose": "空镜：窗外流动的夜色",
+            "parent_version_id": "scv_6c7b5ad1-5451-4718-9387-019ce0f82af4_v1",
+            "provenance": {
+              "last_edit_source": "AI",
+              "source_invocation_id": "8fd8ee7a-426f-4ece-8b76-40daf9b0293e",
+              "source_type": "AI_GENERATED"
+            },
+            "schema_version": "1.1.0",
+            "sequence": 3,
+            "shot_id": "shot_9fa1a678-7f36-4161-b1db-c6abbcc227c7",
+            "target_duration_sec": 15,
+            "status": "READY",
+            "version_id": "scv_006ce858-c46c-4013-8194-83672977acf8_v2"
+          },
+          "dialogueRenderMode": "NARRATION_FIRST",
+          "lockedPaths": [],
+          "narrativePurpose": "空镜：窗外流动的夜色",
+          "sequence": 3,
+          "shotId": "shot_9fa1a678-7f36-4161-b1db-c6abbcc227c7",
+          "shotSize": "LONG",
+          "targetDurationSec": 15,
+          "versionId": "scv_006ce858-c46c-4013-8194-83672977acf8_v2"
+        },
+        {
+          "cameraMotion": "DOLLY",
+          "document": {
+            "acceptance": {
+              "must_include": [
+                "午夜列车车厢"
+              ],
+              "must_not_include": [],
+              "human_review_required": true
+            },
+            "cinematography": {
+              "shot_size": "MEDIUM",
+              "camera_angle": "EYE_LEVEL",
+              "composition": "中景，主体居左",
+              "focus": "人物面部清晰",
+              "camera_motion": "DOLLY",
+              "frontal_face": true,
+              "mouth_visible": true
+            },
+            "content": {
+              "character_ids": [
+                "char_lead"
+              ],
+              "scene_id": "scene_train",
+              "prop_ids": [],
+              "action": "镜 4：林夜质问列车长",
+              "emotion": "警惕",
+              "spoken_text": "这趟列车，到底要开去哪里？"
+            },
+            "continuity": {
+              "continuity_mode": "SCENE_CHANGE",
+              "first_frame_requirement": "林夜质问列车长起帧",
+              "last_frame_requirement": "林夜质问列车长止帧",
+              "asset_version_ids": [],
+              "previous_shot_id": null
+            },
+            "contract_version": 2,
+            "dialogue": {
+              "dialogue_render_mode": "NARRATION_FIRST",
+              "speaker_id": "narrator",
+              "estimated_speech_duration_sec": 3,
+              "audio_required": true,
+              "dialogue_mode_source": "PROJECT_DEFAULT",
+              "lip_sync_required": false,
+              "override_reason": null
+            },
+            "derived_from_shot_ids": [],
+            "format_profile_id": "format_profile_32ea347d-3673-4ca4-88ad-860738a231f9",
+            "generation_constraints": {
+              "capability_requirements": [
+                {
+                  "capability": "FIRST_FRAME",
+                  "required": true
+                }
+              ],
+              "image_prompt": "夜行列车车厢，冷色调，中景",
+              "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+              "negative_constraints": [
+                "文字水印"
+              ],
+              "budget_estimate": {
+                "currency_or_credit": "UNKNOWN",
+                "is_estimate": true,
+                "max": null,
+                "min": null,
+                "price_version": null
+              }
+            },
+            "locked_paths": [],
+            "narrative_purpose": "林夜质问列车长",
+            "parent_version_id": "scv_b872aef3-0855-4c05-b986-b805f9c31707_v1",
+            "provenance": {
+              "last_edit_source": "AI",
+              "source_invocation_id": "8fd8ee7a-426f-4ece-8b76-40daf9b0293e",
+              "source_type": "AI_GENERATED"
+            },
+            "schema_version": "1.1.0",
+            "sequence": 4,
+            "shot_id": "shot_a0502d50-5e96-4325-9313-aa1e876a1344",
+            "target_duration_sec": 15,
+            "status": "READY",
+            "version_id": "scv_42817eb6-e9b5-4800-84f1-3b8c45e97dea_v2"
+          },
+          "dialogueRenderMode": "NARRATION_FIRST",
+          "lockedPaths": [],
+          "narrativePurpose": "林夜质问列车长",
+          "sequence": 4,
+          "shotId": "shot_a0502d50-5e96-4325-9313-aa1e876a1344",
+          "shotSize": "MEDIUM",
+          "targetDurationSec": 15,
+          "versionId": "scv_42817eb6-e9b5-4800-84f1-3b8c45e97dea_v2"
+        },
+        {
+          "cameraMotion": "STATIC",
+          "document": {
+            "acceptance": {
+              "must_include": [
+                "午夜列车车厢"
+              ],
+              "must_not_include": [],
+              "human_review_required": true
+            },
+            "cinematography": {
+              "shot_size": "MEDIUM",
+              "camera_angle": "EYE_LEVEL",
+              "composition": "中景，主体居左",
+              "focus": "人物面部清晰",
+              "camera_motion": "STATIC",
+              "frontal_face": true,
+              "mouth_visible": true
+            },
+            "content": {
+              "character_ids": [
+                "char_lead"
+              ],
+              "scene_id": "scene_train",
+              "prop_ids": [],
+              "action": "镜 5：连续动作：林夜追向车尾",
+              "emotion": "警惕",
+              "spoken_text": "这趟列车，到底要开去哪里？"
+            },
+            "continuity": {
+              "continuity_mode": "CONTINUOUS_ACTION",
+              "first_frame_requirement": "连续动作：林夜追向车尾起帧",
+              "last_frame_requirement": "连续动作：林夜追向车尾止帧",
+              "asset_version_ids": [],
+              "previous_shot_id": "shot_a0502d50-5e96-4325-9313-aa1e876a1344"
+            },
+            "contract_version": 2,
+            "dialogue": {
+              "dialogue_render_mode": "NARRATION_FIRST",
+              "speaker_id": "narrator",
+              "estimated_speech_duration_sec": 3,
+              "audio_required": true,
+              "dialogue_mode_source": "PROJECT_DEFAULT",
+              "lip_sync_required": false,
+              "override_reason": null
+            },
+            "derived_from_shot_ids": [],
+            "format_profile_id": "format_profile_32ea347d-3673-4ca4-88ad-860738a231f9",
+            "generation_constraints": {
+              "capability_requirements": [
+                {
+                  "capability": "FIRST_FRAME",
+                  "required": true
+                }
+              ],
+              "image_prompt": "夜行列车车厢，冷色调，中景",
+              "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+              "negative_constraints": [
+                "文字水印"
+              ],
+              "budget_estimate": {
+                "currency_or_credit": "UNKNOWN",
+                "is_estimate": true,
+                "max": null,
+                "min": null,
+                "price_version": null
+              }
+            },
+            "locked_paths": [],
+            "narrative_purpose": "连续动作：林夜追向车尾",
+            "parent_version_id": "scv_6b09eeca-82eb-4dac-bd96-ab84db18c104_v1",
+            "provenance": {
+              "last_edit_source": "AI",
+              "source_invocation_id": "8fd8ee7a-426f-4ece-8b76-40daf9b0293e",
+              "source_type": "AI_GENERATED"
+            },
+            "schema_version": "1.1.0",
+            "sequence": 5,
+            "shot_id": "shot_09f6720b-d576-458a-9fed-b48322579ac4",
+            "target_duration_sec": 15,
+            "status": "READY",
+            "version_id": "scv_fb0d48a3-e3ad-4d89-833d-f0db6efc1d75_v2"
+          },
+          "dialogueRenderMode": "NARRATION_FIRST",
+          "lockedPaths": [],
+          "narrativePurpose": "连续动作：林夜追向车尾",
+          "sequence": 5,
+          "shotId": "shot_09f6720b-d576-458a-9fed-b48322579ac4",
+          "shotSize": "MEDIUM",
+          "targetDurationSec": 15,
+          "versionId": "scv_fb0d48a3-e3ad-4d89-833d-f0db6efc1d75_v2"
+        },
+        {
+          "cameraMotion": "DOLLY",
+          "document": {
+            "acceptance": {
+              "must_include": [
+                "午夜列车车厢"
+              ],
+              "must_not_include": [],
+              "human_review_required": true
+            },
+            "cinematography": {
+              "shot_size": "LONG",
+              "camera_angle": "EYE_LEVEL",
+              "composition": "中景，主体居左",
+              "focus": "人物面部清晰",
+              "camera_motion": "DOLLY",
+              "frontal_face": true,
+              "mouth_visible": false
+            },
+            "content": {
+              "character_ids": [],
+              "scene_id": "scene_train",
+              "prop_ids": [],
+              "action": "镜 6：结尾钩子：怀表传出声音",
+              "emotion": "震惊",
+              "spoken_text": ""
+            },
+            "continuity": {
+              "continuity_mode": "SCENE_CHANGE",
+              "first_frame_requirement": "结尾钩子：怀表传出声音起帧",
+              "last_frame_requirement": "结尾钩子：怀表传出声音止帧",
+              "asset_version_ids": [],
+              "previous_shot_id": null
+            },
+            "contract_version": 2,
+            "dialogue": {
+              "dialogue_render_mode": "NARRATION_FIRST",
+              "speaker_id": null,
+              "estimated_speech_duration_sec": 0,
+              "audio_required": false,
+              "dialogue_mode_source": "PROJECT_DEFAULT",
+              "lip_sync_required": false,
+              "override_reason": null
+            },
+            "derived_from_shot_ids": [],
+            "format_profile_id": "format_profile_32ea347d-3673-4ca4-88ad-860738a231f9",
+            "generation_constraints": {
+              "capability_requirements": [
+                {
+                  "capability": "FIRST_FRAME",
+                  "required": true
+                }
+              ],
+              "image_prompt": "夜行列车车厢，冷色调，中景",
+              "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+              "negative_constraints": [
+                "文字水印"
+              ],
+              "budget_estimate": {
+                "currency_or_credit": "UNKNOWN",
+                "is_estimate": true,
+                "max": null,
+                "min": null,
+                "price_version": null
+              }
+            },
+            "locked_paths": [],
+            "narrative_purpose": "结尾钩子：怀表传出声音",
+            "parent_version_id": "scv_48cfbced-1145-43c6-a451-850b920063cc_v1",
+            "provenance": {
+              "last_edit_source": "AI",
+              "source_invocation_id": "8fd8ee7a-426f-4ece-8b76-40daf9b0293e",
+              "source_type": "AI_GENERATED"
+            },
+            "schema_version": "1.1.0",
+            "sequence": 6,
+            "shot_id": "shot_2c117520-6467-49ae-8e59-90b739558b2c",
+            "target_duration_sec": 15,
+            "status": "READY",
+            "version_id": "scv_107d5371-2a22-4ce7-9ed6-4e04677068d1_v2"
+          },
+          "dialogueRenderMode": "NARRATION_FIRST",
+          "lockedPaths": [],
+          "narrativePurpose": "结尾钩子：怀表传出声音",
+          "sequence": 6,
+          "shotId": "shot_2c117520-6467-49ae-8e59-90b739558b2c",
+          "shotSize": "LONG",
+          "targetDurationSec": 15,
+          "versionId": "scv_107d5371-2a22-4ce7-9ed6-4e04677068d1_v2"
+        }
+      ],
+      "totalDurationSec": 90
+    },
+    "stages": [
+      {
+        "current": {
+          "createdAt": "2026-08-23T12:46:53.984Z",
+          "document": {
+            "data": {
+              "core_conflict": "主角必须在真相与亲情之间做出选择",
+              "genre": "悬疑",
+              "synopsis": "主角追查失窃的记忆，并在终点前找到幕后操控者。",
+              "target_audience": "喜欢悬疑漫剧的成年观众",
+              "theme": "记忆与身份",
+              "title": "午夜列车"
+            },
+            "episode_id": null,
+            "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "schema_version": "1.0.0",
+            "source_invocation_id": "c7f7e691-5e2b-4720-b0a4-8dc01de9b060",
+            "stage": "CONCEPT"
+          },
+          "documentHash": "d92a686fe112eb88f71dbeeb8b2f6e6672ef8a2620de5cc35cb8151e6267ec25",
+          "id": "4aaf8d18-305f-48a3-be6e-44760e4d273f",
+          "parentId": "95a6add8-4876-4a58-b587-7b29a2d52275",
+          "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+          "source": "USER",
+          "status": "READY",
+          "versionNo": 2
+        },
+        "history": [
+          {
+            "createdAt": "2026-08-23T12:46:53.984Z",
+            "document": {
+              "data": {
+                "core_conflict": "主角必须在真相与亲情之间做出选择",
+                "genre": "悬疑",
+                "synopsis": "主角追查失窃的记忆，并在终点前找到幕后操控者。",
+                "target_audience": "喜欢悬疑漫剧的成年观众",
+                "theme": "记忆与身份",
+                "title": "午夜列车"
+              },
+              "episode_id": null,
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "c7f7e691-5e2b-4720-b0a4-8dc01de9b060",
+              "stage": "CONCEPT"
+            },
+            "documentHash": "d92a686fe112eb88f71dbeeb8b2f6e6672ef8a2620de5cc35cb8151e6267ec25",
+            "id": "4aaf8d18-305f-48a3-be6e-44760e4d273f",
+            "parentId": "95a6add8-4876-4a58-b587-7b29a2d52275",
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "USER",
+            "status": "READY",
+            "versionNo": 2
+          },
+          {
+            "createdAt": "2026-08-23T12:46:53.959Z",
+            "document": {
+              "data": {
+                "core_conflict": "主角必须在真相与亲情之间做出选择",
+                "genre": "悬疑",
+                "synopsis": "主角追查失窃的记忆，并在终点前找到幕后操控者。",
+                "target_audience": "喜欢悬疑漫剧的成年观众",
+                "theme": "记忆与身份",
+                "title": "午夜列车"
+              },
+              "episode_id": null,
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "c7f7e691-5e2b-4720-b0a4-8dc01de9b060",
+              "stage": "CONCEPT"
+            },
+            "documentHash": "d92a686fe112eb88f71dbeeb8b2f6e6672ef8a2620de5cc35cb8151e6267ec25",
+            "id": "95a6add8-4876-4a58-b587-7b29a2d52275",
+            "parentId": null,
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "AI",
+            "status": "DRAFT",
+            "versionNo": 1
+          }
+        ],
+        "prerequisiteReady": true,
+        "stage": "CONCEPT"
+      },
+      {
+        "current": {
+          "createdAt": "2026-08-23T12:46:54.039Z",
+          "document": {
+            "data": {
+              "characters": {
+                "char_lead": {
+                  "appearance": "黑色风衣，随身携带旧怀表",
+                  "motivation": "找回被窃取的记忆",
+                  "name": "林夜",
+                  "personality": "谨慎而执着"
+                }
+              },
+              "props": {},
+              "scenes": {
+                "scene_train": {
+                  "description": "穿行在夜色中的旧列车",
+                  "name": "午夜列车"
+                }
+              },
+              "world_rules": [
+                "记忆可以被提取，但每次交易都会留下可追踪的回声"
+              ]
+            },
+            "episode_id": null,
+            "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "schema_version": "1.0.0",
+            "source_invocation_id": "221d7197-8c9b-4591-bd0a-b40b8a3576dd",
+            "stage": "STORY_BIBLE"
+          },
+          "documentHash": "4835a16582fc80777d838b16a013043d6b79470933b05c3a99497e0c8c239de9",
+          "id": "c356f53c-8c06-4858-916d-7ade6f21a451",
+          "parentId": "67e27ee1-129c-4e51-a35e-8359afc68f94",
+          "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+          "source": "USER",
+          "status": "READY",
+          "versionNo": 2
+        },
+        "history": [
+          {
+            "createdAt": "2026-08-23T12:46:54.039Z",
+            "document": {
+              "data": {
+                "characters": {
+                  "char_lead": {
+                    "appearance": "黑色风衣，随身携带旧怀表",
+                    "motivation": "找回被窃取的记忆",
+                    "name": "林夜",
+                    "personality": "谨慎而执着"
+                  }
+                },
+                "props": {},
+                "scenes": {
+                  "scene_train": {
+                    "description": "穿行在夜色中的旧列车",
+                    "name": "午夜列车"
+                  }
+                },
+                "world_rules": [
+                  "记忆可以被提取，但每次交易都会留下可追踪的回声"
+                ]
+              },
+              "episode_id": null,
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "221d7197-8c9b-4591-bd0a-b40b8a3576dd",
+              "stage": "STORY_BIBLE"
+            },
+            "documentHash": "4835a16582fc80777d838b16a013043d6b79470933b05c3a99497e0c8c239de9",
+            "id": "c356f53c-8c06-4858-916d-7ade6f21a451",
+            "parentId": "67e27ee1-129c-4e51-a35e-8359afc68f94",
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "USER",
+            "status": "READY",
+            "versionNo": 2
+          },
+          {
+            "createdAt": "2026-08-23T12:46:54.022Z",
+            "document": {
+              "data": {
+                "characters": {
+                  "char_lead": {
+                    "appearance": "黑色风衣，随身携带旧怀表",
+                    "motivation": "找回被窃取的记忆",
+                    "name": "林夜",
+                    "personality": "谨慎而执着"
+                  }
+                },
+                "props": {},
+                "scenes": {
+                  "scene_train": {
+                    "description": "穿行在夜色中的旧列车",
+                    "name": "午夜列车"
+                  }
+                },
+                "world_rules": [
+                  "记忆可以被提取，但每次交易都会留下可追踪的回声"
+                ]
+              },
+              "episode_id": null,
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "221d7197-8c9b-4591-bd0a-b40b8a3576dd",
+              "stage": "STORY_BIBLE"
+            },
+            "documentHash": "4835a16582fc80777d838b16a013043d6b79470933b05c3a99497e0c8c239de9",
+            "id": "67e27ee1-129c-4e51-a35e-8359afc68f94",
+            "parentId": null,
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "AI",
+            "status": "DRAFT",
+            "versionNo": 1
+          }
+        ],
+        "prerequisiteReady": true,
+        "stage": "STORY_BIBLE"
+      },
+      {
+        "current": {
+          "createdAt": "2026-08-23T12:46:54.095Z",
+          "document": {
+            "data": {
+              "climax": "林夜揭穿列车长的记忆交易",
+              "ending_hook": "旧怀表中传出另一个自己的声音",
+              "episode_goal": "找到第一条记忆失窃线索",
+              "midpoint": "同车乘客承认所有人都遗失了同一天",
+              "opening": "林夜在没有终点站名的列车中醒来",
+              "target_duration_sec": 90
+            },
+            "episode_id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+            "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "schema_version": "1.0.0",
+            "source_invocation_id": "b2c3b76f-bc44-4351-a45c-8b1be689006f",
+            "stage": "EPISODE_OUTLINE"
+          },
+          "documentHash": "19847e26c161172fdc5062fb0e4ec965e4a980418faebd96364f5a5ed1c99d71",
+          "id": "529e9f1a-a798-4b7d-bf71-0dc0dbc17454",
+          "parentId": "9888f818-2540-48eb-ad3d-a9f143aa34e8",
+          "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+          "source": "USER",
+          "status": "READY",
+          "versionNo": 2
+        },
+        "history": [
+          {
+            "createdAt": "2026-08-23T12:46:54.095Z",
+            "document": {
+              "data": {
+                "climax": "林夜揭穿列车长的记忆交易",
+                "ending_hook": "旧怀表中传出另一个自己的声音",
+                "episode_goal": "找到第一条记忆失窃线索",
+                "midpoint": "同车乘客承认所有人都遗失了同一天",
+                "opening": "林夜在没有终点站名的列车中醒来",
+                "target_duration_sec": 90
+              },
+              "episode_id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "b2c3b76f-bc44-4351-a45c-8b1be689006f",
+              "stage": "EPISODE_OUTLINE"
+            },
+            "documentHash": "19847e26c161172fdc5062fb0e4ec965e4a980418faebd96364f5a5ed1c99d71",
+            "id": "529e9f1a-a798-4b7d-bf71-0dc0dbc17454",
+            "parentId": "9888f818-2540-48eb-ad3d-a9f143aa34e8",
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "USER",
+            "status": "READY",
+            "versionNo": 2
+          },
+          {
+            "createdAt": "2026-08-23T12:46:54.075Z",
+            "document": {
+              "data": {
+                "climax": "林夜揭穿列车长的记忆交易",
+                "ending_hook": "旧怀表中传出另一个自己的声音",
+                "episode_goal": "找到第一条记忆失窃线索",
+                "midpoint": "同车乘客承认所有人都遗失了同一天",
+                "opening": "林夜在没有终点站名的列车中醒来",
+                "target_duration_sec": 90
+              },
+              "episode_id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "b2c3b76f-bc44-4351-a45c-8b1be689006f",
+              "stage": "EPISODE_OUTLINE"
+            },
+            "documentHash": "19847e26c161172fdc5062fb0e4ec965e4a980418faebd96364f5a5ed1c99d71",
+            "id": "9888f818-2540-48eb-ad3d-a9f143aa34e8",
+            "parentId": null,
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "AI",
+            "status": "DRAFT",
+            "versionNo": 1
+          }
+        ],
+        "prerequisiteReady": true,
+        "stage": "EPISODE_OUTLINE"
+      },
+      {
+        "current": {
+          "createdAt": "2026-08-23T12:46:54.149Z",
+          "document": {
+            "data": {
+              "beats": [
+                {
+                  "beat_id": "beat_1",
+                  "description": "主角醒来",
+                  "estimated_duration_sec": 20,
+                  "purpose": "建立悬念",
+                  "sequence": 1
+                },
+                {
+                  "beat_id": "beat_2",
+                  "description": "发现共同失忆",
+                  "estimated_duration_sec": 35,
+                  "purpose": "升级冲突",
+                  "sequence": 2
+                },
+                {
+                  "beat_id": "beat_3",
+                  "description": "揭穿交易",
+                  "estimated_duration_sec": 35,
+                  "purpose": "高潮与钩子",
+                  "sequence": 3
+                }
+              ]
+            },
+            "episode_id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+            "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "schema_version": "1.0.0",
+            "source_invocation_id": "0de559aa-2965-4a37-bcec-e877bbed400e",
+            "stage": "BEAT_SHEET"
+          },
+          "documentHash": "e5cb1688fd9569fc2dcb0519e254b396d7b8bd42d7412b9b599b6419c215e569",
+          "id": "915b1e05-a89a-43dc-8b0b-5d69f5cbcb28",
+          "parentId": "d7d5dfe4-433d-4b98-8337-070f45a5a564",
+          "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+          "source": "USER",
+          "status": "READY",
+          "versionNo": 2
+        },
+        "history": [
+          {
+            "createdAt": "2026-08-23T12:46:54.149Z",
+            "document": {
+              "data": {
+                "beats": [
+                  {
+                    "beat_id": "beat_1",
+                    "description": "主角醒来",
+                    "estimated_duration_sec": 20,
+                    "purpose": "建立悬念",
+                    "sequence": 1
+                  },
+                  {
+                    "beat_id": "beat_2",
+                    "description": "发现共同失忆",
+                    "estimated_duration_sec": 35,
+                    "purpose": "升级冲突",
+                    "sequence": 2
+                  },
+                  {
+                    "beat_id": "beat_3",
+                    "description": "揭穿交易",
+                    "estimated_duration_sec": 35,
+                    "purpose": "高潮与钩子",
+                    "sequence": 3
+                  }
+                ]
+              },
+              "episode_id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "0de559aa-2965-4a37-bcec-e877bbed400e",
+              "stage": "BEAT_SHEET"
+            },
+            "documentHash": "e5cb1688fd9569fc2dcb0519e254b396d7b8bd42d7412b9b599b6419c215e569",
+            "id": "915b1e05-a89a-43dc-8b0b-5d69f5cbcb28",
+            "parentId": "d7d5dfe4-433d-4b98-8337-070f45a5a564",
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "USER",
+            "status": "READY",
+            "versionNo": 2
+          },
+          {
+            "createdAt": "2026-08-23T12:46:54.132Z",
+            "document": {
+              "data": {
+                "beats": [
+                  {
+                    "beat_id": "beat_1",
+                    "description": "主角醒来",
+                    "estimated_duration_sec": 20,
+                    "purpose": "建立悬念",
+                    "sequence": 1
+                  },
+                  {
+                    "beat_id": "beat_2",
+                    "description": "发现共同失忆",
+                    "estimated_duration_sec": 35,
+                    "purpose": "升级冲突",
+                    "sequence": 2
+                  },
+                  {
+                    "beat_id": "beat_3",
+                    "description": "揭穿交易",
+                    "estimated_duration_sec": 35,
+                    "purpose": "高潮与钩子",
+                    "sequence": 3
+                  }
+                ]
+              },
+              "episode_id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "0de559aa-2965-4a37-bcec-e877bbed400e",
+              "stage": "BEAT_SHEET"
+            },
+            "documentHash": "e5cb1688fd9569fc2dcb0519e254b396d7b8bd42d7412b9b599b6419c215e569",
+            "id": "d7d5dfe4-433d-4b98-8337-070f45a5a564",
+            "parentId": null,
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "AI",
+            "status": "DRAFT",
+            "versionNo": 1
+          }
+        ],
+        "prerequisiteReady": true,
+        "stage": "BEAT_SHEET"
+      },
+      {
+        "current": {
+          "createdAt": "2026-08-23T12:46:54.198Z",
+          "document": {
+            "data": {
+              "scenes": [
+                {
+                  "action": "林夜在摇晃的车厢中睁开眼睛，握紧旧怀表。",
+                  "character_ids": [
+                    "char_lead"
+                  ],
+                  "estimated_duration_sec": 30,
+                  "scene_id": "scene_train",
+                  "script_scene_id": "script_scene_1",
+                  "sequence": 1,
+                  "spoken_lines": [
+                    {
+                      "line_type": "DIALOGUE",
+                      "speaker_id": "char_lead",
+                      "text": "这趟列车要开往哪里？"
+                    }
+                  ]
+                }
+              ]
+            },
+            "episode_id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+            "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "schema_version": "1.0.0",
+            "source_invocation_id": "00dab607-3a2e-4cc9-93a7-2de6f1d2bf01",
+            "stage": "SCENE_SCRIPT"
+          },
+          "documentHash": "9c4954a35f9f17effebd1c164c9e4c6a50b19f30e6f20939ff89a5918a033379",
+          "id": "9ea92d76-b097-4296-b63c-e354da36bea4",
+          "parentId": "6dd936fe-dbb2-4cfb-8145-1d7190c5794b",
+          "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+          "source": "USER",
+          "status": "READY",
+          "versionNo": 2
+        },
+        "history": [
+          {
+            "createdAt": "2026-08-23T12:46:54.198Z",
+            "document": {
+              "data": {
+                "scenes": [
+                  {
+                    "action": "林夜在摇晃的车厢中睁开眼睛，握紧旧怀表。",
+                    "character_ids": [
+                      "char_lead"
+                    ],
+                    "estimated_duration_sec": 30,
+                    "scene_id": "scene_train",
+                    "script_scene_id": "script_scene_1",
+                    "sequence": 1,
+                    "spoken_lines": [
+                      {
+                        "line_type": "DIALOGUE",
+                        "speaker_id": "char_lead",
+                        "text": "这趟列车要开往哪里？"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "episode_id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "00dab607-3a2e-4cc9-93a7-2de6f1d2bf01",
+              "stage": "SCENE_SCRIPT"
+            },
+            "documentHash": "9c4954a35f9f17effebd1c164c9e4c6a50b19f30e6f20939ff89a5918a033379",
+            "id": "9ea92d76-b097-4296-b63c-e354da36bea4",
+            "parentId": "6dd936fe-dbb2-4cfb-8145-1d7190c5794b",
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "USER",
+            "status": "READY",
+            "versionNo": 2
+          },
+          {
+            "createdAt": "2026-08-23T12:46:54.183Z",
+            "document": {
+              "data": {
+                "scenes": [
+                  {
+                    "action": "林夜在摇晃的车厢中睁开眼睛，握紧旧怀表。",
+                    "character_ids": [
+                      "char_lead"
+                    ],
+                    "estimated_duration_sec": 30,
+                    "scene_id": "scene_train",
+                    "script_scene_id": "script_scene_1",
+                    "sequence": 1,
+                    "spoken_lines": [
+                      {
+                        "line_type": "DIALOGUE",
+                        "speaker_id": "char_lead",
+                        "text": "这趟列车要开往哪里？"
+                      }
+                    ]
+                  }
+                ]
+              },
+              "episode_id": "episode_519ad2ac-093d-4a19-814a-50134958225d",
+              "project_id": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "00dab607-3a2e-4cc9-93a7-2de6f1d2bf01",
+              "stage": "SCENE_SCRIPT"
+            },
+            "documentHash": "9c4954a35f9f17effebd1c164c9e4c6a50b19f30e6f20939ff89a5918a033379",
+            "id": "6dd936fe-dbb2-4cfb-8145-1d7190c5794b",
+            "parentId": null,
+            "projectId": "project_9d1114a5-382b-4e8a-9464-eff33c38a82d",
+            "source": "AI",
+            "status": "DRAFT",
+            "versionNo": 1
+          }
+        ],
+        "prerequisiteReady": true,
+        "stage": "SCENE_SCRIPT"
+      }
+    ]
+  }
+}

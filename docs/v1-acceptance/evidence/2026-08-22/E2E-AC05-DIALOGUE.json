@@ -1,0 +1,34 @@
+{
+  "report": {
+    "ok": true,
+    "data": {
+      "id": "report_10e39ee6-bdae-48d5-9ae9-d9751838a3d9",
+      "capabilitySnapshotId": "volcark-seedance-video/v2",
+      "projectId": "project_18f48102-a03e-4b9d-a0d6-6496f2485c44",
+      "episodeId": "episode_ff8dd819-8ef5-4e69-8d1c-a90fd922be9f",
+      "episodeVersionId": "36248f0e-80db-4c33-a100-1c65636c314b",
+      "ruleSetVersion": "jingxu-producibility-rules/1",
+      "status": "PASS",
+      "findings": [],
+      "createdAt": "2026-08-22T15:43:21.456Z",
+      "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
+      "referencePriceSnapshotId": "price_shot_package_v1"
+    }
+  },
+  "loaded": {
+    "ok": true,
+    "data": {
+      "id": "report_10e39ee6-bdae-48d5-9ae9-d9751838a3d9",
+      "capabilitySnapshotId": "volcark-seedance-video/v2",
+      "projectId": "project_18f48102-a03e-4b9d-a0d6-6496f2485c44",
+      "episodeId": "episode_ff8dd819-8ef5-4e69-8d1c-a90fd922be9f",
+      "episodeVersionId": "36248f0e-80db-4c33-a100-1c65636c314b",
+      "ruleSetVersion": "jingxu-producibility-rules/1",
+      "status": "PASS",
+      "findings": [],
+      "createdAt": "2026-08-22T15:43:21.456Z",
+      "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
+      "referencePriceSnapshotId": "price_shot_package_v1"
+    }
+  }
+}

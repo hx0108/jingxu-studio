@@ -1,0 +1,23 @@
+{
+  "result": {
+    "ok": false,
+    "error": {
+      "code": "IPC_INVALID_REQUEST",
+      "message": "项目名称不能包含首尾空白",
+      "retryable": false,
+      "userAction": null,
+      "fieldErrors": {
+        "name": "项目名称不能包含首尾空白"
+      },
+      "traceId": "9e9f9648-7eb7-45e3-8692-2a6246fad7a0"
+    }
+  },
+  "projects": {
+    "ok": true,
+    "data": {
+      "items": [],
+      "nextCursor": null,
+      "truncated": false
+    }
+  }
+}
