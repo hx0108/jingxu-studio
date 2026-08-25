@@ -14,9 +14,22 @@ import { useProjectCommands, useProjectDetail, useProjectList } from './project-
 import { getTransferClient } from './transfer-api';
 import { formatTransferWarnings } from './transfer-copy';
 import { ScriptWorkspaceView } from '../script/ScriptWorkspace';
+import { ProviderSettings } from '../script/ProviderSettings';
 import { EvaluationWorkspace } from '../evaluation/EvaluationWorkspace';
+import { AppShell, ComingSoonPanel, type GlobalArea } from '../ui/AppShell';
 
-type Screen = 'list' | 'create' | 'detail' | 'edit' | 'script' | 'evaluation';
+type Screen =
+  | 'home'
+  | 'list'
+  | 'create'
+  | 'detail'
+  | 'edit'
+  | 'script'
+  | 'assets'
+  | 'tasks'
+  | 'exports'
+  | 'settings'
+  | 'evaluation';
 type PendingTarget = Screen | 'close';
 interface ConfirmState {
   readonly action: 'delete' | 'restore';
@@ -80,6 +93,26 @@ export const ProjectWorkspace = () => {
   const hasMore = lastPage?.ok === true && lastPage.data.nextCursor !== null;
   const detailResult = detail.data;
   const currentDetail = detailResult?.ok === true ? detailResult.data : null;
+  const activeArea: GlobalArea =
+    screen === 'home'
+      ? 'home'
+      : screen === 'evaluation'
+        ? 'evaluation'
+        : screen === 'assets' || screen === 'tasks' || screen === 'exports' || screen === 'settings'
+          ? screen
+          : screen === 'detail' || screen === 'edit' || screen === 'script'
+            ? 'workspace'
+            : 'projects';
+  const pageTitle: Readonly<Record<GlobalArea, string>> = {
+    assets: '素材库',
+    evaluation: '质量与评测',
+    exports: '导出记录',
+    home: '首页',
+    projects: '我的项目',
+    settings: '设置',
+    tasks: '生成任务',
+    workspace: '创作工作台',
+  };
 
   const moveTo = (target: Screen): void => {
     if (isDirty) {
@@ -100,6 +133,17 @@ export const ProjectWorkspace = () => {
   const openProject = (project: ProjectSummaryDto): void => {
     select(project.id);
     setScreen('detail');
+  };
+  const navigateGlobal = (area: GlobalArea): void => {
+    const target: Screen =
+      area === 'projects'
+        ? 'list'
+        : area === 'workspace'
+          ? selectedProjectId === null
+            ? 'list'
+            : 'detail'
+          : area;
+    moveTo(target);
   };
 
   const createProject = async (values: ProjectFormValues) => {
@@ -192,247 +236,312 @@ export const ProjectWorkspace = () => {
 
   const pending = commands.deleteProject.isPending || commands.restore.isPending;
   return (
-    <main className="project-shell">
-      <header className="app-header">
-        <div>
-          <p className="eyebrow">JINGXU STUDIO</p>
-          <h1>镜序 Studio</h1>
-        </div>
-        <nav aria-label="项目导航">
-          <button
-            className={listScope === 'ACTIVE' ? 'active-tab' : 'secondary-button'}
-            onClick={() => {
-              moveTo('list');
-              setListScope('ACTIVE');
-            }}
-            type="button"
-          >
-            项目
-          </button>
-          <button
-            className={listScope === 'DELETED' ? 'active-tab' : 'secondary-button'}
-            onClick={() => {
-              moveTo('list');
-              setListScope('DELETED');
-            }}
-            type="button"
-          >
-            回收站
-          </button>
-          <button
-            className={screen === 'evaluation' ? 'active-tab' : 'secondary-button'}
-            onClick={() => {
-              moveTo('evaluation');
-            }}
-            type="button"
-          >
-            评测集
-          </button>
-        </nav>
-      </header>
-      {commandError !== null && <ProjectErrorBanner error={commandError} />}
-      {screen === 'evaluation' && (
-        <EvaluationWorkspace
-          onBack={() => {
-            moveTo(selectedProjectId === null ? 'list' : 'detail');
-          }}
-          projectId={selectedProjectId}
-        />
-      )}
-      {screen === 'list' && (
-        <section>
-          <div className="list-toolbar">
-            <label>
-              筛选项目
-              <input
-                onChange={(event) => {
-                  setListFilter(event.target.value);
-                }}
-                placeholder="按名称搜索"
-                type="search"
-                value={listFilter}
-              />
-            </label>
-            {listScope === 'ACTIVE' && (
-              <button
-                data-primary-action
-                onClick={() => {
-                  setScreen('create');
-                }}
-                type="button"
-              >
-                创建项目
-              </button>
-            )}
-            {listScope === 'ACTIVE' && (
-              <button
-                disabled={importPending}
-                name="import-project-snapshot"
-                onClick={() => {
-                  void performTransferImport();
-                }}
-                type="button"
-              >
-                {importPending ? '正在导入…' : '导入项目快照'}
-              </button>
-            )}
+    <AppShell
+      activeArea={activeArea}
+      onNavigate={navigateGlobal}
+      projectName={currentDetail?.name ?? null}
+    >
+      <div className="project-shell">
+        <header className="page-header">
+          <div>
+            <p className="eyebrow">{activeArea === 'workspace' ? '项目创作' : '本地创作空间'}</p>
+            <h1>{pageTitle[activeArea]}</h1>
           </div>
-          {importNotice !== null && (
-            <p className="action-hint" role="status">
-              {importNotice}
-            </p>
-          )}
-          <ProjectListView
-            errorMessage={
-              listFailure?.ok === false
-                ? describeProjectError(listFailure.error).summary
-                : list.error === null
-                  ? undefined
-                  : '加载失败，请重试'
-            }
-            hasFilter={listFilter.trim() !== ''}
-            hasMore={hasMore}
-            loadingMore={list.isFetchingNextPage}
-            onCreate={() => {
-              setScreen('create');
-            }}
-            onLoadMore={() => {
-              void list.fetchNextPage();
-            }}
-            onOpen={openProject}
-            onRestore={(project) => {
-              setConfirmState({ action: 'restore', project });
-            }}
-            projects={projects}
-            scope={listScope}
-            state={
-              list.isPending
-                ? 'loading'
-                : list.isError || listFailure !== undefined
-                  ? 'error'
-                  : 'ready'
-            }
-          />
-        </section>
-      )}
-      {screen === 'create' && (
-        <section className="editor-panel">
-          <h2>创建项目</h2>
-          <ProjectFormView
-            defaults={createProjectFormDefaults()}
-            formId="project-editor"
-            onCancel={() => {
-              moveTo('list');
-            }}
-            onCommitted={(created) => {
-              select(created.id);
-              if (pendingScreen === null) setScreen('detail');
-              else finishPendingNavigation();
-            }}
-            onDirtyChange={setDirty}
-            onSubmit={createProject}
-          />
-        </section>
-      )}
-      {(screen === 'detail' || screen === 'edit' || screen === 'script') &&
-        (detail.isPending ? (
-          <p aria-live="polite">正在加载项目详情…</p>
-        ) : detailResult?.ok === false ? (
-          <ProjectErrorBanner error={detailResult.error} />
-        ) : currentDetail === null ? (
-          <section className="notice error-notice" role="alert">
-            找不到项目详情，请返回列表刷新。
-          </section>
-        ) : screen === 'script' ? (
-          <section className="editor-panel script-shell">
-            <div className="script-heading">
+          <span className="local-first-badge">仅保存在本机</span>
+        </header>
+        {commandError !== null && <ProjectErrorBanner error={commandError} />}
+        {screen === 'home' && (
+          <section className="home-dashboard">
+            <div className="hero-card">
               <div>
-                <p className="eyebrow">SCRIPT WORKSPACE</p>
-                <h2>{currentDetail.name}</h2>
+                <p className="eyebrow">从故事到成片</p>
+                <h2>按步骤完成你的下一部 AI 漫剧</h2>
+                <p>镜序会保留每个阶段的版本、锁定字段和失败证据，并在每一步告诉你接下来做什么。</p>
               </div>
               <button
-                className="secondary-button"
                 onClick={() => {
-                  moveTo('detail');
+                  moveTo(selectedProjectId === null ? 'list' : 'detail');
                 }}
                 type="button"
               >
-                返回项目
+                {selectedProjectId === null ? '查看我的项目' : '继续当前项目'}
               </button>
             </div>
-            <ScriptWorkspaceView
-              onCommitted={() => {
-                if (pendingScreen !== null) finishPendingNavigation();
+            <div className="home-card-grid">
+              <article>
+                <span>01</span>
+                <h3>剧本开发</h3>
+                <p>从创意或已有剧本开始，逐阶段确认内容。</p>
+              </article>
+              <article>
+                <span>02</span>
+                <h3>分镜设计</h3>
+                <p>编辑镜头、管理锁定和检查可生产性。</p>
+              </article>
+              <article>
+                <span>03</span>
+                <h3>视频与导出</h3>
+                <p>选择候选、调整时间线并导出整集。</p>
+              </article>
+            </div>
+          </section>
+        )}
+        {screen === 'assets' && (
+          <ComingSoonPanel
+            title="素材库"
+            description="素材仍在各镜头上下文中管理；独立素材库将在后续 Change 实现。"
+          />
+        )}
+        {screen === 'tasks' && (
+          <ComingSoonPanel
+            title="生成任务"
+            description="当前任务状态保留在对应创作阶段；独立任务中心尚未实现。"
+          />
+        )}
+        {screen === 'exports' && (
+          <ComingSoonPanel
+            title="导出记录"
+            description="导出证据目前随项目保存；独立记录页尚未实现。"
+          />
+        )}
+        {screen === 'settings' && (
+          <section className="settings-workspace">
+            <header>
+              <p className="eyebrow">设置</p>
+              <h2>模型服务</h2>
+              <p>凭据只由主进程安全保存，完整密钥不会回显。</p>
+            </header>
+            <ProviderSettings onReadyChange={() => undefined} />
+          </section>
+        )}
+        {screen === 'evaluation' && (
+          <EvaluationWorkspace
+            onBack={() => {
+              moveTo(selectedProjectId === null ? 'list' : 'detail');
+            }}
+            projectId={selectedProjectId}
+          />
+        )}
+        {screen === 'list' && (
+          <section>
+            <div className="list-toolbar">
+              <div aria-label="项目范围" className="segmented-control">
+                <button
+                  aria-pressed={listScope === 'ACTIVE'}
+                  className={listScope === 'ACTIVE' ? 'active' : ''}
+                  onClick={() => {
+                    setListScope('ACTIVE');
+                  }}
+                  type="button"
+                >
+                  我的项目
+                </button>
+                <button
+                  aria-pressed={listScope === 'DELETED'}
+                  className={listScope === 'DELETED' ? 'active' : ''}
+                  onClick={() => {
+                    setListScope('DELETED');
+                  }}
+                  type="button"
+                >
+                  回收站
+                </button>
+              </div>
+              <label>
+                筛选项目
+                <input
+                  onChange={(event) => {
+                    setListFilter(event.target.value);
+                  }}
+                  placeholder="按名称搜索"
+                  type="search"
+                  value={listFilter}
+                />
+              </label>
+              {listScope === 'ACTIVE' && (
+                <button
+                  data-primary-action
+                  onClick={() => {
+                    setScreen('create');
+                  }}
+                  type="button"
+                >
+                  创建项目
+                </button>
+              )}
+              {listScope === 'ACTIVE' && (
+                <button
+                  disabled={importPending}
+                  name="import-project-snapshot"
+                  onClick={() => {
+                    void performTransferImport();
+                  }}
+                  type="button"
+                >
+                  {importPending ? '正在导入…' : '导入项目快照'}
+                </button>
+              )}
+            </div>
+            {importNotice !== null && (
+              <p className="action-hint" role="status">
+                {importNotice}
+              </p>
+            )}
+            <ProjectListView
+              errorMessage={
+                listFailure?.ok === false
+                  ? describeProjectError(listFailure.error).summary
+                  : list.error === null
+                    ? undefined
+                    : '加载失败，请重试'
+              }
+              hasFilter={listFilter.trim() !== ''}
+              hasMore={hasMore}
+              loadingMore={list.isFetchingNextPage}
+              onCreate={() => {
+                setScreen('create');
               }}
-              onDirtyChange={setDirty}
-              projectId={currentDetail.id}
+              onLoadMore={() => {
+                void list.fetchNextPage();
+              }}
+              onOpen={openProject}
+              onRestore={(project) => {
+                setConfirmState({ action: 'restore', project });
+              }}
+              projects={projects}
+              scope={listScope}
+              state={
+                list.isPending
+                  ? 'loading'
+                  : list.isError || listFailure !== undefined
+                    ? 'error'
+                    : 'ready'
+              }
             />
           </section>
-        ) : screen === 'edit' ? (
+        )}
+        {screen === 'create' && (
           <section className="editor-panel">
-            <h2>编辑创作设定</h2>
+            <h2>创建项目</h2>
             <ProjectFormView
-              defaults={createProjectFormDefaults(currentDetail)}
+              defaults={createProjectFormDefaults()}
               formId="project-editor"
               onCancel={() => {
-                moveTo('detail');
+                moveTo('list');
               }}
-              onCommitted={() => {
-                setScreen('detail');
-                finishPendingNavigation();
+              onCommitted={(created) => {
+                select(created.id);
+                if (pendingScreen === null) setScreen('detail');
+                else finishPendingNavigation();
               }}
               onDirtyChange={setDirty}
-              onSubmit={updateProject}
-              submitLabel="保存更改"
+              onSubmit={createProject}
             />
           </section>
-        ) : (
-          <ProjectDetailView
-            detail={currentDetail}
-            onDelete={() => {
-              setConfirmState({ action: 'delete', project: currentDetail });
-            }}
-            onEdit={() => {
-              setScreen('edit');
-            }}
-            onRestore={() => {
-              setConfirmState({ action: 'restore', project: currentDetail });
-            }}
-            onOpenScript={() => {
-              setScreen('script');
-            }}
-            onOpenEvaluation={() => {
-              setScreen('evaluation');
-            }}
-          />
-        ))}
-      <DirtyLeaveDialog
-        onCancel={() => {
-          setPendingScreen(null);
-        }}
-        onDiscard={() => {
-          setDirty(false);
-          finishPendingNavigation();
-        }}
-        onSaveAndLeave={() => {
-          document
-            .querySelector<HTMLFormElement>('#project-editor, #script-stage-editor')
-            ?.requestSubmit();
-        }}
-        open={pendingScreen !== null}
-        pending={commands.create.isPending || commands.update.isPending}
-      />
-      <ConfirmActionDialog
-        action={confirmState?.action ?? null}
-        onCancel={() => {
-          setConfirmState(null);
-        }}
-        onConfirm={() => {
-          void executeConfirm();
-        }}
-        pending={pending}
-        projectName={confirmState?.project.name ?? ''}
-      />
-    </main>
+        )}
+        {(screen === 'detail' || screen === 'edit' || screen === 'script') &&
+          (detail.isPending ? (
+            <p aria-live="polite">正在加载项目详情…</p>
+          ) : detailResult?.ok === false ? (
+            <ProjectErrorBanner error={detailResult.error} />
+          ) : currentDetail === null ? (
+            <section className="notice error-notice" role="alert">
+              找不到项目详情，请返回列表刷新。
+            </section>
+          ) : screen === 'script' ? (
+            <section className="editor-panel script-shell">
+              <div className="script-heading">
+                <div>
+                  <p className="eyebrow">剧本工作区</p>
+                  <h2>{currentDetail.name}</h2>
+                </div>
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    moveTo('detail');
+                  }}
+                  type="button"
+                >
+                  返回项目
+                </button>
+              </div>
+              <ScriptWorkspaceView
+                onCommitted={() => {
+                  if (pendingScreen !== null) finishPendingNavigation();
+                }}
+                onDirtyChange={setDirty}
+                onOpenSettings={() => {
+                  moveTo('settings');
+                }}
+                projectId={currentDetail.id}
+              />
+            </section>
+          ) : screen === 'edit' ? (
+            <section className="editor-panel">
+              <h2>编辑创作设定</h2>
+              <ProjectFormView
+                defaults={createProjectFormDefaults(currentDetail)}
+                formId="project-editor"
+                onCancel={() => {
+                  moveTo('detail');
+                }}
+                onCommitted={() => {
+                  setScreen('detail');
+                  finishPendingNavigation();
+                }}
+                onDirtyChange={setDirty}
+                onSubmit={updateProject}
+                submitLabel="保存更改"
+              />
+            </section>
+          ) : (
+            <ProjectDetailView
+              detail={currentDetail}
+              onDelete={() => {
+                setConfirmState({ action: 'delete', project: currentDetail });
+              }}
+              onEdit={() => {
+                setScreen('edit');
+              }}
+              onRestore={() => {
+                setConfirmState({ action: 'restore', project: currentDetail });
+              }}
+              onOpenScript={() => {
+                setScreen('script');
+              }}
+              onOpenEvaluation={() => {
+                setScreen('evaluation');
+              }}
+            />
+          ))}
+        <DirtyLeaveDialog
+          onCancel={() => {
+            setPendingScreen(null);
+          }}
+          onDiscard={() => {
+            setDirty(false);
+            finishPendingNavigation();
+          }}
+          onSaveAndLeave={() => {
+            document
+              .querySelector<HTMLFormElement>('#project-editor, #script-stage-editor')
+              ?.requestSubmit();
+          }}
+          open={pendingScreen !== null}
+          pending={commands.create.isPending || commands.update.isPending}
+        />
+        <ConfirmActionDialog
+          action={confirmState?.action ?? null}
+          onCancel={() => {
+            setConfirmState(null);
+          }}
+          onConfirm={() => {
+            void executeConfirm();
+          }}
+          pending={pending}
+          projectName={confirmState?.project.name ?? ''}
+        />
+      </div>
+    </AppShell>
   );
 };

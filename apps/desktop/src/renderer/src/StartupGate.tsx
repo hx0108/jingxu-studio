@@ -30,7 +30,7 @@ export const StartupGate = ({
     return (
       <main className="workspace-shell fault-shell">
         <section className="status-card fault-card" role="alert">
-          <p className="eyebrow">READ-ONLY STARTUP FAULT</p>
+          <p className="eyebrow">只读启动故障</p>
           <h1>无法读取启动状态</h1>
           <p className="error-code">RUNTIME_IPC_FAILED</p>
           <p>主进程未返回可验证的启动状态。请完全退出应用后重试。</p>
@@ -43,7 +43,7 @@ export const StartupGate = ({
     return (
       <main className="workspace-shell">
         <section className="status-card" aria-live="polite">
-          <p className="eyebrow">STARTUP CHECK</p>
+          <p className="eyebrow">启动检查</p>
           <h1>{isSchemaPhase ? '正在检查内置 Schema 契约' : '正在检查本地数据库'}</h1>
           <p>当前阶段：{status.currentPhase ?? 'DATABASE_OPEN'}</p>
           <p>检查完成前不会开放写入或正常工作区。</p>
@@ -57,7 +57,7 @@ export const StartupGate = ({
   return (
     <main className="workspace-shell fault-shell">
       <section className="status-card fault-card" aria-labelledby="fault-title">
-        <p className="eyebrow">READ-ONLY STARTUP FAULT</p>
+        <p className="eyebrow">只读启动故障</p>
         <h1 id="fault-title">{isSchemaPhase ? 'Schema 契约只读故障' : '数据库只读故障'}</h1>
         <dl className="fault-details">
           <div>

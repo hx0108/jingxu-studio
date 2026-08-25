@@ -54,7 +54,7 @@ export const ProjectDetailView = ({
   <section className="detail-panel" aria-labelledby="detail-title">
     <header className="detail-header">
       <div>
-        <p className="eyebrow">PROJECT</p>
+        <p className="eyebrow">项目概览</p>
         <h2 id="detail-title">{detail.name}</h2>
         <p>
           {detail.genre ?? '未填写题材'} · {detail.style ?? '未填写风格'}
@@ -77,7 +77,7 @@ export const ProjectDetailView = ({
       <p id="storyboard-disabled-reason">分镜能力在剧本工作区内提供：请先进入剧本工作区。</p>
     </div>
     <section aria-labelledby="profile-title">
-      <h3 id="profile-title">FormatProfile 版本链</h3>
+      <h3 id="profile-title">画面规格版本</h3>
       <ProfileCard label="当前版本" profile={detail.currentFormatProfile} />
       {detail.formatProfileHistory.map((profile) => (
         <ProfileCard key={profile.id} label="历史版本" profile={profile} />
