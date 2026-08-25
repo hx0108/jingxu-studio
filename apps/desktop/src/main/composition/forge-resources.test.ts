@@ -6,6 +6,8 @@ import { V1_SCHEMA_LOCKS } from '@jingxu/validation';
 import { describe, expect, it } from 'vitest';
 
 import forgeConfig, {
+  assertFfmpegResources,
+  ffmpegResourceDirectory,
   migrationResourceDirectory,
   schemaResourceDirectory,
 } from '../../../forge.config';
@@ -22,6 +24,7 @@ describe('Forge SQLite 资源清单', () => {
     expect(forgeConfig.packagerConfig.extraResource).toEqual([
       migrationResourceDirectory,
       schemaResourceDirectory,
+      ffmpegResourceDirectory,
     ]);
     expect(forgeConfig.plugins.map(({ name }) => name)).not.toContain(
       '@electron-forge/plugin-auto-unpack-natives',
@@ -44,4 +47,17 @@ describe('Forge SQLite 资源清单', () => {
       expect(createHash('sha256').update(bytes).digest('hex')).toBe(lock.sha256);
     }
   });
+
+  it('打包配置—检查 FFmpeg 资源组—哈希、许可证和固定版本均可审计', async () => {
+    await expect(access(path.join(ffmpegResourceDirectory, 'LICENSE.txt'))).resolves.toBe(
+      undefined,
+    );
+    await expect(access(path.join(ffmpegResourceDirectory, 'NOTICE.txt'))).resolves.toBe(undefined);
+    await expect(access(path.join(ffmpegResourceDirectory, 'ffmpeg-manifest.json'))).resolves.toBe(
+      undefined,
+    );
+    expect(() => {
+      assertFfmpegResources(ffmpegResourceDirectory);
+    }).not.toThrow();
+  }, 30_000);
 });

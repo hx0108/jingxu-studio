@@ -5,6 +5,7 @@ node_modules/
 # Build and test outputs
 dist/
 out/
+apps/desktop/out*/
 release/
 coverage/
 playwright-report/
@@ -30,6 +31,10 @@ temp/
 *.sqlite-journal
 *.sqlite-shm
 *.sqlite-wal
+
+# FFmpeg runtime binaries are pinned by apps/desktop/resources/ffmpeg/ffmpeg-manifest.json
+# (source URL + SHA-256). Fetch per the manifest; package:win fails closed if absent.
+apps/desktop/resources/ffmpeg/*.exe
 
 # Secrets and local environment overrides
 .env

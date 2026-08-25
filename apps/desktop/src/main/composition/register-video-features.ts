@@ -7,13 +7,16 @@ import {
   createVideoApiService,
   createVideoBatchService,
   createVideoGenerationService,
+  createVideoCompositionService,
   createVideoRequestBlueprintBuilder,
 } from '@jingxu/application';
 import type { ModelErrorCode, VideoModelPort, VideoResultRef } from '@jingxu/application';
-import type { AppResultDto } from '@jingxu/contracts';
+import type { AppResultDto, VideoAudioAssetSummaryDto } from '@jingxu/contracts';
 import { MEDIA_BATCH_MAX_SHOTS } from '@jingxu/contracts';
 import {
   MockVideoModelAdapter,
+  DEFAULT_SEEDANCE_VIDEO_MODEL_ID,
+  getSeedanceVideoModel,
   SEEDANCE_DURATION_RANGE,
   SEEDANCE_MODEL_ID,
   SEEDANCE_VIDEO_SEGMENT_TIMEOUT_MS,
@@ -22,10 +25,14 @@ import {
 } from '@jingxu/model-adapters';
 import type { MockVideoSubmitStep } from '@jingxu/model-adapters';
 import { createContentAddressedStore, deriveMediaStorageRelPath } from '@jingxu/persistence';
+import { createFfmpegVideoComposer } from '../adapters/ffmpeg-video-composer';
+import { createVideoAudioFileSink } from './video-audio-file-sink';
+import { createVideoExportFileSink } from './video-export-file-sink';
 
 import { CredentialAdapter, type SafeStorageFacade } from '../adapters/credential';
 import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
 import { registerVideoIpc, type VideoIpcRegistrar, type VideoIpcService } from '../ipc/video-ipc';
+import type { VideoApiService } from '@jingxu/application';
 
 /** ARK Key 的 safeStorage 凭据引用（视频独立档，与图片档分存；design D2）。 */
 export const VIDEO_CREDENTIAL_ID = 'profile-video-primary';
@@ -89,6 +96,8 @@ export interface RegisterVideoFeaturesOptions {
   readonly persistenceRuntime: DesktopPersistenceRuntime;
   readonly safeStorage: SafeStorageFacade;
   readonly trustedUrl: string;
+  /** Deterministic E2E audio path; production uses the Main Open Dialog. */
+  readonly audioImportFile?: string | undefined;
   /** Enables the deterministic network-free video model only for the Electron E2E harness. */
   readonly useE2eMock?: boolean;
   /** 轮询间隔测试注入（缺省 VIDEO_POLL_INTERVAL_MS；生产不传）。 */
@@ -118,11 +127,20 @@ export const createVideoFeatureRegistration = ({
   persistenceRuntime,
   safeStorage,
   trustedUrl,
+  audioImportFile,
   useE2eMock = false,
   pollIntervalMs = VIDEO_POLL_INTERVAL_MS,
 }: RegisterVideoFeaturesOptions): VideoFeatureRegistration => {
   let registered = false;
-  let activeService: VideoIpcService | null = null;
+  let activeService: VideoApiService | null = null;
+  let activeCompositionService: ReturnType<typeof createVideoCompositionService> | null = null;
+  const audioFileSink = createVideoAudioFileSink({
+    ffprobePath: process.env.JINGXU_FFPROBE_PATH,
+    importFile: audioImportFile,
+  });
+  const exportFileSink = createVideoExportFileSink({
+    exportDirectory: process.env.JINGXU_E2E_EXPORT_DIR,
+  });
   let stopScheduler: () => Promise<void> = () => Promise.resolve();
 
   const blocked = <T>(): AppResultDto<T> => ({
@@ -151,6 +169,69 @@ export const createVideoFeatureRegistration = ({
       activeService?.cancelVideoBatch(input, traceId) ?? Promise.resolve(blocked()),
     listStoryboardVideoStates: (input, traceId) =>
       activeService?.listStoryboardVideoStates(input, traceId) ?? Promise.resolve(blocked()),
+    createTimeline: (input, traceId) =>
+      activeCompositionService?.createTimeline(input, traceId) ?? Promise.resolve(blocked()),
+    getTimeline: (input, traceId) =>
+      activeCompositionService?.getTimeline(input, traceId) ?? Promise.resolve(blocked()),
+    updateTimeline: (input, traceId) =>
+      activeCompositionService?.updateTimeline(input, traceId) ?? Promise.resolve(blocked()),
+    importBackgroundMusic: (input, traceId) => {
+      const service = activeCompositionService;
+      if (service === null) return Promise.resolve(blocked<VideoAudioAssetSummaryDto>());
+      return audioFileSink
+        .readSelectedAudio()
+        .then(async (selected) => {
+          if (selected === null)
+            return {
+              ok: false as const,
+              error: {
+                code: 'VIDEO_AUDIO_INVALID' as const,
+                fieldErrors: null,
+                message: '已取消背景音乐导入。',
+                retryable: false,
+                traceId,
+                userAction: '选择音频文件后重试。',
+              },
+            };
+          const bytes = selected.bytes;
+          const fileSha256 = createHash('sha256').update(bytes).digest('hex');
+          const stored = await createContentAddressedStore(managedRoot).write({
+            bytes,
+            mimeType: selected.mimeType,
+            namespace: 'audio',
+            projectId: input.projectId,
+          });
+          return service.importBackgroundMusic(
+            input,
+            {
+              byteSize: stored.byteSize,
+              fileSha256,
+              id: `audio_${randomUUID().replaceAll('-', '')}`,
+              mimeType: selected.mimeType,
+              originalFileName: selected.originalFileName,
+              storageRelPath: stored.storageRelPath,
+            },
+            traceId,
+          );
+        })
+        .catch(() => ({
+          ok: false as const,
+          error: {
+            code: 'VIDEO_AUDIO_INVALID' as const,
+            fieldErrors: null,
+            message: '背景音乐无法读取或解码。',
+            retryable: false,
+            traceId,
+            userAction: '选择可用的 MP3、WAV 或 M4A 后重试。',
+          },
+        }));
+    },
+    startExport: (input, traceId) =>
+      activeCompositionService?.startExport(input, traceId) ?? Promise.resolve(blocked()),
+    getExportJob: (input, traceId) =>
+      activeCompositionService?.getExportJob(input, traceId) ?? Promise.resolve(blocked()),
+    cancelExport: (input, traceId) =>
+      activeCompositionService?.cancelExport(input, traceId) ?? Promise.resolve(blocked()),
   };
   registerVideoIpc(
     ipcRegistrar,
@@ -199,9 +280,15 @@ export const createVideoFeatureRegistration = ({
     ensureRegistered: () => {
       if (registered || !persistenceRuntime.startupService.getStatus().writeEnabled) return false;
       const mediaUnitOfWork = persistenceRuntime.getMediaUnitOfWork();
+      const providerProfiles = persistenceRuntime.getProviderProfileRepository();
       const workspaceQuery = persistenceRuntime.getScriptWorkspaceQuery();
       const projectUnitOfWork = persistenceRuntime.getProjectUnitOfWork();
-      if (mediaUnitOfWork === null || workspaceQuery === null || projectUnitOfWork === null) {
+      if (
+        mediaUnitOfWork === null ||
+        providerProfiles === null ||
+        workspaceQuery === null ||
+        projectUnitOfWork === null
+      ) {
         return false;
       }
       bootstrapVideoCredential();
@@ -221,8 +308,14 @@ export const createVideoFeatureRegistration = ({
         : new SeedanceVideoModelAdapter({
             credentialId: VIDEO_CREDENTIAL_ID,
             credentialPort: credentials,
-            modelId: SEEDANCE_MODEL_ID,
           });
+      const resolveCurrentModel = async (): Promise<Readonly<{ modelId: string }>> => {
+        if (useE2eMock) return { modelId: SEEDANCE_MODEL_ID };
+        const profile = await providerProfiles.findById(VIDEO_CREDENTIAL_ID);
+        const resolved = getSeedanceVideoModel(profile?.modelId ?? DEFAULT_SEEDANCE_VIDEO_MODEL_ID);
+        if (resolved === null) throw new Error('VIDEO_MODEL_CONFIGURATION_INVALID');
+        return { modelId: resolved.id };
+      };
       // 首帧字节读取（images 命名空间，内容寻址）：与图片调度器写入路径同一落盘口径。
       const referenceImages = {
         readReference: ({
@@ -251,6 +344,7 @@ export const createVideoFeatureRegistration = ({
         modelId: SEEDANCE_MODEL_ID,
         newId: randomUUID,
         workspaceQuery,
+        resolveModel: resolveCurrentModel,
         // Mock 档不设闸（无凭据依赖）；真实档在生成前解密探一次，
         // 未配置/不可解密以稳定 MODEL_CREDENTIAL_INVALID 拒绝（A5）。
         ...(useE2eMock
@@ -274,6 +368,7 @@ export const createVideoFeatureRegistration = ({
         modelId: SEEDANCE_MODEL_ID,
         newId: randomUUID,
         workspaceQuery,
+        resolveModel: resolveCurrentModel,
       });
       const scheduler = createMediaTaskScheduler({
         fileStore: {
@@ -322,6 +417,30 @@ export const createVideoFeatureRegistration = ({
         mediaUnitOfWork,
         scheduler,
       });
+      activeCompositionService = createVideoCompositionService({
+        composer: createFfmpegVideoComposer({
+          delayBeforeComposeMs:
+            useE2eMock && /^\d{1,5}$/u.test(process.env.JINGXU_E2E_VIDEO_COMPOSE_DELAY_MS ?? '')
+              ? Number(process.env.JINGXU_E2E_VIDEO_COMPOSE_DELAY_MS)
+              : 0,
+          exportFileSink,
+          managedRoot,
+          store,
+        }),
+        hashPayload,
+        mediaUnitOfWork,
+        newId: randomUUID,
+        resolveFormatProfile: async (projectId, formatProfileId) => {
+          const profiles = await persistenceRuntime
+            .getFormatProfileRepository()
+            ?.findAllByProject(projectId);
+          const profile = profiles?.find((entry) => entry.id === formatProfileId);
+          return profile === undefined
+            ? null
+            : { fps: profile.spec.fps, height: profile.spec.height, width: profile.spec.width };
+        },
+        workspaceQuery,
+      });
       registered = true;
       stopScheduler = () => scheduler.stop();
       // 启动恢复：证据齐全的未终态任务续轮询，其余标记待人工；随后按项目后台排空。
@@ -332,6 +451,7 @@ export const createVideoFeatureRegistration = ({
         .then(async (refs) => {
           await Promise.all(
             refs.map(async (ref) => {
+              await activeCompositionService?.recoverUnfinishedExports(ref.projectId);
               await scheduler.recover(ref.projectId);
               scheduler.kick(ref.projectId);
             }),

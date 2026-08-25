@@ -182,6 +182,9 @@ const buildHarness = (writeEnabled = true, shotCount = 1): Harness => {
     getProjectUnitOfWork: () => ({
       run: <T>(work: (repos: typeof repositories) => Promise<T>) => work(repositories),
     }),
+    getProviderProfileRepository: () => ({
+      findById: () => Promise.resolve(null),
+    }),
     getScriptWorkspaceQuery: () => workspaceQuery,
     startupService: { getStatus: () => ({ writeEnabled }) },
   } as unknown as DesktopPersistenceRuntime;
@@ -245,10 +248,10 @@ const seedFirstFrame = async (harness: Harness, index: number): Promise<void> =>
 };
 
 describe('createVideoFeatureRegistration', () => {
-  it('注册边界—固定七 video 频道—READY 前统一 STARTUP_WRITE_BLOCKED', () => {
+  it('注册边界—固定 video 频道白名单—READY 前统一 STARTUP_WRITE_BLOCKED', () => {
     const harness = buildHarness(false);
     expect([...harness.handlers.keys()].sort()).toEqual(Object.values(VIDEO_IPC_CHANNELS).sort());
-    expect(harness.handlers.size).toBe(7);
+    expect(harness.handlers.size).toBe(14);
     expect(harness.registration.ensureRegistered()).toBe(false);
   });
 

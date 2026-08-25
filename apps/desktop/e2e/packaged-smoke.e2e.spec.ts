@@ -32,7 +32,7 @@ test('packaged smoke—jingxu-studio.exe boots to project UI', async () => {
     });
     try {
       const page = await application.firstWindow();
-      await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible({
+      await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible({
         timeout: 20_000,
       });
     } finally {

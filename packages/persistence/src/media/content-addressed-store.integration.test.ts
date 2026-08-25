@@ -17,6 +17,9 @@ const MP4_BYTES = new Uint8Array([
 const OTHER_MP4_BYTES = new Uint8Array([
   0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d, 9, 9, 9, 9,
 ]);
+const WAV_BYTES = new Uint8Array([
+  0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+]);
 
 const withRoot = async <T>(operation: (root: string) => Promise<T> | T): Promise<T> => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-media-store-'));
@@ -155,6 +158,39 @@ describe('createContentAddressedStore', () => {
       ]) {
         await expect(store.read(badPath), badPath).rejects.toBeInstanceOf(PersistenceRuntimeError);
       }
+    });
+  });
+
+  it('V2 音频与导出命名空间—白名单路径、哈希复算和同字节去重保持独立', async () => {
+    await withRoot(async (root) => {
+      const store = createContentAddressedStore(root);
+      const audio = await store.write({
+        bytes: WAV_BYTES,
+        mimeType: 'audio/wav',
+        namespace: 'audio',
+        projectId: 'project_media',
+      });
+      const exported = await store.write({
+        bytes: MP4_BYTES,
+        mimeType: 'video/mp4',
+        namespace: 'exports',
+        projectId: 'project_media',
+      });
+      expect(audio.storageRelPath).toMatch(/\/audio\/[0-9a-f]{2}\/[0-9a-f]{64}\.wav$/u);
+      expect(exported.storageRelPath).toMatch(/\/exports\/[0-9a-f]{2}\/[0-9a-f]{64}\.mp4$/u);
+      expect(new Uint8Array(await store.read(audio.storageRelPath))).toEqual(WAV_BYTES);
+      expect(new Uint8Array(await store.read(exported.storageRelPath))).toEqual(MP4_BYTES);
+      await expect(
+        store.write({
+          bytes: WAV_BYTES,
+          mimeType: 'audio/wav',
+          namespace: 'audio',
+          projectId: 'project_media',
+        }),
+      ).resolves.toMatchObject({ storageRelPath: audio.storageRelPath });
+      await expect(
+        store.read(`projects/project_media/exports/ab/${'a'.repeat(64)}.exe`),
+      ).rejects.toMatchObject({ code: 'MEDIA_STORE_INVALID_PATH' });
     });
   });
 

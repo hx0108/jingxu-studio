@@ -102,6 +102,47 @@ const selectInput = {
   projectId: 'project_12345678',
   requestId: 'request_select_1',
 };
+const okTimeline = {
+  ok: true as const,
+  data: {
+    audioAsset: null,
+    createdAt: NOW,
+    episodeId: 'episode_12345678',
+    episodeVersionId: 'episode_version_12345678',
+    formatProfileId: 'format_12345678',
+    id: 'timeline_12345678',
+    inputHash: hash64('timeline'),
+    items: [],
+    parentVersionId: null,
+    totalDurationMs: 0,
+    versionNo: 1,
+  },
+};
+const okAudio = {
+  ok: true as const,
+  data: {
+    byteSize: 16,
+    fileSha256: hash64('audio'),
+    id: 'audio_12345678',
+    mimeType: 'audio/mpeg' as const,
+    originalFileName: 'music.mp3',
+  },
+};
+const okExport = {
+  ok: true as const,
+  data: {
+    byteSize: null,
+    createdAt: NOW,
+    errorCode: null,
+    fileSha256: null,
+    id: 'export_12345678',
+    mediaUrl: null,
+    status: 'PREPARING' as const,
+    timelineVersionId: 'timeline_12345678',
+    totalDurationMs: 0,
+    updatedAt: NOW,
+  },
+};
 
 const createHarness = (ready = true) => {
   const handlers = new Map<
@@ -116,6 +157,13 @@ const createHarness = (ready = true) => {
     generateVideosForShots: vi.fn(() => Promise.resolve(okBatch)),
     cancelVideoBatch: vi.fn(() => Promise.resolve(okBatch)),
     listStoryboardVideoStates: vi.fn(() => Promise.resolve(okStates)),
+    createTimeline: vi.fn(() => Promise.resolve(okTimeline)),
+    getTimeline: vi.fn(() => Promise.resolve(okTimeline)),
+    updateTimeline: vi.fn(() => Promise.resolve(okTimeline)),
+    importBackgroundMusic: vi.fn(() => Promise.resolve(okAudio)),
+    startExport: vi.fn(() => Promise.resolve(okExport)),
+    getExportJob: vi.fn(() => Promise.resolve(okExport)),
+    cancelExport: vi.fn(() => Promise.resolve(okExport)),
   };
   registerVideoIpc(
     { handle: (channel, listener) => handlers.set(channel, listener) },

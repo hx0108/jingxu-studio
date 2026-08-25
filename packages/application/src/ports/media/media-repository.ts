@@ -7,6 +7,7 @@
  */
 
 import type { MediaInvocationRepository } from './media-invocation-repository';
+import type { VideoCompositionRepositories } from './video-composition-repository';
 
 export type MediaAssetType = 'CHARACTER' | 'SCENE';
 
@@ -438,6 +439,7 @@ export interface VideoMediaRepository extends MediaGenerationRepository<
  * （视频建档读选中首帧引用）。
  */
 export interface MediaRepositories {
+  readonly composition?: VideoCompositionRepositories;
   readonly invocations: MediaInvocationRepository;
   readonly media: MediaRepository;
   readonly video: VideoMediaRepository;

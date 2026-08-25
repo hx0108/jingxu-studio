@@ -1,4 +1,11 @@
 export type { MediaRepositories } from './media-repository';
+export type {
+  VideoAudioAssetRecord,
+  VideoCompositionRepositories,
+  VideoCompositionRepository,
+  VideoExportJobRecord,
+  VideoTimelineVersionRecord,
+} from './video-composition-repository';
 export type { MediaModelPort } from './media-model-port';
 export type {
   MediaInvocationRepository,

@@ -78,3 +78,11 @@ export { createVideoBatchService } from './video-batch-service';
 export type { VideoBatchService, VideoBatchServiceDependencies } from './video-batch-service';
 export { createVideoApiService } from './video-api-service';
 export type { VideoApiService, VideoApiServiceDependencies } from './video-api-service';
+export { createVideoCompositionService } from './video-composition-service';
+export type {
+  ImportedBackgroundMusic,
+  VideoComposerPort,
+  VideoCompositionService,
+  VideoCompositionServiceDependencies,
+  VideoMetadataProbePort,
+} from './video-composition-service';

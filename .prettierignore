@@ -1,2 +1,5 @@
 # These are byte-for-byte controlled copies of the PRD-owned root schemas.
 packages/validation/resources/schemas/v1/*.json
+
+# Electron Forge package output may be placed under the desktop app when the default package is running.
+apps/desktop/out*/

@@ -55,7 +55,7 @@ test('§5.2 受限取图协议—越权标识一律拒绝—CSP 阻止外部图�
 
   try {
     const page = await application.firstWindow();
-    await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
 
     // 越权标识：短 id、路径注入、格式合法但未落盘的随机 id、未知资源段——全部 error。
     const denied = await probeImageOutcomes(page, [

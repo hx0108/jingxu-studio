@@ -5,6 +5,7 @@ import { SqliteTransactionCoordinator } from '../runtime/sqlite-transaction-coor
 import { SqliteMediaInvocationRepository } from './sqlite-media-invocation-repository';
 import { SqliteMediaRepository } from './sqlite-media-repository';
 import { SqliteVideoMediaRepository } from './sqlite-video-media-repository';
+import { SqliteVideoCompositionRepository } from './sqlite-video-composition-repository';
 
 /**
  * 媒体读写事务边界（沿 SqliteProjectUnitOfWork 语义）：单一 `BEGIN IMMEDIATE`，
@@ -28,6 +29,7 @@ export class SqliteMediaUnitOfWork implements MediaUnitOfWorkPort {
       invocations: new SqliteMediaInvocationRepository(database, clock),
       media: new SqliteMediaRepository(database, clock),
       video: new SqliteVideoMediaRepository(database, clock),
+      composition: { composition: new SqliteVideoCompositionRepository(database, clock) },
     };
   }
 

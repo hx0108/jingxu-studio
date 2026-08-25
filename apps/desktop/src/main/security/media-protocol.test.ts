@@ -23,6 +23,7 @@ const buildDependencies = (
     findAssetVersionMedia: vi.fn(() => Promise.resolve(null)),
     findCandidateMedia: vi.fn(() => Promise.resolve(REF)),
     findVideoCandidateMedia: vi.fn(() => Promise.resolve(null)),
+    findVideoExportMedia: vi.fn(() => Promise.resolve(null)),
     ...overrides.locator,
   },
   readFile: vi.fn(() => Promise.resolve(Uint8Array.from([1, 2, 3, 4]))),
@@ -50,6 +51,7 @@ describe('handleMediaProtocolRequest', () => {
         findAssetVersionMedia: vi.fn(() => Promise.resolve(REF)),
         findCandidateMedia: vi.fn(() => Promise.resolve(null)),
         findVideoCandidateMedia: vi.fn(() => Promise.resolve(null)),
+        findVideoExportMedia: vi.fn(() => Promise.resolve(null)),
       },
     });
     const response = await handleMediaProtocolRequest(
@@ -92,6 +94,7 @@ describe('handleMediaProtocolRequest', () => {
         findAssetVersionMedia: vi.fn(() => Promise.resolve(null)),
         findCandidateMedia: vi.fn(() => Promise.resolve(null)),
         findVideoCandidateMedia: vi.fn(() => Promise.resolve(null)),
+        findVideoExportMedia: vi.fn(() => Promise.resolve(null)),
       },
     });
     const notStored = await handleMediaProtocolRequest(
@@ -109,6 +112,7 @@ describe('handleMediaProtocolRequest', () => {
           Promise.reject(new Error('C:\\Users\\secret MEDIA_STORE_PATH_ESCAPE at stack')),
         ),
         findVideoCandidateMedia: vi.fn(() => Promise.resolve(null)),
+        findVideoExportMedia: vi.fn(() => Promise.resolve(null)),
       },
     });
     const locatorThrow = await handleMediaProtocolRequest(
@@ -144,6 +148,7 @@ describe('handleMediaProtocolRequest', () => {
         findAssetVersionMedia: vi.fn(() => Promise.resolve(null)),
         findCandidateMedia: vi.fn(() => Promise.resolve(null)),
         findVideoCandidateMedia: vi.fn(() => Promise.resolve(VIDEO_REF)),
+        findVideoExportMedia: vi.fn(() => Promise.resolve(null)),
       },
     });
     const response = await handleMediaProtocolRequest(
@@ -154,6 +159,28 @@ describe('handleMediaProtocolRequest', () => {
     expect(response.headers.get('Content-Type')).toBe('video/mp4');
     expect(response.headers.get('Accept-Ranges')).toBe('bytes');
     expect(dependencies.locator.findVideoCandidateMedia).toHaveBeenCalledWith('vcand_0000001');
+  });
+
+  it('已成功导出的视频—仅经 video-export 受限标识反查并支持播放 Range', async () => {
+    const dependencies = buildDependencies({
+      locator: {
+        findAssetVersionMedia: vi.fn(() => Promise.resolve(null)),
+        findCandidateMedia: vi.fn(() => Promise.resolve(null)),
+        findVideoCandidateMedia: vi.fn(() => Promise.resolve(null)),
+        findVideoExportMedia: vi.fn(() => Promise.resolve(VIDEO_REF)),
+      },
+    });
+    const response = await handleMediaProtocolRequest(
+      {
+        method: 'GET',
+        rangeHeader: 'bytes=1-2',
+        url: 'jingxu://media/video-export/exportjob_0001',
+      },
+      dependencies,
+    );
+    expect(response.status).toBe(206);
+    expect(response.headers.get('Content-Type')).toBe('video/mp4');
+    expect(dependencies.locator.findVideoExportMedia).toHaveBeenCalledWith('exportjob_0001');
   });
 
   it('合法单段 Range—回 206 切片与 Content-Range—前闭后开、开区间与后缀同源', async () => {
@@ -197,6 +224,7 @@ describe('handleMediaProtocolRequest', () => {
         findAssetVersionMedia: vi.fn(() => Promise.resolve(null)),
         findCandidateMedia: vi.fn(() => Promise.resolve(null)),
         findVideoCandidateMedia: vi.fn(() => Promise.resolve(VIDEO_REF)),
+        findVideoExportMedia: vi.fn(() => Promise.resolve(null)),
       },
     });
     for (const rangeHeader of ['bytes=4-', 'bytes=10-20', 'bytes=-0']) {

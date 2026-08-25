@@ -1,5 +1,5 @@
 /**
- * `jingxu://media/<candidate|asset-version|video-candidate>/<id>` 受限取媒体协议（design D4）。
+ * `jingxu://media/<candidate|asset-version|video-candidate|video-export>/<id>` 受限取媒体协议（design D4）。
  *
  * 纯边界：id 白名单字符集 → Repository 反查落盘引用 → 内容寻址路径解析
  * （拒绝模式外路径、符号链接与 projects 根逃逸）→ 读字节回 Response。
@@ -22,6 +22,7 @@ export interface MediaFileLocator {
   readonly findCandidateMedia: (candidateId: string) => Promise<MediaStoredFileRef | null>;
   readonly findAssetVersionMedia: (versionId: string) => Promise<MediaStoredFileRef | null>;
   readonly findVideoCandidateMedia: (candidateId: string) => Promise<MediaStoredFileRef | null>;
+  readonly findVideoExportMedia: (exportJobId: string) => Promise<MediaStoredFileRef | null>;
 }
 
 export interface MediaProtocolDependencies {
@@ -34,7 +35,8 @@ export interface MediaProtocolDependencies {
 export const MEDIA_PROTOCOL_HOST = 'media';
 
 const MEDIA_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/u;
-const MEDIA_PATH_PATTERN = /^\/(candidate|asset-version|video-candidate)\/([A-Za-z0-9_-]{8,128})$/u;
+const MEDIA_PATH_PATTERN =
+  /^\/(candidate|asset-version|video-candidate|video-export)\/([A-Za-z0-9_-]{8,128})$/u;
 
 const notFound = (): Response => new Response('Not found', { status: 404 });
 
@@ -94,7 +96,9 @@ export const handleMediaProtocolRequest = async (
         ? await dependencies.locator.findCandidateMedia(identifier)
         : segment === 'asset-version'
           ? await dependencies.locator.findAssetVersionMedia(identifier)
-          : await dependencies.locator.findVideoCandidateMedia(identifier);
+          : segment === 'video-candidate'
+            ? await dependencies.locator.findVideoCandidateMedia(identifier)
+            : await dependencies.locator.findVideoExportMedia(identifier);
     if (located === null) return notFound();
     const absolutePath = await dependencies.resolveWithinProjects(located.storageRelPath);
     const bytes = await dependencies.readFile(absolutePath);

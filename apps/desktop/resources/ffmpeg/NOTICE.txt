@@ -1,0 +1,10 @@
+镜序 Studio 分发以下第三方组件：
+
+FFmpeg 9.0.1 Essentials Build for Windows x64
+提供方：Gyan.Dev（https://www.gyan.dev/ffmpeg/builds/）
+来源制品：https://github.com/GyanD/codexffmpeg/releases/download/9.0.1/ffmpeg-9.0.1-essentials_build.zip
+来源 ZIP SHA-256：fec81ae03971d9dd4be3ebe02e263bd2ec1d789483f931bdba5f5715e65da2e9
+许可证：GNU General Public License version 3 or later（GPL-3.0-or-later）
+
+该构建包含 libx264。完整许可证文本随本目录 LICENSE.txt 一同分发。
+FFmpeg 的源码与许可证信息见：https://ffmpeg.org/。

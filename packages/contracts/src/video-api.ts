@@ -145,6 +145,135 @@ export const listStoryboardVideoStatesInputSchema = z
   .object({ projectId: projectIdSchema })
   .strict();
 
+const videoTimelineIdSchema = idSchema;
+const videoTimelineVersionIdSchema = idSchema;
+const videoAudioAssetIdSchema = idSchema;
+const videoExportJobIdSchema = idSchema;
+
+export const videoTimelineItemSchema = z
+  .object({
+    candidateId: candidateIdSchema,
+    enabled: z.boolean(),
+    fileSha256: hashSchema,
+    generationInputHash: hashSchema,
+    position: z.number().int().nonnegative(),
+    shotId: shotIdSchema,
+    trimInMs: z.number().int().nonnegative(),
+    trimOutMs: z.number().int().positive(),
+  })
+  .strict();
+
+export const videoAudioAssetSummarySchema = z
+  .object({
+    byteSize: z.number().int().positive(),
+    fileSha256: hashSchema,
+    id: videoAudioAssetIdSchema,
+    mimeType: z.enum(['audio/mpeg', 'audio/wav', 'audio/x-m4a', 'audio/mp4']),
+    originalFileName: z.string().min(1).max(255),
+  })
+  .strict();
+
+export const videoTimelineSummarySchema = z
+  .object({
+    audioAsset: videoAudioAssetSummarySchema.nullable(),
+    createdAt: isoDateTimeSchema,
+    episodeId: idSchema,
+    episodeVersionId: idSchema,
+    formatProfileId: idSchema,
+    id: videoTimelineIdSchema,
+    inputHash: hashSchema,
+    items: z.array(videoTimelineItemSchema).max(20),
+    parentVersionId: videoTimelineVersionIdSchema.nullable(),
+    totalDurationMs: z.number().int().nonnegative(),
+    versionNo: z.number().int().positive(),
+  })
+  .strict();
+
+export const videoExportStatusSchema = z.enum([
+  'PREPARING',
+  'RUNNING',
+  'VALIDATING',
+  'SUCCEEDED',
+  'FAILED',
+  'CANCELLED',
+]);
+
+export const videoExportJobSchema = z
+  .object({
+    byteSize: z.number().int().positive().nullable(),
+    createdAt: isoDateTimeSchema,
+    errorCode: z.string().min(1).max(64).nullable(),
+    fileSha256: hashSchema.nullable(),
+    id: videoExportJobIdSchema,
+    mediaUrl: z.string().startsWith('jingxu://media/video-export/').nullable(),
+    status: videoExportStatusSchema,
+    timelineVersionId: videoTimelineVersionIdSchema,
+    totalDurationMs: z.number().int().nonnegative().nullable(),
+    updatedAt: isoDateTimeSchema,
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      value.status === 'SUCCEEDED' &&
+      (value.fileSha256 === null || value.byteSize === null || value.mediaUrl === null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: '成功导出必须携带文件哈希、字节数和受限媒体 URL。',
+      });
+    }
+    if (value.status !== 'SUCCEEDED' && value.mediaUrl !== null) {
+      context.addIssue({ code: 'custom', message: '非成功导出不得携带媒体 URL。' });
+    }
+  });
+
+export const createVideoTimelineInputSchema = z
+  .object({
+    episodeId: idSchema,
+    expectedEpisodeVersionId: idSchema,
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+  })
+  .strict();
+export const getVideoTimelineInputSchema = z
+  .object({
+    episodeId: idSchema,
+    projectId: projectIdSchema,
+    timelineVersionId: videoTimelineVersionIdSchema.nullable(),
+  })
+  .strict();
+export const updateVideoTimelineInputSchema = z
+  .object({
+    audioAssetId: videoAudioAssetIdSchema.nullable(),
+    episodeId: idSchema,
+    expectedVersionId: videoTimelineVersionIdSchema,
+    items: z.array(videoTimelineItemSchema).min(1).max(20),
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+  })
+  .strict();
+export const importVideoBackgroundMusicInputSchema = z
+  .object({ projectId: projectIdSchema, requestId: requestIdSchema })
+  .strict();
+export const startVideoExportInputSchema = z
+  .object({
+    episodeId: idSchema,
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+    timelineVersionId: videoTimelineVersionIdSchema,
+  })
+  .strict();
+export const getVideoExportJobInputSchema = z
+  .object({ exportJobId: videoExportJobIdSchema, projectId: projectIdSchema })
+  .strict();
+export const cancelVideoExportInputSchema = z
+  .object({
+    exportJobId: videoExportJobIdSchema,
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+  })
+  .strict();
+
 export type VideoCandidateViewDto = z.infer<typeof videoCandidateViewSchema>;
 export type ShotVideoStateDto = z.infer<typeof shotVideoStateSchema>;
 export type StoryboardVideoStatesDto = z.infer<typeof storyboardVideoStatesSchema>;
@@ -157,6 +286,20 @@ export type CancelVideoBatchInputDto = z.infer<typeof cancelVideoBatchInputSchem
 export type ListStoryboardVideoStatesInputDto = z.infer<
   typeof listStoryboardVideoStatesInputSchema
 >;
+export type VideoTimelineItemDto = z.infer<typeof videoTimelineItemSchema>;
+export type VideoAudioAssetSummaryDto = z.infer<typeof videoAudioAssetSummarySchema>;
+export type VideoTimelineSummaryDto = z.infer<typeof videoTimelineSummarySchema>;
+export type VideoExportJobDto = z.infer<typeof videoExportJobSchema>;
+export type VideoExportStatus = z.infer<typeof videoExportStatusSchema>;
+export type CreateVideoTimelineInputDto = z.infer<typeof createVideoTimelineInputSchema>;
+export type GetVideoTimelineInputDto = z.infer<typeof getVideoTimelineInputSchema>;
+export type UpdateVideoTimelineInputDto = z.infer<typeof updateVideoTimelineInputSchema>;
+export type ImportVideoBackgroundMusicInputDto = z.infer<
+  typeof importVideoBackgroundMusicInputSchema
+>;
+export type StartVideoExportInputDto = z.infer<typeof startVideoExportInputSchema>;
+export type GetVideoExportJobInputDto = z.infer<typeof getVideoExportJobInputSchema>;
+export type CancelVideoExportInputDto = z.infer<typeof cancelVideoExportInputSchema>;
 
 export interface VideoApi {
   /** 为单镜头发起一轮视频候选生成（N=2 次独立异步请求聚合为一个媒体任务）。 */
@@ -185,6 +328,19 @@ export interface VideoApi {
   listStoryboardVideoStates(
     input: ListStoryboardVideoStatesInputDto,
   ): Promise<AppResultDto<StoryboardVideoStatesDto>>;
+  createTimeline(
+    input: CreateVideoTimelineInputDto,
+  ): Promise<AppResultDto<VideoTimelineSummaryDto>>;
+  getTimeline(input: GetVideoTimelineInputDto): Promise<AppResultDto<VideoTimelineSummaryDto>>;
+  updateTimeline(
+    input: UpdateVideoTimelineInputDto,
+  ): Promise<AppResultDto<VideoTimelineSummaryDto>>;
+  importBackgroundMusic(
+    input: ImportVideoBackgroundMusicInputDto,
+  ): Promise<AppResultDto<VideoAudioAssetSummaryDto>>;
+  startExport(input: StartVideoExportInputDto): Promise<AppResultDto<VideoExportJobDto>>;
+  getExportJob(input: GetVideoExportJobInputDto): Promise<AppResultDto<VideoExportJobDto>>;
+  cancelExport(input: CancelVideoExportInputDto): Promise<AppResultDto<VideoExportJobDto>>;
 }
 
 export const VIDEO_IPC_CHANNELS = {
@@ -195,4 +351,11 @@ export const VIDEO_IPC_CHANNELS = {
   listStoryboardVideoStates: 'video.listStoryboardVideoStates',
   listVideoCandidates: 'video.listVideoCandidates',
   selectVideoCandidate: 'video.selectVideoCandidate',
+  cancelExport: 'video.cancelExport',
+  createTimeline: 'video.createTimeline',
+  getExportJob: 'video.getExportJob',
+  getTimeline: 'video.getTimeline',
+  importBackgroundMusic: 'video.importBackgroundMusic',
+  startExport: 'video.startExport',
+  updateTimeline: 'video.updateTimeline',
 } as const;

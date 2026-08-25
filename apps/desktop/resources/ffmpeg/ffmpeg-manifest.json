@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "distribution": "Gyan.Dev FFmpeg Essentials Build",
+  "version": "9.0.1-essentials_build-www.gyan.dev",
+  "platform": "windows-x64",
+  "license": "GPL-3.0-or-later",
+  "sourceUrl": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.1/ffmpeg-9.0.1-essentials_build.zip",
+  "sourceArchiveSha256": "fec81ae03971d9dd4be3ebe02e263bd2ec1d789483f931bdba5f5715e65da2e9",
+  "files": {
+    "ffmpeg.exe": "72a489eccd008c2ec2c0a5856c5c75bc3d8bbfa90166c4566865c246445e6aa3",
+    "ffprobe.exe": "19202b23c0043f15ad1b7bce2344f406fd52bd6efd8f995ce02e7392a1cec52f",
+    "LICENSE.txt": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+  }
+}

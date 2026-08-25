@@ -5,9 +5,13 @@ import {
   VIDEO_IPC_CHANNELS,
   generateVideoCandidatesInputSchema,
   generateVideosForShotsInputSchema,
+  startVideoExportInputSchema,
   storyboardVideoStatesSchema,
+  updateVideoTimelineInputSchema,
   videoCandidateMediaUrl,
   videoCandidateViewSchema,
+  videoExportJobSchema,
+  videoTimelineSummarySchema,
 } from './video-api';
 
 const id = 'vcand_00000001';
@@ -109,19 +113,94 @@ describe('video-api contracts', () => {
     ).toBe(false);
   });
 
-  it('IPC 通道—video 前缀七方法与 API 接口一一对应', () => {
+  it('IPC 通道—video 前缀方法与 API 接口一一对应', () => {
     expect(Object.keys(VIDEO_IPC_CHANNELS).sort()).toEqual([
+      'cancelExport',
       'cancelVideoBatch',
+      'createTimeline',
       'generateVideoCandidates',
       'generateVideosForShots',
+      'getExportJob',
+      'getTimeline',
       'getVideoTask',
+      'importBackgroundMusic',
       'listStoryboardVideoStates',
       'listVideoCandidates',
       'selectVideoCandidate',
+      'startExport',
+      'updateTimeline',
     ]);
     for (const channel of Object.values(VIDEO_IPC_CHANNELS)) {
       expect(channel.startsWith('video.')).toBe(true);
     }
+  });
+
+  it('时间线与导出 DTO—仅包含脱敏摘要、裁剪与成功状态不变量可验证', () => {
+    const item = {
+      candidateId: id,
+      enabled: true,
+      fileSha256: hash,
+      generationInputHash: hash,
+      position: 0,
+      shotId,
+      trimInMs: 0,
+      trimOutMs: 5000,
+    };
+    const timeline = {
+      audioAsset: null,
+      createdAt: iso,
+      episodeId: 'episode_00001',
+      episodeVersionId: 'epver_00000001',
+      formatProfileId: 'format_0000001',
+      id: 'timelinever_001',
+      inputHash: hash,
+      items: [item],
+      parentVersionId: null,
+      totalDurationMs: 5000,
+      versionNo: 1,
+    };
+    expect(videoTimelineSummarySchema.safeParse(timeline).success).toBe(true);
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items: [{ ...item, trimInMs: 5000, trimOutMs: 5000 }],
+        projectId,
+        requestId,
+      }).success,
+    ).toBe(true);
+    expect(
+      startVideoExportInputSchema.safeParse({
+        episodeId: timeline.episodeId,
+        projectId,
+        requestId,
+        timelineVersionId: timeline.id,
+      }).success,
+    ).toBe(true);
+    const successfulExport = {
+      byteSize: 1234,
+      createdAt: iso,
+      errorCode: null,
+      fileSha256: hash,
+      id: 'exportjob_0001',
+      mediaUrl: 'jingxu://media/video-export/exportjob_0001',
+      status: 'SUCCEEDED' as const,
+      timelineVersionId: timeline.id,
+      totalDurationMs: 5000,
+      updatedAt: iso,
+    };
+    expect(videoExportJobSchema.safeParse(successfulExport).success).toBe(true);
+    expect(videoExportJobSchema.safeParse({ ...successfulExport, mediaUrl: null }).success).toBe(
+      false,
+    );
+    expect(
+      videoExportJobSchema.safeParse({
+        ...successfulExport,
+        status: 'FAILED',
+        mediaUrl: 'jingxu://media/video-export/exportjob_0001',
+      }).success,
+    ).toBe(false);
   });
 
   it('generateVideoCandidates 输入—projectId/shotId/requestId 必填且 strict', () => {

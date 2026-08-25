@@ -3,31 +3,51 @@ import { randomUUID } from 'node:crypto';
 import {
   appResultSchema,
   cancelVideoBatchInputSchema,
+  cancelVideoExportInputSchema,
+  createVideoTimelineInputSchema,
   generateVideoCandidatesInputSchema,
   generateVideosForShotsInputSchema,
   getVideoTaskInputSchema,
+  getVideoExportJobInputSchema,
+  getVideoTimelineInputSchema,
+  importVideoBackgroundMusicInputSchema,
   listStoryboardVideoStatesInputSchema,
   listVideoCandidatesInputSchema,
   mediaBatchViewSchema,
   mediaTaskViewSchema,
   selectVideoCandidateInputSchema,
+  startVideoExportInputSchema,
+  updateVideoTimelineInputSchema,
   storyboardVideoStatesSchema,
   VIDEO_IPC_CHANNELS,
+  videoAudioAssetSummarySchema,
   videoCandidateViewSchema,
+  videoExportJobSchema,
+  videoTimelineSummarySchema,
 } from '@jingxu/contracts';
 import type {
   AppResultDto,
   CancelVideoBatchInputDto,
+  CancelVideoExportInputDto,
+  CreateVideoTimelineInputDto,
   GenerateVideoCandidatesInputDto,
   GenerateVideosForShotsInputDto,
   GetVideoTaskInputDto,
+  GetVideoExportJobInputDto,
+  GetVideoTimelineInputDto,
+  ImportVideoBackgroundMusicInputDto,
   ListStoryboardVideoStatesInputDto,
   ListVideoCandidatesInputDto,
   MediaBatchViewDto,
   MediaTaskViewDto,
   SelectVideoCandidateInputDto,
+  StartVideoExportInputDto,
   StoryboardVideoStatesDto,
+  UpdateVideoTimelineInputDto,
+  VideoAudioAssetSummaryDto,
   VideoCandidateViewDto,
+  VideoExportJobDto,
+  VideoTimelineSummaryDto,
 } from '@jingxu/contracts';
 import { z, type ZodType } from 'zod';
 
@@ -72,6 +92,34 @@ export interface VideoIpcService {
     input: ListStoryboardVideoStatesInputDto,
     traceId: string,
   ) => Promise<AppResultDto<StoryboardVideoStatesDto>>;
+  readonly createTimeline: (
+    input: CreateVideoTimelineInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<VideoTimelineSummaryDto>>;
+  readonly getTimeline: (
+    input: GetVideoTimelineInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<VideoTimelineSummaryDto>>;
+  readonly updateTimeline: (
+    input: UpdateVideoTimelineInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<VideoTimelineSummaryDto>>;
+  readonly importBackgroundMusic: (
+    input: ImportVideoBackgroundMusicInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<VideoAudioAssetSummaryDto>>;
+  readonly startExport: (
+    input: StartVideoExportInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<VideoExportJobDto>>;
+  readonly getExportJob: (
+    input: GetVideoExportJobInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<VideoExportJobDto>>;
+  readonly cancelExport: (
+    input: CancelVideoExportInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<VideoExportJobDto>>;
 }
 
 export interface VideoStartupWriteGate {
@@ -164,6 +212,9 @@ export const registerVideoIpc = (
   const candidatesResult = appResultSchema(z.array(videoCandidateViewSchema));
   const batchResult = appResultSchema(mediaBatchViewSchema);
   const storyboardStatesResult = appResultSchema(storyboardVideoStatesSchema);
+  const timelineResult = appResultSchema(videoTimelineSummarySchema);
+  const audioResult = appResultSchema(videoAudioAssetSummarySchema);
+  const exportResult = appResultSchema(videoExportJobSchema);
 
   const registerQuery = <TInput, TOutput>(
     channel: string,
@@ -253,5 +304,52 @@ export const registerVideoIpc = (
     listStoryboardVideoStatesInputSchema,
     storyboardStatesResult,
     (input, traceId) => service.listStoryboardVideoStates(input, traceId),
+  );
+  registerQuery(
+    VIDEO_IPC_CHANNELS.getTimeline,
+    getVideoTimelineInputSchema,
+    timelineResult,
+    (input, traceId) => service.getTimeline(input, traceId),
+  );
+  registerQuery(
+    VIDEO_IPC_CHANNELS.getExportJob,
+    getVideoExportJobInputSchema,
+    exportResult,
+    (input, traceId) => service.getExportJob(input, traceId),
+  );
+  registerCommand(
+    VIDEO_IPC_CHANNELS.createTimeline,
+    createVideoTimelineInputSchema,
+    timelineResult,
+    (input, traceId) => service.createTimeline(input, traceId),
+    (input) => `video.createTimeline:${JSON.stringify(input)}`,
+  );
+  registerCommand(
+    VIDEO_IPC_CHANNELS.updateTimeline,
+    updateVideoTimelineInputSchema,
+    timelineResult,
+    (input, traceId) => service.updateTimeline(input, traceId),
+    (input) => `video.updateTimeline:${JSON.stringify(input)}`,
+  );
+  registerCommand(
+    VIDEO_IPC_CHANNELS.importBackgroundMusic,
+    importVideoBackgroundMusicInputSchema,
+    audioResult,
+    (input, traceId) => service.importBackgroundMusic(input, traceId),
+    (input) => `video.importBackgroundMusic:${JSON.stringify(input)}`,
+  );
+  registerCommand(
+    VIDEO_IPC_CHANNELS.startExport,
+    startVideoExportInputSchema,
+    exportResult,
+    (input, traceId) => service.startExport(input, traceId),
+    (input) => `video.startExport:${JSON.stringify(input)}`,
+  );
+  registerCommand(
+    VIDEO_IPC_CHANNELS.cancelExport,
+    cancelVideoExportInputSchema,
+    exportResult,
+    (input, traceId) => service.cancelExport(input, traceId),
+    (input) => `video.cancelExport:${JSON.stringify(input)}`,
   );
 };
