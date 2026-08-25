@@ -39,6 +39,8 @@ export interface ScriptGenerationRuntimeDependencies {
   readonly unitOfWork: ScriptUnitOfWorkPort;
   readonly validateCandidate: (job: ScriptStageJob, value: unknown) => CandidateContractValidation;
   readonly validateFinal: (job: ScriptStageJob, value: unknown) => CandidateContractValidation;
+  /** Test-only seam for deterministic concurrent-input invalidation coverage. */
+  readonly forceStaleInput?: boolean;
 }
 
 export interface ScriptGenerationRuntime {
@@ -113,6 +115,7 @@ const loadShotCollectionBibleKeys = async (
 export const createScriptGenerationRuntime = (
   dependencies: ScriptGenerationRuntimeDependencies,
 ): ScriptGenerationRuntime => {
+  let staleInputInjected = false;
   const buildContract = async (job: ScriptStageJob, invocationId: string) =>
     buildScriptCandidateContract(job, invocationId, {
       newId: dependencies.newId,
@@ -127,8 +130,13 @@ export const createScriptGenerationRuntime = (
     hashText: dependencies.hashText,
     newId: dependencies.newId,
     now: dependencies.now,
-    revalidateFrozenInput: (repositories, job) =>
-      revalidateFrozenInput(repositories, job, dependencies.hashPayload),
+    revalidateFrozenInput: async (repositories, job) => {
+      if (dependencies.forceStaleInput === true && !staleInputInjected) {
+        staleInputInjected = true;
+        return false;
+      }
+      return revalidateFrozenInput(repositories, job, dependencies.hashPayload);
+    },
   });
   const buildRequest = createScriptJobRequestBuilder({
     finalSchemaId: dependencies.finalSchemaId,

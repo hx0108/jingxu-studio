@@ -90,6 +90,7 @@ describe('window.jingxu 白名单 Contract', () => {
       'events',
       'image',
       'job',
+      'producibility',
       'project',
       'provider',
       'runtime',
@@ -100,6 +101,7 @@ describe('window.jingxu 白名单 Contract', () => {
     ]);
     expect(Object.isFrozen(api.storyboard)).toBe(true);
     expect(Object.isFrozen(api.evaluation)).toBe(true);
+    expect(Object.isFrozen(api.producibility)).toBe(true);
     expect(Object.keys(api.evaluation).sort()).toEqual([
       'addAnnotation',
       'createFromEpisode',
@@ -109,11 +111,17 @@ describe('window.jingxu 白名单 Contract', () => {
       'importBatch',
       'listSamples',
     ]);
+    expect(Object.keys(api.producibility).sort()).toEqual(['getReport', 'overrideFinding', 'run']);
     expect(Object.keys(api.script).sort()).toEqual([
       'confirmVersion',
       'getWorkspace',
+      'importInput',
+      'initializeInput',
       'initializeOriginal',
+      'listLocks',
+      'lockPath',
       'restoreVersion',
+      'rewriteSelection',
       'saveDraft',
     ]);
     expect(Object.keys(api.runtime).sort()).toEqual([
@@ -349,25 +357,32 @@ describe('window.jingxu 白名单 Contract', () => {
     ).rejects.toThrow();
   });
 
-  it('Video Change—video 恰有冻结的七方法白名单—零路径/SQL/存储入口', () => {
+  it('Video Change—video 仅暴露固定方法白名单—零路径/SQL/存储入口', () => {
     const api = createJingxuApi(vi.fn());
 
     expect(Object.isFrozen(api.video)).toBe(true);
     expect(Object.keys(api.video).sort()).toEqual([
+      'cancelExport',
       'cancelVideoBatch',
+      'createTimeline',
       'generateVideoCandidates',
       'generateVideosForShots',
+      'getExportJob',
+      'getTimeline',
       'getVideoTask',
+      'importBackgroundMusic',
       'listStoryboardVideoStates',
       'listVideoCandidates',
       'selectVideoCandidate',
+      'startExport',
+      'updateTimeline',
     ]);
     for (const forbidden of ['path', 'sql', 'database', 'repository', 'node', 'persistence']) {
       expect(Reflect.has(api.video, forbidden)).toBe(false);
     }
   });
 
-  it('调用七个 video 方法—输入合法—只 invoke 固定 channel 且校验输出（首帧/模型指纹不透出）', async () => {
+  it('调用 video 方法—输入合法—只 invoke 固定 channel 且校验输出（首帧/模型指纹不透出）', async () => {
     const now = '2026-08-16T00:00:00.000Z';
     const hash = 'a'.repeat(64);
     const task: MediaTaskViewDto = {

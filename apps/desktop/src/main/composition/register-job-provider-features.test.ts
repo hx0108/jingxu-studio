@@ -357,6 +357,18 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
       }>;
     const VIDEO_INPUT = { profileId: 'profile-video-primary' };
 
+    // 首次配置可先保存模型，不必先输入密钥；随后保存 Key 必须保留选定模型。
+    const selected = await invoke(PROVIDER_IPC_CHANNELS.saveProfile, {
+      enabled: true,
+      expectedVersionId: 'profile-video-primary',
+      modelId: 'doubao-seedance-2-5-260628',
+      profileId: 'profile-video-primary',
+      requestId: 'request-video-model-0001',
+      workspaceId: 'ark',
+    });
+    expect(selected.ok).toBe(true);
+    expect(selected.data).toMatchObject({ modelId: 'doubao-seedance-2-5-260628' });
+
     // 保存：视频档行惰性建档，末 4 位回读，provider=VOLCARK_SEEDANCE、Seedance model id。
     const saved = await invoke(PROVIDER_IPC_CHANNELS.saveCredential, {
       apiKey: 'ark-key-video7777',
@@ -368,7 +380,7 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     expect(saved.data).toMatchObject({
       configured: true,
       last4: '7777',
-      modelId: 'doubao-seedance-1-5-pro-251215',
+      modelId: 'doubao-seedance-2-5-260628',
       provider: 'VOLCARK_SEEDANCE',
     });
     // 密文按视频固定 id 独立落盘（与图片档分存）。

@@ -77,6 +77,7 @@ export const providerGetInputSchema = z.object({ profileId: idSchema }).strict()
 export const providerProfileCommandSchema = mutationSchema
   .extend({
     enabled: z.boolean(),
+    modelId: z.string().min(1).max(128).optional(),
     profileId: idSchema,
     workspaceId: z.string().regex(/^[A-Za-z0-9-]+$/u),
   })

@@ -39,7 +39,7 @@ const repeat = (token: string, count: number): string[] =>
 
 /** 重载后从项目列表走真实入口进分镜工作台（复用 first-frame E2E 驱动路径）。 */
 const openStoryboard = async (page: Page, projectName: string): Promise<void> => {
-  await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
   await page.locator('.project-card-main', { hasText: projectName }).click();
   await page.getByRole('button', { name: '进入剧本工作区' }).click();
   await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
@@ -208,6 +208,7 @@ test('§6.2-T4 重启恢复—在飞任务标 INTERRUPTED 待人工，剩余队�
     await expect(page.getByRole('button', { name: '重试失败镜头（新批次）' })).toBeVisible();
     // 不重发红线：被打断的镜头2 四候选停留 PENDING（尚未出图、零终态推进），
     // 恢复未重发也未补提交——任务级 FAILED（INTERRUPTED）+ 候选原地不动。
+    await page.getByRole('button', { name: '画面生成', exact: true }).click();
     await page.locator('.shot-card', { hasText: '#2' }).click();
     await expect(page.getByRole('heading', { name: '首帧候选 · 镜头 #2' })).toBeVisible();
     await expect(page.locator('#first-frame-panel .candidate-card')).toHaveCount(4);

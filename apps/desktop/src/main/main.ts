@@ -1,8 +1,10 @@
 import path from 'node:path';
 import os from 'node:os';
 import { readFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 
 import { app, BrowserWindow, ipcMain, net, protocol, safeStorage, session } from 'electron';
+import type { AppResultDto } from '@jingxu/contracts';
 import { createContentAddressedStore, deriveWindowsProductionRoot } from '@jingxu/persistence';
 
 import { deriveSchemaResourceDirectory } from './adapters/schema-resource-adapter';
@@ -45,12 +47,15 @@ import {
   type EvaluationFeatureRegistration,
 } from './composition/register-evaluation-features';
 import { createEvaluationImportFileSink } from './composition/evaluation-import-file-sink';
+import { createScriptInputFileSink } from './composition/script-input-file-sink';
 import {
   createTransferFeatureRegistration,
   type TransferFeatureRegistration,
 } from './composition/register-transfer-features';
 import { createTransferFileSink } from './composition/transfer-file-sink';
 import { registerRuntimeIpc } from './ipc/runtime-ipc';
+import { registerProducibilityIpc, type ProducibilityIpcService } from './ipc/producibility-ipc';
+import { createProducibilityReportService } from '@jingxu/application';
 import { registerAppProtocol } from './security/app-protocol';
 import { handleMediaProtocolRequest } from './security/media-protocol';
 
@@ -181,6 +186,18 @@ const createMainWindow = async (): Promise<void> => {
                   return null;
                 }
               },
+              findVideoExportMedia: async (exportJobId) => {
+                const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+                if (unitOfWork === null) return null;
+                try {
+                  return await unitOfWork.run(
+                    async ({ composition }) =>
+                      (await composition?.composition.findExportMediaById(exportJobId)) ?? null,
+                  );
+                } catch {
+                  return null;
+                }
+              },
             },
             readFile: (absolutePath) => readFile(absolutePath),
             resolveWithinProjects:
@@ -263,6 +280,9 @@ if (!singleInstanceLockAcquired) {
           createService: createProductionScriptService,
           ipcRegistrar,
           persistenceRuntime,
+          inputFile: createScriptInputFileSink({
+            importFile: process.env.JINGXU_E2E_SCRIPT_IMPORT_FILE,
+          }),
           trustedUrl: getTrustedUrl(),
         });
         storyboardFeatureRegistration = createStoryboardFeatureRegistration({
@@ -308,8 +328,46 @@ if (!singleInstanceLockAcquired) {
           persistenceRuntime,
           safeStorage: createSafeStorageFacade(),
           trustedUrl: getTrustedUrl(),
+          audioImportFile: process.env.JINGXU_E2E_VIDEO_AUDIO_FILE,
           useE2eMock: process.env.JINGXU_E2E === '1',
         });
+        const producibilityUnitOfWork = persistenceRuntime.getScriptUnitOfWork();
+        const producibilityService =
+          producibilityUnitOfWork === null
+            ? null
+            : createProducibilityReportService({
+                newId: randomUUID,
+                now: () => new Date().toISOString(),
+                unitOfWork: producibilityUnitOfWork,
+              });
+        const producibilityUnavailable = <T>(traceId: string): AppResultDto<T> => ({
+          ok: false,
+          error: {
+            code: 'STARTUP_WRITE_BLOCKED',
+            fieldErrors: null,
+            message: '应用尚未进入可写状态',
+            retryable: true,
+            traceId,
+            userAction: '请先处理启动故障。',
+          },
+        });
+        const producibilityFacade: ProducibilityIpcService = {
+          run: (input, traceId) =>
+            producibilityService !== null &&
+            persistenceRuntime?.startupService.getStatus().writeEnabled === true
+              ? producibilityService.run(input, traceId)
+              : Promise.resolve(producibilityUnavailable(traceId)),
+          getReport: (input, traceId) =>
+            producibilityService === null
+              ? Promise.resolve(producibilityUnavailable(traceId))
+              : producibilityService.getReport(input.reportId, traceId),
+          overrideFinding: (input, traceId) =>
+            producibilityService !== null &&
+            persistenceRuntime?.startupService.getStatus().writeEnabled === true
+              ? producibilityService.overrideFinding(input, traceId)
+              : Promise.resolve(producibilityUnavailable(traceId)),
+        };
+        registerProducibilityIpc(ipcRegistrar, producibilityFacade, getTrustedUrl());
         registerRuntimeIpc(ipcRegistrar, persistenceRuntime.startupService, getTrustedUrl(), () => {
           projectFeatureRegistration?.ensureRegistered();
           jobProviderFeatureRegistration?.ensureRegistered();

@@ -2,18 +2,22 @@
 
 ## TECH_DESIGN v1.1
 
-| 文档项 | 内容 |
-|---|---|
-| 产品 | 镜序 Studio |
-| 对应产品文档 | `镜序Studio_AI漫剧工作台_产品需求文档_PRD_v1.4.md` |
-| 设计范围 | V1：AI 剧本与结构化分镜 |
-| 文档版本 | TECH_DESIGN v1.1 |
-| 更新日期 | 2026-08-10 |
-| 当前状态 | 可开发基线；真实模型验收前需完成 Provider 凭据配置和 Fixture 矩阵 |
-| 目标读者 | 独立开发者、前端/客户端开发、测试、后续技术评审者 |
-| 机器契约 | `镜序Studio_V1_ScriptStageOutput.schema.json`、`镜序Studio_V1_ShotContract.schema.json`、`镜序Studio_V1_EpisodeStoryboardExport.schema.json`、`镜序Studio_V1_ProjectTransferBundle.schema.json` |
+| 文档项       | 内容                                                                                                                                                                                            |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 产品         | 镜序 Studio                                                                                                                                                                                     |
+| 对应产品文档 | `镜序Studio_AI漫剧工作台_产品需求文档_PRD_v1.4.md`                                                                                                                                              |
+| 设计范围     | V1：AI 剧本与结构化分镜                                                                                                                                                                         |
+| 文档版本     | TECH_DESIGN v1.1                                                                                                                                                                                |
+| 更新日期     | 2026-08-10                                                                                                                                                                                      |
+| 当前状态     | 可开发基线；真实模型验收前需完成 Provider 凭据配置和 Fixture 矩阵                                                                                                                               |
+| 目标读者     | 独立开发者、前端/客户端开发、测试、后续技术评审者                                                                                                                                               |
+| 机器契约     | `镜序Studio_V1_ScriptStageOutput.schema.json`、`镜序Studio_V1_ShotContract.schema.json`、`镜序Studio_V1_EpisodeStoryboardExport.schema.json`、`镜序Studio_V1_ProjectTransferBundle.schema.json` |
 
 > 本文只承诺 V1。V2 的图片、视频、TTS、口型、时间线和成本对账，以及 V3 的自动质量评估与返工闭环，只保留扩展边界，不进入当前实现。
+
+> 实施注记（非 V1 发布范围）：经用户明确要求，视频实验路径的 Provider 设置可保存受限 Seedance 模型选择；API Key 仍由主进程安全存储，任务创建时冻结模型 ID。该路径不改变 V1 的发布验收、真实 Provider 认证或成本结论。
+>
+> 实施注记（V2 Change）：`v2-video-composition-export` 已增加单集不可变时间线、音频资产和导出 Job 的 SQLite 结构、Main 侧 Dialog/FFprobe/FFmpeg 边界及 `jingxu://media/video-export` 受限预览。固定 FFmpeg/FFprobe 制品、真实本地合成、V2 Electron E2E 与 Windows 打包已有历史门禁证据；任何后续 Renderer 改造仍须重新验证，且该能力不改变 V1 发布门槛。
 
 ---
 
@@ -30,18 +34,18 @@
 
 ### 1.2 硬约束
 
-| 约束 | 技术口径 |
-|---|---|
-| 运行形态 | Windows 优先的本地桌面 Web 工作台；Electron 承载 React UI 和本地应用服务 |
-| 用户模型 | 单用户、无注册登录、无组织权限、无云同步 |
-| 数据 | SQLite 为结构化数据唯一事实源；项目内部文件和导出文件保存在本地文件系统 |
-| 模型 | V1 仅一个 `TextModelAdapter`；Provider 请求/响应不得进入领域对象 |
-| 密钥 | API Key 不进 SQLite 明文字段、日志、导出包或前端状态 |
-| 结构化输出 | Draft 2020-12 JSON Schema + Episode 集合校验器共同验收 |
-| 版本 | AI 生成、人工保存、拆分、合并、复制和恢复都创建新版本，不覆盖历史版本 |
-| 锁定 | RFC 6901 JSON Pointer；生成前检查、提交前复检；冲突时整次事务失败 |
-| 外部网络 | 只有 Electron 主进程中的 Provider Adapter 可以访问允许的 HTTPS 域名 |
-| V1 容量 | 单项目 1 个当前 Episode、最多 20 个 READY Shot、每类对象至少保留 100 个历史版本 |
+| 约束       | 技术口径                                                                        |
+| ---------- | ------------------------------------------------------------------------------- |
+| 运行形态   | Windows 优先的本地桌面 Web 工作台；Electron 承载 React UI 和本地应用服务        |
+| 用户模型   | 单用户、无注册登录、无组织权限、无云同步                                        |
+| 数据       | SQLite 为结构化数据唯一事实源；项目内部文件和导出文件保存在本地文件系统         |
+| 模型       | V1 仅一个 `TextModelAdapter`；Provider 请求/响应不得进入领域对象                |
+| 密钥       | API Key 不进 SQLite 明文字段、日志、导出包或前端状态                            |
+| 结构化输出 | Draft 2020-12 JSON Schema + Episode 集合校验器共同验收                          |
+| 版本       | AI 生成、人工保存、拆分、合并、复制和恢复都创建新版本，不覆盖历史版本           |
+| 锁定       | RFC 6901 JSON Pointer；生成前检查、提交前复检；冲突时整次事务失败               |
+| 外部网络   | 只有 Electron 主进程中的 Provider Adapter 可以访问允许的 HTTPS 域名             |
+| V1 容量    | 单项目 1 个当前 Episode、最多 20 个 READY Shot、每类对象至少保留 100 个历史版本 |
 
 ### 1.3 非目标
 
@@ -55,16 +59,16 @@
 
 ## 2. 核心技术决策
 
-| ADR | 决策 | 原因与边界 |
-|---|---|---|
-| ADR-001 | Electron + React + TypeScript | 保持 Web 交互开发效率，同时获得 SQLite、文件系统、系统安全存储和桌面打包能力。V1 首发 Windows，保留 macOS/Linux 适配可能性 |
-| ADR-002 | Electron 主进程承载本地应用服务 | Renderer 不直接访问 Node、文件系统、SQLite 或 Provider；所有特权能力通过白名单 IPC 暴露 |
-| ADR-003 | SQLite 单库 + 项目文件目录 | 符合本地优先和单用户范围；不提前引入客户端/服务端同步模型 |
-| ADR-004 | JSON 文档保存版本内容，关系表保存索引和血缘 | ShotContract 与 ScriptStageOutput 以现有 Schema 为事实源，避免把嵌套契约重复拆成大量易漂移字段 |
-| ADR-005 | 追加式版本 + 当前指针 | 历史版本不可变；恢复等价于创建新版本，便于审计、回滚和依赖影响分析 |
-| ADR-006 | 确定性 JobRunner 编排 AI 调用 | 状态、重试、幂等、校验和提交由代码控制；LLM 只生成候选内容 |
-| ADR-007 | V1 Provider 锁定为阿里云百炼千问快照 | 中文创作、结构化输出和中国内地地域可用；Provider 细节只存在于 Adapter 与配置快照 |
-| ADR-008 | 不在 V1 引入通用 Agent 框架 | 当前流程是固定阶段流水线；通用 Agent 增加不可复现性与调试成本，不带来必要收益 |
+| ADR     | 决策                                        | 原因与边界                                                                                                                 |
+| ------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| ADR-001 | Electron + React + TypeScript               | 保持 Web 交互开发效率，同时获得 SQLite、文件系统、系统安全存储和桌面打包能力。V1 首发 Windows，保留 macOS/Linux 适配可能性 |
+| ADR-002 | Electron 主进程承载本地应用服务             | Renderer 不直接访问 Node、文件系统、SQLite 或 Provider；所有特权能力通过白名单 IPC 暴露                                    |
+| ADR-003 | SQLite 单库 + 项目文件目录                  | 符合本地优先和单用户范围；不提前引入客户端/服务端同步模型                                                                  |
+| ADR-004 | JSON 文档保存版本内容，关系表保存索引和血缘 | ShotContract 与 ScriptStageOutput 以现有 Schema 为事实源，避免把嵌套契约重复拆成大量易漂移字段                             |
+| ADR-005 | 追加式版本 + 当前指针                       | 历史版本不可变；恢复等价于创建新版本，便于审计、回滚和依赖影响分析                                                         |
+| ADR-006 | 确定性 JobRunner 编排 AI 调用               | 状态、重试、幂等、校验和提交由代码控制；LLM 只生成候选内容                                                                 |
+| ADR-007 | V1 Provider 锁定为阿里云百炼千问快照        | 中文创作、结构化输出和中国内地地域可用；Provider 细节只存在于 Adapter 与配置快照                                           |
+| ADR-008 | 不在 V1 引入通用 Agent 框架                 | 当前流程是固定阶段流水线；通用 Agent 增加不可复现性与调试成本，不带来必要收益                                              |
 
 所有依赖的精确版本在项目初始化时写入锁文件；不得使用无锁的 `latest` 作为发布构建依据。
 
@@ -120,49 +124,49 @@ flowchart LR
 
 ### 3.2 进程边界
 
-| 进程 | 职责 | 禁止事项 |
-|---|---|---|
-| Renderer | 页面、表单状态、编辑体验、任务状态展示 | 不启用 Node integration；不读取数据库、密钥和任意文件；不直接请求 Provider |
-| Preload | 将有限、逐方法的类型化 IPC 暴露为 `window.jingxu` | 不暴露通用 `ipcRenderer`、文件路径操作、Shell 或任意频道调用 |
-| Main | IPC Host、Composition Root、任务调度与应用生命周期宿主；通过 Application Services/JobRunner 和注入的 Adapter 使用 SQLite、文件、凭据与 Provider 网络 | 不把密钥或原始内部异常堆栈返回 Renderer；不得绕过 Application Ports 从用例代码直接访问基础设施 |
-| Worker/Utility（可选） | 大 JSON 校验、Markdown 生成等 CPU 任务 | V1 不单独持有数据库写连接；所有写入回到 Main 串行执行 |
+| 进程                   | 职责                                                                                                                                                 | 禁止事项                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Renderer               | 页面、表单状态、编辑体验、任务状态展示                                                                                                               | 不启用 Node integration；不读取数据库、密钥和任意文件；不直接请求 Provider                     |
+| Preload                | 将有限、逐方法的类型化 IPC 暴露为 `window.jingxu`                                                                                                    | 不暴露通用 `ipcRenderer`、文件路径操作、Shell 或任意频道调用                                   |
+| Main                   | IPC Host、Composition Root、任务调度与应用生命周期宿主；通过 Application Services/JobRunner 和注入的 Adapter 使用 SQLite、文件、凭据与 Provider 网络 | 不把密钥或原始内部异常堆栈返回 Renderer；不得绕过 Application Ports 从用例代码直接访问基础设施 |
+| Worker/Utility（可选） | 大 JSON 校验、Markdown 生成等 CPU 任务                                                                                                               | V1 不单独持有数据库写连接；所有写入回到 Main 串行执行                                          |
 
 ### 3.3 V1 组件
 
-| 模块 | 核心职责 |
-|---|---|
-| ProjectService | 项目、FormatProfile、创作模式、DialogueRenderMode、原始输入和授权声明 |
-| ScriptService | 阶段头、版本保存、局部改写、版本对比、恢复和上游失效传播 |
-| StoryBibleService | StoryBible 版本、ID 字典、字段锁定与引用解析 |
-| StoryboardService | Shot 聚合、ShotContractVersion、拆分、合并、复制、排序、软删除和恢复 |
-| LockService | JSON Pointer 解析、锁定路径合法性、父子路径冲突、提交前复检 |
-| JobService | ScriptStageJob 创建、幂等、取消、状态查询和恢复入口 |
-| JobRunner | Application 层的持久化任务编排器；负责 Provider 调用、重试、结构修复和校验，通过 Repository/UnitOfWork 完成原子提交 |
-| ProviderService | Provider 配置、凭据引用、数据处理提示、连接测试 |
-| QwenTextModelAdapter | 将内部调用 DTO 映射到百炼 OpenAI 兼容接口并归一化错误 |
-| SchemaRegistry | 离线加载四份 PRD-owned JSON Schema，校验 `$id`、版本和文件哈希 |
-| EpisodeValidator | 跨镜头顺序、引用、连续性、StoryBible、FormatProfile 和总时长校验 |
-| ProducibilityService | 确定性结构规则、静态能力规则、启发式规则、LLM 补充说明及人工覆盖 |
-| ImportExportService | UTF-8 `.txt/.md` 输入、JSON staging 导入、Markdown/JSON 可恢复导出与启动对账 |
-| AuditService | 审计事件、哈希、错误证据和本地分析事件 |
+| 模块                 | 核心职责                                                                                                            |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| ProjectService       | 项目、FormatProfile、创作模式、DialogueRenderMode、原始输入和授权声明                                               |
+| ScriptService        | 阶段头、版本保存、局部改写、版本对比、恢复和上游失效传播                                                            |
+| StoryBibleService    | StoryBible 版本、ID 字典、字段锁定与引用解析                                                                        |
+| StoryboardService    | Shot 聚合、ShotContractVersion、拆分、合并、复制、排序、软删除和恢复                                                |
+| LockService          | JSON Pointer 解析、锁定路径合法性、父子路径冲突、提交前复检                                                         |
+| JobService           | ScriptStageJob 创建、幂等、取消、状态查询和恢复入口                                                                 |
+| JobRunner            | Application 层的持久化任务编排器；负责 Provider 调用、重试、结构修复和校验，通过 Repository/UnitOfWork 完成原子提交 |
+| ProviderService      | Provider 配置、凭据引用、数据处理提示、连接测试                                                                     |
+| QwenTextModelAdapter | 将内部调用 DTO 映射到百炼 OpenAI 兼容接口并归一化错误                                                               |
+| SchemaRegistry       | 离线加载四份 PRD-owned JSON Schema，校验 `$id`、版本和文件哈希                                                      |
+| EpisodeValidator     | 跨镜头顺序、引用、连续性、StoryBible、FormatProfile 和总时长校验                                                    |
+| ProducibilityService | 确定性结构规则、静态能力规则、启发式规则、LLM 补充说明及人工覆盖                                                    |
+| ImportExportService  | UTF-8 `.txt/.md` 输入、JSON staging 导入、Markdown/JSON 可恢复导出与启动对账                                        |
+| AuditService         | 审计事件、哈希、错误证据和本地分析事件                                                                              |
 
-### 3.4 当前实现快照（2026-08-11）
+### 3.4 当前实现快照（2026-08-23）
 
 本节记录当前代码事实，不改变 3.3 的 V1 目标架构，也不把后续规划描述为已实现。
 
-| 切片 | 当前实现 | 尚未实现边界 |
-|---|---|---|
-| Project/FormatProfile | `ProjectService` 已实现稳定列表与详情、原子创建、乐观并发更新、FormatProfile 不可变版本链、软删除、恢复、名称冲突检查和 requestId 幂等；Application 通过 ProjectUnitOfWork Port 持有事务边界 | 授权改编声明仍是后续独立能力 |
-| Persistence | SQLite Project/FormatProfile/Audit/Analytics/CommandReceipt、SourceInput/Consent/Episode/Script/StoryBible/Job/ModelInvocation、分镜、Transfer 与评测 Repository；单连接 `BEGIN IMMEDIATE` UnitOfWork、Row mapper 错误归一化和 Project/Script invariant audit 已实现 | 发布用户试用、云端同步与 V2+ 评测回归集 |
-| Main/Preload | Composition Root 只在启动 `READY/writeEnabled=true` 后注入目录 Adapter、ProjectUnitOfWork、ProjectService、ScriptService 和 JobRunner 生产接线；`project`、`script`、`job`、`provider`、`events` 逐方法 IPC 已完成 sender、strict Zod DTO、AppResult 输出和启动写门校验；Preload 逐方法暴露 | `storyboard` 命名空间尚未实现 |
-| Renderer | Project 列表/真实空态/筛选空态/回收站、创建与设置、详情与 FormatProfile 历史、软删除恢复、错误提示和 dirty 离开保护已实现；剧本工作区、原创初始化（SourceInput/Consent/Episode）、Provider 设置、五阶段导航与阶段编辑器已实现 | 分镜工作台和导入导出页面没有业务入口，不生成伪造数据 |
-| AI/契约 | 四份 PRD-owned Schema 已复制到受控资源目录并由离线 Registry 核对 `$id`、Draft、版本、SHA-256 和 `$ref` 闭包；manifest 短事务提交后才发布四个校验器；JobRunner 状态机、ModelInvocation 证据、重试/取消/超时/恢复、Mock 失败矩阵、Qwen Adapter 与五份 `*/v1` Prompt 已实现，五阶段版本链经离线 Mock 闭环验证 | EpisodeValidator、真实 Qwen 阶段生成连通性和 AC-V1-01 至 AC-V1-06 验收尚未完成 |
+| 切片                  | 当前实现                                                                                                                                                                                                                                                                                                                                                                                           | 尚未实现边界                                                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| Project/FormatProfile | `ProjectService` 已实现稳定列表与详情、原子创建、乐观并发更新、FormatProfile 不可变版本链、软删除、恢复、名称冲突检查和 requestId 幂等；Application 通过 ProjectUnitOfWork Port 持有事务边界                                                                                                                                                                                                       | 授权改编声明仍是后续独立能力                                                           |
+| Persistence           | SQLite Project/FormatProfile/Audit/Analytics/CommandReceipt、SourceInput/Consent/Episode/Script/StoryBible/Job/ModelInvocation、分镜、Transfer 与评测 Repository；单连接 `BEGIN IMMEDIATE` UnitOfWork、Row mapper 错误归一化和 Project/Script invariant audit 已实现                                                                                                                               | 发布用户试用、云端同步与 V2+ 评测回归集                                                |
+| Main/Preload          | Composition Root 只在启动 `READY/writeEnabled=true` 后注入目录 Adapter、ProjectUnitOfWork、ProjectService、ScriptService 和 JobRunner 生产接线；`project`、`script`、`storyboard`、`producibility`、`job`、`provider`、`events` 逐方法 IPC 已完成 sender、strict Zod DTO、AppResult 输出和启动写门校验；已有剧本导入由 Main 系统 Dialog 读取，Script/StoryBible 锁定、解锁和 LockRecord 查询已接入 | 统一发布门禁日志与三名真实用户试用仍待完成                                             |
+| Renderer              | 固定中文全局导航、引导式三栏工作台、六阶段项目流程、五阶段垂直剧本导航、原创/已有剧本输入、脱敏模型状态、分镜镜头列表、图片/视频候选与合成页签已实现；Provider 凭据编辑集中在设置区域，版本、锁、任务和错误码按渐进式信息展示；底层 IPC 和领域语义未改变                                                                                                                                           | 当前 UI Change 的全量 Electron E2E、Windows 打包及三名目标用户新版复测仍待最终门禁确认 |
+| AI/契约               | 四份 PRD-owned Schema 已复制到受控资源目录并由离线 Registry 核对 `$id`、Draft、版本、SHA-256 和 `$ref` 闭包；manifest 短事务提交后才发布四个校验器；JobRunner 状态机、ModelInvocation 证据、重试/取消/超时/恢复、主进程固定 Mock 失败矩阵、Qwen Adapter 与五份 `*/v1` Prompt 已实现；已有输入、结构化分镜编辑、可生产性 Report/Findings/Overrides 和对话规则复用同一版本/锁/审计边界               | 最终全量门禁与三名真实用户试用仍待完成                                                 |
 
-当前测试证据分布为：Domain/Application Unit、Project/Runtime DTO/IPC/Preload Contract、SQLite Repository/UnitOfWork/Migration/Composition Integration、Script 五阶段/JobRunner/Provider Integration、Renderer Unit、Electron Project/Schema/bootstrap/staged-script E2E，以及 Windows x64 Schema/Project/packaged smoke。OpenSpec Verify 和 AC-V1-01 至 AC-V1-06 仍必须以各自 Change 的最终门禁结果为准，不能用当前基础切片替代。
+当前测试证据分布为：Domain/Application Unit、Project/Runtime DTO/IPC/Preload Contract、SQLite Repository/UnitOfWork/Migration/Composition Integration、Script 五阶段/JobRunner/Provider Integration、Renderer Unit、Electron 全量 E2E，以及 Windows x64 packaged smoke。最终日志显示 Unit 920、Contract 161、Integration 246、Electron 33 passed + 3 skipped；真实用户试用仍是独立发布条件。
 
-`staged-script-generation` Active Change 已在代码层接入 SourceInput/Consent/Episode、五阶段不可变版本链、五份 `*/v1` Prompt、Script JobRunner/恢复、`script` IPC 与剧本工作区，并通过 `openspec validate --strict`、全量门禁与 clean Windows x64 packaged smoke（离线 Mock）。真实 Qwen 连通性、真实用户试用和 AC-V1-01 完整链路仍待人工核验。
+`staged-script-generation` Active Change 已在代码层接入 SourceInput/Consent/Episode、五阶段不可变版本链、五份 `*/v1` Prompt、Script JobRunner/恢复、`script` IPC 与剧本工作区，并通过 `openspec validate --strict`、全量门禁与 Windows x64 packaged smoke（离线 Mock）。真实 Qwen 连通性和真实用户试用仍待人工核验；自动化 AC 由 `v1-acceptance-evidence` 统一记录。
 
-`project-transfer-import-export` 已在代码层接入项目快照导入导出（2026-08-22）：ProjectTransferBundle 1.0.0 CURRENT_ONLY 组装与 staging 校验链、NEW_PROJECT（ID Mapping + 引用重写）/RETURN_TO_ORIGIN（基线规范化比对 + expected head 校验）双模式同事务导入（中途失败零残留）、0016 request_id partial 唯一索引幂等、`transfer` IPC 白名单 + Main 系统 Dialog 原子文件 sink、项目列表/设置双入口 UI，路径红线（文件路径不进 Renderer/回执/审计）经专用 E2E 与关进程查库审计断言钉死。全量门禁（Unit 879 / Contract 147 / Integration 230 / E2E 25 passed + 3 skipped / Windows x64 packaged smoke）与 `openspec validate --strict` 通过；评测业务用例与 AC-V1 验收仍待后续 Change。
+`project-transfer-import-export` 已在代码层接入项目快照导入导出（2026-08-22）：ProjectTransferBundle 1.0.0 CURRENT_ONLY 组装与 staging 校验链、NEW_PROJECT（ID Mapping + 引用重写）/RETURN_TO_ORIGIN（基线规范化比对 + expected head 校验）双模式同事务导入（中途失败零残留）、0016 request_id partial 唯一索引幂等、`transfer` IPC 白名单 + Main 系统 Dialog 原子文件 sink、项目列表/设置双入口 UI，路径红线（文件路径不进 Renderer/回执/审计）经专用 E2E 与关进程查库审计断言钉死。其专项 E2E 与当前全量门禁均通过；V1 用户试用仍待组织。
 
 `storyboard-evaluation-set` 已于 2026-08-22 归档：评测样本、追加式标注与离线规则命中均已接入；0017 迁移播种 24 个 SYNTHETIC 样本和首批标注；`evaluation` 七方法 IPC 以系统文件选择与路径脱敏为边界；项目 READY 分镜派生以 `stage_heads` 的 `SHOT_CONTRACT` 指针复核并使用确定性 dedup_key；Renderer 提供全局/项目双入口、筛选、创建、派生、导入、标注和删除确认。
 
@@ -172,19 +176,19 @@ flowchart LR
 
 ### 4.1 技术栈
 
-| 层 | 选择 |
-|---|---|
-| 桌面运行时 | Electron |
-| UI | React、TypeScript、Vite |
-| 状态与请求 | React Query 处理 IPC 异步状态；Zustand 处理局部编辑与跨组件 UI 状态 |
-| 表单 | React Hook Form；领域校验仍以后端/主进程为准 |
-| 本地数据库 | SQLite + 锁定 Node.js/Electron 内置 `node:sqlite`；SQL migration 文件进入版本控制，不依赖外部 SQLite native addon 或本机 C++ rebuild |
-| JSON Schema | Ajv 2020；Format Checker 单独实现日期时间等格式校验 |
-| 运行时 DTO | Zod，用于 IPC 输入输出，不替代领域 Schema |
-| 文本模型 | 阿里云百炼 OpenAI 兼容 Chat Completions，由 `QwenTextModelAdapter` 封装 |
-| 日志 | 结构化 JSONL，本地滚动；字段白名单和脱敏 |
-| 测试 | Vitest（单元/Contract）、SQLite 临时库（集成）、Playwright Electron（E2E） |
-| 打包 | Electron Forge；Windows x64 首发 |
+| 层          | 选择                                                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| 桌面运行时  | Electron                                                                                                                             |
+| UI          | React、TypeScript、Vite                                                                                                              |
+| 状态与请求  | React Query 处理 IPC 异步状态；Zustand 处理局部编辑与跨组件 UI 状态                                                                  |
+| 表单        | React Hook Form；领域校验仍以后端/主进程为准                                                                                         |
+| 本地数据库  | SQLite + 锁定 Node.js/Electron 内置 `node:sqlite`；SQL migration 文件进入版本控制，不依赖外部 SQLite native addon 或本机 C++ rebuild |
+| JSON Schema | Ajv 2020；Format Checker 单独实现日期时间等格式校验                                                                                  |
+| 运行时 DTO  | Zod，用于 IPC 输入输出，不替代领域 Schema                                                                                            |
+| 文本模型    | 阿里云百炼 OpenAI 兼容 Chat Completions，由 `QwenTextModelAdapter` 封装                                                              |
+| 日志        | 结构化 JSONL，本地滚动；字段白名单和脱敏                                                                                             |
+| 测试        | Vitest（单元/Contract）、SQLite 临时库（集成）、Playwright Electron（E2E）                                                           |
+| 打包        | Electron Forge；Windows x64 首发                                                                                                     |
 
 ### 4.2 目录建议
 
@@ -240,31 +244,31 @@ jingxu-studio/
 
 #### 4.3.1 TypeScript、Lint 与格式化基线
 
-| 项目 | 强制规则 |
-|---|---|
-| TypeScript | 开启 `strict`、`noImplicitAny`、`noUncheckedIndexedAccess` 和 `exactOptionalPropertyTypes`；业务代码不得使用未说明原因的 `any`、`@ts-ignore` 或非空断言逃避类型检查 |
-| ESLint | 使用 Flat Config；启用 TypeScript、React Hooks、Promise 和 import 边界规则；未处理 Promise、无用变量、循环依赖和跨层非法 import 为 error |
-| Prettier | 作为唯一代码格式化器；ESLint 不重复承担排版；格式化差异使 CI 失败 |
-| EditorConfig | UTF-8、LF、文件末尾换行、删除行尾空格；Markdown 保留语义需要的尾随空格时例外 |
-| 依赖版本 | 精确依赖由 `pnpm-lock.yaml` 固定；生产依赖升级必须包含变更说明和相关 Contract/E2E 回归 |
-| 生成文件 | Schema 派生类型、迁移快照等生成物必须标注来源和生成命令；不得直接手改后与源契约分叉 |
+| 项目         | 强制规则                                                                                                                                                            |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TypeScript   | 开启 `strict`、`noImplicitAny`、`noUncheckedIndexedAccess` 和 `exactOptionalPropertyTypes`；业务代码不得使用未说明原因的 `any`、`@ts-ignore` 或非空断言逃避类型检查 |
+| ESLint       | 使用 Flat Config；启用 TypeScript、React Hooks、Promise 和 import 边界规则；未处理 Promise、无用变量、循环依赖和跨层非法 import 为 error                            |
+| Prettier     | 作为唯一代码格式化器；ESLint 不重复承担排版；格式化差异使 CI 失败                                                                                                   |
+| EditorConfig | UTF-8、LF、文件末尾换行、删除行尾空格；Markdown 保留语义需要的尾随空格时例外                                                                                        |
+| 依赖版本     | 精确依赖由 `pnpm-lock.yaml` 固定；生产依赖升级必须包含变更说明和相关 Contract/E2E 回归                                                                              |
+| 生成文件     | Schema 派生类型、迁移快照等生成物必须标注来源和生成命令；不得直接手改后与源契约分叉                                                                                 |
 
 注释解释“为什么存在该约束、风险或例外”，不重复翻译代码。公开 IPC、领域端口和复杂不变量必须有简短 TSDoc；普通内部函数不强制写无信息量注释。
 
 #### 4.3.2 命名与文件组织
 
-| 对象 | 规范 | 示例 |
-|---|---|---|
-| React 组件、类、类型 | `PascalCase` | `StoryboardPanel`、`ShotContractVersion` |
-| 函数、变量、Hook | `camelCase`；Hook 以 `use` 开头 | `createProject`、`useJobStatus` |
-| 真正常量 | `UPPER_SNAKE_CASE`；局部不可变变量仍用 camelCase | `MAX_SHOTS_PER_EPISODE` |
-| 普通 TypeScript 文件 | `kebab-case.ts` | `episode-validator.ts` |
-| React 组件文件 | 与默认导出组件同名的 `PascalCase.tsx`；一个文件只包含一个主组件 | `StoryboardPanel.tsx` |
-| 测试文件 | 与被测文件同目录或同层测试目录；单元测试用 `.test.ts`/`.test.tsx`，契约测试用 `.contract.test.ts`，集成测试用 `.integration.test.ts`，Playwright Electron E2E 用 `.e2e.spec.ts` | `lock-service.test.ts`、`shot-contract.contract.test.ts` |
-| 包和目录 | `kebab-case`，不得只靠大小写区分 | `model-adapters/` |
-| 数据库 | 表名、列名和索引名使用 `snake_case`；索引使用 `ix_`/`ux_` 前缀 | `shot_contract_versions` |
-| 领域 ID | 使用 PRD/Schema 固定前缀，不在 UI 或模型中自行拼接 | `project_*`、`shot_*`、`scv_*` |
-| IPC 方法 | `namespace.method` 语义；Command 使用动词，Query 使用 `get/list` | `storyboard.copy`、`project.get` |
+| 对象                 | 规范                                                                                                                                                                            | 示例                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| React 组件、类、类型 | `PascalCase`                                                                                                                                                                    | `StoryboardPanel`、`ShotContractVersion`                 |
+| 函数、变量、Hook     | `camelCase`；Hook 以 `use` 开头                                                                                                                                                 | `createProject`、`useJobStatus`                          |
+| 真正常量             | `UPPER_SNAKE_CASE`；局部不可变变量仍用 camelCase                                                                                                                                | `MAX_SHOTS_PER_EPISODE`                                  |
+| 普通 TypeScript 文件 | `kebab-case.ts`                                                                                                                                                                 | `episode-validator.ts`                                   |
+| React 组件文件       | 与默认导出组件同名的 `PascalCase.tsx`；一个文件只包含一个主组件                                                                                                                 | `StoryboardPanel.tsx`                                    |
+| 测试文件             | 与被测文件同目录或同层测试目录；单元测试用 `.test.ts`/`.test.tsx`，契约测试用 `.contract.test.ts`，集成测试用 `.integration.test.ts`，Playwright Electron E2E 用 `.e2e.spec.ts` | `lock-service.test.ts`、`shot-contract.contract.test.ts` |
+| 包和目录             | `kebab-case`，不得只靠大小写区分                                                                                                                                                | `model-adapters/`                                        |
+| 数据库               | 表名、列名和索引名使用 `snake_case`；索引使用 `ix_`/`ux_` 前缀                                                                                                                  | `shot_contract_versions`                                 |
+| 领域 ID              | 使用 PRD/Schema 固定前缀，不在 UI 或模型中自行拼接                                                                                                                              | `project_*`、`shot_*`、`scv_*`                           |
+| IPC 方法             | `namespace.method` 语义；Command 使用动词，Query 使用 `get/list`                                                                                                                | `storyboard.copy`、`project.get`                         |
 
 单文件只承担一个主要职责。跨包使用包的公开入口，不从其他包的 `src/` 私有路径深层导入；发现循环依赖必须拆分端口、DTO 或共享值对象，不得通过关闭规则绕过。
 
@@ -321,12 +325,12 @@ Persistence / Model / File / Credential Adapters --implements--> Application Por
 
 测试脚本与收集范围固定如下；每份配置必须显式设置 `include`/`exclude` 或 Playwright `testMatch`，不得依赖 Runner 默认匹配：
 
-| 命令 | Runner 与配置 | 唯一收集范围 | 必须排除 |
-|---|---|---|---|
-| `pnpm test` | Vitest + `vitest.config.ts` | `**/*.test.ts`、`**/*.test.tsx` | `**/*.contract.test.ts`、`**/*.integration.test.ts`、`**/*.e2e.spec.ts` |
-| `pnpm test:contract` | Vitest + `vitest.contract.config.ts` | `**/*.contract.test.ts` | 单元、Integration、E2E 后缀 |
-| `pnpm test:integration` | Vitest + `vitest.integration.config.ts` | `**/*.integration.test.ts` | 单元、Contract、E2E 后缀 |
-| `pnpm test:e2e` | Playwright Electron + `playwright.config.ts` | `**/*.e2e.spec.ts` | 所有 Vitest 后缀 |
+| 命令                    | Runner 与配置                                | 唯一收集范围                    | 必须排除                                                                |
+| ----------------------- | -------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------- |
+| `pnpm test`             | Vitest + `vitest.config.ts`                  | `**/*.test.ts`、`**/*.test.tsx` | `**/*.contract.test.ts`、`**/*.integration.test.ts`、`**/*.e2e.spec.ts` |
+| `pnpm test:contract`    | Vitest + `vitest.contract.config.ts`         | `**/*.contract.test.ts`         | 单元、Integration、E2E 后缀                                             |
+| `pnpm test:integration` | Vitest + `vitest.integration.config.ts`      | `**/*.integration.test.ts`      | 单元、Contract、E2E 后缀                                                |
+| `pnpm test:e2e`         | Playwright Electron + `playwright.config.ts` | `**/*.e2e.spec.ts`              | 所有 Vitest 后缀                                                        |
 
 根 `package.json` 的四个脚本必须分别显式传入上述配置文件。CI 按命令分组保存报告；同一测试文件不得被两个 Runner/脚本重复收集。
 
@@ -430,15 +434,15 @@ CREATED
 
 #### 5.3.2 崩溃点恢复矩阵
 
-| 持久化证据 | 启动恢复 |
-|---|---|
-| Job=QUEUED，无 Invocation | 重新领取 |
-| Invocation=CREATED，`request_sent_at` 为空 | 删除过期 lease，Job 回 QUEUED |
+| 持久化证据                                          | 启动恢复                                               |
+| --------------------------------------------------- | ------------------------------------------------------ |
+| Job=QUEUED，无 Invocation                           | 重新领取                                               |
+| Invocation=CREATED，`request_sent_at` 为空          | 删除过期 lease，Job 回 QUEUED                          |
 | `request_sent_at` 非空，`response_complete_at` 为空 | Job FAILED/`INTERRUPTED_UNKNOWN_OUTCOME`，禁止自动重发 |
-| `response_complete_at` 非空，Job 仍 RUNNING | 校验 blob hash 后切 VALIDATING 并恢复校验 |
-| Job=VALIDATING，响应 hash 正确 | 重跑确定性校验与提交；幂等键阻止重复版本 |
-| `cancel_requested_at` 非空 | 保持 CANCELLED；任何后续响应均按迟到响应处理 |
-| 超过 `deadline_at` | FAILED/`JOB_DEADLINE_EXCEEDED` |
+| `response_complete_at` 非空，Job 仍 RUNNING         | 校验 blob hash 后切 VALIDATING 并恢复校验              |
+| Job=VALIDATING，响应 hash 正确                      | 重跑确定性校验与提交；幂等键阻止重复版本               |
+| `cancel_requested_at` 非空                          | 保持 CANCELLED；任何后续响应均按迟到响应处理           |
+| 超过 `deadline_at`                                  | FAILED/`JOB_DEADLINE_EXCEEDED`                         |
 
 ---
 
@@ -479,10 +483,10 @@ export interface TextGenerationResult {
 
 模型不得生成系统元数据。JobRunner 使用两层契约，解决“模型不决定 ID”与正式 Schema 必填字段之间的边界：
 
-| 阶段 | 模型只返回 | JobRunner 注入 | 最终校验 |
-|---|---|---|---|
-| CONCEPT 至 SCENE_SCRIPT | `{ "data": <阶段数据> }` | `schema_version`、`project_id`、`episode_id`、`source_invocation_id`、`stage` | `ScriptStageOutput.schema.json` |
-| SHOT_CONTRACT | `{ "shots": [<ShotCandidate>...] }` | 每个 Shot 的 `shot_id`、`version_id`、`contract_version=1`、`parent_version_id=null`、`derived_from_shot_ids=[]`、连续 `sequence`、`status=DRAFT`、`provenance`、`format_profile_id`、`locked_paths=[]` | 每个对象通过 `ShotContract.schema.json`，集合再通过 EpisodeValidator |
+| 阶段                    | 模型只返回                          | JobRunner 注入                                                                                                                                                                                          | 最终校验                                                             |
+| ----------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| CONCEPT 至 SCENE_SCRIPT | `{ "data": <阶段数据> }`            | `schema_version`、`project_id`、`episode_id`、`source_invocation_id`、`stage`                                                                                                                           | `ScriptStageOutput.schema.json`                                      |
+| SHOT_CONTRACT           | `{ "shots": [<ShotCandidate>...] }` | 每个 Shot 的 `shot_id`、`version_id`、`contract_version=1`、`parent_version_id=null`、`derived_from_shot_ids=[]`、连续 `sequence`、`status=DRAFT`、`provenance`、`format_profile_id`、`locked_paths=[]` | 每个对象通过 `ShotContract.schema.json`，集合再通过 EpisodeValidator |
 
 `ShotCandidate` 等于正式 ShotContract 去除上述系统字段后的可生成字段。模型候选层使用随代码发布的内部 Schema：
 
@@ -502,20 +506,20 @@ Shot 初始候选先以 DRAFT 运行单对象、引用和可生产性检查。�
 
 以下配置是 **2026-08-05 的开发验收快照**，不是永久承诺；每次准备真实用户验收时必须重新核对官方资料并创建新的配置快照。
 
-| 配置项 | V1 值 |
-|---|---|
-| Provider | Alibaba Cloud Model Studio / 阿里云百炼 |
-| 地域 | 华北 2（北京） |
-| 部署范围 | 中国内地地域调用 |
-| 模型 ID | `qwen3.7-plus-2026-05-26`，禁止使用会漂移的无日期别名作为验收基线 |
-| 接口 | OpenAI 兼容 Chat Completions |
+| 配置项   | V1 值                                                                                                          |
+| -------- | -------------------------------------------------------------------------------------------------------------- |
+| Provider | Alibaba Cloud Model Studio / 阿里云百炼                                                                        |
+| 地域     | 华北 2（北京）                                                                                                 |
+| 部署范围 | 中国内地地域调用                                                                                               |
+| 模型 ID  | `qwen3.7-plus-2026-05-26`，禁止使用会漂移的无日期别名作为验收基线                                              |
+| 接口     | OpenAI 兼容 Chat Completions                                                                                   |
 | Base URL | `https://dashscope.aliyuncs.com/compatible-mode/v1`（公共兼容端点；业务空间专属端点需账号单独开通，V1 不依赖） |
-| 输出方式 | 非思考模式 + `response_format={"type":"json_object"}`；Prompt 明确包含 JSON 要求 |
-| 上下文 | 官方快照上下文 1,000,000 Token；应用侧组装后输入硬上限 64,000 Token |
-| 输出 | JSON Mode 下不主动设置 `max_tokens`，避免截断 JSON；返回后由 Schema 限制业务内容 |
-| 超时 | 单次 120 秒，Job 墙钟 300 秒 |
-| 价格快照 | 输入不超过 256K 时：输入 2 元/百万 Token，输出 8 元/百万 Token；不计活动与缓存优惠 |
-| 数据提示 | 官方 FAQ 表示调用数据会按法律法规和协议存储，并声明不用于模型训练；界面必须展示官方协议链接和快照日期 |
+| 输出方式 | 非思考模式 + `response_format={"type":"json_object"}`；Prompt 明确包含 JSON 要求                               |
+| 上下文   | 官方快照上下文 1,000,000 Token；应用侧组装后输入硬上限 64,000 Token                                            |
+| 输出     | JSON Mode 下不主动设置 `max_tokens`，避免截断 JSON；返回后由 Schema 限制业务内容                               |
+| 超时     | 单次 120 秒，Job 墙钟 300 秒                                                                                   |
+| 价格快照 | 输入不超过 256K 时：输入 2 元/百万 Token，输出 8 元/百万 Token；不计活动与缓存优惠                             |
+| 数据提示 | 官方 FAQ 表示调用数据会按法律法规和协议存储，并声明不用于模型训练；界面必须展示官方协议链接和快照日期          |
 
 虽然 Provider 上下文更大，应用仍维持 64K Token 组装上限，原因是 V1 输入上限仅 30,000 字符，且需要控制时延、成本和可重复性。超限时阻断，不静默裁剪。
 
@@ -547,18 +551,18 @@ Prompt 必须：
 
 ### 6.4 错误归一化
 
-| 内部错误码 | 典型来源 | retryable | 行为 |
-|---|---|---:|---|
-| `PROVIDER_AUTH_INVALID` | 401/403 | 否 | FAILED，要求重新配置凭据 |
-| `PROVIDER_RATE_LIMITED` | 429 | 是 | 指数退避，最多 2 次自动重试 |
-| `PROVIDER_TEMPORARY` | 5xx/网络暂时失败 | 是 | 指数退避，最多 2 次自动重试 |
-| `PROVIDER_TIMEOUT` | 单次超过 120 秒 | 否 | 当前 Job FAILED，可人工新建 Job |
-| `CONTENT_REJECTED` | 内容安全拒绝 | 否 | 不绕过，不自动改写原文 |
-| `CONTEXT_LIMIT_EXCEEDED` | 本地预算或 Provider 超限 | 否 | 展示实际值和限制，不截断 |
-| `RESPONSE_PARSE_FAILED` | 非法 JSON | 否 | 允许一次结构修复 |
-| `SCHEMA_VALIDATION_FAILED` | JSON 不符合 Schema | 否 | 允许一次结构修复，仍失败则 FAILED |
-| `STALE_INPUT` | 上游版本或锁发生变化 | 否 | 不提交业务版本 |
-| `INTERRUPTED_UNKNOWN_OUTCOME` | 应用退出时请求结果未知 | 否 | 不自动重发，避免潜在重复计费 |
+| 内部错误码                    | 典型来源                 | retryable | 行为                              |
+| ----------------------------- | ------------------------ | --------: | --------------------------------- |
+| `PROVIDER_AUTH_INVALID`       | 401/403                  |        否 | FAILED，要求重新配置凭据          |
+| `PROVIDER_RATE_LIMITED`       | 429                      |        是 | 指数退避，最多 2 次自动重试       |
+| `PROVIDER_TEMPORARY`          | 5xx/网络暂时失败         |        是 | 指数退避，最多 2 次自动重试       |
+| `PROVIDER_TIMEOUT`            | 单次超过 120 秒          |        否 | 当前 Job FAILED，可人工新建 Job   |
+| `CONTENT_REJECTED`            | 内容安全拒绝             |        否 | 不绕过，不自动改写原文            |
+| `CONTEXT_LIMIT_EXCEEDED`      | 本地预算或 Provider 超限 |        否 | 展示实际值和限制，不截断          |
+| `RESPONSE_PARSE_FAILED`       | 非法 JSON                |        否 | 允许一次结构修复                  |
+| `SCHEMA_VALIDATION_FAILED`    | JSON 不符合 Schema       |        否 | 允许一次结构修复，仍失败则 FAILED |
+| `STALE_INPUT`                 | 上游版本或锁发生变化     |        否 | 不提交业务版本                    |
+| `INTERRUPTED_UNKNOWN_OUTCOME` | 应用退出时请求结果未知   |        否 | 不自动重发，避免潜在重复计费      |
 
 ---
 
@@ -583,33 +587,33 @@ IPC DTO 校验
 
 应用包内固定映射：
 
-| `$id` | 本地资源 |
-|---|---|
-| `https://jingxu.studio/schemas/script-stage-output/1.0.0` | `resources/schemas/v1/ScriptStageOutput.schema.json` |
-| `https://jingxu.studio/schemas/shot-contract/1.1.0` | `resources/schemas/v1/ShotContract.schema.json` |
+| `$id`                                                           | 本地资源                                                   |
+| --------------------------------------------------------------- | ---------------------------------------------------------- |
+| `https://jingxu.studio/schemas/script-stage-output/1.0.0`       | `resources/schemas/v1/ScriptStageOutput.schema.json`       |
+| `https://jingxu.studio/schemas/shot-contract/1.1.0`             | `resources/schemas/v1/ShotContract.schema.json`            |
 | `https://jingxu.studio/schemas/episode-storyboard-export/1.1.0` | `resources/schemas/v1/EpisodeStoryboardExport.schema.json` |
-| `https://jingxu.studio/schemas/project-transfer-bundle/1.0.0` | `resources/schemas/v1/ProjectTransferBundle.schema.json` |
+| `https://jingxu.studio/schemas/project-transfer-bundle/1.0.0`   | `resources/schemas/v1/ProjectTransferBundle.schema.json`   |
 
 启动时校验 `$id`、Schema 版本、Draft、文件 SHA-256 和相互 `$ref`；任一不一致则进入只读故障页，不能继续生成或导入。运行时禁止为解析 `$ref` 请求 `jingxu.studio`。
 
 当前实现的四组小写 SHA-256 为：
 
-| 资源 | SHA-256 |
-|---|---|
-| `ScriptStageOutput.schema.json` | `128e7a49e1d5829c4b0c9cf89fc5e6fd883746f022e9759c157f70176309971f` |
-| `ShotContract.schema.json` | `3fa77aa85152ad2500fcc1c07da5bec697da8810c572d1c378b0bf432f437e4b` |
+| 资源                                  | SHA-256                                                            |
+| ------------------------------------- | ------------------------------------------------------------------ |
+| `ScriptStageOutput.schema.json`       | `128e7a49e1d5829c4b0c9cf89fc5e6fd883746f022e9759c157f70176309971f` |
+| `ShotContract.schema.json`            | `3fa77aa85152ad2500fcc1c07da5bec697da8810c572d1c378b0bf432f437e4b` |
 | `EpisodeStoryboardExport.schema.json` | `55238d1958aae25341d137192cf544946b9d8b8767648a98a3956e01798fcb13` |
-| `ProjectTransferBundle.schema.json` | `9736ee2421fa8b8febe683c6e41e3cae47665df5d7afe85592a25e4fa4fbabbb` |
+| `ProjectTransferBundle.schema.json`   | `9736ee2421fa8b8febe683c6e41e3cae47665df5d7afe85592a25e4fa4fbabbb` |
 
 启动顺序固定为 Persistence 自检成功后进入 `SCHEMA_REGISTRY`：Main 从受控目录读取恰好四个普通文件，Validation 在事务外构建干净 Registry，Application 在 `BEGIN IMMEDIATE` 中精确替换并读回 manifest，提交后一次发布。失败保持 Registry 未发布、Project 写门关闭且仅允许 `RETRY`。稳定错误码为 `SCHEMA_RESOURCE_MISSING`、`SCHEMA_RESOURCE_INVALID_JSON`、`SCHEMA_HASH_MISMATCH`、`SCHEMA_ID_MISMATCH`、`SCHEMA_DRAFT_MISMATCH`、`SCHEMA_VERSION_MISMATCH`、`SCHEMA_MANIFEST_INVALID`、`SCHEMA_REFERENCE_UNRESOLVED`、`SCHEMA_COMPILE_FAILED` 和 `SCHEMA_EVIDENCE_WRITE_FAILED`。
 
 #### 7.2.1 契约归属与版本治理
 
-| 归属 | 契约/交付物 | 变更规则 |
-|---|---|---|
-| PRD-owned 公开业务契约 | ScriptStageOutput 1.0.0、ShotContract 1.1.0、EpisodeStoryboardExport 1.1.0、ProjectTransferBundle 1.0.0 | PRD 修订历史、语义版本、Schema、示例与 Registry 必须在同一变更中同步；不兼容变更升 major |
-| TECH-owned 内部调用契约 | ModelScriptStageCandidate、ModelShotBatchCandidate、SelectionRange、WriteSet、LockCommand | 不作为用户交换格式；变更必须更新 TECH 版本及对应 Contract Fixture |
-| Persistence-owned 数据契约 | `0001_initial.sql` 及后续顺序 migration | 已发布 migration 不可改写；新增约束只能用新 migration，并保留升级/回滚演练证据 |
+| 归属                       | 契约/交付物                                                                                             | 变更规则                                                                                 |
+| -------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| PRD-owned 公开业务契约     | ScriptStageOutput 1.0.0、ShotContract 1.1.0、EpisodeStoryboardExport 1.1.0、ProjectTransferBundle 1.0.0 | PRD 修订历史、语义版本、Schema、示例与 Registry 必须在同一变更中同步；不兼容变更升 major |
+| TECH-owned 内部调用契约    | ModelScriptStageCandidate、ModelShotBatchCandidate、SelectionRange、WriteSet、LockCommand               | 不作为用户交换格式；变更必须更新 TECH 版本及对应 Contract Fixture                        |
+| Persistence-owned 数据契约 | `0001_initial.sql` 及后续顺序 migration                                                                 | 已发布 migration 不可改写；新增约束只能用新 migration，并保留升级/回滚演练证据           |
 
 公开契约与内部 DTO 不得共享同一 `$id` 或用文件名暗示兼容。当前产品尚未发布，ShotContract 1.0.0 仅为方案草案，由 1.1.0 基线直接取代且不承诺运行时兼容；进入受控试用后严格执行语义化版本，不兼容变更必须升 major，历史文件只能通过显式迁移后进入新版本校验，不在解析器中静默容错。
 
@@ -706,65 +710,65 @@ erDiagram
 
 #### 8.4.1 系统与配置
 
-| 表 | 关键字段 | 约束/用途 |
-|---|---|---|
-| `schema_migrations` | `version PK, name, checksum, applied_at` | migration 只允许顺序前进；checksum 变化阻断启动 |
-| `app_settings` | `key PK, value_json, updated_at` | 非敏感本地设置；`json_valid` |
-| `schema_registry_manifest` | `schema_id PK, semantic_version, resource_path, sha256, enabled` | 记录应用包中启用的离线 Schema |
-| `provider_profiles` | `id PK, provider, region, base_url, workspace_id, model_id, model_snapshot_date, config_json, credential_ref, enabled` | 只保存凭据引用；base_url 由受校验 workspace_id/region 派生，只读且不可任意配置 |
-| `provider_capability_snapshots` | `id PK, provider_profile_id FK, snapshot_version, valid_from, expires_at, capabilities_json, source_url, sha256` | V1 静态视觉能力提示；过期时 UNKNOWN |
-| `model_price_snapshots` | `id PK, provider_profile_id FK, model_id, region, currency, tiers_json, effective_at, expires_at, source_url, sha256` | 记录真实文本模型调用的计价快照，用于 ModelInvocation 估算；与视觉可生产性参考价分离 |
-| `reference_price_snapshots` | `id PK, price_version UNIQUE, provider, model, region, capability_type, billing_unit, currency, price_range_json, effective_at, expires_at, source_url, sha256, enabled` | 与 Provider 凭据/Profile 无关，随包发布；V1 Shot 只引用 `SHOT_PACKAGE + PER_SHOT` 整镜打包行 |
-| `prompt_templates` | `id PK, stage, version, template_text, sha256, active, created_at` | `(stage, version)` 唯一；发布构建内置且不可静默改写 |
-| `command_receipts` | `request_id PK, command_name, payload_sha256, project_id FK NULL, result_ref_json, trace_id, committed_at` | 由 `0002_project_command_receipts.sql` 追加；通用写命令幂等回执。合法 command 枚举、64 位小写 hex `payload_sha256`、`json_valid(result_ref_json)`、可空 Project 外键；`result_ref_json` 只存安全 ID/revision，不存名称、genre/style、目录或完整命令载荷 |
+| 表                              | 关键字段                                                                                                                                                                 | 约束/用途                                                                                                                                                                                                                                               |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `schema_migrations`             | `version PK, name, checksum, applied_at`                                                                                                                                 | migration 只允许顺序前进；checksum 变化阻断启动                                                                                                                                                                                                         |
+| `app_settings`                  | `key PK, value_json, updated_at`                                                                                                                                         | 非敏感本地设置；`json_valid`                                                                                                                                                                                                                            |
+| `schema_registry_manifest`      | `schema_id PK, semantic_version, resource_path, sha256, enabled`                                                                                                         | 记录应用包中启用的离线 Schema                                                                                                                                                                                                                           |
+| `provider_profiles`             | `id PK, provider, region, base_url, workspace_id, model_id, model_snapshot_date, config_json, credential_ref, enabled`                                                   | 只保存凭据引用；base_url 由受校验 workspace_id/region 派生，只读且不可任意配置                                                                                                                                                                          |
+| `provider_capability_snapshots` | `id PK, provider_profile_id FK, snapshot_version, valid_from, expires_at, capabilities_json, source_url, sha256`                                                         | V1 静态视觉能力提示；过期时 UNKNOWN                                                                                                                                                                                                                     |
+| `model_price_snapshots`         | `id PK, provider_profile_id FK, model_id, region, currency, tiers_json, effective_at, expires_at, source_url, sha256`                                                    | 记录真实文本模型调用的计价快照，用于 ModelInvocation 估算；与视觉可生产性参考价分离                                                                                                                                                                     |
+| `reference_price_snapshots`     | `id PK, price_version UNIQUE, provider, model, region, capability_type, billing_unit, currency, price_range_json, effective_at, expires_at, source_url, sha256, enabled` | 与 Provider 凭据/Profile 无关，随包发布；V1 Shot 只引用 `SHOT_PACKAGE + PER_SHOT` 整镜打包行                                                                                                                                                            |
+| `prompt_templates`              | `id PK, stage, version, template_text, sha256, active, created_at`                                                                                                       | `(stage, version)` 唯一；发布构建内置且不可静默改写                                                                                                                                                                                                     |
+| `command_receipts`              | `request_id PK, command_name, payload_sha256, project_id FK NULL, result_ref_json, trace_id, committed_at`                                                               | 由 `0002_project_command_receipts.sql` 追加；通用写命令幂等回执。合法 command 枚举、64 位小写 hex `payload_sha256`、`json_valid(result_ref_json)`、可空 Project 外键；`result_ref_json` 只存安全 ID/revision，不存名称、genre/style、目录或完整命令载荷 |
 
 `schema_registry_manifest` 的静态锁清单是期望事实源，SQLite 行只是本构建成功核验的本地证据。前置数据库 audit 只检查表与行结构，不能用旧 manifest 批准资源；Schema 阶段通过同一写连接短事务删除旧集合、写入四条启用记录并读回逐字段对账，任一故障回滚且不发布 Registry。
 
 #### 8.4.2 项目、输入与版本内容
 
-| 表 | 关键字段 | 约束/用途 |
-|---|---|---|
-| `projects` | `id PK, name, genre, style, creation_mode, dialogue_render_mode, deployment_mode, data_root_rel, created_at, updated_at, deleted_at` | V1 deployment 固定 `LOCAL_DEMO` 或受控试用时显式切换；V1 不含 `budget`，V2 通过 migration 新增 |
-| `format_profiles` | `id PK, project_id FK, version_no, parent_id FK, aspect_ratio, width, height, fps, language, subtitle_safe_area_json, is_current, created_at` | `(project_id, version_no)` 唯一；partial unique 保证每项目只有一个 current；V1 不含 `target_platform` |
-| `source_inputs` | `id PK, project_id FK, input_kind, file_name, encoding, content_text, char_count, sha256, created_at` | 保留原始输入；不因 AI 失败覆盖 |
-| `consent_records` | `id PK, project_id FK, source_input_id FK, consent_type, content_source, scope, statement_text, confirmed_at, revoked_at` | 授权改编提交前必须存在有效记录 |
-| `episodes` | `id PK, project_id FK, title, target_duration_sec, current_version_id, created_at, updated_at, deleted_at` | V1 每项目最多一个未删除 Episode |
-| `episode_versions` | `id PK, episode_id FK, version_no, parent_id FK, story_bible_version_id, format_profile_id, target_duration_sec, shot_set_hash, status, created_at` | 镜头集合/顺序/关键上游发生变化时递增；不可变快照头 |
-| `episode_version_shots` | `episode_version_id FK, shot_id FK, shot_version_id FK, sequence` | 固定该 EpisodeVersion 的成员；PK `(episode_version_id,shot_id)`，同版本 sequence 和 shot_version 唯一 |
-| `story_bible_versions` | `id PK, project_id FK, version_no, parent_id FK, document_json, document_sha256, status, source, source_invocation_id, created_at` | `document_json` 必须是 STORY_BIBLE ScriptStageOutput；source 支持 SYSTEM_INVALIDATION |
-| `script_versions` | `id PK, project_id FK, episode_id FK NULL, stage, version_no, parent_id FK, source_input_id FK NULL, document_json, document_sha256, status, change_summary, source, source_invocation_id, created_at` | stage 为 CONCEPT/EPISODE_OUTLINE/BEAT_SHEET/SCENE_SCRIPT；内容不可变 |
-| `stage_heads` | `project_id, episode_id NULL, stage, current_version_type, current_version_id, updated_at` | 项目级/集级分别使用 partial unique，避免 SQLite NULL 绕过唯一；应用层校验版本类型 |
+| 表                      | 关键字段                                                                                                                                                                                               | 约束/用途                                                                                             |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| `projects`              | `id PK, name, genre, style, creation_mode, dialogue_render_mode, deployment_mode, data_root_rel, created_at, updated_at, deleted_at`                                                                   | V1 deployment 固定 `LOCAL_DEMO` 或受控试用时显式切换；V1 不含 `budget`，V2 通过 migration 新增        |
+| `format_profiles`       | `id PK, project_id FK, version_no, parent_id FK, aspect_ratio, width, height, fps, language, subtitle_safe_area_json, is_current, created_at`                                                          | `(project_id, version_no)` 唯一；partial unique 保证每项目只有一个 current；V1 不含 `target_platform` |
+| `source_inputs`         | `id PK, project_id FK, input_kind, file_name, encoding, content_text, char_count, sha256, created_at`                                                                                                  | 保留原始输入；不因 AI 失败覆盖                                                                        |
+| `consent_records`       | `id PK, project_id FK, source_input_id FK, consent_type, content_source, scope, statement_text, confirmed_at, revoked_at`                                                                              | 授权改编提交前必须存在有效记录                                                                        |
+| `episodes`              | `id PK, project_id FK, title, target_duration_sec, current_version_id, created_at, updated_at, deleted_at`                                                                                             | V1 每项目最多一个未删除 Episode                                                                       |
+| `episode_versions`      | `id PK, episode_id FK, version_no, parent_id FK, story_bible_version_id, format_profile_id, target_duration_sec, shot_set_hash, status, created_at`                                                    | 镜头集合/顺序/关键上游发生变化时递增；不可变快照头                                                    |
+| `episode_version_shots` | `episode_version_id FK, shot_id FK, shot_version_id FK, sequence`                                                                                                                                      | 固定该 EpisodeVersion 的成员；PK `(episode_version_id,shot_id)`，同版本 sequence 和 shot_version 唯一 |
+| `story_bible_versions`  | `id PK, project_id FK, version_no, parent_id FK, document_json, document_sha256, status, source, source_invocation_id, created_at`                                                                     | `document_json` 必须是 STORY_BIBLE ScriptStageOutput；source 支持 SYSTEM_INVALIDATION                 |
+| `script_versions`       | `id PK, project_id FK, episode_id FK NULL, stage, version_no, parent_id FK, source_input_id FK NULL, document_json, document_sha256, status, change_summary, source, source_invocation_id, created_at` | stage 为 CONCEPT/EPISODE_OUTLINE/BEAT_SHEET/SCENE_SCRIPT；内容不可变                                  |
+| `stage_heads`           | `project_id, episode_id NULL, stage, current_version_type, current_version_id, updated_at`                                                                                                             | 项目级/集级分别使用 partial unique，避免 SQLite NULL 绕过唯一；应用层校验版本类型                     |
 
 #### 8.4.3 AI 任务、锁定与依赖
 
-| 表 | 关键字段 | 约束/用途 |
-|---|---|---|
-| `script_stage_jobs` | `id PK, project_id FK, episode_id FK NULL, stage, operation_type, status, idempotency_key, user_operation_id, input_versions_json, input_version_set_hash, selection_json, write_set_json, lock_snapshot_hash, prompt_template_id FK, transport_attempts, structure_repair_attempts, lease_token, lease_expires_at, deadline_at, cancel_requested_at, error_code, error_json, queued_at, started_at, finished_at` | `(project_id, idempotency_key)` 唯一；终态不可回退 |
-| `model_invocations` | `id PK, job_id FK, status, attempt_kind, transport_attempt, provider_profile_id FK, provider_request_id, model_id, model_version, parameters_json, request_snapshot_json, request_sha256, request_sent_at, timeout_at, raw_response_blob, raw_response_sha256, response_complete_at, late_response_at, parsed_json, validation_errors_json, input_tokens, output_tokens, estimated_cost_micros, currency, started_at, finished_at, error_code` | 每次真实调用一行；原始内容不进入普通日志和诊断包 |
-| `lock_records` | `id PK, project_id FK, object_type, object_id, object_version_id, json_pointer, locked_by, note, locked_at, unlocked_at` | partial unique 保证当前有效锁 `(object_version_id,json_pointer)` 唯一；Pointer 必须解析到现有字段 |
-| `dependency_edges` | `id PK, project_id FK, upstream_type, upstream_id, upstream_version_id, downstream_type, downstream_id, downstream_version_id, dependency_type, created_at` | 用于 STALE_INPUT 和影响分析；复合边唯一 |
-| `audit_events` | `id PK, project_id FK NULL, actor, action, object_type, object_id, object_version_id, before_sha256, after_sha256, metadata_json, trace_id, created_at` | 追加式；不保存 API Key 和完整 Prompt |
+| 表                  | 关键字段                                                                                                                                                                                                                                                                                                                                                                                                                                       | 约束/用途                                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `script_stage_jobs` | `id PK, project_id FK, episode_id FK NULL, stage, operation_type, status, idempotency_key, user_operation_id, input_versions_json, input_version_set_hash, selection_json, write_set_json, lock_snapshot_hash, prompt_template_id FK, transport_attempts, structure_repair_attempts, lease_token, lease_expires_at, deadline_at, cancel_requested_at, error_code, error_json, queued_at, started_at, finished_at`                              | `(project_id, idempotency_key)` 唯一；终态不可回退                                                |
+| `model_invocations` | `id PK, job_id FK, status, attempt_kind, transport_attempt, provider_profile_id FK, provider_request_id, model_id, model_version, parameters_json, request_snapshot_json, request_sha256, request_sent_at, timeout_at, raw_response_blob, raw_response_sha256, response_complete_at, late_response_at, parsed_json, validation_errors_json, input_tokens, output_tokens, estimated_cost_micros, currency, started_at, finished_at, error_code` | 每次真实调用一行；原始内容不进入普通日志和诊断包                                                  |
+| `lock_records`      | `id PK, project_id FK, object_type, object_id, object_version_id, json_pointer, locked_by, note, locked_at, unlocked_at`                                                                                                                                                                                                                                                                                                                       | partial unique 保证当前有效锁 `(object_version_id,json_pointer)` 唯一；Pointer 必须解析到现有字段 |
+| `dependency_edges`  | `id PK, project_id FK, upstream_type, upstream_id, upstream_version_id, downstream_type, downstream_id, downstream_version_id, dependency_type, created_at`                                                                                                                                                                                                                                                                                    | 用于 STALE_INPUT 和影响分析；复合边唯一                                                           |
+| `audit_events`      | `id PK, project_id FK NULL, actor, action, object_type, object_id, object_version_id, before_sha256, after_sha256, metadata_json, trace_id, created_at`                                                                                                                                                                                                                                                                                        | 追加式；不保存 API Key 和完整 Prompt                                                              |
 
 #### 8.4.4 分镜与可生产性
 
-| 表 | 关键字段 | 约束/用途 |
-|---|---|---|
-| `shots` | `id PK, episode_id FK, lifecycle_status, current_version_id, created_at, updated_at, deleted_at` | lifecycle 仅 ACTIVE/SUPERSEDED/DELETED |
-| `shot_contract_versions` | `id PK, shot_id FK, version_no, parent_id FK NULL, external_parent_version_id, lineage_resolution_status, sequence, version_status, format_profile_id, target_duration_sec, dialogue_render_mode, document_json, document_sha256, source_invocation_id, created_at` | JSON 必须通过 ShotContract Schema；`(shot_id,version_no)` 唯一；外部父链不伪装成本地 FK |
-| `shot_derivations` | `new_shot_id FK, source_shot_id FK, operation, created_at` | operation 为 COPY/SPLIT/MERGE；COPY、SPLIT 每个新 Shot 恰好 1 个来源，MERGE 至少 2 个且不重复 |
-| `producibility_reports` | `id PK, project_id FK, episode_id FK, shot_version_id FK NULL, scope, rule_set_version, capability_snapshot_id FK, status, disclaimer, created_at` | 一个报告绑定固定输入版本与能力快照 |
-| `producibility_findings` | `id PK, report_id FK, rule_id, rule_version, severity, json_pointer, observation, recommendation, evidence_json, source_type, created_at` | LLM 来源不得产生 BLOCK |
-| `finding_overrides` | `id PK, finding_id FK, decision, reason, actor, created_at` | 只允许覆盖 WARN/INFO；BLOCK 不可覆盖 |
+| 表                       | 关键字段                                                                                                                                                                                                                                                            | 约束/用途                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `shots`                  | `id PK, episode_id FK, lifecycle_status, current_version_id, created_at, updated_at, deleted_at`                                                                                                                                                                    | lifecycle 仅 ACTIVE/SUPERSEDED/DELETED                                                        |
+| `shot_contract_versions` | `id PK, shot_id FK, version_no, parent_id FK NULL, external_parent_version_id, lineage_resolution_status, sequence, version_status, format_profile_id, target_duration_sec, dialogue_render_mode, document_json, document_sha256, source_invocation_id, created_at` | JSON 必须通过 ShotContract Schema；`(shot_id,version_no)` 唯一；外部父链不伪装成本地 FK       |
+| `shot_derivations`       | `new_shot_id FK, source_shot_id FK, operation, created_at`                                                                                                                                                                                                          | operation 为 COPY/SPLIT/MERGE；COPY、SPLIT 每个新 Shot 恰好 1 个来源，MERGE 至少 2 个且不重复 |
+| `producibility_reports`  | `id PK, project_id FK, episode_id FK, shot_version_id FK NULL, scope, rule_set_version, capability_snapshot_id FK, status, disclaimer, created_at`                                                                                                                  | 一个报告绑定固定输入版本与能力快照                                                            |
+| `producibility_findings` | `id PK, report_id FK, rule_id, rule_version, severity, json_pointer, observation, recommendation, evidence_json, source_type, created_at`                                                                                                                           | LLM 来源不得产生 BLOCK                                                                        |
+| `finding_overrides`      | `id PK, finding_id FK, decision, reason, actor, created_at`                                                                                                                                                                                                         | 只允许覆盖 WARN/INFO；BLOCK 不可覆盖                                                          |
 
 #### 8.4.5 导入导出、评测与本地分析
 
-| 表 | 关键字段 | 约束/用途 |
-|---|---|---|
-| `export_records` | `id PK, project_id FK, episode_id FK, episode_version_id FK, export_type, status, target_path, temp_path, overwrite_policy, payload_sha256, byte_size, schema_version, lineage_completeness, warning_overrides_json, file_ready_at, created_at, finished_at, error_code` | 状态 PREPARING/FILE_READY/SUCCEEDED/FAILED；启动时文件/数据库对账 |
-| `import_records` | `id PK, project_id FK NULL, import_mode, source_path, source_sha256, status, validation_errors_json, id_mapping_json, created_at, finished_at` | staging 全量通过后才原子写入正式表；成功重导按 source/mode/target 幂等 |
-| `evaluation_samples` | `id PK, project_id FK NULL, sample_type, input_json, expected_json, authorization_status, dedup_key, dataset_split, rule_hits_json, rule_version, created_at` | V1 20–40 个结构化分镜样本；0017 固化规则命中与规则版本 |
-| `evaluation_annotations` | `id PK, sample_id FK, guideline_version, label_json, rationale, annotator, created_at` | 保存人工结论和依据 |
-| `analytics_events` | `id PK, project_id FK NULL, event_name, session_id, properties_json, occurred_at` | V1 仅本地；用户内容、Prompt、密钥不得进入 properties |
+| 表                       | 关键字段                                                                                                                                                                                                                                                                 | 约束/用途                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| `export_records`         | `id PK, project_id FK, episode_id FK, episode_version_id FK, export_type, status, target_path, temp_path, overwrite_policy, payload_sha256, byte_size, schema_version, lineage_completeness, warning_overrides_json, file_ready_at, created_at, finished_at, error_code` | 状态 PREPARING/FILE_READY/SUCCEEDED/FAILED；启动时文件/数据库对账      |
+| `import_records`         | `id PK, project_id FK NULL, import_mode, source_path, source_sha256, status, validation_errors_json, id_mapping_json, created_at, finished_at`                                                                                                                           | staging 全量通过后才原子写入正式表；成功重导按 source/mode/target 幂等 |
+| `evaluation_samples`     | `id PK, project_id FK NULL, sample_type, input_json, expected_json, authorization_status, dedup_key, dataset_split, rule_hits_json, rule_version, created_at`                                                                                                            | V1 20–40 个结构化分镜样本；0017 固化规则命中与规则版本                 |
+| `evaluation_annotations` | `id PK, sample_id FK, guideline_version, label_json, rationale, annotator, created_at`                                                                                                                                                                                   | 保存人工结论和依据                                                     |
+| `analytics_events`       | `id PK, project_id FK NULL, event_name, session_id, properties_json, occurred_at`                                                                                                                                                                                        | V1 仅本地；用户内容、Prompt、密钥不得进入 properties                   |
 
 `project-transfer-import-export`（2026-08-22）为上表 `export_records`/`import_records` 增补迁移 0016：两表各加 `request_id` 与 `result_json`（回放摘要，`json_valid` 约束；历史行保持 NULL 不回填），并建 partial 唯一索引（仅 `status='SUCCEEDED' AND request_id IS NOT NULL` 行按 `request_id` 唯一，FAILED 证据行可与成功行同 request_id 并存）；Transfer 导入导出经此实现 requestId 幂等（同 requestId 同载荷重放返回原摘要，载荷漂移报 `TRANSFER_IDEMPOTENCY_CONFLICT`）。
 
@@ -1027,13 +1031,13 @@ LockRecord 是唯一可写锁事实源，ShotContract JSON 的 `locked_paths` �
 
 #### 9.2.1 三类对象的允许锁路径
 
-| 对象 | 允许路径 | 数组策略 |
-|---|---|---|
-| StoryBible | `/data/characters/<char_id>/<field>`、`/data/scenes/<scene_id>/<field>`、`/data/props/<prop_id>/<field>`、`/data/world_rules` | ID-keyed对象可锁叶子；world_rules 只锁整个数组 |
-| CONCEPT/EPISODE_OUTLINE | `/data/<schema_defined_field>` | 均为标量字段 |
-| BEAT_SHEET | `/data/beats` 或 `/data/beats/<index>/<field>` | 子项锁在新版本中按 `beat_id` 重映射；缺失或重复时返回 STALE_INPUT |
-| SCENE_SCRIPT | `/data/scenes` 或 `/data/scenes/<index>/<field>` | 子项锁按 `script_scene_id` 重映射；不得只按旧下标盲目复制 |
-| ShotContract | PRD 指定七个一级根及其已存在子路径 | 禁止所有数组下标；需要保护数组时锁整个数组字段 |
+| 对象                    | 允许路径                                                                                                                      | 数组策略                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| StoryBible              | `/data/characters/<char_id>/<field>`、`/data/scenes/<scene_id>/<field>`、`/data/props/<prop_id>/<field>`、`/data/world_rules` | ID-keyed对象可锁叶子；world_rules 只锁整个数组                    |
+| CONCEPT/EPISODE_OUTLINE | `/data/<schema_defined_field>`                                                                                                | 均为标量字段                                                      |
+| BEAT_SHEET              | `/data/beats` 或 `/data/beats/<index>/<field>`                                                                                | 子项锁在新版本中按 `beat_id` 重映射；缺失或重复时返回 STALE_INPUT |
+| SCENE_SCRIPT            | `/data/scenes` 或 `/data/scenes/<index>/<field>`                                                                              | 子项锁按 `script_scene_id` 重映射；不得只按旧下标盲目复制         |
+| ShotContract            | PRD 指定七个一级根及其已存在子路径                                                                                            | 禁止所有数组下标；需要保护数组时锁整个数组字段                    |
 
 #### 9.2.2 Selection、WriteSet 与 Lock DTO
 
@@ -1064,14 +1068,14 @@ interface LockCommand {
 
 ### 9.3 依赖传播
 
-| 上游变化 | V1 下游动作 |
-|---|---|
-| CONCEPT | StoryBible、Episode Outline、Beat Sheet、Scene Script、ShotContract 标记 STALE_INPUT |
-| StoryBible | Outline 及其后续版本标记 STALE_INPUT；列出受影响角色/场景/道具引用 |
-| Episode Outline | Beat Sheet、Scene Script、ShotContract 标记 STALE_INPUT |
-| Beat Sheet | Scene Script、ShotContract 标记 STALE_INPUT |
-| Scene Script | ShotContract 标记 STALE_INPUT |
-| FormatProfile | 当前 ShotContract 标记 STALE_INPUT，需重新确认画幅相关约束 |
+| 上游变化        | V1 下游动作                                                                          |
+| --------------- | ------------------------------------------------------------------------------------ |
+| CONCEPT         | StoryBible、Episode Outline、Beat Sheet、Scene Script、ShotContract 标记 STALE_INPUT |
+| StoryBible      | Outline 及其后续版本标记 STALE_INPUT；列出受影响角色/场景/道具引用                   |
+| Episode Outline | Beat Sheet、Scene Script、ShotContract 标记 STALE_INPUT                              |
+| Beat Sheet      | Scene Script、ShotContract 标记 STALE_INPUT                                          |
+| Scene Script    | ShotContract 标记 STALE_INPUT                                                        |
+| FormatProfile   | 当前 ShotContract 标记 STALE_INPUT，需重新确认画幅相关约束                           |
 
 “标记 STALE_INPUT”不 UPDATE 已有版本，而是创建新的系统失效当前版本：复制旧业务内容、把状态改为 STALE_INPUT、父版本指向原当前版并写入失效原因。Script/StoryBible 在版本关系行写 `source=SYSTEM_INVALIDATION`；ShotContractVersion 不新增 `source` 列，也不得把该值伪装进 ShotContract `provenance`，其 JSON `status` 与关系列 `version_status` 必须同时为 STALE_INPUT，并在 `audit_events.metadata_json` 记录 `source=SYSTEM_INVALIDATION`、上游对象和失效原因。原 READY/DRAFT 版本仍可查看，不自动重生成。
 
@@ -1079,15 +1083,15 @@ interface LockCommand {
 
 ## 10. 分镜编辑事务
 
-| 操作 | 原子动作 |
-|---|---|
-| 编辑 | 校验 base version → 检查锁 → 创建新 version → 更新 current → 重跑 EpisodeValidator |
-| 排序 | 为受影响 Shot 创建仅 sequence 改变的新 version → 连续重排 → 校验 → 一次提交 |
-| 拆分 | 原 Shot lifecycle=SUPERSEDED → 创建两个新 Shot/首版 → 写 derivation → 修复 sequence/previous → 校验 |
-| 合并 | 多个原 Shot lifecycle=SUPERSEDED → 创建一个新 Shot/首版 → 写多个 derivation → 修复 sequence/previous → 校验 |
+| 操作 | 原子动作                                                                                                                                    |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 编辑 | 校验 base version → 检查锁 → 创建新 version → 更新 current → 重跑 EpisodeValidator                                                          |
+| 排序 | 为受影响 Shot 创建仅 sequence 改变的新 version → 连续重排 → 校验 → 一次提交                                                                 |
+| 拆分 | 原 Shot lifecycle=SUPERSEDED → 创建两个新 Shot/首版 → 写 derivation → 修复 sequence/previous → 校验                                         |
+| 合并 | 多个原 Shot lifecycle=SUPERSEDED → 创建一个新 Shot/首版 → 写多个 derivation → 修复 sequence/previous → 校验                                 |
 | 复制 | 源 Shot 保持 ACTIVE → 创建新 Shot/首版 DRAFT → `derived_from=[source]` 且 operation=COPY → 插入源后并重排 → 重算 previous/continuity → 校验 |
-| 删除 | lifecycle=DELETED、deleted_at 写入 → 重排 ACTIVE → 修复引用或阻断 → 校验 |
-| 恢复 | 以历史内容创建新当前版本；若聚合已 DELETED 则恢复 ACTIVE；不把历史版本直接设为当前 |
+| 删除 | lifecycle=DELETED、deleted_at 写入 → 重排 ACTIVE → 修复引用或阻断 → 校验                                                                    |
+| 恢复 | 以历史内容创建新当前版本；若聚合已 DELETED 则恢复 ACTIVE；不把历史版本直接设为当前                                                          |
 
 任何操作的 EpisodeValidator `EDIT_INVARIANT` 出现 BLOCK 时，整次事务回滚并返回全部问题，不留下部分排序、复制或半个拆分结果。操作成功后仍可能保留 DRAFT/STALE_INPUT；只有 `READY_EXPORT` 通过才可进入导出。
 
@@ -1099,19 +1103,19 @@ interface LockCommand {
 
 Renderer 只使用 `window.jingxu` 的逐方法接口。所有 Command 带 `requestId`；修改类命令带 `expectedVersionId` 或 `expectedUpdatedAt` 进行乐观并发校验。
 
-| 命名空间 | 方法 | 当前状态 |
-|---|---|---|
-| `runtime` | `getStartupStatus/retryStartup/restoreBackup` | 已实现；只接受受管理 backup id，不接受路径 |
-| `project` | `list/get/create/update/delete/restore` | 已实现；六个逐方法白名单、双端 DTO 校验、sender 校验和启动写门 |
-| `source` | `importText/savePasted/getOriginal` | 未实现 |
-| `consent` | `confirm/revoke/getCurrent` | 未实现 |
-| `script` | `getStageHead/listVersions/compare/restore/lock/unlock` | 未实现 |
-| `job` | `create/get/list/cancel/retry` | 未实现；JobRunner 也未实现 |
-| `storyboard` | `getEpisode/generate/edit/split/merge/copy/reorder/delete/restore/validate` | 未实现 |
-| `producibility` | `run/getReport/overrideFinding` | 未实现 |
-| `transfer` | `exportJson/exportMarkdown/importJson` | 未实现 |
-| `provider` | `getProfile/saveProfile/saveCredential/testCredential/deleteCredential` | 未实现 |
-| `events` | `subscribeJobUpdates/subscribeProjectUpdates` | 未实现 |
+| 命名空间        | 方法                                                                    | 当前状态                                                                                |
+| --------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `runtime`       | `getStartupStatus/retryStartup/restoreBackup`                           | 已实现；只接受受管理 backup id，不接受路径                                              |
+| `project`       | `list/get/create/update/delete/restore`                                 | 已实现；六个逐方法白名单、双端 DTO 校验、sender 校验和启动写门                          |
+| `source`        | `initializeInput/importInput`                                           | 已实现 UTF-8 `.txt/.md` 1–30,000 字符校验、原文 hash、文件元数据和授权/数据处理确认     |
+| `consent`       | `confirm/revoke/getCurrent`                                             | 未实现                                                                                  |
+| `script`        | `getStageHead/listVersions/compare/restore/lock/unlock`                 | 未实现                                                                                  |
+| `job`           | `create/get/list/cancel/retry`                                          | 未实现；JobRunner 也未实现                                                              |
+| `storyboard`    | `edit/export/lock/unlock/split/merge/copy/reorder/delete/restore`       | 已接入不可变 EpisodeVersion、镜头生命周期和血缘写入；完整 AC-V1-03 roundtrip 仍待验收   |
+| `producibility` | `run/getReport/overrideFinding`                                         | 已接入规则报告 IPC；当前报告存储仍为进程内，SQLite Report/Finding/Override 持久化待完成 |
+| `transfer`      | `exportJson/exportMarkdown/importJson`                                  | 未实现                                                                                  |
+| `provider`      | `getProfile/saveProfile/saveCredential/testCredential/deleteCredential` | 未实现                                                                                  |
+| `events`        | `subscribeJobUpdates/subscribeProjectUpdates`                           | 未实现                                                                                  |
 
 统一错误结构：
 
@@ -1136,10 +1140,10 @@ Renderer 不接收 SQL、文件系统堆栈、请求 Authorization header、API 
 
 ### 12.1 文本输入
 
-| 输入模式 | 来源 | 字符范围 | 处理 |
-|---|---|---:|---|
-| `AI_ORIGINAL` | 手工输入 | 20–2,000 | 按 UTF-8 解码后的 Unicode 字符计数；不足或超限均阻断 |
-| `ADAPTATION` / `OPTIMIZATION` | 粘贴或 `.txt/.md` | 1–30,000 | 先校验扩展名、文件大小和 UTF-8；不得静默截断 |
+| 输入模式                      | 来源              | 字符范围 | 处理                                                 |
+| ----------------------------- | ----------------- | -------: | ---------------------------------------------------- |
+| `AI_ORIGINAL`                 | 手工输入          | 20–2,000 | 按 UTF-8 解码后的 Unicode 字符计数；不足或超限均阻断 |
+| `ADAPTATION` / `OPTIMIZATION` | 粘贴或 `.txt/.md` | 1–30,000 | 先校验扩展名、文件大小和 UTF-8；不得静默截断         |
 
 - 判空时可以检查前后空白，但不得先 trim 后覆盖用户原文；`source_inputs.content_text` 保存原始内容，模型请求快照保存明确的规范化策略与 hash。
 - Markdown 作为纯文本输入，不执行 HTML、脚本、远程图片或链接预览。
@@ -1150,10 +1154,10 @@ Renderer 不接收 SQL、文件系统堆栈、请求 Authorization header、API 
 
 现有 `EpisodeStoryboardExport` 只包含 `story_bible_version_id`，不能单独导入一个全新空项目并解析角色、场景、道具。因此 V1 区分两种输入：
 
-| 模式 | 输入 | 允许条件 |
-|---|---|---|
-| `RETURN_TO_ORIGIN` | 单独 EpisodeStoryboardExport 或完整 Bundle | 目标本地项目已存在同 ID、同 hash 的 StoryBibleVersion 和 FormatProfile |
-| `NEW_PROJECT` | `JingxuProjectTransferBundle/1.0.0` | Bundle 必须包含项目最小快照、当前 StoryBible、其余四个当前 ScriptStageOutput 和 EpisodeStoryboardExport |
+| 模式               | 输入                                       | 允许条件                                                                                                |
+| ------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `RETURN_TO_ORIGIN` | 单独 EpisodeStoryboardExport 或完整 Bundle | 目标本地项目已存在同 ID、同 hash 的 StoryBibleVersion 和 FormatProfile                                  |
+| `NEW_PROJECT`      | `JingxuProjectTransferBundle/1.0.0`        | Bundle 必须包含项目最小快照、当前 StoryBible、其余四个当前 ScriptStageOutput 和 EpisodeStoryboardExport |
 
 Transfer Bundle 是 PRD v1.4 登记的公开交换契约，固定文件为 `镜序Studio_V1_ProjectTransferBundle.schema.json`。最小结构：
 
@@ -1172,9 +1176,7 @@ Transfer Bundle 是 PRD v1.4 登记的公开交换契约，固定文件为 `镜�
     "version_id": "story_bible_v1",
     "output": {}
   },
-  "script_stage_outputs": [
-    {"version_id": "script_concept_v1", "output": {}}
-  ],
+  "script_stage_outputs": [{ "version_id": "script_concept_v1", "output": {} }],
   "episode_storyboard": {}
 }
 ```
@@ -1239,8 +1241,8 @@ const win = new BrowserWindow({
     contextIsolation: true,
     nodeIntegration: false,
     sandbox: true,
-    webSecurity: true
-  }
+    webSecurity: true,
+  },
 });
 win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 win.webContents.on('will-navigate', (event, url) => {
@@ -1294,10 +1296,10 @@ user_operation_id
 
 ### 14.2 日志等级
 
-| 等级 | 内容 |
-|---|---|
-| INFO | 状态变化、耗时、版本 ID、导入导出结果 |
-| WARN | 可恢复错误、能力过期、规则覆盖、总时长偏离 |
+| 等级  | 内容                                                   |
+| ----- | ------------------------------------------------------ |
+| INFO  | 状态变化、耗时、版本 ID、导入导出结果                  |
+| WARN  | 可恢复错误、能力过期、规则覆盖、总时长偏离             |
 | ERROR | 事务回滚、Schema 启动失败、Provider 失败、文件写入失败 |
 
 日志滚动建议：单文件 10 MB、最多 10 个文件；退出后不自动上传。
@@ -1315,16 +1317,16 @@ user_operation_id
 
 ## 15. 性能、容量与并发
 
-| 项目 | 设计 |
-|---|---|
-| 本地读取 | 列表只读取索引列；打开详情时读取 JSON 文档 |
-| 本地保存 | 单次短事务，目标 P95 ≤ 1 秒 |
-| Job 并发 | 全局最多 1 个真实 LLM Job；同项目严格串行，避免输入版本竞争和意外成本 |
-| UI 反馈 | 命令接收后 1 秒内显示成功、加载或 Job 状态 |
-| JSON 上限 | 输入 30,000 字符；单 Episode 最多 20 个 Shot；IPC 载荷超过 2 MB 改为文件/分页读取 |
-| 历史版本 | 每对象至少 100 个；不自动删除，达到软阈值只提示导出/清理 |
-| SQLite | 单写连接；WAL；短事务；读查询分页 |
-| Schema 启动 | 固定四资源离线读取、hash 与 Ajv 编译均在事务外；manifest 仅使用短事务，零网络 |
+| 项目        | 设计                                                                              |
+| ----------- | --------------------------------------------------------------------------------- |
+| 本地读取    | 列表只读取索引列；打开详情时读取 JSON 文档                                        |
+| 本地保存    | 单次短事务，目标 P95 ≤ 1 秒                                                       |
+| Job 并发    | 全局最多 1 个真实 LLM Job；同项目严格串行，避免输入版本竞争和意外成本             |
+| UI 反馈     | 命令接收后 1 秒内显示成功、加载或 Job 状态                                        |
+| JSON 上限   | 输入 30,000 字符；单 Episode 最多 20 个 Shot；IPC 载荷超过 2 MB 改为文件/分页读取 |
+| 历史版本    | 每对象至少 100 个；不自动删除，达到软阈值只提示导出/清理                          |
+| SQLite      | 单写连接；WAL；短事务；读查询分页                                                 |
+| Schema 启动 | 固定四资源离线读取、hash 与 Ajv 编译均在事务外；manifest 仅使用短事务，零网络     |
 
 若未来需要云同步或多人协作，应重新设计身份、冲突解决和服务端数据库，不能直接把本地 SQLite 文件共享到网络盘。
 
@@ -1334,27 +1336,27 @@ user_operation_id
 
 ### 16.1 测试金字塔
 
-| 类型 | 覆盖 |
-|---|---|
-| 单元测试 | ID、JSON Pointer、锁冲突、状态机、幂等键、错误映射、价格计算、规则优先级 |
-| Schema Contract | 每阶段 1 个合法 + 1 个仅含单一错误的非法 Fixture；四份 PRD-owned Schema 离线 `$ref` |
-| Repository 集成 | migration、FK、事务回滚、版本链、软删除、索引查询 |
-| Provider Contract | Mock 覆盖 401/429/5xx/超时/非法 JSON/取消/迟到响应；真实 Provider 仅低成本受控验证 |
-| E2E | AC-V1-01 至 AC-V1-06，断网导入导出、异常退出恢复 |
-| 数据质量 | 20–40 个结构化分镜评测样本及标注指南 |
+| 类型              | 覆盖                                                                                |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| 单元测试          | ID、JSON Pointer、锁冲突、状态机、幂等键、错误映射、价格计算、规则优先级            |
+| Schema Contract   | 每阶段 1 个合法 + 1 个仅含单一错误的非法 Fixture；四份 PRD-owned Schema 离线 `$ref` |
+| Repository 集成   | migration、FK、事务回滚、版本链、软删除、索引查询                                   |
+| Provider Contract | Mock 覆盖 401/429/5xx/超时/非法 JSON/取消/迟到响应；真实 Provider 仅低成本受控验证  |
+| E2E               | AC-V1-01 至 AC-V1-06，断网导入导出、异常退出恢复                                    |
+| 数据质量          | 20–40 个结构化分镜评测样本及标注指南                                                |
 
 ### 16.2 必须具备的 Fixture
 
-| 组 | 最少 Fixture |
-|---|---|
-| ScriptStageOutput | CONCEPT、STORY_BIBLE、EPISODE_OUTLINE、BEAT_SHEET、SCENE_SCRIPT 各 1 valid + 1 single-error invalid |
-| 模型候选 DTO | 五阶段 Candidate、6/10/不足/超出 ShotBatch、系统字段注入与恶意伪造 ID |
-| ShotContract | 四种 DialogueRenderMode；无台词镜头；首版/后续版；锁路径；连续模式；已知/未知参考价；每类非法样本只触发一个预期错误 |
-| Episode | sequence 空洞/重复、前镜错误、StoryBible 引用错误、FormatProfile 不一致、时长 WARN、外部父链 |
-| Job | 401、429、5xx、120 秒超时、非法 JSON、结构修复失败、STALE_INPUT、取消和迟到响应 |
-| 编辑 | 拆分、合并、复制、排序、删除、恢复以及每个操作中途失败回滚 |
-| 输入边界 | AI 原创 19/20/2,000/2,001；已有内容 0/1/30,000/30,001；UTF-8 非法字节与仅空白文本 |
-| Transfer Bundle | RETURN_TO_ORIGIN、NEW_PROJECT、StoryBible 缺失、跨对象 ID 不一致、重复重导、外部父链 |
+| 组                | 最少 Fixture                                                                                                        |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| ScriptStageOutput | CONCEPT、STORY_BIBLE、EPISODE_OUTLINE、BEAT_SHEET、SCENE_SCRIPT 各 1 valid + 1 single-error invalid                 |
+| 模型候选 DTO      | 五阶段 Candidate、6/10/不足/超出 ShotBatch、系统字段注入与恶意伪造 ID                                               |
+| ShotContract      | 四种 DialogueRenderMode；无台词镜头；首版/后续版；锁路径；连续模式；已知/未知参考价；每类非法样本只触发一个预期错误 |
+| Episode           | sequence 空洞/重复、前镜错误、StoryBible 引用错误、FormatProfile 不一致、时长 WARN、外部父链                        |
+| Job               | 401、429、5xx、120 秒超时、非法 JSON、结构修复失败、STALE_INPUT、取消和迟到响应                                     |
+| 编辑              | 拆分、合并、复制、排序、删除、恢复以及每个操作中途失败回滚                                                          |
+| 输入边界          | AI 原创 19/20/2,000/2,001；已有内容 0/1/30,000/30,001；UTF-8 非法字节与仅空白文本                                   |
+| Transfer Bundle   | RETURN_TO_ORIGIN、NEW_PROJECT、StoryBible 缺失、跨对象 ID 不一致、重复重导、外部父链                                |
 
 ### 16.3 发布前数据库检查
 
@@ -1392,35 +1394,35 @@ PRAGMA foreign_key_check;
 
 ### 18.2 部署模式开关
 
-| 模式 | 技术行为 |
-|---|---|
-| `LOCAL_DEMO` | 无远程遥测；数据仅本地与用户主动调用的 Provider；本地删除入口 |
+| 模式                       | 技术行为                                                                                 |
+| -------------------------- | ---------------------------------------------------------------------------------------- |
+| `LOCAL_DEMO`               | 无远程遥测；数据仅本地与用户主动调用的 Provider；本地删除入口                            |
 | `CONTROLLED_EXTERNAL_TEST` | 在 LOCAL_DEMO 基础上增加测试者协议、隐私同意、受控版本号和试用记录导出；仍无公共账号服务 |
-| `PUBLIC_ONLINE` | V1 架构不支持；必须重新技术评审，不允许只改配置开启 |
+| `PUBLIC_ONLINE`            | V1 架构不支持；必须重新技术评审，不允许只改配置开启                                      |
 
 ---
 
 ## 19. PRD 验收追踪
 
-| PRD 验收 | 主要模块 | 数据证据 | 自动化测试 |
-|---|---|---|---|
-| AC-V1-01 AI 原创 | ScriptService、JobRunner、SchemaRegistry、StoryboardService | 各阶段版本、Job/Invocation、6–10 Shot、Envelope | 阶段 E2E + Schema/集合校验 |
-| AC-V1-02 已有剧本优化 | SourceInput、Consent、LockService、ScriptService | 原文、Consent、选区、锁、父版本 | 选区写集 + 锁冲突测试 |
-| AC-V1-03 分镜编辑与恢复 | StoryboardService、EpisodeValidator、ImportExport | Shot 聚合、版本链、derivation、导出 hash | 事务回滚 + 断网往返 |
-| AC-V1-04 模型失败恢复 | JobService、JobRunner、Adapter | Job 状态、Invocation attempts、错误证据 | 故障 Fixture 全矩阵 |
-| AC-V1-05 对白规则 | Domain Validator、ProducibilityService | Shot JSON、规则版本、finding | 四模式 Contract Test |
-| AC-V1-06 锁定边界 | LockService、事务提交器 | LockRecord、write_set、STALE_INPUT audit | RFC 6901 与父子路径矩阵 |
+| PRD 验收                | 主要模块                                                    | 数据证据                                        | 自动化测试                 |
+| ----------------------- | ----------------------------------------------------------- | ----------------------------------------------- | -------------------------- |
+| AC-V1-01 AI 原创        | ScriptService、JobRunner、SchemaRegistry、StoryboardService | 各阶段版本、Job/Invocation、6–10 Shot、Envelope | 阶段 E2E + Schema/集合校验 |
+| AC-V1-02 已有剧本优化   | SourceInput、Consent、LockService、ScriptService            | 原文、Consent、选区、锁、父版本                 | 选区写集 + 锁冲突测试      |
+| AC-V1-03 分镜编辑与恢复 | StoryboardService、EpisodeValidator、ImportExport           | Shot 聚合、版本链、derivation、导出 hash        | 事务回滚 + 断网往返        |
+| AC-V1-04 模型失败恢复   | JobService、JobRunner、Adapter                              | Job 状态、Invocation attempts、错误证据         | 故障 Fixture 全矩阵        |
+| AC-V1-05 对白规则       | Domain Validator、ProducibilityService                      | Shot JSON、规则版本、finding                    | 四模式 Contract Test       |
+| AC-V1-06 锁定边界       | LockService、事务提交器                                     | LockRecord、write_set、STALE_INPUT audit        | RFC 6901 与父子路径矩阵    |
 
 ### 19.1 可直接自动化的 P0 断言
 
-| 测试 ID | Fixture/命令 | 状态断言 | 数据与文件断言 |
-|---|---|---|---|
-| `E2E-AC01-ORIGINAL` | 9:16、NARRATION_FIRST、合法创意；逐阶段 generate | 每个 Job `QUEUED→RUNNING→VALIDATING→SUCCEEDED` | 五阶段正式 Schema 均通过；Shot 数 6–10；sequence 连续；Envelope 与 Bundle 通过；时长偏离只产生规则码 `EPISODE_DURATION_OUT_OF_TARGET` WARN |
-| `E2E-AC02-LOCKED-REWRITE` | 已授权 Markdown、锁 `/data/characters/char_01/appearance`、改写选区 | 冲突命令失败 `LOCK_CONFLICT`；合法选区 Job 成功 | source_input hash 不变；锁字段前后 hash 相同；只创建允许 write_set 的新版本 |
-| `E2E-AC03-EDIT-ROUNDTRIP` | READY Episode 执行拆分/合并/复制/排序/删除/恢复后 Bundle 导出重导 | 每个编辑事务成功或整体回滚；导入 SUCCEEDED | 复制体为新 shot_id、首版 DRAFT、COPY 单一来源；EpisodeVersion 成员可重建；ID 映射明确；断网 Schema/Bundle/集合校验通过；导出 hash 可对账 |
-| `E2E-AC04-FAILURE` | 固定 Mock 依次模拟 401、429、5xx、120 秒超时、非法 JSON、STALE_INPUT、取消、迟到响应、各崩溃点 | 符合 5.3/6.4；终态不回退 | 自动 transport retry ≤2；结构修复 ≤1；未知结果不自动重发；无重复业务版本 |
-| `E2E-AC05-DIALOGUE` | 四种 DialogueRenderMode；无台词 WEAK/PRECISE；WEAK 下 frontal_face=true、mouth_visible=true、estimated_speech_duration_sec>4 | 长对白产生 `DLG_WEAK_FRONTAL_LONG_SPEECH` WARN；无台词样本不伪造 speaker | `rule_version`、阈值 4 秒和 snapshot 保存；无台词四字段归零；非空文本的四模式 speaker/audio/lip-sync 跨字段断言通过 |
-| `E2E-AC06-LOCK-MATRIX` | 父写子、子写父、同路径、非法 `~`、不存在路径、数组下标、版本变化 | 冲突 100% 阻断；版本变化 `STALE_INPUT` | 无部分版本、无半个锁；Shot JSON `locked_paths` 与 LockRecord 投影完全一致 |
+| 测试 ID                   | Fixture/命令                                                                                                                 | 状态断言                                                                 | 数据与文件断言                                                                                                                             |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `E2E-AC01-ORIGINAL`       | 9:16、NARRATION_FIRST、合法创意；逐阶段 generate                                                                             | 每个 Job `QUEUED→RUNNING→VALIDATING→SUCCEEDED`                           | 五阶段正式 Schema 均通过；Shot 数 6–10；sequence 连续；Envelope 与 Bundle 通过；时长偏离只产生规则码 `EPISODE_DURATION_OUT_OF_TARGET` WARN |
+| `E2E-AC02-LOCKED-REWRITE` | 已授权 Markdown、锁 `/data/characters/char_01/appearance`、改写选区                                                          | 冲突命令失败 `LOCK_CONFLICT`；合法选区 Job 成功                          | source_input hash 不变；锁字段前后 hash 相同；只创建允许 write_set 的新版本                                                                |
+| `E2E-AC03-EDIT-ROUNDTRIP` | READY Episode 执行拆分/合并/复制/排序/删除/恢复后 Bundle 导出重导                                                            | 每个编辑事务成功或整体回滚；导入 SUCCEEDED                               | 复制体为新 shot_id、首版 DRAFT、COPY 单一来源；EpisodeVersion 成员可重建；ID 映射明确；断网 Schema/Bundle/集合校验通过；导出 hash 可对账   |
+| `E2E-AC04-FAILURE`        | 固定 Mock 依次模拟 401、429、5xx、120 秒超时、非法 JSON、STALE_INPUT、取消、迟到响应、各崩溃点                               | 符合 5.3/6.4；终态不回退                                                 | 自动 transport retry ≤2；结构修复 ≤1；未知结果不自动重发；无重复业务版本                                                                   |
+| `E2E-AC05-DIALOGUE`       | 四种 DialogueRenderMode；无台词 WEAK/PRECISE；WEAK 下 frontal_face=true、mouth_visible=true、estimated_speech_duration_sec>4 | 长对白产生 `DLG_WEAK_FRONTAL_LONG_SPEECH` WARN；无台词样本不伪造 speaker | `rule_version`、阈值 4 秒和 snapshot 保存；无台词四字段归零；非空文本的四模式 speaker/audio/lip-sync 跨字段断言通过                        |
+| `E2E-AC06-LOCK-MATRIX`    | 父写子、子写父、同路径、非法 `~`、不存在路径、数组下标、版本变化                                                             | 冲突 100% 阻断；版本变化 `STALE_INPUT`                                   | 无部分版本、无半个锁；Shot JSON `locked_paths` 与 LockRecord 投影完全一致                                                                  |
 
 规则阈值不硬编码在组件中。V1 内置 `producibility-rules/1.0.0`，至少包含 `shot_count_min=6`、`shot_count_max=10`、`weak_lip_sync_long_speech_sec=4`、`target_episode_duration_min_sec=60`、`target_episode_duration_max_sec=120`；每个 finding 和 override 保存 `rule_version`。
 

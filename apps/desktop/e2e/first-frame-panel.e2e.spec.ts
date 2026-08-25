@@ -76,10 +76,11 @@ test('§5.3 逐镜头首帧面板—生成/选择/参考图升版 STALE 与受�
 
     // UI happy path：重载后从项目列表走真实入口进分镜工作区。
     await page.reload();
-    await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await page.locator('.project-card-main', { hasText: '首帧闭环' }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
+    await page.getByRole('button', { name: '画面生成', exact: true }).click();
     await page.locator('.shot-card', { hasText: '#1' }).click();
 
     // 首帧面板：READY 整集下可生成；候选经受限取图协议真实解码。
@@ -87,7 +88,7 @@ test('§5.3 逐镜头首帧面板—生成/选择/参考图升版 STALE 与受�
     await expect(panel.getByRole('heading', { name: '首帧候选 · 镜头 #1' })).toBeVisible();
     await expect(panel.getByText('该镜头尚未生成首帧候选。')).toBeVisible();
     await panel.getByRole('button', { name: '生成首帧候选' }).click();
-    await expect(panel.getByText('任务状态：COMPLETED')).toBeVisible({ timeout: 30_000 });
+    await expect(panel.getByText('任务状态：已完成')).toBeVisible({ timeout: 30_000 });
     await waitForDecodedImages(page);
     await expect(panel.locator('.candidate-card')).toHaveCount(4);
     await expect(panel.locator('.candidate-grid img')).toHaveCount(4);

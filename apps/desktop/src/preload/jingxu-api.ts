@@ -38,12 +38,17 @@ import {
   createProjectInputSchema,
   deleteProjectInputSchema,
   PROJECT_IPC_CHANNELS,
+  PRODUCIBILITY_IPC_CHANNELS,
   providerCredentialCommandSchema,
   providerGetInputSchema,
   PROVIDER_IPC_CHANNELS,
   providerMutationInputSchema,
   providerProfileCommandSchema,
   providerProfileSchema,
+  producibilityGetReportInputSchema,
+  producibilityOverrideFindingInputSchema,
+  producibilityReportSchema,
+  producibilityRunInputSchema,
   projectDetailSchema,
   projectGetInputSchema,
   projectListInputSchema,
@@ -55,14 +60,26 @@ import {
   confirmScriptVersionInputSchema,
   getScriptWorkspaceInputSchema,
   initializeOriginalInputSchema,
+  initializeInputSchema,
+  importInputSchema,
   restoreScriptVersionInputSchema,
   saveScriptDraftInputSchema,
+  rewriteSelectionInputSchema,
+  scriptLockInputSchema,
+  scriptLockListInputSchema,
+  scriptLockSummarySchema,
   shotEditLockSummarySchema,
   storyboardEditShotInputSchema,
   storyboardExportEpisodeInputSchema,
   storyboardExportResultSchema,
   storyboardLockShotInputSchema,
   storyboardUnlockShotInputSchema,
+  storyboardSplitShotInputSchema,
+  storyboardMergeShotsInputSchema,
+  storyboardCopyShotInputSchema,
+  storyboardReorderShotsInputSchema,
+  storyboardDeleteShotInputSchema,
+  storyboardRestoreShotInputSchema,
   STORYBOARD_IPC_CHANNELS,
   scriptMutationResultSchema,
   scriptVersionSchema,
@@ -77,18 +94,30 @@ import {
   VIDEO_IPC_CHANNELS,
   TRANSFER_IPC_CHANNELS,
   cancelVideoBatchInputSchema,
+  cancelVideoExportInputSchema,
+  createVideoTimelineInputSchema,
   generateVideoCandidatesInputSchema,
   generateVideosForShotsInputSchema,
   getVideoTaskInputSchema,
+  getVideoExportJobInputSchema,
+  getVideoTimelineInputSchema,
+  importVideoBackgroundMusicInputSchema,
   listStoryboardVideoStatesInputSchema,
   listVideoCandidatesInputSchema,
   selectVideoCandidateInputSchema,
+  startVideoExportInputSchema,
+  updateVideoTimelineInputSchema,
   videoCandidateViewSchema,
+  videoAudioAssetSummarySchema,
+  videoExportJobSchema,
+  videoTimelineSummarySchema,
   transferExportProjectInputSchema,
   transferImportProjectInputSchema,
   transferExportResultSchema,
   transferImportResultSchema,
   type CancelVideoBatchInputDto,
+  type CancelVideoExportInputDto,
+  type CreateVideoTimelineInputDto,
   type EvaluationAddAnnotationInputDto,
   type EvaluationCreateFromEpisodeInputDto,
   type EvaluationCreateSampleInputDto,
@@ -99,9 +128,14 @@ import {
   type GenerateVideoCandidatesInputDto,
   type GenerateVideosForShotsInputDto,
   type GetVideoTaskInputDto,
+  type GetVideoExportJobInputDto,
+  type GetVideoTimelineInputDto,
+  type ImportVideoBackgroundMusicInputDto,
   type ListStoryboardVideoStatesInputDto,
   type ListVideoCandidatesInputDto,
   type SelectVideoCandidateInputDto,
+  type StartVideoExportInputDto,
+  type UpdateVideoTimelineInputDto,
   type CreateProjectInputDto,
   type GenerateCandidatesForShotsInputDto,
   type GenerateCandidatesInputDto,
@@ -117,6 +151,8 @@ import {
   type ConfirmScriptVersionInputDto,
   type GetScriptWorkspaceInputDto,
   type InitializeOriginalInputDto,
+  type InitializeInputDto,
+  type ImportInputDto,
   type ListAssetsInputDto,
   type ListCandidatesInputDto,
   type ListStoryboardImageStatesInputDto,
@@ -126,14 +162,26 @@ import {
   type ProviderGetInputDto,
   type ProviderMutationInputDto,
   type ProviderProfileCommandDto,
+  type ProducibilityGetReportInputDto,
+  type ProducibilityOverrideFindingInputDto,
+  type ProducibilityRunInputDto,
   type RestoreBackupCommandDto,
   type RestoreProjectInputDto,
   type RestoreScriptVersionInputDto,
   type SaveScriptDraftInputDto,
+  type RewriteSelectionInputDto,
+  type ScriptLockInputDto,
+  type ScriptLockListInputDto,
   type StoryboardEditShotInputDto,
   type StoryboardExportEpisodeInputDto,
   type StoryboardLockShotInputDto,
   type StoryboardUnlockShotInputDto,
+  type StoryboardSplitShotInputDto,
+  type StoryboardMergeShotsInputDto,
+  type StoryboardCopyShotInputDto,
+  type StoryboardReorderShotsInputDto,
+  type StoryboardDeleteShotInputDto,
+  type StoryboardRestoreShotInputDto,
   type SelectCandidateInputDto,
   type StartupCommandDto,
   type UpdateProjectInputDto,
@@ -337,6 +385,26 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
         );
       },
     }),
+    producibility: Object.freeze({
+      run: async (input: ProducibilityRunInputDto) =>
+        appResultSchema(producibilityReportSchema).parse(
+          await invoke(PRODUCIBILITY_IPC_CHANNELS.run, producibilityRunInputSchema.parse(input)),
+        ),
+      getReport: async (input: ProducibilityGetReportInputDto) =>
+        appResultSchema(producibilityReportSchema).parse(
+          await invoke(
+            PRODUCIBILITY_IPC_CHANNELS.getReport,
+            producibilityGetReportInputSchema.parse(input),
+          ),
+        ),
+      overrideFinding: async (input: ProducibilityOverrideFindingInputDto) =>
+        appResultSchema(producibilityReportSchema).parse(
+          await invoke(
+            PRODUCIBILITY_IPC_CHANNELS.overrideFinding,
+            producibilityOverrideFindingInputSchema.parse(input),
+          ),
+        ),
+    }),
     provider: Object.freeze({
       getProfile: async (input: ProviderGetInputDto) =>
         appResultSchema(providerProfileSchema).parse(
@@ -378,6 +446,29 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
             SCRIPT_IPC_CHANNELS.initializeOriginal,
             initializeOriginalInputSchema.parse(input),
           ),
+        ),
+      initializeInput: async (input: InitializeInputDto) =>
+        appResultSchema(scriptWorkspaceSchema).parse(
+          await invoke(SCRIPT_IPC_CHANNELS.initializeInput, initializeInputSchema.parse(input)),
+        ),
+      importInput: async (input: ImportInputDto) =>
+        appResultSchema(scriptWorkspaceSchema).parse(
+          await invoke(SCRIPT_IPC_CHANNELS.importInput, importInputSchema.parse(input)),
+        ),
+      rewriteSelection: async (input: RewriteSelectionInputDto) =>
+        appResultSchema(scriptVersionSchema).parse(
+          await invoke(
+            SCRIPT_IPC_CHANNELS.rewriteSelection,
+            rewriteSelectionInputSchema.parse(input),
+          ),
+        ),
+      lockPath: async (input: ScriptLockInputDto) =>
+        appResultSchema(scriptLockSummarySchema).parse(
+          await invoke(SCRIPT_IPC_CHANNELS.lockPath, scriptLockInputSchema.parse(input)),
+        ),
+      listLocks: async (input: ScriptLockListInputDto) =>
+        appResultSchema(scriptLockSummarySchema).parse(
+          await invoke(SCRIPT_IPC_CHANNELS.listLocks, scriptLockListInputSchema.parse(input)),
         ),
       getWorkspace: async (input: GetScriptWorkspaceInputDto) =>
         appResultSchema(scriptWorkspaceSchema).parse(
@@ -434,6 +525,48 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
             storyboardUnlockShotInputSchema.parse(input),
           ),
         ),
+      splitShot: async (input: StoryboardSplitShotInputDto) =>
+        appResultSchema(shotEditLockSummarySchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.splitShot,
+            storyboardSplitShotInputSchema.parse(input),
+          ),
+        ),
+      mergeShots: async (input: StoryboardMergeShotsInputDto) =>
+        appResultSchema(shotEditLockSummarySchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.mergeShots,
+            storyboardMergeShotsInputSchema.parse(input),
+          ),
+        ),
+      copyShot: async (input: StoryboardCopyShotInputDto) =>
+        appResultSchema(shotEditLockSummarySchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.copyShot,
+            storyboardCopyShotInputSchema.parse(input),
+          ),
+        ),
+      reorderShots: async (input: StoryboardReorderShotsInputDto) =>
+        appResultSchema(shotEditLockSummarySchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.reorderShots,
+            storyboardReorderShotsInputSchema.parse(input),
+          ),
+        ),
+      deleteShot: async (input: StoryboardDeleteShotInputDto) =>
+        appResultSchema(shotEditLockSummarySchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.deleteShot,
+            storyboardDeleteShotInputSchema.parse(input),
+          ),
+        ),
+      restoreShot: async (input: StoryboardRestoreShotInputDto) =>
+        appResultSchema(shotEditLockSummarySchema).parse(
+          await invoke(
+            STORYBOARD_IPC_CHANNELS.restoreShot,
+            storyboardRestoreShotInputSchema.parse(input),
+          ),
+        ),
     }),
     video: Object.freeze({
       generateVideoCandidates: async (input: GenerateVideoCandidatesInputDto) =>
@@ -481,6 +614,43 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
             VIDEO_IPC_CHANNELS.listStoryboardVideoStates,
             listStoryboardVideoStatesInputSchema.parse(input),
           ),
+        ),
+      createTimeline: async (input: CreateVideoTimelineInputDto) =>
+        appResultSchema(videoTimelineSummarySchema).parse(
+          await invoke(
+            VIDEO_IPC_CHANNELS.createTimeline,
+            createVideoTimelineInputSchema.parse(input),
+          ),
+        ),
+      getTimeline: async (input: GetVideoTimelineInputDto) =>
+        appResultSchema(videoTimelineSummarySchema).parse(
+          await invoke(VIDEO_IPC_CHANNELS.getTimeline, getVideoTimelineInputSchema.parse(input)),
+        ),
+      updateTimeline: async (input: UpdateVideoTimelineInputDto) =>
+        appResultSchema(videoTimelineSummarySchema).parse(
+          await invoke(
+            VIDEO_IPC_CHANNELS.updateTimeline,
+            updateVideoTimelineInputSchema.parse(input),
+          ),
+        ),
+      importBackgroundMusic: async (input: ImportVideoBackgroundMusicInputDto) =>
+        appResultSchema(videoAudioAssetSummarySchema).parse(
+          await invoke(
+            VIDEO_IPC_CHANNELS.importBackgroundMusic,
+            importVideoBackgroundMusicInputSchema.parse(input),
+          ),
+        ),
+      startExport: async (input: StartVideoExportInputDto) =>
+        appResultSchema(videoExportJobSchema).parse(
+          await invoke(VIDEO_IPC_CHANNELS.startExport, startVideoExportInputSchema.parse(input)),
+        ),
+      getExportJob: async (input: GetVideoExportJobInputDto) =>
+        appResultSchema(videoExportJobSchema).parse(
+          await invoke(VIDEO_IPC_CHANNELS.getExportJob, getVideoExportJobInputSchema.parse(input)),
+        ),
+      cancelExport: async (input: CancelVideoExportInputDto) =>
+        appResultSchema(videoExportJobSchema).parse(
+          await invoke(VIDEO_IPC_CHANNELS.cancelExport, cancelVideoExportInputSchema.parse(input)),
         ),
     }),
     transfer: Object.freeze({

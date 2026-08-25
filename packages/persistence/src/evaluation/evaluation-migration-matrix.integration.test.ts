@@ -64,7 +64,7 @@ const countRows = (database: SqliteTestDatabase, table: string): number =>
   ).count;
 
 describe('0016→0017 前向迁移与播种矩阵（storyboard-evaluation-set 3.3）', () => {
-  it('0016 库带历史评测行无损升级—旧行原样、rule 列 NULL、种子补齐、版本到 17', async () => {
+  it('0016 库带历史评测行无损升级—旧行原样、rule 列 NULL、种子补齐、版本到 19', async () => {
     await withMatrixDatabase(16, async (database) => {
       // 0016 语义：两表存在但尚无 rule_hits 列。
       const columnsBefore = database
@@ -80,8 +80,8 @@ describe('0016→0017 前向迁移与播种矩阵（storyboard-evaluation-set 3.
       const versions = database
         .prepare('SELECT version FROM schema_migrations ORDER BY version')
         .all() as unknown as readonly { readonly version: number }[];
-      expect(versions).toHaveLength(17);
-      expect(versions.at(-1)?.version).toBe(17);
+      expect(versions).toHaveLength(19);
+      expect(versions.at(-1)?.version).toBe(19);
 
       // 旧行原样保留且读侧不虚构命中；种子 24 行补齐，标注 = 24 种子 + 1 历史。
       const legacy = await new SqliteEvaluationSampleRepository(database).findById(
@@ -102,7 +102,7 @@ describe('0016→0017 前向迁移与播种矩阵（storyboard-evaluation-set 3.
         await loadMigrationSet(MIGRATION_DIRECTORY),
         () => NOW,
       );
-      expect(plan.currentVersion).toBe(17);
+      expect(plan.currentVersion).toBe(19);
       expect(plan.pending).toHaveLength(0);
       expect(countRows(database, 'evaluation_samples')).toBe(24);
       expect(countRows(database, 'evaluation_annotations')).toBe(24);

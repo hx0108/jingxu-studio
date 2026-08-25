@@ -92,9 +92,7 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
       env: environment(),
     });
     const page = await application.firstWindow();
-    await page
-      .getByRole('heading', { name: '镜序 Studio', exact: true })
-      .waitFor({ timeout: 30_000 });
+    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
 
     // 阶段一：全新项目走真实 Qwen 六阶段播种；续跑项目只校验分镜仍 READY 并取镜头清单。
     let projectId = '';
@@ -147,15 +145,14 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
 
     // 阶段二：ARK Key 走 UI 路径（与 real-seedream-probe 同闭环：先删后存→解密测试）。
     await page.reload();
-    await page
-      .getByRole('heading', { name: '镜序 Studio', exact: true })
-      .waitFor({ timeout: 30_000 });
+    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
     await page.locator('.project-card-main', { hasText: cardName }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await page.getByRole('heading', { name: '分镜工作台' }).waitFor();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
     const imageCard = page.locator('section[aria-labelledby="image-provider-title"]');
     await imageCard
-      .getByRole('heading', { name: '图片 Provider 设置（火山方舟 ARK）' })
+      .getByRole('heading', { name: '图片模型服务（火山方舟 ARK）' })
       .waitFor({ timeout: 30_000 });
     // 已配置且末四位与本轮密钥一致 → 直接复用不删存（删除确认框曾需人工应答，15:0x 实录
     // 卡住整轮探针）；未配置或密钥不一致才走「先删后存」重建。
@@ -418,9 +415,7 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
         : ([...finalStates.batches].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0] ??
           null);
     await page.reload();
-    await page
-      .getByRole('heading', { name: '镜序 Studio', exact: true })
-      .waitFor({ timeout: 30_000 });
+    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
     await page.locator('.project-card-main', { hasText: cardName }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await page.getByRole('heading', { name: '分镜工作台' }).waitFor();
@@ -456,6 +451,7 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
     }
     await expect(page.getByRole('button', { name: '取消剩余镜头' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: '重试失败镜头（新批次）' })).toHaveCount(0);
+    await page.getByRole('button', { name: '画面生成', exact: true }).click();
     await page.locator('.shot-card', { hasText: /#1\b/ }).click();
     await page.getByRole('heading', { name: '首帧候选 · 镜头 #1' }).waitFor();
     await page.waitForFunction(

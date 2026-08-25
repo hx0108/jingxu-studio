@@ -54,6 +54,8 @@ describe('0003_script_version_receipts.sql', () => {
           { version: 15 },
           { version: 16 },
           { version: 17 },
+          { version: 18 },
+          { version: 19 },
         ]);
         expect(
           database
@@ -67,6 +69,8 @@ describe('0003_script_version_receipts.sql', () => {
           'DELETE_PROJECT',
           'RESTORE_PROJECT',
           'INITIALIZE_ORIGINAL',
+          'INITIALIZE_INPUT',
+          'REWRITE_SELECTION',
           'SAVE_SCRIPT_DRAFT',
           'CONFIRM_SCRIPT_VERSION',
           'RESTORE_SCRIPT_VERSION',
@@ -94,7 +98,7 @@ describe('0003_script_version_receipts.sql', () => {
                (request_id, command_name, payload_sha256, result_ref_json, trace_id, committed_at)
                VALUES (?, ?, ?, ?, ?, ?)`,
             )
-            .run('request_bad', 'REWRITE_SELECTION', 'a'.repeat(64), '{}', 'trace', NOW),
+            .run('request_bad', 'NOT_A_SCRIPT_COMMAND', 'a'.repeat(64), '{}', 'trace', NOW),
         ).toThrow();
       } finally {
         database.close();
@@ -171,7 +175,7 @@ describe('0003_script_version_receipts.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 17 });
+        ).toEqual({ version: 19 });
       } finally {
         database.close();
       }
@@ -361,7 +365,7 @@ describe('0008_prompt_templates_shot_contract.sql', () => {
         ).toEqual({ count: 1 });
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 17 });
+        ).toEqual({ version: 19 });
       } finally {
         database.close();
       }

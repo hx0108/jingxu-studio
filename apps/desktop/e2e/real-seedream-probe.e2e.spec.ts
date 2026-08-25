@@ -65,9 +65,7 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
       ...(probeExecutable === '' ? {} : { executablePath: probeExecutable }),
     });
     const page = await application.firstWindow();
-    await page
-      .getByRole('heading', { name: '镜序 Studio', exact: true })
-      .waitFor({ timeout: 30_000 });
+    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
 
     // 阶段一：真实 Qwen 五阶段 + SHOT_CONTRACT，取得 READY 分镜（与 real-qwen-probe 同源逻辑）。
     const seeded = await page.evaluate(
@@ -324,15 +322,14 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
 
     // ARK Key 走 UI 路径（6.1）：真实页面 ImageProviderCard「保存→解密测试」，替代 env 引导。
     await page.reload();
-    await page
-      .getByRole('heading', { name: '镜序 Studio', exact: true })
-      .waitFor({ timeout: 30_000 });
+    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
     await page.locator('.project-card-main', { hasText: projectName }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await page.getByRole('heading', { name: '分镜工作台' }).waitFor();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
     const imageCard = page.locator('section[aria-labelledby="image-provider-title"]');
     await imageCard
-      .getByRole('heading', { name: '图片 Provider 设置（火山方舟 ARK）' })
+      .getByRole('heading', { name: '图片模型服务（火山方舟 ARK）' })
       .waitFor({ timeout: 30_000 });
     // 生产档可能残留旧配置：先走 UI 删除，再完整复刻「保存→测试」闭环。
     if ((await imageCard.getByText(/已配置/).count()) > 0) {
@@ -541,6 +538,7 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
     await page.locator('.project-card-main', { hasText: projectName }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await page.getByRole('heading', { name: '分镜工作台' }).waitFor();
+    await page.getByRole('button', { name: '画面生成', exact: true }).click();
     await page.locator('.shot-card', { hasText: '#1' }).click();
     await page.getByRole('heading', { name: '首帧候选 · 镜头 #1' }).waitFor();
     await page.waitForFunction(

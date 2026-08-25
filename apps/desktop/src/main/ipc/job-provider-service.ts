@@ -134,6 +134,15 @@ const mapProviderError = (
       null,
     );
   }
+  if (marker === 'PROVIDER_MODEL_NOT_ALLOWED') {
+    return err<ProviderProfileDto>(
+      'IPC_INVALID_REQUEST',
+      traceId,
+      '视频模型不在允许的选择范围内。',
+      false,
+      '请选择视频 Provider 设置中列出的模型。',
+    );
+  }
   return err<ProviderProfileDto>(fallback, traceId, 'Provider 操作失败，请重试。', true, null);
 };
 
@@ -178,6 +187,11 @@ const CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFa
       message: 'Provider 服务端错误。',
       retryable: true,
       userAction: '请稍后重试；若持续失败请查看 Provider 状态页。',
+    },
+    MODEL_MODEL_UNAVAILABLE: {
+      message: '当前模型未开通或当前 API Key 无调用权限。',
+      retryable: false,
+      userAction: '请在火山方舟开通所选模型或配置对应接入点后重试。',
     },
     MODEL_RATE_LIMITED: {
       message: 'Provider 限流，请稍后再试。',
@@ -340,15 +354,20 @@ export const createJobProviderIpcService = (
   ): Promise<AppResultDto<ProviderProfileDto>> => {
     const result = await mutate(
       input,
-      `${PROVIDER_IPC_CHANNELS.saveProfile}:${input.profileId}`,
+      `${PROVIDER_IPC_CHANNELS.saveProfile}:${input.profileId}:${input.modelId ?? ''}`,
       traceId,
       async () => {
         try {
-          const view = await providerFor(input.profileId).saveProfile(
-            input.profileId,
-            input.workspaceId,
-            input.enabled,
-          );
+          const provider = providerFor(input.profileId);
+          const view =
+            input.modelId === undefined
+              ? await provider.saveProfile(input.profileId, input.workspaceId, input.enabled)
+              : await provider.saveProfile(
+                  input.profileId,
+                  input.workspaceId,
+                  input.enabled,
+                  input.modelId,
+                );
           return ok(toProviderDto(view));
         } catch (error) {
           return mapProviderError(error, traceId, 'PROVIDER_CALL_FAILED');

@@ -12,6 +12,7 @@ import type { AppResultDto } from '@jingxu/contracts';
 import {
   QWEN_MODEL_ID,
   QwenTextModelAdapter,
+  SELECTABLE_SEEDANCE_VIDEO_MODELS,
   SEEDANCE_MODEL_ID,
   SEEDREAM_MODEL_ID,
   deriveQwenBaseUrl,
@@ -20,7 +21,10 @@ import {
 } from '@jingxu/model-adapters';
 
 import { CredentialAdapter, type SafeStorageFacade } from '../adapters/credential';
-import { E2eScriptTextModelAdapter } from '../adapters/e2e-script-text-model-adapter';
+import {
+  E2eScriptTextModelAdapter,
+  type E2eFailureScenario,
+} from '../adapters/e2e-script-text-model-adapter';
 import { ProfileTextModelAdapter } from '../adapters/profile-text-model-adapter';
 import { JobService } from '../jobs/job-service';
 import {
@@ -89,8 +93,8 @@ const VIDEO_PROFILE_ID = VIDEO_CREDENTIAL_ID;
 const VIDEO_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
   baseUrl: deriveSeedanceBaseUrl(),
   modelId: SEEDANCE_MODEL_ID,
-  // 取自锁定 model id 的 yymmdd 版本段：doubao-seedance-1-5-pro-251215 → 2025-12-15。
-  modelSnapshotDate: '2025-12-15',
+  // 默认档 Seedance-2.0：doubao-seedance-2-0-260128 → 2026-01-28。
+  modelSnapshotDate: '2026-01-28',
   provider: 'VOLCARK_SEEDANCE',
   workspaceId: 'ark',
 };
@@ -159,8 +163,13 @@ export const createJobProviderFeatureRegistration = ({
         safeStorage,
         secretsDirectory: path.join(managedRoot, 'secrets'),
       });
+      const e2eTextModel = useE2eMock
+        ? new E2eScriptTextModelAdapter(
+            (process.env.JINGXU_E2E_FAILURE_SCENARIO ?? null) as E2eFailureScenario | null,
+          )
+        : null;
       const createProviderAdapter = (profile: ProviderProfile): TextModelPort => {
-        if (useE2eMock) return new E2eScriptTextModelAdapter();
+        if (e2eTextModel !== null) return e2eTextModel;
         if (profile.credentialRef === null) throw new Error('PROVIDER_CREDENTIAL_MISSING');
         return new QwenTextModelAdapter({
           credentialId: profile.credentialRef,
@@ -227,6 +236,10 @@ export const createJobProviderFeatureRegistration = ({
         credentials: videoCredentials,
         defaults: VIDEO_PROVIDER_DEFAULTS,
         profiles,
+        selectableModels: SELECTABLE_SEEDANCE_VIDEO_MODELS.map((model) => ({
+          id: model.id,
+          snapshotDate: model.snapshotDate,
+        })),
         textModelFactory: () => videoCredentialValidator,
         unitOfWork: providerUnitOfWork,
       });
@@ -239,6 +252,7 @@ export const createJobProviderFeatureRegistration = ({
           profiles,
         }),
         unitOfWork: scriptUnitOfWork,
+        forceStaleInput: process.env.JINGXU_E2E_FAILURE_SCENARIO === 'stale',
       });
       const jobService = new JobService({
         jobs,

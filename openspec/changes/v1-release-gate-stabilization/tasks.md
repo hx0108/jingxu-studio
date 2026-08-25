@@ -1,0 +1,4 @@
+- [x] 修复评测 E2E 联合类型与可空分支。
+- [x] 修复 EvaluationWorkspace ESLint/React effect 门禁。
+- [x] 运行 format、lint、typecheck、test:collection。
+- [x] 运行完整单元、Contract、Integration、E2E 和 Windows 打包门禁。

@@ -328,14 +328,22 @@ test('分镜逐镜头编辑与锁定—编辑往返/锁阻断/解锁/非法路�
     expect(dataPath.unlockedPaths).toEqual([]);
     // storyboard 命名空间白名单（D4；storyboard-export 起第 4 方法 exportEpisode）。
     expect(dataPath.storyboardKeys).toEqual([
+      'copyShot',
+      'deleteShot',
       'editShot',
       'exportEpisode',
       'lockShot',
+      'mergeShots',
+      'reorderShots',
+      'restoreShot',
+      'splitShot',
       'unlockShot',
     ]);
     expect(dataPath.storyboardFrozen).toBe(true);
 
     // ---- UI 通路：项目导航、编辑入口、锁徽标、锁阻断错误、七根级入口 ----
+    await page.reload();
+    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await page.locator('.project-card-main', { hasText: '编辑锁定闭环' }).first().click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
@@ -365,7 +373,7 @@ test('分镜逐镜头编辑与锁定—编辑往返/锁阻断/解锁/非法路�
     blockedDialogue.estimated_speech_duration_sec = 4;
     await editor.fill(JSON.stringify(blockedDocument, null, 2));
     await page.locator('button[name="save-shot-edit"]').click();
-    await expect(page.locator('p.field-error.script-card')).toContainText('SHOT_LOCK_CONFLICT');
+    await expect(page.locator('section.inline-error')).toContainText('SHOT_LOCK_CONFLICT');
 
     // 解锁 → 徽标消失。
     await page.locator('button[name="unlock-shot"]').click();

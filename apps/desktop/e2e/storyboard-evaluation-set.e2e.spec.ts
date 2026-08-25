@@ -36,7 +36,7 @@ test('评测集—种子/九类规则/创建派生导入标注删除/路径红�
   const managedRoot = path.join(root, 'managed');
   const importFile = path.join(root, 'incoming', 'evaluation.json');
   await mkdir(path.dirname(importFile), { recursive: true });
-  let application = await launch(managedRoot, importFile);
+  const application = await launch(managedRoot, importFile);
   try {
     const page = await application.firstWindow();
     const seeded = await seedStoryboardReady(page, '评测集闭环');
@@ -125,7 +125,8 @@ test('评测集—种子/九类规则/创建派生导入标注删除/路径红�
           stage: 'SHOT_CONTRACT',
           versionId: restored.data.id,
         });
-        return { confirmed, rejected, restored };
+        if (!confirmed.ok) throw new Error(confirmed.error.code);
+        return { confirmedVersionId: confirmed.data.id, rejected, restored };
       },
       {
         episodeId: baseline.episodeId,
@@ -138,8 +139,8 @@ test('评测集—种子/九类规则/创建派生导入标注删除/路径红�
       error: { code: 'EVALUATION_DERIVE_NOT_READY' },
       ok: false,
     });
-    expect(readiness.confirmed).toMatchObject({ ok: true });
-    if (!readiness.confirmed.ok) throw new Error(readiness.confirmed.error.code);
+    const confirmedVersionId = readiness.confirmedVersionId ?? '';
+    expect(confirmedVersionId).not.toBe('');
 
     const derived = await page.evaluate(
       async (context: { projectId: string; versionId: string }) =>
@@ -150,7 +151,7 @@ test('评测集—种子/九类规则/创建派生导入标注删除/路径红�
           projectId: context.projectId,
           requestId: `evaluation_derive_${crypto.randomUUID()}`,
         }),
-      { projectId: seeded.projectId, versionId: readiness.confirmed.data.id },
+      { projectId: seeded.projectId, versionId: confirmedVersionId },
     );
     if (!derived.ok) throw new Error(`derive:${derived.error.code}`);
     expect(derived.data.samples).toHaveLength(6);
@@ -240,7 +241,10 @@ test('评测集—种子/九类规则/创建派生导入标注删除/路径红�
     });
 
     // UI 双入口：项目详情按钮与全局导航均可达；提示文本不含本地路径。
-    await page.getByRole('button', { name: '项目', exact: true }).click();
+    await page
+      .locator('nav[aria-label="全局导航"]')
+      .getByRole('button', { name: '我的项目', exact: true })
+      .click();
     await page.locator('.project-card-main', { hasText: '评测集闭环' }).click();
     await page.getByRole('button', { name: '当前项目评测集' }).click();
     await expect(page.getByRole('heading', { name: '结构化分镜评测集' })).toBeVisible();

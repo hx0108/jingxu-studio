@@ -78,11 +78,14 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
 
   try {
     let page = await application.firstWindow();
-    await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await createProjectThroughUi(page, '竖屏项目', '9:16');
     await expect(page.getByText('1080×1920')).toBeVisible();
     await expect(page.getByText('当前版本 v1')).toBeVisible();
-    await page.getByRole('button', { name: '项目', exact: true }).click();
+    await page
+      .locator('nav[aria-label="全局导航"]')
+      .getByRole('button', { name: '我的项目', exact: true })
+      .click();
     await createProjectThroughUi(page, '横屏项目', '16:9');
     await expect(page.getByText('1920×1080')).toBeVisible();
     await application.close();
@@ -153,6 +156,7 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
         'events',
         'image',
         'job',
+        'producibility',
         'project',
         'provider',
         'runtime',
@@ -276,7 +280,10 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
     await expect(page.getByRole('button', { name: /并发基准项目新版/u })).toBeVisible();
     await page.getByRole('button', { name: '恢复项目' }).click();
     await page.getByRole('button', { name: '确认恢复' }).click();
-    await page.getByRole('button', { name: '项目', exact: true }).click();
+    await page
+      .getByLabel('项目范围')
+      .getByRole('button', { name: '我的项目', exact: true })
+      .click();
     await page.getByRole('button', { name: /并发基准项目新版/u }).click();
 
     await page.getByRole('button', { name: '编辑创作设定' }).click();
@@ -292,20 +299,29 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
       .getByRole('button', { name: '取消', exact: true })
       .click();
     await expect(page.getByLabel('项目名称')).toHaveValue('dirty 取消保留');
-    await page.getByRole('button', { name: '项目', exact: true }).click();
+    await page
+      .locator('nav[aria-label="全局导航"]')
+      .getByRole('button', { name: '我的项目', exact: true })
+      .click();
     await page
       .getByRole('dialog', { name: '创作设定尚未保存' })
       .getByRole('button', { name: '取消', exact: true })
       .click();
     await expect(page.getByLabel('项目名称')).toHaveValue('dirty 取消保留');
-    await page.getByRole('button', { name: '项目', exact: true }).click();
+    await page
+      .locator('nav[aria-label="全局导航"]')
+      .getByRole('button', { name: '我的项目', exact: true })
+      .click();
     await page.getByRole('button', { name: '放弃修改' }).click();
     await expect(page.getByRole('button', { name: /并发基准项目新版/u })).toBeVisible();
 
     await page.getByRole('button', { name: /并发基准项目新版/u }).click();
     await page.getByRole('button', { name: '编辑创作设定' }).click();
     await page.getByLabel('项目名称').fill('dirty 保存成功');
-    await page.getByRole('button', { name: '项目', exact: true }).click();
+    await page
+      .locator('nav[aria-label="全局导航"]')
+      .getByRole('button', { name: '我的项目', exact: true })
+      .click();
     await page.getByRole('button', { name: '保存并离开' }).click();
     await expect(page.getByRole('button', { name: /dirty 保存成功/u })).toBeVisible();
 
@@ -527,7 +543,7 @@ test('Schema 资源缺失—只读故障阻断四个写命令—原位修复后�
     await restoreSchemaResourceIfNeeded();
     await page.getByRole('button', { name: '重新检查' }).click();
     await expect(page.getByTestId('workspace-ready')).toBeVisible();
-    await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await expect
       .poll(async () => page.evaluate(() => window.jingxu.runtime.getStartupStatus()))
       .toMatchObject({

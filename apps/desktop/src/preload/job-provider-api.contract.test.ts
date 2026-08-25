@@ -11,6 +11,7 @@ describe('Job Provider Events Preload Contract', () => {
       'events',
       'image',
       'job',
+      'producibility',
       'project',
       'provider',
       'runtime',

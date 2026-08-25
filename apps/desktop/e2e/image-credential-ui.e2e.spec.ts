@@ -37,15 +37,14 @@ test('§3.2 图片凭据 UI 闭环—保存→解密测试→删除：密文固�
     // 播种已初始化的剧本工作区，使 ProviderSettings（含图片卡片）可达。
     await seedStoryboardReady(page, '图片凭据闭环');
     await page.reload();
-    await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await page.locator('.project-card-main', { hasText: '图片凭据闭环' }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
+    await page.getByRole('button', { name: '设置', exact: true }).click();
 
     const card = page.locator('section[aria-labelledby="image-provider-title"]');
-    await expect(
-      card.getByRole('heading', { name: '图片 Provider 设置（火山方舟 ARK）' }),
-    ).toBeVisible();
+    await expect(card.getByRole('heading', { name: '图片模型服务（火山方舟 ARK）' })).toBeVisible();
     // 惰性默认档：模型只读展示、未配置、验证范围如实文案。
     await expect(card.locator('input[readonly]')).toHaveValue('doubao-seedream-5-0-lite-260128');
     await expect(card.getByText('未配置', { exact: true })).toBeVisible();

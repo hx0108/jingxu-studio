@@ -425,16 +425,20 @@ test('dirty 离开取消与 Script 白名单—不丢输入且不暴露通用 IP
   const application = await launch(path.join(root, 'managed'));
   try {
     const page = await application.firstWindow();
-    await expect(page.getByRole('heading', { name: '镜序 Studio', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await page.getByRole('button', { name: '创建第一个项目' }).click();
     await page.getByLabel('项目名称').fill('剧本安全路径');
     await page.getByRole('button', { name: '保存项目' }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
+    const initializeButton = page.getByRole('button', { name: '创建剧本工作区' });
+    await expect(initializeButton).toBeDisabled();
+    await expect(page.getByRole('status')).toContainText('还需输入 20 个 Unicode 字符');
     await page
       .getByLabel('创意内容')
       .fill('这是一段用于验证刷新、取消和离开保护的原创漫剧创意，长度满足产品边界。');
     await page.getByRole('checkbox').check();
-    await page.getByRole('button', { name: '项目', exact: true }).click();
+    await expect(initializeButton).toBeEnabled();
+    await page.getByRole('button', { name: '我的项目', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
     await page.getByRole('dialog').getByRole('button', { name: '取消', exact: true }).click();
     await expect(page.getByLabel('创意内容')).toHaveValue(/刷新、取消和离开保护/u);
@@ -450,10 +454,24 @@ test('dirty 离开取消与 Script 白名单—不丢输入且不暴露通用 IP
     expect(scriptSurface).toEqual({
       frozen: true,
       generic: false,
-      keys: ['confirmVersion', 'getWorkspace', 'initializeOriginal', 'restoreVersion', 'saveDraft'],
+      keys: [
+        'confirmVersion',
+        'getWorkspace',
+        'importInput',
+        'initializeInput',
+        'initializeOriginal',
+        'listLocks',
+        'lockPath',
+        'restoreVersion',
+        'rewriteSelection',
+        'saveDraft',
+      ],
     });
-    await page.getByRole('button', { name: '项目', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: '放弃修改' }).click();
+    await page.getByRole('button', { name: '我的项目', exact: true }).click();
+    const leaveDialog = page.getByRole('dialog');
+    await expect(leaveDialog).toBeVisible();
+    await leaveDialog.getByRole('button', { name: '放弃修改' }).click();
+    await expect(leaveDialog).toBeHidden();
   } finally {
     await application.close();
     await rm(root, { force: true, recursive: true });

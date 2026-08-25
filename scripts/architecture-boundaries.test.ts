@@ -19,10 +19,12 @@ const collectTypeScriptFiles = async (root: string): Promise<string[]> => {
 
 const assertFilesExclude = async (root: string, forbidden: RegExp): Promise<void> => {
   const files = await collectTypeScriptFiles(root);
-  for (const file of files) {
-    const content = await readFile(file, 'utf8');
-    expect(content, path.relative(repositoryRoot, file)).not.toMatch(forbidden);
-  }
+  await Promise.all(
+    files.map(async (file) => {
+      const content = await readFile(file, 'utf8');
+      expect(content, path.relative(repositoryRoot, file)).not.toMatch(forbidden);
+    }),
+  );
 };
 
 describe('跨包依赖边界', () => {
