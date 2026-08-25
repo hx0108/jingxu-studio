@@ -121,6 +121,8 @@ const buildReadyShotVersions = (
       ...(JSON.parse(version.document) as Readonly<Record<string, unknown>>),
       contract_version: versionNo,
       parent_version_id: version.id,
+      // 重排仅先推进 EpisodeVersion 链接；确认 READY 时创建新镜头版本并把链接序号固化到文档。
+      sequence: link.sequence,
       status: 'READY',
       version_id: id,
     };

@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { createShotEditLockService, createStoryboardExportService } from '@jingxu/application';
+import {
+  createShotEditLockService,
+  createStoryboardExportService,
+  createStoryboardStructuralEditService,
+} from '@jingxu/application';
 import type {
   CompiledSchemaRegistry,
   FormatProfileRepository,
@@ -95,6 +99,13 @@ export const createProductionStoryboardService = (
           };
     },
   });
+  const structuralService = createStoryboardStructuralEditService({
+    hashPayload,
+    hashText,
+    newId: randomUUID,
+    now: (): string => new Date().toISOString(),
+    unitOfWork: handles.unitOfWork,
+  });
   // application 摘要的 readonly lockedPaths → 可序列化 DTO 数组。
   const toDto = (summary: ShotEditLockSummary): ShotEditLockSummaryDto => ({
     episode: summary.episode,
@@ -111,6 +122,37 @@ export const createProductionStoryboardService = (
     exportEpisode: (input, traceId) => exportService.exportEpisode(input, traceId),
     lockShot: (input, traceId) => adapt(service.lockShot(input, traceId)),
     unlockShot: (input, traceId) => adapt(service.unlockShot(input, traceId)),
+    splitShot: (input, traceId) =>
+      structuralService
+        .mutate({ ...input, operation: 'SPLIT' }, traceId)
+        .then((result) => (result.ok ? { data: toDto(result.data), ok: true } : result)),
+    mergeShots: (input, traceId) =>
+      structuralService
+        .mutate(
+          {
+            ...input,
+            operation: 'MERGE',
+            shotIds: [input.shotIds[0] ?? '', input.shotIds[1] ?? ''],
+          },
+          traceId,
+        )
+        .then((result) => (result.ok ? { data: toDto(result.data), ok: true } : result)),
+    copyShot: (input, traceId) =>
+      structuralService
+        .mutate({ ...input, operation: 'COPY' }, traceId)
+        .then((result) => (result.ok ? { data: toDto(result.data), ok: true } : result)),
+    reorderShots: (input, traceId) =>
+      structuralService
+        .mutate({ ...input, operation: 'REORDER' }, traceId)
+        .then((result) => (result.ok ? { data: toDto(result.data), ok: true } : result)),
+    deleteShot: (input, traceId) =>
+      structuralService
+        .mutate({ ...input, operation: 'DELETE' }, traceId)
+        .then((result) => (result.ok ? { data: toDto(result.data), ok: true } : result)),
+    restoreShot: (input, traceId) =>
+      structuralService
+        .mutate({ ...input, operation: 'RESTORE' }, traceId)
+        .then((result) => (result.ok ? { data: toDto(result.data), ok: true } : result)),
   };
 };
 
@@ -147,6 +189,12 @@ export const createStoryboardFeatureRegistration = ({
     exportEpisode: (input, traceId) => activeService?.exportEpisode(input, traceId) ?? blocked(),
     lockShot: (input, traceId) => activeService?.lockShot(input, traceId) ?? blocked(),
     unlockShot: (input, traceId) => activeService?.unlockShot(input, traceId) ?? blocked(),
+    splitShot: (input, traceId) => activeService?.splitShot?.(input, traceId) ?? blocked(),
+    mergeShots: (input, traceId) => activeService?.mergeShots?.(input, traceId) ?? blocked(),
+    copyShot: (input, traceId) => activeService?.copyShot?.(input, traceId) ?? blocked(),
+    reorderShots: (input, traceId) => activeService?.reorderShots?.(input, traceId) ?? blocked(),
+    deleteShot: (input, traceId) => activeService?.deleteShot?.(input, traceId) ?? blocked(),
+    restoreShot: (input, traceId) => activeService?.restoreShot?.(input, traceId) ?? blocked(),
   };
   registerStoryboardIpc(
     ipcRegistrar,

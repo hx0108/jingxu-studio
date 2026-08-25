@@ -19,11 +19,17 @@ const shotId = 'shot_1234567890';
 const shotVersionId = 'scv_1234567890';
 
 describe('Storyboard IPC Contract（shot-edit-lock D4）', () => {
-  it('频道白名单—四个逐方法接口—名称固定且 API 类型公开，script.* 白名单不受影响', () => {
+  it('频道白名单—结构化编辑逐方法接口—名称固定且 API 类型公开', () => {
     expect(Object.values(STORYBOARD_IPC_CHANNELS).sort()).toEqual([
+      'storyboard.copyShot',
+      'storyboard.deleteShot',
       'storyboard.editShot',
       'storyboard.exportEpisode',
       'storyboard.lockShot',
+      'storyboard.mergeShots',
+      'storyboard.reorderShots',
+      'storyboard.restoreShot',
+      'storyboard.splitShot',
       'storyboard.unlockShot',
     ]);
     expectTypeOf<StoryboardApi>().toBeObject();

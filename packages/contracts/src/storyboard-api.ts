@@ -48,6 +48,27 @@ export const storyboardUnlockShotInputSchema = z
   })
   .strict();
 
+const structuralBase = z
+  .object({
+    episodeId: idSchema,
+    expectedVersionId: idSchema,
+    projectId: projectIdSchema,
+    requestId: requestIdSchema,
+  })
+  .strict();
+export const storyboardSplitShotInputSchema = structuralBase.extend({ shotId: idSchema }).strict();
+export const storyboardMergeShotsInputSchema = structuralBase
+  .extend({ shotIds: z.array(idSchema).length(2) })
+  .strict();
+export const storyboardCopyShotInputSchema = structuralBase.extend({ shotId: idSchema }).strict();
+export const storyboardReorderShotsInputSchema = structuralBase
+  .extend({ orderedShotIds: z.array(idSchema).min(1).max(20) })
+  .strict();
+export const storyboardDeleteShotInputSchema = structuralBase.extend({ shotId: idSchema }).strict();
+export const storyboardRestoreShotInputSchema = structuralBase
+  .extend({ shotId: idSchema, fromVersionId: idSchema })
+  .strict();
+
 /** editShot/lockShot/unlockShot 共用输出：整集摘要 + 镜头当前版本 + 有效锁投影。 */
 export const shotEditLockSummarySchema = z
   .object({
@@ -61,6 +82,12 @@ export const shotEditLockSummarySchema = z
 export type StoryboardEditShotInputDto = z.infer<typeof storyboardEditShotInputSchema>;
 export type StoryboardLockShotInputDto = z.infer<typeof storyboardLockShotInputSchema>;
 export type StoryboardUnlockShotInputDto = z.infer<typeof storyboardUnlockShotInputSchema>;
+export type StoryboardSplitShotInputDto = z.infer<typeof storyboardSplitShotInputSchema>;
+export type StoryboardMergeShotsInputDto = z.infer<typeof storyboardMergeShotsInputSchema>;
+export type StoryboardCopyShotInputDto = z.infer<typeof storyboardCopyShotInputSchema>;
+export type StoryboardReorderShotsInputDto = z.infer<typeof storyboardReorderShotsInputSchema>;
+export type StoryboardDeleteShotInputDto = z.infer<typeof storyboardDeleteShotInputSchema>;
+export type StoryboardRestoreShotInputDto = z.infer<typeof storyboardRestoreShotInputSchema>;
 export type ShotEditLockSummaryDto = z.infer<typeof shotEditLockSummarySchema>;
 
 /**
@@ -114,6 +141,14 @@ export interface StoryboardApi {
   ): Promise<AppResultDto<StoryboardExportResultDto>>;
   lockShot(input: StoryboardLockShotInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
   unlockShot(input: StoryboardUnlockShotInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  splitShot(input: StoryboardSplitShotInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  mergeShots(input: StoryboardMergeShotsInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  copyShot(input: StoryboardCopyShotInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  reorderShots(
+    input: StoryboardReorderShotsInputDto,
+  ): Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  deleteShot(input: StoryboardDeleteShotInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  restoreShot(input: StoryboardRestoreShotInputDto): Promise<AppResultDto<ShotEditLockSummaryDto>>;
 }
 
 export const STORYBOARD_IPC_CHANNELS = {
@@ -121,4 +156,10 @@ export const STORYBOARD_IPC_CHANNELS = {
   exportEpisode: 'storyboard.exportEpisode',
   lockShot: 'storyboard.lockShot',
   unlockShot: 'storyboard.unlockShot',
+  splitShot: 'storyboard.splitShot',
+  mergeShots: 'storyboard.mergeShots',
+  copyShot: 'storyboard.copyShot',
+  reorderShots: 'storyboard.reorderShots',
+  deleteShot: 'storyboard.deleteShot',
+  restoreShot: 'storyboard.restoreShot',
 } as const;

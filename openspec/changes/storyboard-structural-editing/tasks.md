@@ -1,0 +1,4 @@
+- [x] 增加六组 storyboard Contract、IPC 和 Preload 方法。
+- [x] 增加 shot 生命周期、shot_derivations 和 EpisodeVersion 原子写入。
+- [x] 保持 sequence 连续并重算 shot_set_hash。
+- [x] 完成 AC-V1-03 导出/Bundle roundtrip Electron 证据。

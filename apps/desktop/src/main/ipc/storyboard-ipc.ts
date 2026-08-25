@@ -9,6 +9,12 @@ import {
   storyboardExportResultSchema,
   storyboardLockShotInputSchema,
   storyboardUnlockShotInputSchema,
+  storyboardSplitShotInputSchema,
+  storyboardMergeShotsInputSchema,
+  storyboardCopyShotInputSchema,
+  storyboardReorderShotsInputSchema,
+  storyboardDeleteShotInputSchema,
+  storyboardRestoreShotInputSchema,
 } from '@jingxu/contracts';
 import type {
   AppResultDto,
@@ -18,6 +24,12 @@ import type {
   StoryboardExportResultDto,
   StoryboardLockShotInputDto,
   StoryboardUnlockShotInputDto,
+  StoryboardSplitShotInputDto,
+  StoryboardMergeShotsInputDto,
+  StoryboardCopyShotInputDto,
+  StoryboardReorderShotsInputDto,
+  StoryboardDeleteShotInputDto,
+  StoryboardRestoreShotInputDto,
 } from '@jingxu/contracts';
 import type { ZodType } from 'zod';
 
@@ -48,6 +60,30 @@ export interface StoryboardIpcService {
   ) => Promise<AppResultDto<ShotEditLockSummaryDto>>;
   readonly unlockShot: (
     input: StoryboardUnlockShotInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  readonly splitShot?: (
+    input: StoryboardSplitShotInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  readonly mergeShots?: (
+    input: StoryboardMergeShotsInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  readonly copyShot?: (
+    input: StoryboardCopyShotInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  readonly reorderShots?: (
+    input: StoryboardReorderShotsInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  readonly deleteShot?: (
+    input: StoryboardDeleteShotInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ShotEditLockSummaryDto>>;
+  readonly restoreShot?: (
+    input: StoryboardRestoreShotInputDto,
     traceId: string,
   ) => Promise<AppResultDto<ShotEditLockSummaryDto>>;
 }
@@ -183,5 +219,53 @@ export const registerStoryboardIpc = (
     storyboardUnlockShotInputSchema,
     summaryResult,
     (input, traceId) => service.unlockShot(input, traceId),
+  );
+  registerCommand(
+    STORYBOARD_IPC_CHANNELS.splitShot,
+    storyboardSplitShotInputSchema,
+    summaryResult,
+    (input, traceId) =>
+      service.splitShot?.(input, traceId) ??
+      Promise.resolve(errorResult('PROJECT_PERSISTENCE_FAILED', traceId)),
+  );
+  registerCommand(
+    STORYBOARD_IPC_CHANNELS.mergeShots,
+    storyboardMergeShotsInputSchema,
+    summaryResult,
+    (input, traceId) =>
+      service.mergeShots?.(input, traceId) ??
+      Promise.resolve(errorResult('PROJECT_PERSISTENCE_FAILED', traceId)),
+  );
+  registerCommand(
+    STORYBOARD_IPC_CHANNELS.copyShot,
+    storyboardCopyShotInputSchema,
+    summaryResult,
+    (input, traceId) =>
+      service.copyShot?.(input, traceId) ??
+      Promise.resolve(errorResult('PROJECT_PERSISTENCE_FAILED', traceId)),
+  );
+  registerCommand(
+    STORYBOARD_IPC_CHANNELS.reorderShots,
+    storyboardReorderShotsInputSchema,
+    summaryResult,
+    (input, traceId) =>
+      service.reorderShots?.(input, traceId) ??
+      Promise.resolve(errorResult('PROJECT_PERSISTENCE_FAILED', traceId)),
+  );
+  registerCommand(
+    STORYBOARD_IPC_CHANNELS.deleteShot,
+    storyboardDeleteShotInputSchema,
+    summaryResult,
+    (input, traceId) =>
+      service.deleteShot?.(input, traceId) ??
+      Promise.resolve(errorResult('PROJECT_PERSISTENCE_FAILED', traceId)),
+  );
+  registerCommand(
+    STORYBOARD_IPC_CHANNELS.restoreShot,
+    storyboardRestoreShotInputSchema,
+    summaryResult,
+    (input, traceId) =>
+      service.restoreShot?.(input, traceId) ??
+      Promise.resolve(errorResult('PROJECT_PERSISTENCE_FAILED', traceId)),
   );
 };
