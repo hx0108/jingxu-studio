@@ -1,6 +1,6 @@
 # Proposal
 
-补齐 V2 语音音频时间线：火山方舟 Ark TTS 配音/旁白生成、角色音色映射、配音轨与基础字幕轨进入合成时间线、TTS 时长与镜头时长的显式对齐策略，以及数据驱动的导出混音。对应 PRD v1.4 §10.4（V2 仅接入一家 TTS Provider）、§10.6（TTS 异步任务）、§10.7/§10.7.1（对白生产与时长对齐）、§10.9（时间线配音/旁白/字幕/BGM 轨道）、§10.10（V2 验收要求 NARRATION_FIRST 与 WEAK_LIP_SYNC 跑通）。
+补齐 V2 语音音频时间线：DashScope Qwen3-TTS 配音/旁白生成、角色音色映射、配音轨与基础字幕轨进入合成时间线、TTS 时长与镜头时长的显式对齐策略，以及数据驱动的导出混音。对应 PRD v1.4 §10.4（V2 仅接入一家 TTS Provider）、§10.6（TTS 异步任务）、§10.7/§10.7.1（对白生产与时长对齐）、§10.9（时间线配音/旁白/字幕/BGM 轨道）、§10.10（V2 验收要求 NARRATION_FIRST 与 WEAK_LIP_SYNC 跑通）。
 
 ## Why
 
@@ -10,7 +10,7 @@
 
 ## What Changes
 
-- 新增 `VOLCARK_TTS` Provider 档位，复用既有 Volcark 凭据安全通路（safeStorage 密文、固定 CREDENTIAL_ID、白名单校验）；模型与音色按受限注册表冻结，实施首任务做 Ark TTS Schema Probe 并回写快照。
+- 新增 `QWEN_TTS` Provider 档位，复用既有 QWEN 凭据安全通路（safeStorage 密文、固定 CREDENTIAL_ID、白名单校验；与 QWEN 文本档共用同一把 DashScope Key）；模型与音色按受限注册表冻结，实施首任务做 DashScope TTS Schema Probe 并回写快照。（2026-08-26 修订：原 Ark 方案被免费探测证伪——TTS 路由不存在且模型目录无 TTS 条目，详见 design D1 修订记录。）
 - 新增台词驱动的配音生成任务：整集批量建档（仅 `audio_required` 且 `spoken_text` 非空的镜头）、requestId 幂等、取消、重启恢复只信证据、多候选保留不覆盖、镜头改文后旧候选 STALE_INPUT。
 - 新增角色音色映射：`narrator` 固定旁白音色；`char_*` 必须映射到注册表音色，缺口在生成前阻断并报告清单；映射快照冻结进导出记录。
 - 配音产物写入既有内容寻址存储 `audio` 命名空间，ffprobe 探测时长（durationMs>0）后才登记候选；同 hash 去重。
@@ -20,7 +20,7 @@
 
 ## Impact
 
-- 代码：`packages/contracts`（voice 契约、video-api 时间线扩展）、`packages/application`（provider/media/script 新服务与 Port）、`packages/persistence`（0020 迁移+新仓储）、`packages/model-adapters`（Ark TTS 适配器与注册表）、`apps/desktop`（IPC/composition/renderer/E2E）。
+- 代码：`packages/contracts`（voice 契约、video-api 时间线扩展）、`packages/application`（provider/media/script 新服务与 Port）、`packages/persistence`（0020 迁移+新仓储）、`packages/model-adapters`（Qwen TTS 适配器与注册表）、`apps/desktop`（IPC/composition/renderer/E2E）。
 - 规范：新增 `voice-audio-timeline` 能力（7 个 Requirement）。
 - 依赖：`apps/desktop/resources/ffmpeg` 既有二进制即可（amix/adelay/tpad/subtitles 均为标准滤镜）；无新外部二进制。
 - 非目标：PRECISE_LIP_SYNC 口型驱动或口型后处理（独立 change）；字幕样式编辑器（本 change 仅默认安全区样式）；环境音/音效库；自定义音色克隆上传；多语种配音；BGM 多轨与配音波形编辑器。

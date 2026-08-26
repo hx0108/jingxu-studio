@@ -6,12 +6,12 @@
 
 ## 2. 适配器与探测
 
-- [ ] 2.1 实现 Ark TTS 适配器（`TtsModelPort`：同步合成、参数白名单、错误归一化脱敏、证据留存）+ Mock 适配器镜像对齐。
-- [ ] 2.2 Ark TTS Schema Probe 实测：记录请求/响应形状、音频格式与时长事实，回写注册表快照与 TECH_DESIGN；探测不通过则回设计评审 D1。
+- [x] 2.1 实现 Qwen TTS 适配器（`TtsModelPort`：同步合成、参数白名单、错误归一化脱敏、证据留存）+ Mock 适配器镜像对齐。（Port/Mock 于 f47234a；QwenTtsModelAdapter 按 2.2 实测形状实现：POST 原生路由 + OSS url 下载 RIFF 校验 + 600 字符上限本地拒绝 + 证据通道，单测 8 例）
+- [x] 2.2 DashScope Qwen3-TTS Schema Probe 实测：记录请求/响应形状、音频格式与时长事实，回写注册表快照与 TECH_DESIGN；探测不通过则回设计评审 D1。（2026-08-26/27：免费探针证伪 Ark 改道 DashScope；实测非流式 OSS url 交付/RIFF 24kHz 单声道 16bit/[0,600] 字符/usage.characters 每汉字 2/音色表支持列即逐模型支持度；注册表 qwen/tts-voice-models.ts VERIFIED（Neil/Elias/Mochi/Stella），TECH_DESIGN §6.5）
 
 ## 3. Provider 档位与音色映射
 
-- [ ] 3.1 `ProviderProfileKind` 增加 `VOLCARK_TTS`：ProviderService 模型+音色双白名单、凭据档复用既有装配、契约与 UI 文案；非法值稳定错误（测试覆盖）。
+- [ ] 3.1 `ProviderProfileKind` 增加 `QWEN_TTS`：ProviderService 模型+音色双白名单、凭据档复用 QWEN 装配（同一把 DashScope Key）、契约与 UI 文案；非法值稳定错误（测试覆盖）。
 - [ ] 3.2 音色映射服务 + `voice_mappings` 持久化：narrator 固定行、`char_*` 校验引用当前 STORY_BIBLE、缺口清单阻断错误；映射快照冻结进导出记录。
 
 ## 4. 生成服务与持久化
@@ -40,6 +40,6 @@
 ## 8. 端到端与门禁
 
 - [ ] 8.1 Mock 全链 E2E：映射 → 整集生成 → 候选选择 → 时间线编辑 → 对齐 → 含配音字幕导出 → 审计验证脚本。
-- [ ] 8.2 真实 Ark TTS 探针 E2E（凭据门控，`--no-proxy-server` 配方）。
+- [ ] 8.2 真实 DashScope TTS 探针 E2E（凭据门控，`--no-proxy-server` 配方）。
 - [ ] 8.3 TECH_DESIGN / README / 实现快照同步更新。
 - [ ] 8.4 全量门禁：format/lint/typecheck/collection/unit/contract/integration/E2E + `package:win`，记录实际结果。

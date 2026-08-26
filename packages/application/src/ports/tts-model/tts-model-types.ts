@@ -3,8 +3,9 @@ import type { ModelErrorCode } from '../text-model/text-model-types';
 /**
  * 语音（TTS）模型 Port 类型（v2-voice-audio-timeline design D2）。
  *
- * Ark TTS 为同步 HTTP 返回音频字节——单段 synthesize 即终态，不引入
- * submit/poll/download 三段式；无结果 URL，字节直接进内容寻址存储。
+ * DashScope qwen3-tts 为同步 HTTP 返回音频字节（D1 修订后 Provider）——单段
+ * synthesize 即终态，不引入 submit/poll/download 三段式；2.2 实测非流式经
+ * OSS url 交付，适配器内完成下载，URL 不出适配器、字节直接进内容寻址存储。
  * 证据通道沿用 media-invocation-evidence 的 ModelCallEvidence（成功段
  * body 为音频字节，不落 bodyText）。
  */

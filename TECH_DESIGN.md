@@ -564,6 +564,27 @@ Prompt 必须：
 | `STALE_INPUT`                 | 上游版本或锁发生变化     |        否 | 不提交业务版本                    |
 | `INTERRUPTED_UNKNOWN_OUTCOME` | 应用退出时请求结果未知   |        否 | 不自动重发，避免潜在重复计费      |
 
+### 6.5 V2 TTS Provider 快照（v2-voice-audio-timeline）
+
+2026-08-26/27 受限预算 Schema Probe 实测快照（免费差分探针 + 2 次计费合成）；原火山方舟 Ark TTS 选型被免费探测证伪（`/api/v3/audio/speech` 裸 404 路由不存在、130 模型目录零 TTS 条目），D1 修订改道 DashScope，凭据复用 QWEN 档同一把 DASHSCOPE_API_KEY（`QWEN_TTS` 同 key 双档，先例 `VOLCARK_SEEDREAM`/`VOLCARK_SEEDANCE`）。
+
+| 配置项   | V2 值                                                                                                       |
+| -------- | ----------------------------------------------------------------------------------------------------------- |
+| Provider | Alibaba Cloud DashScope qwen3-tts                                                                           |
+| 模型 ID  | `qwen3-tts-instruct-flash`（稳定版快照 2026-01-26；`qwen3-tts-flash` 存在但未入选）                          |
+| 接口     | 原生 `POST /api/v1/services/aigc/multimodal-generation/generation`（compatible-mode 无 audio/speech，裸 404） |
+| 请求体   | `{model, input:{text, voice}}`；`instructions` 仅 instruct 系可选（≤1600 Token，语速控制唯一途径，无数值参数） |
+| 文本上限 | [0,600] 字符（实测 400 `InvalidParameter`）                                                                 |
+| 成功响应 | 顶层仅 `output/usage/request_id`（无 status_code 错误信封字段）；`output.audio.url` 为 OSS http 链接（24h），`audio.data` 恒空串 |
+| 音频交付 | 适配器内 GET url 下载；`audio/x-wav`、RIFF/WAVE、24kHz、单声道、16bit（实测 1.12s/"你好镜序"）              |
+| 用量     | `usage.characters`（实测每汉字计 2；4 汉字→8）；无自报时长——时长一律 ffprobe 实测                            |
+| 标识     | `audio.id` = `audio_` + `request_id`（providerRequestId 取 audio.id，缺则 request_id）                       |
+| 错误信封 | 顶层 `{"request_id","code":"InvalidParameter","message"}`；音色错误先于文本长度校验（差分探测判据）          |
+| 音色注册 | `Neil`（narrator 旁白男，默认）/`Elias`（旁白女）/`Mochi`（少年男）/`Stella`（少年女）；官方音色表 2026-06-25，其"支持模型"列真实预测非实时支持度（Dylan/Lenn 仅 realtime 系→实测被拒，7 数据点零偏差） |
+| 超时     | 单次合成（POST+GET）120 秒                                                                                  |
+
+注册表实现：`packages/model-adapters/src/qwen/tts-voice-models.ts`（VERIFIED/selectable，SELECTABLE_* 导出）；适配器 `qwen-tts-model-adapter.ts`（错误归一化复用 §6.4 码表：401/403→凭据、429→限流、5xx→暂时、400/422→内容拒绝、超文本上限→上下文超限）。
+
 ---
 
 ## 7. 校验架构
