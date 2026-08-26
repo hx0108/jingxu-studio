@@ -309,6 +309,36 @@ describe('ProviderService', () => {
       modelSnapshotDate: '2026-06-28',
     });
   });
+
+  it('配音档模型白名单—注册表内惰性建档、注册表外稳定拒绝', async () => {
+    const profiles = createProfiles(() => null);
+    const service = new ProviderService({
+      clock: () => '2026-08-26T00:00:00Z',
+      credentials: {
+        ...unusedCredentialMethods(),
+        isAvailable: () => true,
+        saveCredential: vi.fn(() => Promise.reject(new Error('unused'))),
+      },
+      defaults: {
+        ...DEFAULTS,
+        modelId: 'qwen3-tts-instruct-flash',
+        provider: 'QWEN_TTS',
+      },
+      profiles,
+      selectableModels: [{ id: 'qwen3-tts-instruct-flash', snapshotDate: '2026-01-26' }],
+      textModelFactory: vi.fn(),
+      unitOfWork: {
+        run: (work) => work({ audit: { recordCredentialDeleted: vi.fn() }, profiles }),
+      },
+    });
+
+    await expect(
+      service.saveProfile('profile-voice-primary', 'dashscope', true, 'qwen3-tts-flash'),
+    ).rejects.toThrow('PROVIDER_MODEL_NOT_ALLOWED');
+    await expect(
+      service.saveProfile('profile-voice-primary', 'dashscope', true),
+    ).resolves.toMatchObject({ modelId: 'qwen3-tts-instruct-flash' });
+  });
 });
 
 const createProfiles = (

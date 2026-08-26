@@ -138,9 +138,9 @@ const mapProviderError = (
     return err<ProviderProfileDto>(
       'IPC_INVALID_REQUEST',
       traceId,
-      '视频模型不在允许的选择范围内。',
+      '所选模型不在允许的选择范围内。',
       false,
-      '请选择视频 Provider 设置中列出的模型。',
+      '请选择该 Provider 设置中列出的模型。',
     );
   }
   return err<ProviderProfileDto>(fallback, traceId, 'Provider 操作失败，请重试。', true, null);
@@ -237,6 +237,17 @@ const VIDEO_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, Credential
     },
   });
 
+/** 配音档解密校验的失败文案覆盖（同 key 双档：DashScope Key 需在配音档再粘贴一次）。 */
+const VOICE_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFailureCopy>> =
+  Object.freeze({
+    ...CREDENTIAL_TEST_FAILURES,
+    MODEL_CREDENTIAL_INVALID: {
+      message: '配音 API Key 密文无法解密读取（未配置、系统密钥变更或目录迁移）。',
+      retryable: false,
+      userAction: '请在配音 Provider 设置中重新粘贴 DashScope API Key 并保存。',
+    },
+  });
+
 export interface JobProviderIpcDependencies {
   /** 图片档（image-credential-management D1）：按 profileId 精确命中时分发到独立 ProviderService。 */
   readonly image?: Readonly<{ profileId: string; service: ProviderService }>;
@@ -244,6 +255,8 @@ export interface JobProviderIpcDependencies {
   readonly provider: ProviderService;
   /** 视频档（shot-video-generation D2）：按 profileId 精确命中时分发到独立 ProviderService。 */
   readonly video?: Readonly<{ profileId: string; service: ProviderService }>;
+  /** 配音档（v2-voice-audio-timeline D1）：按 profileId 精确命中时分发到独立 ProviderService。 */
+  readonly voice?: Readonly<{ profileId: string; service: ProviderService }>;
   readonly newTraceId?: () => string;
   readonly newSubscriptionId?: () => string;
 }
@@ -279,6 +292,7 @@ export const createJobProviderIpcService = (
   const providerFor = (profileId: string): ProviderService => {
     if (dependencies.image?.profileId === profileId) return dependencies.image.service;
     if (dependencies.video?.profileId === profileId) return dependencies.video.service;
+    if (dependencies.voice?.profileId === profileId) return dependencies.voice.service;
     return dependencies.provider;
   };
   const credentialTestFailuresFor = (
@@ -286,6 +300,7 @@ export const createJobProviderIpcService = (
   ): Readonly<Record<ModelErrorCode, CredentialTestFailureCopy>> => {
     if (dependencies.image?.profileId === profileId) return IMAGE_CREDENTIAL_TEST_FAILURES;
     if (dependencies.video?.profileId === profileId) return VIDEO_CREDENTIAL_TEST_FAILURES;
+    if (dependencies.voice?.profileId === profileId) return VOICE_CREDENTIAL_TEST_FAILURES;
     return CREDENTIAL_TEST_FAILURES;
   };
 

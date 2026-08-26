@@ -7,6 +7,7 @@ import { isProviderReadyForGeneration } from './script-ui-policy';
 
 import { ImageProviderCard } from './ImageProviderCard';
 import { VideoProviderCard } from './VideoProviderCard';
+import { VoiceProviderCard } from './VoiceProviderCard';
 
 const PROFILE_ID = 'profile_qwen_primary';
 
@@ -121,127 +122,157 @@ export const ProviderSettings = ({
     );
   }
   return (
-    <>
-      <section className="script-card" aria-labelledby="provider-title">
-        <p className="eyebrow">文本模型</p>
-        <h2 id="provider-title">Qwen 模型服务</h2>
-        <p>Workspace 与 API Key 分开保存。完整 Key 不会回显或进入页面长期状态。</p>
-        {error !== null && (
-          <p className="field-error" role="alert">
-            {error.code}：{error.message}
+    <div className="model-service-list">
+      <details className="script-card model-service-card">
+        <summary className="model-service-heading">
+          <span aria-hidden="true" className="model-service-mark">
+            文
+          </span>
+          <div>
+            <p className="eyebrow">文本模型</p>
+            <h2 id="provider-title">Qwen</h2>
+          </div>
+          <span
+            className={`model-configuration-status${profile?.configured === true ? ' configured' : ''}`}
+          >
+            {profile?.configured === true ? '已配置' : '未配置'}
+          </span>
+          <span className="model-current-summary">
+            <small>当前模型</small>
+            <strong>qwen-plus</strong>
+          </span>
+          <span className="model-credential-summary">
+            <small>凭据</small>
+            <strong>
+              {profile?.configured === true
+                ? `已安全保存 · 末四位 ${profile.last4 ?? '不可用'}`
+                : '尚未保存'}
+            </strong>
+          </span>
+          <span className="model-manage-label">管理配置</span>
+        </summary>
+        <div className="model-service-body" aria-labelledby="provider-title">
+          <p>Workspace 与 API Key 分开保存。完整 Key 不会回显或进入页面长期状态。</p>
+          {error !== null && (
+            <p className="field-error" role="alert">
+              {error.code}：{error.message}
+            </p>
+          )}
+          <label>
+            Workspace ID
+            <input
+              autoComplete="off"
+              onChange={(event) => {
+                setWorkspaceId(event.target.value);
+              }}
+              value={workspaceId}
+            />
+          </label>
+          <button
+            disabled={pending || profile === null || workspaceId.trim() === ''}
+            onClick={() => {
+              if (profile === null) return;
+              void apply(
+                () =>
+                  getProviderClient().saveProfile({
+                    enabled: true,
+                    expectedVersionId: profile.versionId,
+                    profileId: PROFILE_ID,
+                    requestId: createScriptRequestId('provider-profile'),
+                    workspaceId: workspaceId.trim(),
+                  }),
+                'Workspace 已保存',
+              );
+            }}
+            type="button"
+          >
+            保存 Workspace
+          </button>
+          <label>
+            API Key
+            <input
+              autoComplete="new-password"
+              onChange={(event) => {
+                setApiKey(event.target.value);
+              }}
+              type="password"
+              value={apiKey}
+            />
+          </label>
+          <div className="script-actions">
+            <button
+              disabled={pending || profile === null || apiKey === ''}
+              onClick={() => {
+                if (profile === null) return;
+                const credential = apiKey;
+                setApiKey('');
+                void apply(
+                  () =>
+                    getProviderClient().saveCredential({
+                      apiKey: credential,
+                      expectedVersionId: profile.versionId,
+                      profileId: PROFILE_ID,
+                      requestId: createScriptRequestId('provider-key'),
+                    }),
+                  '凭据已安全保存，请执行连通性测试',
+                );
+              }}
+              type="button"
+            >
+              保存凭据
+            </button>
+            <button
+              disabled={pending || profile?.configured !== true}
+              onClick={() => {
+                if (profile === null) return;
+                void apply(
+                  () =>
+                    getProviderClient().testCredential({
+                      expectedVersionId: profile.versionId,
+                      profileId: PROFILE_ID,
+                      requestId: createScriptRequestId('provider-test'),
+                    }),
+                  '凭据验证成功',
+                );
+              }}
+              type="button"
+            >
+              测试凭据
+            </button>
+            <button
+              className="danger-button"
+              disabled={pending || profile?.configured !== true}
+              onClick={() => {
+                if (profile === null || !globalThis.confirm('删除已保存的 Qwen 凭据？')) return;
+                void apply(
+                  () =>
+                    getProviderClient().deleteCredential({
+                      expectedVersionId: profile.versionId,
+                      profileId: PROFILE_ID,
+                      requestId: createScriptRequestId('provider-delete'),
+                    }),
+                  '凭据已删除',
+                );
+              }}
+              type="button"
+            >
+              删除凭据
+            </button>
+          </div>
+          <p aria-live="polite">
+            {profile?.configured === true
+              ? `已配置（末四位 ${profile.last4 ?? '不可用'}）`
+              : '未配置'}
+            {feedback === '' ? '' : ` · ${feedback}`}
           </p>
-        )}
-        <label>
-          Workspace ID
-          <input
-            autoComplete="off"
-            onChange={(event) => {
-              setWorkspaceId(event.target.value);
-            }}
-            value={workspaceId}
-          />
-        </label>
-        <button
-          disabled={pending || profile === null || workspaceId.trim() === ''}
-          onClick={() => {
-            if (profile === null) return;
-            void apply(
-              () =>
-                getProviderClient().saveProfile({
-                  enabled: true,
-                  expectedVersionId: profile.versionId,
-                  profileId: PROFILE_ID,
-                  requestId: createScriptRequestId('provider-profile'),
-                  workspaceId: workspaceId.trim(),
-                }),
-              'Workspace 已保存',
-            );
-          }}
-          type="button"
-        >
-          保存 Workspace
-        </button>
-        <label>
-          API Key
-          <input
-            autoComplete="new-password"
-            onChange={(event) => {
-              setApiKey(event.target.value);
-            }}
-            type="password"
-            value={apiKey}
-          />
-        </label>
-        <div className="script-actions">
-          <button
-            disabled={pending || profile === null || apiKey === ''}
-            onClick={() => {
-              if (profile === null) return;
-              const credential = apiKey;
-              setApiKey('');
-              void apply(
-                () =>
-                  getProviderClient().saveCredential({
-                    apiKey: credential,
-                    expectedVersionId: profile.versionId,
-                    profileId: PROFILE_ID,
-                    requestId: createScriptRequestId('provider-key'),
-                  }),
-                '凭据已安全保存，请执行连通性测试',
-              );
-            }}
-            type="button"
-          >
-            保存凭据
-          </button>
-          <button
-            disabled={pending || profile?.configured !== true}
-            onClick={() => {
-              if (profile === null) return;
-              void apply(
-                () =>
-                  getProviderClient().testCredential({
-                    expectedVersionId: profile.versionId,
-                    profileId: PROFILE_ID,
-                    requestId: createScriptRequestId('provider-test'),
-                  }),
-                '凭据验证成功',
-              );
-            }}
-            type="button"
-          >
-            测试凭据
-          </button>
-          <button
-            className="danger-button"
-            disabled={pending || profile?.configured !== true}
-            onClick={() => {
-              if (profile === null || !globalThis.confirm('删除已保存的 Qwen 凭据？')) return;
-              void apply(
-                () =>
-                  getProviderClient().deleteCredential({
-                    expectedVersionId: profile.versionId,
-                    profileId: PROFILE_ID,
-                    requestId: createScriptRequestId('provider-delete'),
-                  }),
-                '凭据已删除',
-              );
-            }}
-            type="button"
-          >
-            删除凭据
-          </button>
+          {!ready && (
+            <p className="action-hint">保存 Workspace 并通过凭据测试后才能生成阶段内容。</p>
+          )}
         </div>
-        <p aria-live="polite">
-          {profile?.configured === true
-            ? `已配置（末四位 ${profile.last4 ?? '不可用'}）`
-            : '未配置'}
-          {feedback === '' ? '' : ` · ${feedback}`}
-        </p>
-        {!ready && <p className="action-hint">保存 Workspace 并通过凭据测试后才能生成阶段内容。</p>}
-      </section>
+      </details>
       <ImageProviderCard />
       <VideoProviderCard />
-    </>
+      <VoiceProviderCard />
+    </div>
   );
 };

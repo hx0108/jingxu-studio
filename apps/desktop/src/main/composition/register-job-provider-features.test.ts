@@ -412,4 +412,81 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     });
     expect(imageView.data?.configured).toBe(false);
   });
+
+  it('配音档凭据闭环—QWEN_TTS 惰性建档、注册表外模型稳定拒绝、密文按配音固定 id 落盘', async () => {
+    const reversibleStorage: SafeStorageFacade = {
+      decryptString: (encrypted) => new TextDecoder().decode(encrypted).replace(/^enc:/u, ''),
+      encryptString: (plaintext) => new TextEncoder().encode(`enc:${plaintext}`),
+      isEncryptionAvailable: () => true,
+    };
+    const profiles = new Map<string, ProviderProfile>();
+    const units = configuredUnits();
+    units.providerProfileRepository = {
+      delete: (id: string) => {
+        profiles.delete(id);
+        return Promise.resolve();
+      },
+      findById: (id: string) => Promise.resolve(profiles.get(id) ?? null),
+      save: (profile: ProviderProfile) => {
+        profiles.set(profile.id, profile);
+        return Promise.resolve();
+      },
+    };
+    units.providerUnitOfWork = {
+      run: (work: (repositories: never) => Promise<unknown>) =>
+        work({
+          audit: { recordCredentialDeleted: vi.fn() },
+          profiles: units.providerProfileRepository,
+        } as never),
+    } as unknown as ProviderUnitOfWorkPort;
+
+    const h = createHarness({ managedRoot: await createRoot(), safeStorage: reversibleStorage });
+    h.setReady(true);
+    h.setUnits(units);
+    h.registration.ensureRegistered();
+    const invoke = (channel: string, input: unknown) =>
+      h.handlers.get(channel)?.(trustedEvent(), input) as Promise<{
+        error?: { code: string };
+        ok: boolean;
+        data?: { configured: boolean; last4: string | null; modelId: string; provider: string };
+      }>;
+
+    // 注册表外模型：稳定拒绝（PROVIDER_MODEL_NOT_ALLOWED → IPC_INVALID_REQUEST）。
+    const rejected = await invoke(PROVIDER_IPC_CHANNELS.saveProfile, {
+      enabled: true,
+      expectedVersionId: 'profile-voice-primary',
+      modelId: 'qwen3-tts-flash',
+      profileId: 'profile-voice-primary',
+      requestId: 'request-voice-model-bad',
+      workspaceId: 'dashscope',
+    });
+    expect(rejected.ok).toBe(false);
+    expect(rejected.error?.code).toBe('IPC_INVALID_REQUEST');
+
+    // 保存：配音档行惰性建档，末 4 位回读，provider=QWEN_TTS、qwen3-tts 模型 id。
+    const saved = await invoke(PROVIDER_IPC_CHANNELS.saveCredential, {
+      apiKey: 'dashscope-key-abcd8888',
+      expectedVersionId: 'profile-voice-primary',
+      profileId: 'profile-voice-primary',
+      requestId: 'request-voice-save-0001',
+    });
+    expect(saved.ok).toBe(true);
+    expect(saved.data).toMatchObject({
+      configured: true,
+      last4: '8888',
+      modelId: 'qwen3-tts-instruct-flash',
+      provider: 'QWEN_TTS',
+    });
+    // 密文按配音固定 id 独立落盘（与文本/图片/视频档分存）。
+    expect(await readdir(path.join(h.root, 'secrets'))).toEqual(['profile-voice-primary.bin']);
+
+    // 测试：解密校验成功（零网络、零计费）。
+    const tested = await invoke(PROVIDER_IPC_CHANNELS.testCredential, {
+      expectedVersionId: 'profile-voice-primary',
+      profileId: 'profile-voice-primary',
+      requestId: 'request-voice-test-0001',
+    });
+    expect(tested.ok).toBe(true);
+    expect(tested.data?.configured).toBe(true);
+  });
 });

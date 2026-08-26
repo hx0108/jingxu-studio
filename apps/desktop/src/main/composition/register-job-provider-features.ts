@@ -11,6 +11,8 @@ import type {
 import type { AppResultDto } from '@jingxu/contracts';
 import {
   QWEN_MODEL_ID,
+  QWEN_TTS_MODEL_ID,
+  QWEN_TTS_MODELS,
   QwenTextModelAdapter,
   SELECTABLE_SEEDANCE_VIDEO_MODELS,
   SEEDANCE_MODEL_ID,
@@ -97,6 +99,20 @@ const VIDEO_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
   modelSnapshotDate: '2026-01-28',
   provider: 'VOLCARK_SEEDANCE',
   workspaceId: 'ark',
+};
+
+/**
+ * 配音档（v2-voice-audio-timeline D1）：与图片/视频档同构——profileId 与固定凭据引用同名；
+ * 生成路径不读该行（按 VOICE_PROFILE_ID 直读密文），行只承载配置状态/末 4 位/审计。
+ * DashScope 平台无工作区概念，workspace_id 为 DB NOT NULL 惰性占位。
+ */
+const VOICE_PROFILE_ID = 'profile-voice-primary';
+const VOICE_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
+  baseUrl: 'https://dashscope.aliyuncs.com',
+  modelId: QWEN_TTS_MODEL_ID,
+  modelSnapshotDate: '2026-01-26',
+  provider: 'QWEN_TTS',
+  workspaceId: 'dashscope',
 };
 
 const startupBlocked = <T>(traceId: string): AppResultDto<T> => ({
@@ -243,6 +259,37 @@ export const createJobProviderFeatureRegistration = ({
         textModelFactory: () => videoCredentialValidator,
         unitOfWork: providerUnitOfWork,
       });
+      // 配音档凭据：与图片/视频档同构（固定 id + 覆写轮换；DashScope Key 与 QWEN 文本档同值）。
+      const voiceCredentials = new CredentialAdapter({
+        clock,
+        createId: () => VOICE_PROFILE_ID,
+        overwriteExisting: true,
+        safeStorage,
+        secretsDirectory: path.join(managedRoot, 'secrets'),
+      });
+      // 配音档 testCredential 同为解密加载校验（零计费请求）。
+      const voiceCredentialValidator = {
+        validateCredential: async (): Promise<CredentialCheck> => {
+          try {
+            await voiceCredentials.loadCredential(VOICE_PROFILE_ID);
+            return { ok: true };
+          } catch {
+            return { detail: null, errorCode: 'MODEL_CREDENTIAL_INVALID', ok: false };
+          }
+        },
+      };
+      const voiceProviderService = new ProviderService({
+        clock,
+        credentials: voiceCredentials,
+        defaults: VOICE_PROVIDER_DEFAULTS,
+        profiles,
+        selectableModels: QWEN_TTS_MODELS.map((model) => ({
+          id: model.id,
+          snapshotDate: model.snapshotDate,
+        })),
+        textModelFactory: () => voiceCredentialValidator,
+        unitOfWork: providerUnitOfWork,
+      });
       const scriptRuntime = createDesktopScriptGenerationRuntime({
         clock,
         registry,
@@ -267,6 +314,7 @@ export const createJobProviderFeatureRegistration = ({
         newTraceId: traceId,
         provider: providerService,
         video: { profileId: VIDEO_PROFILE_ID, service: videoProviderService },
+        voice: { profileId: VOICE_PROFILE_ID, service: voiceProviderService },
       });
       registered = true;
       stopRuntime = () => scriptRuntime.stop();
