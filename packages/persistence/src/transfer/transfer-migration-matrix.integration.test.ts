@@ -140,7 +140,7 @@ describe('Transfer 迁移与规模矩阵（project-transfer-import-export 3.3）
         applyMigrations(database, await loadMigrationSet(MIGRATION_DIRECTORY), () => NOW);
         expect(
           database.prepare('SELECT version FROM schema_migrations ORDER BY version').all(),
-        ).toHaveLength(19);
+        ).toHaveLength(20);
         const legacyExport = database
           .prepare(
             'SELECT request_id, result_json, payload_sha256 FROM export_records WHERE id = ?',

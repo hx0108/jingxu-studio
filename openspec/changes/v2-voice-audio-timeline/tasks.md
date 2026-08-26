@@ -16,7 +16,7 @@
 
 ## 4. 生成服务与持久化
 
-- [ ] 4.1 persistence 0020 迁移（voice_generation_jobs / voice_candidates / voice_mappings / video_timeline_voice_items / video_timeline_subtitle_items / audio_volume 列）+ 版本断言 4 文件 9 处同步 + 迁移矩阵 0020 用例。
+- [x] 4.1 persistence 0020 迁移（voice_generation_jobs / voice_candidates / voice_mappings / video_timeline_voice_items / video_timeline_subtitle_items / audio_volume 列）+ 版本断言 4 文件 9 处同步 + 迁移矩阵 0020 用例。（0020_voice_audio_timeline.sql：jobs UNIQUE(project_id,request_id)+状态枚举+回执/证据 json_valid；candidates 四元组同生同灭+duration_ms>0 联动 SUCCEEDED+mime 白名单+轮次唯一+ux 当前候选 partial unique；mappings PK(project,speaker)+speaker CHECK；audio_volume REAL DEFAULT 0.2（v19 升级回填=旧硬编码等效）；轨道两表 CHECK 族+版本级联。断言面实际 7 文件 15 处+3 标题+1 注释 19→20（另 receipts "未来版本" 用例 20→21）；新增 voice-migration.integration 7 例（对象全集/升级回填/jobs/候选两族/mapping PK/轨道 CHECK+级联））
 - [ ] 4.2 `VoiceGenerationScheduler`（同项目串行/两段式证据/取消先落库/恢复只信证据）+ `VoiceGenerationService`（整集批量建档、requestId 幂等、STALE_INPUT、跳过清单回执）。
 - [ ] 4.3 产物登记：CAS `audio` 写入、ffprobe durationMs>0 与 mime 白名单校验、同 hash 去重、当前候选唯一约束、候选删除仅删登记；integration 测试。
 
