@@ -12,7 +12,7 @@
 ## 3. Provider 档位与音色映射
 
 - [x] 3.1 `ProviderProfileKind` 增加 `QWEN_TTS`：ProviderService 模型+音色双白名单、凭据档复用 QWEN 装配（同一把 DashScope Key）、契约与 UI 文案；非法值稳定错误（测试覆盖）。（union/row-mapper/contracts 枚举 + 组合根 `profile-voice-primary` 固定 id 装配（QWEN_TTS_MODELS 白名单、解密校验零计费）+ IPC voice 槣位分发与配音档文案覆盖 + `VoiceProviderCard`；测试：白名单内外稳定拒绝、QWEN_TTS round-trip×3、组合根凭据闭环、卡片 6 例）
-- [ ] 3.2 音色映射服务 + `voice_mappings` 持久化：narrator 固定行、`char_*` 校验引用当前 STORY_BIBLE、缺口清单阻断错误；映射快照冻结进导出记录。
+- [x] 3.2 音色映射服务 + `voice_mappings` 持久化：narrator 固定行、`char_*` 校验引用当前 STORY_BIBLE、缺口清单阻断错误；映射快照冻结进导出记录。（application `VoiceMappingService`：narrator 钉住注册表默认音色（防御历史行漂移）、char_* 引用当前 STORY_BIBLE（复用 extractShotCollectionBibleKeys）、先全量校验后整体替换（非法值零写入）、`resolveEffectiveMappings`/`buildMappingSnapshot`（导出冻结形状）/`collectMappingGaps`+`voiceMappingGapFailure`（VOICE_MAPPING_MISSING 清单上限截断）；单测 11 例。SQLite 表与仓库随 4.1 迁移落地——端口已定形）
 
 ## 4. 生成服务与持久化
 

@@ -20,6 +20,7 @@ export type * from './ports/transfer/index';
 export type * from './ports/tts-model/index';
 export { STAGE_DEADLINE_MS, STAGE_INVOCATION_TIMEOUT_MS } from './ports/text-model/index';
 export type * from './ports/video-model/index';
+export type * from './ports/voice/index';
 export * from './jobs/index';
 export { SchemaRegistryOperationError } from './ports/schema-registry/index';
 export { createProjectService, type ProjectService } from './project/project-service';
@@ -27,6 +28,7 @@ export { createStableHasher } from './project/stable-serialization';
 export * from './provider/index';
 export * from './transfer/index';
 export * from './script/index';
+export * from './voice/index';
 export { StartupService } from './services/startup-service';
 export {
   SchemaRegistryStartupService,
