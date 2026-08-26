@@ -96,6 +96,11 @@ export const projectErrorCodeSchema = z.enum([
   'VIDEO_EXPORT_CANCELLED',
   'VIDEO_EXPORT_INTERRUPTED_UNKNOWN_OUTCOME',
   'VIDEO_EXPORT_WRITE_FAILED',
+  // V2 语音音频时间线（v2-voice-audio-timeline）。
+  'VOICE_PROVIDER_NOT_CONFIGURED',
+  'VOICE_MAPPING_MISSING',
+  'VOICE_CANDIDATE_STALE',
+  'VOICE_ALIGNMENT_BLOCKED',
   // V2 批量首帧（batch-first-frame-generation §5.1 批次编排稳定码）。
   'MEDIA_BATCH_NOT_FOUND',
   'MEDIA_BATCH_ALREADY_RUNNING',

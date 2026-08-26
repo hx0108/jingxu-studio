@@ -10,6 +10,8 @@ import {
   updateVideoTimelineInputSchema,
   videoCandidateMediaUrl,
   videoCandidateViewSchema,
+  videoTimelineSubtitleItemSchema,
+  videoTimelineVoiceItemSchema,
   videoExportJobSchema,
   videoTimelineSummarySchema,
 } from './video-api';
@@ -290,5 +292,38 @@ describe('video-api contracts', () => {
         shots: [{ ...states.shots[0], activeTaskPhase: 'RUNNING' }],
       }).success,
     ).toBe(false);
+  });
+
+  it('配音轨条目—合法输入通过、音量越界与负偏移拒绝', () => {
+    const voiceItem = {
+      candidateId: id,
+      enabled: true,
+      fileSha256: hash,
+      generationInputHash: hash,
+      offsetMs: 0,
+      shotId,
+      trimInMs: 0,
+      trimOutMs: 3200,
+      volume: 1,
+    };
+    expect(videoTimelineVoiceItemSchema.safeParse(voiceItem).success).toBe(true);
+    expect(videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, volume: 1.01 }).success).toBe(
+      false,
+    );
+    expect(videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, offsetMs: -1 }).success).toBe(
+      false,
+    );
+  });
+
+  it('字幕轨条目—安全区百分比整数 0–20 之外拒绝', () => {
+    const subtitleItem = {
+      enabled: true,
+      safeAreaPct: 5,
+      shotId,
+      spokenTextSha256: hash,
+    };
+    expect(videoTimelineSubtitleItemSchema.safeParse(subtitleItem).success).toBe(true);
+    expect(videoTimelineSubtitleItemSchema.safeParse({ ...subtitleItem, safeAreaPct: 21 }).success).toBe(false);
+    expect(videoTimelineSubtitleItemSchema.safeParse({ ...subtitleItem, safeAreaPct: 5.5 }).success).toBe(false);
   });
 });

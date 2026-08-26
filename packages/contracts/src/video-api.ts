@@ -163,6 +163,38 @@ export const videoTimelineItemSchema = z
   })
   .strict();
 
+/**
+ * 配音轨条目（v2-voice-audio-timeline design D3）：并行于 items 的第二轨，
+ * 每镜头至多一项。offsetMs 为该配音相对镜头起点的偏移；挂入
+ * updateTimeline/summary schema 随 tasks 5.1 接线切片落地。
+ */
+export const videoTimelineVoiceItemSchema = z
+  .object({
+    candidateId: candidateIdSchema,
+    enabled: z.boolean(),
+    fileSha256: hashSchema,
+    generationInputHash: hashSchema,
+    offsetMs: z.number().int().nonnegative(),
+    shotId: shotIdSchema,
+    trimInMs: z.number().int().nonnegative(),
+    trimOutMs: z.number().int().positive(),
+    volume: z.number().min(0).max(1),
+  })
+  .strict();
+
+/**
+ * 基础字幕轨条目：文本从镜头 spoken_text 派生（以哈希锚定），仅默认安全区
+ * 样式；safeAreaPct 为百分比整数。样式编辑器为非目标（proposal 非目标）。
+ */
+export const videoTimelineSubtitleItemSchema = z
+  .object({
+    enabled: z.boolean(),
+    safeAreaPct: z.number().int().min(0).max(20),
+    shotId: shotIdSchema,
+    spokenTextSha256: hashSchema,
+  })
+  .strict();
+
 export const videoAudioAssetSummarySchema = z
   .object({
     byteSize: z.number().int().positive(),
@@ -287,6 +319,8 @@ export type ListStoryboardVideoStatesInputDto = z.infer<
   typeof listStoryboardVideoStatesInputSchema
 >;
 export type VideoTimelineItemDto = z.infer<typeof videoTimelineItemSchema>;
+export type VideoTimelineVoiceItemDto = z.infer<typeof videoTimelineVoiceItemSchema>;
+export type VideoTimelineSubtitleItemDto = z.infer<typeof videoTimelineSubtitleItemSchema>;
 export type VideoAudioAssetSummaryDto = z.infer<typeof videoAudioAssetSummarySchema>;
 export type VideoTimelineSummaryDto = z.infer<typeof videoTimelineSummarySchema>;
 export type VideoExportJobDto = z.infer<typeof videoExportJobSchema>;

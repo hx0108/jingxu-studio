@@ -136,6 +136,7 @@ export * from './script-api';
 export * from './stage';
 export * from './storyboard-api';
 export * from './video-api';
+export * from './voice-api';
 export * from './transfer-api';
 
 export interface JingxuApi {
