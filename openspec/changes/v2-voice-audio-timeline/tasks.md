@@ -1,8 +1,8 @@
 ## 1. 契约与注册表
 
-- [ ] 1.1 contracts 新增 `voice-api`（映射/批量生成/候选 DTO、`VOICE_*` 错误码、zod schema + contract 测试）；`video-api` 时间线 DTO 扩展 `voiceItems`/`subtitleItems`/`audioVolume`（缺省回填向后兼容）。
-- [ ] 1.2 model-adapters 新增 `volcark/tts-voice-models.ts`：TTS 模型与音色受限注册表（含 narrator 旁白默认音色）、能力快照（语速上限/采样率/输出 mime），单测覆盖合法/非法/快照冻结。
-- [ ] 1.3 application 新增对齐策略纯函数与版本化阈值常量：四类分类、默认策略、人工覆盖归一；单测覆盖 PRD §10.7.1 全表。
+- [x] 1.1 contracts 新增 `voice-api`（映射/批量生成/候选 DTO、`VOICE_*` 错误码、zod schema + contract 测试）；`video-api` 时间线 DTO 扩展 `voiceItems`/`subtitleItems`/`audioVolume`（缺省回填向后兼容）。（c84f84e；schema 已定义，接入 update/summary 的时间线字段原子化并入 5.1，避免中途破坏 TS 调用方）
+- [x] 1.2 model-adapters 新增 `volcark/tts-voice-models.ts`：TTS 模型与音色受限注册表（含 narrator 旁白默认音色）、能力快照（语速上限/采样率/输出 mime），单测覆盖合法/非法/快照冻结。（09e3c0e；快照值全部为 PENDING 占位，2.2 探测后回写真实事实并放开 selectable）
+- [x] 1.3 application 新增对齐策略纯函数与版本化阈值常量：四类分类、默认策略、人工覆盖归一；单测覆盖 PRD §10.7.1 全表。（46d8ffd，12/12 绿）
 
 ## 2. 适配器与探测
 
