@@ -39,6 +39,7 @@ export interface VoiceGenerationSchedulerDependencies {
   /** 4.3 交付：CAS audio 写入 + ffprobe durationMs>0 + mime 白名单 + 同 hash 去重。 */
   readonly registerAudio: (
     payload: TtsSynthesisResult['audio'],
+    projectId: string,
   ) => Promise<VoiceCandidateFileRegistration>;
   readonly repositories: VoiceGenerationRepositoryPort;
   readonly synthesize: (
@@ -179,7 +180,7 @@ export const createVoiceGenerationScheduler = (
         { invocationId: candidateId, modelId, spokenText: fields.spokenText, voiceId },
         controller.signal,
       );
-      const registration = await dependencies.registerAudio(result.audio);
+      const registration = await dependencies.registerAudio(result.audio, job.projectId);
       await repositories.finalizeCandidateSucceeded(
         candidateId,
         registration,

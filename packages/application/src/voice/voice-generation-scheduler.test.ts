@@ -203,15 +203,15 @@ const createHarness = (
       let counter = 0;
       return () => `vcan_${String((counter += 1)).padStart(4, '0')}`;
     })(),
-    registerAudio: (payload) =>
+    registerAudio: (payload, projectId) =>
       options.registerAudioError === true
         ? Promise.reject(new Error('registration failed'))
         : Promise.resolve({
             byteSize: payload.bytes.length,
             durationMs: 1_500,
-            fileSha256: hashText('audio-bytes'),
+            fileSha256: hashText(`audio-bytes:${projectId}`),
             mimeType: payload.mimeType === 'audio/wav' ? 'audio/wav' : 'audio/mpeg',
-            storageRelPath: 'projects/p/audio/aa/hash.mp3',
+            storageRelPath: `projects/${projectId}/audio/aa/hash.mp3`,
           }),
     repositories,
     synthesize: (request, signal) =>
@@ -277,7 +277,7 @@ describe('VoiceGenerationScheduler（tasks 4.2，design D2）', () => {
     const first = harness.repositories.candidates[0];
     expect(first?.status).toBe('SUCCEEDED');
     expect(first?.durationMs).toBe(1_500);
-    expect(first?.fileSha256).toBe(hashText('audio-bytes'));
+    expect(first?.fileSha256).toBe(hashText(`audio-bytes:${PROJECT}`));
     expect(first?.voiceId).toBe(NARRATOR_VOICE);
     expect(first?.roundNo).toBe(1);
     expect(harness.repositories.candidates[1]?.roundNo).toBe(1);
