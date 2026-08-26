@@ -4,7 +4,9 @@ export type {
   VideoCompositionRepositories,
   VideoCompositionRepository,
   VideoExportJobRecord,
+  VideoTimelineSubtitleItemInput,
   VideoTimelineVersionRecord,
+  VideoTimelineWriteTracks,
 } from './video-composition-repository';
 export type { MediaModelPort } from './media-model-port';
 export type {

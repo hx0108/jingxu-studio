@@ -22,7 +22,7 @@
 
 ## 5. 时间线与对齐集成
 
-- [ ] 5.1 `video-composition-service` 扩展：updateTimeline 接受配音/字幕轨与 BGM 音量、inputHash 纳入新轨与映射快照、候选三元组漂移拒绝、旧版本兼容读取；unit + integration。
+- [x] 5.1 `video-composition-service` 扩展：updateTimeline 接受配音/字幕轨与 BGM 音量、inputHash 纳入新轨与映射快照、候选三元组漂移拒绝、旧版本兼容读取；unit + integration。（contracts 156/156：summary/update schema + 缺省回填/轨道 shotId 校验；application unit 156/156：12 个组合服务用例含 VIDEO_VOICE_MAPPING_STALE/VIDEO_TRIM_INVALID/STALE 三元组；SQLite integration 3/3：两轨随版本冻结、0020 前旧行读 audioVolume 0.2 空轨、UoW 回滚；组合根接线 hashText+resolveEffectiveVoiceMappings，tsc 全绿）
 - [ ] 5.2 对齐引擎接入导出链路：逐镜头计算并冻结对齐记录（四要素+extendedMs）、FAR_LONG 阻断、人工覆盖路径；unit 覆盖全部覆盖分支。
 
 ## 6. 合成与导出

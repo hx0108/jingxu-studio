@@ -135,6 +135,25 @@ export const collectMappingGaps = (
   effective: ReadonlyMap<string, string>,
 ): readonly string[] => requiredSpeakerIds.filter((speakerId) => !effective.has(speakerId));
 
+/**
+ * 纯生效映射计算（供映射服务与时间线组合根共用）：narrator 恒为固定音色
+ * （防御历史行漂移），char 行原样生效；narrator 行缺失时钉住默认。
+ */
+export const computeEffectiveVoiceMappings = (
+  records: readonly { readonly speakerId: string; readonly voiceId: string }[],
+  narratorDefaultVoiceId: string,
+): ReadonlyMap<string, string> => {
+  const effective = new Map<string, string>();
+  for (const record of records) {
+    effective.set(
+      record.speakerId,
+      record.speakerId === 'narrator' ? narratorDefaultVoiceId : record.voiceId,
+    );
+  }
+  effective.set('narrator', narratorDefaultVoiceId);
+  return effective;
+};
+
 export const createVoiceMappingService = (
   dependencies: VoiceMappingServiceDependencies,
 ): VoiceMappingService => {
@@ -278,19 +297,11 @@ export const createVoiceMappingService = (
       }
     },
 
-    resolveEffectiveMappings: async (projectId) => {
-      const records = await readRecords(projectId);
-      const effective = new Map<string, string>();
-      for (const record of records) {
-        effective.set(
-          record.speakerId,
-          // narrator 恒为固定音色（防御历史行漂移）；char 行原样生效。
-          record.speakerId === 'narrator' ? dependencies.narratorDefaultVoiceId : record.voiceId,
-        );
-      }
-      effective.set('narrator', dependencies.narratorDefaultVoiceId);
-      return effective;
-    },
+    resolveEffectiveMappings: async (projectId) =>
+      computeEffectiveVoiceMappings(
+        await readRecords(projectId),
+        dependencies.narratorDefaultVoiceId,
+      ),
 
     buildMappingSnapshot: async function (projectId) {
       const effective = await this.resolveEffectiveMappings(projectId);

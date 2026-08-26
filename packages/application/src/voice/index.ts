@@ -19,6 +19,7 @@ export {
 } from './voice-generation-service';
 export {
   collectMappingGaps,
+  computeEffectiveVoiceMappings,
   createVoiceMappingService,
   voiceMappingGapFailure,
   type VoiceMappingService,

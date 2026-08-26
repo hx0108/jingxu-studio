@@ -165,8 +165,8 @@ export const videoTimelineItemSchema = z
 
 /**
  * 配音轨条目（v2-voice-audio-timeline design D3）：并行于 items 的第二轨，
- * 每镜头至多一项。offsetMs 为该配音相对镜头起点的偏移；挂入
- * updateTimeline/summary schema 随 tasks 5.1 接线切片落地。
+ * 每镜头至多一项。offsetMs 为该配音相对镜头起点的偏移；候选三元组
+ * （candidateId/fileSha256/generationInputHash）随版本冻结，漂移即拒绝。
  */
 export const videoTimelineVoiceItemSchema = z
   .object({
@@ -208,6 +208,8 @@ export const videoAudioAssetSummarySchema = z
 export const videoTimelineSummarySchema = z
   .object({
     audioAsset: videoAudioAssetSummarySchema.nullable(),
+    /** BGM 音量（0020 数据化；既有版本行读出默认 0.2=旧硬编码等效）。 */
+    audioVolume: z.number().min(0).max(1),
     createdAt: isoDateTimeSchema,
     episodeId: idSchema,
     episodeVersionId: idSchema,
@@ -216,8 +218,10 @@ export const videoTimelineSummarySchema = z
     inputHash: hashSchema,
     items: z.array(videoTimelineItemSchema).max(20),
     parentVersionId: videoTimelineVersionIdSchema.nullable(),
+    subtitleItems: z.array(videoTimelineSubtitleItemSchema).max(20),
     totalDurationMs: z.number().int().nonnegative(),
     versionNo: z.number().int().positive(),
+    voiceItems: z.array(videoTimelineVoiceItemSchema).max(20),
   })
   .strict();
 
@@ -277,13 +281,45 @@ export const getVideoTimelineInputSchema = z
 export const updateVideoTimelineInputSchema = z
   .object({
     audioAssetId: videoAudioAssetIdSchema.nullable(),
+    audioVolume: z.number().min(0).max(1).default(0.2),
     episodeId: idSchema,
     expectedVersionId: videoTimelineVersionIdSchema,
     items: z.array(videoTimelineItemSchema).min(1).max(20),
     projectId: projectIdSchema,
     requestId: requestIdSchema,
+    subtitleItems: z.array(videoTimelineSubtitleItemSchema).max(20).default([]),
+    voiceItems: z.array(videoTimelineVoiceItemSchema).max(20).default([]),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    // 两轨条目都必须锚定在时间线视频轨的镜头集合内，且每镜头至多一项。
+    const shotIds = new Set(value.items.map((item) => item.shotId));
+    for (const [field, entries] of [
+      ['subtitleItems', value.subtitleItems] as const,
+      ['voiceItems', value.voiceItems] as const,
+    ] as const) {
+      const seen = new Set<string>();
+      for (const entry of entries) {
+        if (seen.has(entry.shotId)) {
+          context.addIssue({
+            code: 'custom',
+            message: `${field} 的 shotId 不得重复。`,
+            path: [field],
+          });
+          break;
+        }
+        seen.add(entry.shotId);
+        if (!shotIds.has(entry.shotId)) {
+          context.addIssue({
+            code: 'custom',
+            message: `${field} 引用了不在视频轨中的镜头。`,
+            path: [field],
+          });
+          break;
+        }
+      }
+    }
+  });
 export const importVideoBackgroundMusicInputSchema = z
   .object({ projectId: projectIdSchema, requestId: requestIdSchema })
   .strict();

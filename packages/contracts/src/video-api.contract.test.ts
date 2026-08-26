@@ -150,6 +150,7 @@ describe('video-api contracts', () => {
     };
     const timeline = {
       audioAsset: null,
+      audioVolume: 0.2,
       createdAt: iso,
       episodeId: 'episode_00001',
       episodeVersionId: 'epver_00000001',
@@ -158,8 +159,10 @@ describe('video-api contracts', () => {
       inputHash: hash,
       items: [item],
       parentVersionId: null,
+      subtitleItems: [],
       totalDurationMs: 5000,
       versionNo: 1,
+      voiceItems: [],
     };
     expect(videoTimelineSummarySchema.safeParse(timeline).success).toBe(true);
     expect(
@@ -172,6 +175,63 @@ describe('video-api contracts', () => {
         requestId,
       }).success,
     ).toBe(true);
+    // 旧调用兼容：缺省 voiceItems/subtitleItems/audioVolume 由 zod 回填（D6 双兜底）。
+    const defaulted = updateVideoTimelineInputSchema.parse({
+      audioAssetId: null,
+      episodeId: timeline.episodeId,
+      expectedVersionId: timeline.id,
+      items: [{ ...item, trimInMs: 5000, trimOutMs: 5000 }],
+      projectId,
+      requestId,
+    });
+    expect(defaulted.audioVolume).toBe(0.2);
+    expect(defaulted.subtitleItems).toEqual([]);
+    expect(defaulted.voiceItems).toEqual([]);
+    // 两轨条目必须锚定视频轨镜头集合；越界镜头与重复 shotId 均拒绝。
+    const voiceItem = {
+      candidateId: id,
+      enabled: true,
+      fileSha256: hash,
+      generationInputHash: hash,
+      offsetMs: 0,
+      shotId,
+      trimInMs: 0,
+      trimOutMs: 4000,
+      volume: 1,
+    };
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items: [item],
+        projectId,
+        requestId,
+        voiceItems: [voiceItem],
+      }).success,
+    ).toBe(true);
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items: [item],
+        projectId,
+        requestId,
+        voiceItems: [{ ...voiceItem, shotId: 'shot_99999999' }],
+      }).success,
+    ).toBe(false);
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items: [item],
+        projectId,
+        requestId,
+        voiceItems: [voiceItem, { ...voiceItem, offsetMs: 100 }],
+      }).success,
+    ).toBe(false);
     expect(
       startVideoExportInputSchema.safeParse({
         episodeId: timeline.episodeId,

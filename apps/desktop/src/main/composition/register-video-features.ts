@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import {
+  computeEffectiveVoiceMappings,
   createMediaTaskScheduler,
   createVideoApiService,
   createVideoBatchService,
@@ -17,6 +18,7 @@ import {
   MockVideoModelAdapter,
   DEFAULT_SEEDANCE_VIDEO_MODEL_ID,
   getSeedanceVideoModel,
+  NARRATOR_DEFAULT_VOICE_ID,
   SEEDANCE_DURATION_RANGE,
   SEEDANCE_MODEL_ID,
   SEEDANCE_VIDEO_SEGMENT_TIMEOUT_MS,
@@ -113,6 +115,9 @@ export interface VideoFeatureRegistration {
 
 const hashPayload = (value: Readonly<Record<string, unknown>>): string =>
   createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex');
+
+const hashText = (value: string): string =>
+  createHash('sha256').update(value, 'utf8').digest('hex');
 
 /**
  * Pure video composition boundary. Registers the frozen seven-method IPC surface immediately
@@ -376,7 +381,7 @@ export const createVideoFeatureRegistration = ({
             store.write({ bytes, mimeType, namespace: 'videos', projectId }),
         },
         generation: (repos) => repos.video,
-        hashText: (value) => createHash('sha256').update(value, 'utf8').digest('hex'),
+        hashText,
         model: videoModel,
         mediaUnitOfWork,
         newId: randomUUID,
@@ -428,8 +433,16 @@ export const createVideoFeatureRegistration = ({
           store,
         }),
         hashPayload,
+        hashText,
         mediaUnitOfWork,
         newId: randomUUID,
+        resolveEffectiveVoiceMappings: async (projectId) =>
+          computeEffectiveVoiceMappings(
+            await mediaUnitOfWork.run(async ({ voice }) =>
+              voice === undefined ? [] : voice.mapping.listByProject(projectId),
+            ),
+            NARRATOR_DEFAULT_VOICE_ID,
+          ),
         resolveFormatProfile: async (projectId, formatProfileId) => {
           const profiles = await persistenceRuntime
             .getFormatProfileRepository()

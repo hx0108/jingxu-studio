@@ -3,12 +3,28 @@ import type {
   VideoExportJobDto,
   VideoExportStatus,
   VideoTimelineItemDto,
+  VideoTimelineSubtitleItemDto,
   VideoTimelineSummaryDto,
+  VideoTimelineVoiceItemDto,
 } from '@jingxu/contracts';
 import type { MediaStoredFileRef } from './media-repository';
 
 export interface VideoTimelineVersionRecord extends VideoTimelineSummaryDto {
   readonly timelineId: string;
+}
+
+/**
+ * 字幕轨的持久化形状：DTO 之外携带随版本冻结的样式快照 JSON（样式编辑器为
+ * 非目标，恒为应用层默认样式常量；Renderer 只见 DTO 面）。
+ */
+export interface VideoTimelineSubtitleItemInput extends VideoTimelineSubtitleItemDto {
+  readonly styleSnapshotJson: string;
+}
+
+export interface VideoTimelineWriteTracks {
+  readonly audioVolume: number;
+  readonly subtitleItems: readonly VideoTimelineSubtitleItemInput[];
+  readonly voiceItems: readonly VideoTimelineVoiceItemDto[];
 }
 
 export interface VideoAudioAssetRecord extends VideoAudioAssetSummaryDto {
@@ -24,30 +40,34 @@ export interface VideoExportJobRecord extends VideoExportJobDto {
 }
 
 export interface VideoCompositionRepository {
-  createTimeline(input: {
-    readonly episodeId: string;
-    readonly episodeVersionId: string;
-    readonly formatProfileId: string;
-    readonly id: string;
-    readonly inputHash: string;
-    readonly items: readonly VideoTimelineItemDto[];
-    readonly projectId: string;
-    readonly totalDurationMs: number;
-  }): Promise<VideoTimelineVersionRecord>;
+  createTimeline(
+    input: {
+      readonly episodeId: string;
+      readonly episodeVersionId: string;
+      readonly formatProfileId: string;
+      readonly id: string;
+      readonly inputHash: string;
+      readonly items: readonly VideoTimelineItemDto[];
+      readonly projectId: string;
+      readonly totalDurationMs: number;
+    } & VideoTimelineWriteTracks,
+  ): Promise<VideoTimelineVersionRecord>;
   findTimelineVersion(
     projectId: string,
     episodeId: string,
     versionId: string | null,
   ): Promise<VideoTimelineVersionRecord | null>;
-  updateTimeline(input: {
-    readonly audioAssetId: string | null;
-    readonly expectedVersionId: string;
-    readonly id: string;
-    readonly inputHash: string;
-    readonly items: readonly VideoTimelineItemDto[];
-    readonly projectId: string;
-    readonly totalDurationMs: number;
-  }): Promise<VideoTimelineVersionRecord>;
+  updateTimeline(
+    input: {
+      readonly audioAssetId: string | null;
+      readonly expectedVersionId: string;
+      readonly id: string;
+      readonly inputHash: string;
+      readonly items: readonly VideoTimelineItemDto[];
+      readonly projectId: string;
+      readonly totalDurationMs: number;
+    } & VideoTimelineWriteTracks,
+  ): Promise<VideoTimelineVersionRecord>;
   findAudioAsset(projectId: string, assetId: string): Promise<VideoAudioAssetRecord | null>;
   findAudioAssetByHash(
     projectId: string,

@@ -19,15 +19,37 @@ import type {
   VideoAudioAssetRecord,
   VideoCompositionRepository,
   VideoExportJobRecord,
+  VideoTimelineSubtitleItemInput,
   VideoTimelineVersionRecord,
 } from '../ports/media';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
+import { extractVoiceShotFields } from '../voice';
+
+/**
+ * 字幕默认样式快照（design D5：默认字体 + 安全区；样式编辑器为非目标）。
+ * 随时间线版本冻结进 style_snapshot_json——常量演进时旧版本行保持原快照。
+ */
+export const DEFAULT_SUBTITLE_STYLE_SNAPSHOT_JSON = JSON.stringify({
+  fontFamily: 'Noto Sans SC',
+  fontWeight: 'Bold',
+  styleVersion: 1,
+});
+
+/** 字幕默认安全区（百分比整数；0020 CHECK 上限 20）。 */
+export const DEFAULT_SUBTITLE_SAFE_AREA_PCT = 5;
+
+/** BGM 默认音量：与 0020 迁移列默认一致（= 旧硬编码现状等效）。 */
+export const DEFAULT_BACKGROUND_MUSIC_VOLUME = 0.2;
 
 export interface VideoCompositionServiceDependencies {
   readonly composer: VideoComposerPort;
   readonly hashPayload: (value: Readonly<Record<string, unknown>>) => string;
+  readonly hashText: (text: string) => string;
   readonly mediaUnitOfWork: MediaUnitOfWorkPort;
   readonly newId: () => string;
+  readonly resolveEffectiveVoiceMappings: (
+    projectId: string,
+  ) => Promise<ReadonlyMap<string, string>>;
   readonly resolveFormatProfile: (
     projectId: string,
     formatProfileId: string,
@@ -139,6 +161,7 @@ const toTimelineDto = (record: VideoTimelineVersionRecord): VideoTimelineSummary
           mimeType: record.audioAsset.mimeType,
           originalFileName: record.audioAsset.originalFileName,
         },
+  audioVolume: record.audioVolume,
   createdAt: record.createdAt,
   episodeId: record.episodeId,
   episodeVersionId: record.episodeVersionId,
@@ -147,8 +170,10 @@ const toTimelineDto = (record: VideoTimelineVersionRecord): VideoTimelineSummary
   inputHash: record.inputHash,
   items: record.items,
   parentVersionId: record.parentVersionId,
+  subtitleItems: record.subtitleItems,
   totalDurationMs: record.totalDurationMs,
   versionNo: record.versionNo,
+  voiceItems: record.voiceItems,
 });
 
 const toExportJobDto = (record: VideoExportJobRecord): VideoExportJobDto => ({
@@ -178,6 +203,14 @@ const findSelectedCandidate = async (
       (candidate) => candidate.status === 'SUCCEEDED' && candidate.selectedAt !== null,
     ),
   );
+
+/** 音色映射快照的规范形状：字母序键值对数组（inputHash 输入集确定性）。 */
+const mappingSnapshotOf = (
+  effective: ReadonlyMap<string, string>,
+): readonly { readonly speakerId: string; readonly voiceId: string }[] =>
+  [...effective.entries()]
+    .map(([speakerId, voiceId]) => ({ speakerId, voiceId }))
+    .sort((left, right) => (left.speakerId < right.speakerId ? -1 : 1));
 
 const validateItems = (items: readonly VideoTimelineItemDto[]): string | null => {
   if (items.length === 0 || items.every((item) => !item.enabled)) return 'VIDEO_TRIM_INVALID';
@@ -227,6 +260,10 @@ export const createVideoCompositionService = (
       return failure('VIDEO_COMPOSITION_NOT_READY', traceId);
     if (current.status !== 'READY') return failure('VIDEO_COMPOSITION_NOT_READY', traceId);
     const items: VideoTimelineItemDto[] = [];
+    // 配音轨与字幕轨从当前工作区派生（spec：字幕从镜头 spoken_text 派生且默认启用；
+    // 配音仅收录当前选中的 SUCCEEDED 候选，人工未选择=空轨道）。
+    const voiceItems: VideoTimelineSummaryDto['voiceItems'] = [];
+    const subtitleItems: VideoTimelineSubtitleItemInput[] = [];
     for (const shot of workspace.storyboard.currentShots) {
       const candidate = await findSelectedCandidate(dependencies.mediaUnitOfWork, shot.shotId);
       if (candidate === undefined) return failure('VIDEO_SOURCE_MISSING', traceId);
@@ -242,11 +279,49 @@ export const createVideoCompositionService = (
         trimInMs: 0,
         trimOutMs: Math.max(1, Math.round(candidate.actualDurationSec * 1_000)),
       });
+      const selectedVoice = await dependencies.mediaUnitOfWork.run(async ({ voice }) => {
+        if (voice === undefined) return null;
+        const rows = await voice.generation.listCandidatesByShot(shot.shotId);
+        return rows.find((row) => row.status === 'SUCCEEDED' && row.selectedAt !== null) ?? null;
+      });
+      if (selectedVoice?.durationMs != null && selectedVoice.fileSha256 != null) {
+        voiceItems.push({
+          candidateId: selectedVoice.id,
+          enabled: true,
+          fileSha256: selectedVoice.fileSha256,
+          generationInputHash: selectedVoice.generationInputHash,
+          offsetMs: 0,
+          shotId: shot.shotId,
+          trimInMs: 0,
+          trimOutMs: selectedVoice.durationMs,
+          volume: 1,
+        });
+      }
+      const fields = extractVoiceShotFields(shot.version.document);
+      if (fields !== null && fields.spokenText !== null) {
+        subtitleItems.push({
+          enabled: true,
+          safeAreaPct: DEFAULT_SUBTITLE_SAFE_AREA_PCT,
+          shotId: shot.shotId,
+          spokenTextSha256: dependencies.hashText(fields.spokenText),
+          styleSnapshotJson: DEFAULT_SUBTITLE_STYLE_SNAPSHOT_JSON,
+        });
+      }
     }
-    const inputHash = dependencies.hashPayload({ episodeVersionId: current.id, items });
+    const mappingSnapshot = mappingSnapshotOf(
+      await dependencies.resolveEffectiveVoiceMappings(input.projectId),
+    );
+    const inputHash = dependencies.hashPayload({
+      episodeVersionId: current.id,
+      items,
+      mappingSnapshot,
+      subtitleItems,
+      voiceItems,
+    });
     const composition = await compositionOf(dependencies.mediaUnitOfWork);
     if (composition === null) return failure('PROJECT_PERSISTENCE_FAILED', traceId);
     const created = await composition.createTimeline({
+      audioVolume: DEFAULT_BACKGROUND_MUSIC_VOLUME,
       episodeId: input.episodeId,
       episodeVersionId: current.id,
       formatProfileId: current.formatProfileId,
@@ -254,7 +329,9 @@ export const createVideoCompositionService = (
       inputHash,
       items,
       projectId: input.projectId,
+      subtitleItems,
       totalDurationMs: items.reduce((sum, item) => sum + item.trimOutMs - item.trimInMs, 0),
+      voiceItems,
     });
     return success(toTimelineDto(created));
   };
@@ -304,28 +381,84 @@ export const createVideoCompositionService = (
       if (item.trimOutMs > Math.round(candidate.actualDurationSec * 1_000))
         return failure('VIDEO_TRIM_INVALID', traceId);
     }
+    // 配音轨校验：候选三元组漂移（改文 STALE/换候选/哈希不符）稳定拒绝；
+    // 音色映射漂移（候选冻结音色 ≠ 当前生效映射）单独稳定码，指引重新生成。
+    const effective = await dependencies.resolveEffectiveVoiceMappings(input.projectId);
+    if (input.voiceItems.length > 0) {
+      const voiceRepositories = await dependencies.mediaUnitOfWork.run(({ voice }) =>
+        Promise.resolve(voice === undefined ? null : voice.generation),
+      );
+      if (voiceRepositories === null) return failure('PROJECT_PERSISTENCE_FAILED', traceId);
+      for (const item of input.voiceItems) {
+        const candidate = await voiceRepositories.findCandidate(input.projectId, item.candidateId);
+        const staleCandidate =
+          candidate?.status !== 'SUCCEEDED' ||
+          candidate.fileSha256 !== item.fileSha256 ||
+          candidate.generationInputHash !== item.generationInputHash ||
+          candidate.durationMs == null;
+        if (candidate === null || staleCandidate)
+          return failure('VIDEO_SOURCE_STALE', traceId, '配音候选已过期，请重新选择候选。');
+        if (item.trimOutMs > candidate.durationMs || item.trimInMs >= item.trimOutMs)
+          return failure('VIDEO_TRIM_INVALID', traceId);
+        if (effective.get(candidate.speakerId) !== candidate.voiceId)
+          return failure(
+            'VIDEO_VOICE_MAPPING_STALE',
+            traceId,
+            '音色映射已变更，请重新生成或调整映射后再次提交。',
+          );
+      }
+    }
+    // 字幕轨锚定校验：spokenTextSha256 必须仍锚定当前镜头文档（镜头改文即拒绝）。
+    if (input.subtitleItems.length > 0) {
+      const workspace = await getWorkspace(input.projectId, input.episodeId);
+      if (workspace === null) return failure('VIDEO_COMPOSITION_NOT_READY', traceId);
+      for (const item of input.subtitleItems) {
+        const snapshot = workspace.storyboard.currentShots.find(
+          (entry) => entry.shotId === item.shotId,
+        );
+        const fields =
+          snapshot === undefined ? null : extractVoiceShotFields(snapshot.version.document);
+        const spokenText = fields?.spokenText ?? null;
+        if (spokenText === null)
+          return failure('VIDEO_SOURCE_STALE', traceId, '镜头台词已变更，请重新生成字幕轨。');
+        if (dependencies.hashText(spokenText) !== item.spokenTextSha256)
+          return failure('VIDEO_SOURCE_STALE', traceId, '镜头台词已变更，请重新生成字幕轨。');
+      }
+    }
     let audio: VideoAudioAssetRecord | null = null;
     if (input.audioAssetId !== null)
       audio = await composition.findAudioAsset(input.projectId, input.audioAssetId);
     if (input.audioAssetId !== null && audio === null)
       return failure('VIDEO_AUDIO_INVALID', traceId);
+    const subtitleItems: VideoTimelineSubtitleItemInput[] = input.subtitleItems.map((item) => ({
+      ...item,
+      styleSnapshotJson: DEFAULT_SUBTITLE_STYLE_SNAPSHOT_JSON,
+    }));
+    const mappingSnapshot = mappingSnapshotOf(effective);
     const inputHash = dependencies.hashPayload({
       audioAssetId: input.audioAssetId,
+      audioVolume: input.audioVolume,
       episodeVersionId: current.episodeVersionId,
       items: input.items,
+      mappingSnapshot,
+      subtitleItems,
+      voiceItems: input.voiceItems,
     });
     return success(
       toTimelineDto(
         await composition.updateTimeline({
           audioAssetId: input.audioAssetId,
+          audioVolume: input.audioVolume,
           expectedVersionId: input.expectedVersionId,
           id: dependencies.newId(),
           inputHash,
           items: input.items,
           projectId: input.projectId,
+          subtitleItems,
           totalDurationMs: input.items
             .filter((item) => item.enabled)
             .reduce((sum, item) => sum + item.trimOutMs - item.trimInMs, 0),
+          voiceItems: input.voiceItems,
         }),
       ),
     );

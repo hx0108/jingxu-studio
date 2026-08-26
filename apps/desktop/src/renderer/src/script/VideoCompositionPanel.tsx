@@ -98,11 +98,14 @@ export const VideoCompositionPanel = ({
     setNotice(null);
     const result = await getVideoClient().updateTimeline({
       audioAssetId,
+      audioVolume: 0.2,
       episodeId,
       expectedVersionId: timeline.id,
       items,
       projectId,
       requestId: createScriptRequestId('video-timeline-update'),
+      subtitleItems: [],
+      voiceItems: [],
     });
     if (result.ok) {
       setTimeline(result.data);
