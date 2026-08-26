@@ -323,7 +323,11 @@ describe('video-api contracts', () => {
       spokenTextSha256: hash,
     };
     expect(videoTimelineSubtitleItemSchema.safeParse(subtitleItem).success).toBe(true);
-    expect(videoTimelineSubtitleItemSchema.safeParse({ ...subtitleItem, safeAreaPct: 21 }).success).toBe(false);
-    expect(videoTimelineSubtitleItemSchema.safeParse({ ...subtitleItem, safeAreaPct: 5.5 }).success).toBe(false);
+    expect(
+      videoTimelineSubtitleItemSchema.safeParse({ ...subtitleItem, safeAreaPct: 21 }).success,
+    ).toBe(false);
+    expect(
+      videoTimelineSubtitleItemSchema.safeParse({ ...subtitleItem, safeAreaPct: 5.5 }).success,
+    ).toBe(false);
   });
 });

@@ -52,7 +52,14 @@ describe('voice-api contracts', () => {
   });
 
   it('非 SUCCEEDED 候选—不得携带 mediaUrl、errorCode 仅 FAILED', () => {
-    const pending = { ...succeededCandidate, mediaUrl: null, byteSize: null, mimeType: null, durationMs: null, status: 'PENDING' as const };
+    const pending = {
+      ...succeededCandidate,
+      mediaUrl: null,
+      byteSize: null,
+      mimeType: null,
+      durationMs: null,
+      status: 'PENDING' as const,
+    };
     expect(voiceCandidateViewSchema.safeParse(pending).success).toBe(true);
     expect(
       voiceCandidateViewSchema.safeParse({ ...pending, errorCode: 'VOICE_TTS_FAILED' }).success,
@@ -66,8 +73,7 @@ describe('voice-api contracts', () => {
       voiceCandidateViewSchema.safeParse({ ...succeededCandidate, speakerId: 'hero' }).success,
     ).toBe(false);
     expect(
-      voiceCandidateViewSchema.safeParse({ ...succeededCandidate, speakerId: 'char_hero' })
-        .success,
+      voiceCandidateViewSchema.safeParse({ ...succeededCandidate, speakerId: 'char_hero' }).success,
     ).toBe(true);
   });
 

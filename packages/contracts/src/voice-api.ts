@@ -143,9 +143,7 @@ export const getVoiceMappingsInputSchema = z.object({ projectId: projectIdSchema
 export const saveVoiceMappingInputSchema = z
   .object({
     mappings: z
-      .array(
-        z.object({ speakerId: voiceSpeakerIdSchema, voiceId: voiceIdSchema }).strict(),
-      )
+      .array(z.object({ speakerId: voiceSpeakerIdSchema, voiceId: voiceIdSchema }).strict())
       .min(1)
       .max(64),
     projectId: projectIdSchema,
