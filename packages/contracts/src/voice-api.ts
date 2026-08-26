@@ -198,6 +198,9 @@ export const deleteVoiceCandidateInputSchema = z
     requestId: requestIdSchema,
   })
   .strict();
+export const voiceCandidateDeleteResultSchema = z
+  .object({ candidateId: candidateIdSchema })
+  .strict();
 
 export type VoiceCandidateViewDto = z.infer<typeof voiceCandidateViewSchema>;
 export type VoiceMappingDto = z.infer<typeof voiceMappingSchema>;
@@ -209,6 +212,7 @@ export type GenerateVoiceForEpisodeInputDto = z.infer<typeof generateVoiceForEpi
 export type GetVoiceGenerationsInputDto = z.infer<typeof getVoiceGenerationsInputSchema>;
 export type SelectVoiceCandidateInputDto = z.infer<typeof selectVoiceCandidateInputSchema>;
 export type DeleteVoiceCandidateInputDto = z.infer<typeof deleteVoiceCandidateInputSchema>;
+export type VoiceCandidateDeleteResultDto = z.infer<typeof voiceCandidateDeleteResultSchema>;
 
 export interface VoiceApi {
   /** 项目级角色音色映射（narrator 固定行始终在列）。 */
@@ -233,7 +237,7 @@ export interface VoiceApi {
   /** 删除候选登记行；共享 CAS 音频文件不受影响。 */
   deleteCandidate(
     input: DeleteVoiceCandidateInputDto,
-  ): Promise<AppResultDto<{ candidateId: string }>>;
+  ): Promise<AppResultDto<VoiceCandidateDeleteResultDto>>;
 }
 
 export const VOICE_IPC_CHANNELS = {

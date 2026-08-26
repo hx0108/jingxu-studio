@@ -8,6 +8,8 @@
 
 import type { MediaInvocationRepository } from './media-invocation-repository';
 import type { VideoCompositionRepositories } from './video-composition-repository';
+import type { VoiceGenerationRepositoryPort } from '../voice/voice-generation-repository';
+import type { VoiceMappingRepositoryPort } from '../voice/voice-mapping-repository';
 
 export type MediaAssetType = 'CHARACTER' | 'SCENE';
 
@@ -443,6 +445,11 @@ export interface MediaRepositories {
   readonly invocations: MediaInvocationRepository;
   readonly media: MediaRepository;
   readonly video: VideoMediaRepository;
+  /** 配音域（v2-voice-audio-timeline D3）：候选/映射与图片/视频共用同一事务边界。 */
+  readonly voice?: {
+    readonly generation: VoiceGenerationRepositoryPort;
+    readonly mapping: VoiceMappingRepositoryPort;
+  };
 }
 
 /** 媒体读写事务边界：单一 `BEGIN IMMEDIATE`，work 抛出即回滚（沿 ProjectUnitOfWorkPort 语义）。 */

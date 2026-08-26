@@ -2,6 +2,8 @@ import type { MediaRepositories, MediaUnitOfWorkPort } from '@jingxu/application
 
 import type { SqliteDatabase } from '../runtime/sqlite-database';
 import { SqliteTransactionCoordinator } from '../runtime/sqlite-transaction-coordinator';
+import { SqliteVoiceGenerationRepository } from '../voice/sqlite-voice-generation-repository';
+import { SqliteVoiceMappingRepository } from '../voice/sqlite-voice-mapping-repository';
 import { SqliteMediaInvocationRepository } from './sqlite-media-invocation-repository';
 import { SqliteMediaRepository } from './sqlite-media-repository';
 import { SqliteVideoMediaRepository } from './sqlite-video-media-repository';
@@ -30,6 +32,10 @@ export class SqliteMediaUnitOfWork implements MediaUnitOfWorkPort {
       media: new SqliteMediaRepository(database, clock),
       video: new SqliteVideoMediaRepository(database, clock),
       composition: { composition: new SqliteVideoCompositionRepository(database, clock) },
+      voice: {
+        generation: new SqliteVoiceGenerationRepository(database),
+        mapping: new SqliteVoiceMappingRepository(database),
+      },
     };
   }
 

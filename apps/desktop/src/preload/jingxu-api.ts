@@ -115,6 +115,17 @@ import {
   transferImportProjectInputSchema,
   transferExportResultSchema,
   transferImportResultSchema,
+  VOICE_IPC_CHANNELS,
+  deleteVoiceCandidateInputSchema,
+  generateVoiceForEpisodeInputSchema,
+  getVoiceGenerationsInputSchema,
+  getVoiceMappingsInputSchema,
+  saveVoiceMappingInputSchema,
+  selectVoiceCandidateInputSchema,
+  voiceCandidateDeleteResultSchema,
+  voiceCandidateViewSchema,
+  voiceEpisodeBatchViewSchema,
+  voiceMappingSchema,
   type CancelVideoBatchInputDto,
   type CancelVideoExportInputDto,
   type CreateVideoTimelineInputDto,
@@ -188,6 +199,12 @@ import {
   type UploadAssetReferenceInputDto,
   type TransferExportProjectInputDto,
   type TransferImportProjectInputDto,
+  type DeleteVoiceCandidateInputDto,
+  type GenerateVoiceForEpisodeInputDto,
+  type GetVoiceGenerationsInputDto,
+  type GetVoiceMappingsInputDto,
+  type SaveVoiceMappingInputDto,
+  type SelectVoiceCandidateInputDto,
 } from '@jingxu/contracts';
 
 export {
@@ -202,6 +219,7 @@ export {
   STORYBOARD_IPC_CHANNELS,
   VIDEO_IPC_CHANNELS,
   TRANSFER_IPC_CHANNELS,
+  VOICE_IPC_CHANNELS,
 };
 
 export type InvokeIpc = (channel: string, ...arguments_: readonly unknown[]) => Promise<unknown>;
@@ -651,6 +669,44 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
       cancelExport: async (input: CancelVideoExportInputDto) =>
         appResultSchema(videoExportJobSchema).parse(
           await invoke(VIDEO_IPC_CHANNELS.cancelExport, cancelVideoExportInputSchema.parse(input)),
+        ),
+    }),
+    voice: Object.freeze({
+      getMappings: async (input: GetVoiceMappingsInputDto) =>
+        appResultSchema(voiceMappingSchema.array()).parse(
+          await invoke(VOICE_IPC_CHANNELS.getMappings, getVoiceMappingsInputSchema.parse(input)),
+        ),
+      saveMapping: async (input: SaveVoiceMappingInputDto) =>
+        appResultSchema(voiceMappingSchema.array()).parse(
+          await invoke(VOICE_IPC_CHANNELS.saveMapping, saveVoiceMappingInputSchema.parse(input)),
+        ),
+      generateForEpisode: async (input: GenerateVoiceForEpisodeInputDto) =>
+        appResultSchema(voiceEpisodeBatchViewSchema).parse(
+          await invoke(
+            VOICE_IPC_CHANNELS.generateForEpisode,
+            generateVoiceForEpisodeInputSchema.parse(input),
+          ),
+        ),
+      getGenerations: async (input: GetVoiceGenerationsInputDto) =>
+        appResultSchema(voiceCandidateViewSchema.array()).parse(
+          await invoke(
+            VOICE_IPC_CHANNELS.getGenerations,
+            getVoiceGenerationsInputSchema.parse(input),
+          ),
+        ),
+      selectCandidate: async (input: SelectVoiceCandidateInputDto) =>
+        appResultSchema(voiceCandidateViewSchema.array()).parse(
+          await invoke(
+            VOICE_IPC_CHANNELS.selectCandidate,
+            selectVoiceCandidateInputSchema.parse(input),
+          ),
+        ),
+      deleteCandidate: async (input: DeleteVoiceCandidateInputDto) =>
+        appResultSchema(voiceCandidateDeleteResultSchema).parse(
+          await invoke(
+            VOICE_IPC_CHANNELS.deleteCandidate,
+            deleteVoiceCandidateInputSchema.parse(input),
+          ),
         ),
     }),
     transfer: Object.freeze({

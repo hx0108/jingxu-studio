@@ -157,7 +157,13 @@ export class InMemoryVoiceGenerationRepository implements VoiceGenerationReposit
     const ids = new Set(candidateIds);
     for (const [index, row] of this.candidates.entries()) {
       if (ids.has(row.id) && row.status === 'SUCCEEDED') {
-        this.candidates[index] = { ...row, status: 'STALE_INPUT', updatedAt };
+        // 与 0020 CHECK 对齐：duration_ms 仅 SUCCEEDED 携带，STALE 迁移清零。
+        this.candidates[index] = {
+          ...row,
+          durationMs: null,
+          status: 'STALE_INPUT',
+          updatedAt,
+        };
       }
     }
     return Promise.resolve();

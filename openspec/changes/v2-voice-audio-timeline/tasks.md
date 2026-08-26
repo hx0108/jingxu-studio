@@ -17,8 +17,8 @@
 ## 4. 生成服务与持久化
 
 - [x] 4.1 persistence 0020 迁移（voice_generation_jobs / voice_candidates / voice_mappings / video_timeline_voice_items / video_timeline_subtitle_items / audio_volume 列）+ 版本断言 4 文件 9 处同步 + 迁移矩阵 0020 用例。（0020_voice_audio_timeline.sql：jobs UNIQUE(project_id,request_id)+状态枚举+回执/证据 json_valid；candidates 四元组同生同灭+duration_ms>0 联动 SUCCEEDED+mime 白名单+轮次唯一+ux 当前候选 partial unique；mappings PK(project,speaker)+speaker CHECK；audio_volume REAL DEFAULT 0.2（v19 升级回填=旧硬编码等效）；轨道两表 CHECK 族+版本级联。断言面实际 7 文件 15 处+3 标题+1 注释 19→20（另 receipts "未来版本" 用例 20→21）；新增 voice-migration.integration 7 例（对象全集/升级回填/jobs/候选两族/mapping PK/轨道 CHECK+级联））
-- [ ] 4.2 `VoiceGenerationScheduler`（同项目串行/两段式证据/取消先落库/恢复只信证据）+ `VoiceGenerationService`（整集批量建档、requestId 幂等、STALE_INPUT、跳过清单回执）。
-- [ ] 4.3 产物登记：CAS `audio` 写入、ffprobe durationMs>0 与 mime 白名单校验、同 hash 去重、当前候选唯一约束、候选删除仅删登记；integration 测试。
+- [x] 4.2 `VoiceGenerationScheduler`（同项目串行/两段式证据/取消先落库/恢复只信证据）+ `VoiceGenerationService`（整集批量建档、requestId 幂等、STALE_INPUT、跳过清单回执）。（Commit A=应用核心：input/service/scheduler+内存仓 43 测试；Commit B=接线：media-repository voice 槽、Sqlite 双仓（integration 11 例：job 生命周期/终态守卫/取消先落库/CHECK 族、候选四元组/轮次唯一/STALE 置空 duration 保四元组/选中互斥/删除仅登记、mapping 整体替换）、voice-ipc 六通道（contract 6 例：注册边界/非 READY 全阻断/strict DTO/不可信 frame/singleflight/REQUEST_ID_REUSED）、组合根 register-voice-features（E2E mock 档+真实档 resolveModel+启动恢复+关停取消，测试 3 例含真 ffprobe 端到端）、contracts JingxuApi.voice+preload 白名单（apiKeys+六方法转发+越权字段拒绝，18 例）、main.ts 生命周期接线；门禁 tsc/eslint/prettier+unit 50/contract 24/integration 11 全绿）
+- [x] 4.3 产物登记：CAS `audio` 写入、ffprobe durationMs>0 与 mime 白名单校验、同 hash 去重、当前候选唯一约束、候选删除仅删登记；integration 测试。（voice-audio-registrar：ALLOWED_MIME_TYPES 白名单→store.write(audio 命名空间)→真 ffprobe -show_streams 实测 hasAudioStream+durationMs>0 否则 VOICE_AUDIO_INVALID；registerAudio(payload, projectId) 供 CAS 按项目命名空间落盘；测试 4 例真 ffprobe：正常登记/同 hash 去重/mime 拒绝/坏音频拒绝）
 
 ## 5. 时间线与对齐集成
 
