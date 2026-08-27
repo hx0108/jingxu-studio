@@ -205,7 +205,7 @@ const createHarness = (
     })(),
     registerAudio: (payload, projectId) =>
       options.registerAudioError === true
-        ? Promise.reject(new Error('registration failed'))
+        ? Promise.reject(new Error('VOICE_AUDIO_INVALID'))
         : Promise.resolve({
             byteSize: payload.bytes.length,
             durationMs: 1_500,
@@ -362,6 +362,8 @@ describe('VoiceGenerationScheduler（tasks 4.2，design D2）', () => {
   });
 
   it('登记失败（ffprobe/CAS 异常）—候选 FAILED 且不阻断后续镜头', async () => {
+    // 真实联调 §8.2 实录归因修正：Provider 合成成功后的本地登记故障必须保留
+    // VOICE_AUDIO_* 原码，不得被 normalizeError 掩盖成 MODEL_UNKNOWN。
     const harness = createHarness({ registerAudioError: true });
     await harness.repositories.insertJob(queuedJob({ id: 'job_1', shotIds: [SHOT_A.shotId] }));
     harness.scheduler.kick(PROJECT);
@@ -369,7 +371,7 @@ describe('VoiceGenerationScheduler（tasks 4.2，design D2）', () => {
     await harness.scheduler.whenSettled(PROJECT);
     const candidate = harness.repositories.candidates[0];
     expect(candidate?.status).toBe('FAILED');
-    expect(candidate?.errorCode).toBe('MODEL_UNKNOWN');
+    expect(candidate?.errorCode).toBe('VOICE_AUDIO_INVALID');
     expect(harness.repositories.jobs[0]?.status).toBe('PARTIAL_COMPLETED');
   });
 

@@ -40,6 +40,6 @@
 ## 8. 端到端与门禁
 
 - [x] 8.1 Mock 全链 E2E：映射 → 整集生成 → 候选选择 → 时间线编辑 → 对齐 → 含配音字幕导出 → 审计验证脚本。（2026-08-27 通过；实测中修复导出边界误用视频候选仓储致 `VOICE_CANDIDATE_STALE` 的集成缺陷，改走配音域仓储；全链 23.1s 绿，审计 VOICE_AUDIT_OK targets/selected/candidates=4）
-- [ ] 8.2 真实 DashScope TTS 探针 E2E（凭据门控，`--no-proxy-server` 配方）。
+- [x] 8.2 真实 DashScope TTS 探针 E2E（凭据门控，`--no-proxy-server` 配方）。（2026-08-27 通过：复用 READY 项目跳档 `JINGXU_REAL_TTS_PROJECT_ID`，7 行映射（narrator=Neil 幂等确认 + 6 个 char_* 按注册表音色循环自动填充——首跑实证真实契约角色说话人缺行会被 VOICE_MAPPING_MISSING 拒）；MAX_TTS_TARGETS=3 真实计费合成 SUCCEEDED（Neil 5920ms / Mochi 3360/4640ms，modelId qwen3-tts-instruct-flash），mediaUrl 受限域校验 + selectCandidate selectedAt 回读通过。实测揭出并修复调度器归因缺陷：Provider 合成成功后的本地登记故障（VOICE_AUDIO_INVALID/MIME_INVALID）被 normalizeError 错标 MODEL_UNKNOWN，掩盖"音频其实已在 CAS 落盘"事实——真凶是 dev electron resourcesPath 无打包 ffprobe，配方补 JINGXU_FFPROBE_PATH 后三发全成）
 - [ ] 8.3 TECH_DESIGN / README / 实现快照同步更新。
 - [ ] 8.4 全量门禁：format/lint/typecheck/collection/unit/contract/integration/E2E + `package:win`，记录实际结果。

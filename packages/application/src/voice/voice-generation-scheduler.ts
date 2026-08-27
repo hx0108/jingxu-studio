@@ -28,6 +28,17 @@ import { computeVoiceGenerationInputHash, extractVoiceShotFields } from './voice
 /** 恢复时无终态证据候选的稳定中断码（Renderer 提示人工重试，不自动重发）。 */
 export const VOICE_INTERRUPTED_ERROR_CODE = 'VOICE_INTERRUPTED';
 
+/**
+ * 登记域稳定错误码（voice-audio-registrar 抛出）。这些错误发生在 Provider 调用
+ * 成功之后（音频已落盘 CAS），属于本地登记域故障——不得经 normalizeError 归因成
+ * MODEL_* 系模型错误（真实联调 §8.2 实录：ffprobe 不可执行被误标 MODEL_UNKNOWN，
+ * 掩盖了合成其实成功且已计费的事实）。
+ */
+const REGISTRATION_ERROR_CODES: ReadonlySet<string> = new Set([
+  'VOICE_AUDIO_INVALID',
+  'VOICE_AUDIO_MIME_INVALID',
+]);
+
 export interface VoiceGenerationSchedulerDependencies {
   readonly clock: () => string;
   /** canonical JSON sha256（组合根注入，与图片/视频侧同构）。 */
@@ -188,10 +199,14 @@ export const createVoiceGenerationScheduler = (
       );
       await appendEvidence(job.id, shotId, candidateId, 'SUCCEEDED');
     } catch (caught: unknown) {
-      const normalized = dependencies.normalizeError(caught);
+      // 登记域稳定码直取（Provider 已成功，音频在 CAS）；其余才走模型错误归一化。
+      const registrationCode =
+        caught instanceof Error && REGISTRATION_ERROR_CODES.has(caught.message)
+          ? caught.message
+          : null;
       await repositories.finalizeCandidateFailed(
         candidateId,
-        normalized.code,
+        registrationCode ?? dependencies.normalizeError(caught).code,
         dependencies.clock(),
       );
       await appendEvidence(job.id, shotId, candidateId, 'FAILED');
