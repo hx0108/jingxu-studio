@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { createQueryClient } from './lib/query-client';
 import './styles.css';
+import './prototype-alignment.css';
 
 const rootElement = document.querySelector<HTMLDivElement>('#root');
 if (rootElement === null) {

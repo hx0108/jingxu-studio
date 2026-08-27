@@ -30,59 +30,88 @@ export const ImageProviderCardView = ({
   pending,
   profile,
 }: ImageProviderCardViewProps) => (
-  <section className="script-card" aria-labelledby="image-provider-title">
-    <h2 id="image-provider-title">图片模型服务（火山方舟 ARK）</h2>
-    <p>
-      用于首帧图片生成。模型与端点固定，仅需保存 ARK API Key；完整 Key 不回显、不进入页面长期状态。
-    </p>
-    {error !== null && (
-      <p className="field-error" role="alert">
-        {error.code}：{error.message}
+  <details className="script-card model-service-card">
+    <summary className="model-service-heading">
+      <span aria-hidden="true" className="model-service-mark">
+        图
+      </span>
+      <div>
+        <p className="eyebrow">图片模型</p>
+        <h2 id="image-provider-title">火山方舟 ARK</h2>
+      </div>
+      <span
+        className={`model-configuration-status${profile?.configured === true ? ' configured' : ''}`}
+      >
+        {profile?.configured === true ? '已配置' : '未配置'}
+      </span>
+      <span className="model-current-summary">
+        <small>当前模型</small>
+        <strong>{profile?.modelId ?? 'Seedream'}</strong>
+      </span>
+      <span className="model-credential-summary">
+        <small>凭据</small>
+        <strong>
+          {profile?.configured === true
+            ? `已安全保存 · 末四位 ${profile.last4 ?? '不可用'}`
+            : '尚未保存'}
+        </strong>
+      </span>
+      <span className="model-manage-label">管理配置</span>
+    </summary>
+    <div className="model-service-body" aria-labelledby="image-provider-title">
+      <p>
+        用于首帧图片生成。模型与端点固定，仅需保存 ARK API Key；完整 Key
+        不回显、不进入页面长期状态。
       </p>
-    )}
-    <label>
-      模型
-      <input readOnly value={profile?.modelId ?? ''} />
-    </label>
-    <label>
-      ARK API Key
-      <input
-        autoComplete="new-password"
-        onChange={(event) => {
-          onApiKeyChange(event.target.value);
-        }}
-        type="password"
-        value={apiKey}
-      />
-    </label>
-    <div className="script-actions">
-      <button
-        disabled={pending || profile === null || apiKey === ''}
-        onClick={onSave}
-        type="button"
-      >
-        保存凭据
-      </button>
-      <button disabled={pending || profile?.configured !== true} onClick={onTest} type="button">
-        测试凭据
-      </button>
-      <button
-        className="danger-button"
-        disabled={pending || profile?.configured !== true}
-        onClick={onDelete}
-        type="button"
-      >
-        删除凭据
-      </button>
+      {error !== null && (
+        <p className="field-error" role="alert">
+          {error.code}：{error.message}
+        </p>
+      )}
+      <label>
+        模型
+        <input readOnly value={profile?.modelId ?? ''} />
+      </label>
+      <label>
+        ARK API Key
+        <input
+          autoComplete="new-password"
+          onChange={(event) => {
+            onApiKeyChange(event.target.value);
+          }}
+          type="password"
+          value={apiKey}
+        />
+      </label>
+      <div className="script-actions">
+        <button
+          disabled={pending || profile === null || apiKey === ''}
+          onClick={onSave}
+          type="button"
+        >
+          保存凭据
+        </button>
+        <button disabled={pending || profile?.configured !== true} onClick={onTest} type="button">
+          测试凭据
+        </button>
+        <button
+          className="danger-button"
+          disabled={pending || profile?.configured !== true}
+          onClick={onDelete}
+          type="button"
+        >
+          删除凭据
+        </button>
+      </div>
+      <p aria-live="polite">
+        {profile?.configured === true ? `已配置（末四位 ${profile.last4 ?? '不可用'}）` : '未配置'}
+        {feedback === '' ? '' : ` · ${feedback}`}
+      </p>
+      <p className="action-hint">
+        测试仅验证密文可解密读取，不发起计费请求；未配置时生成首帧会前置失败并提示。
+      </p>
     </div>
-    <p aria-live="polite">
-      {profile?.configured === true ? `已配置（末四位 ${profile.last4 ?? '不可用'}）` : '未配置'}
-      {feedback === '' ? '' : ` · ${feedback}`}
-    </p>
-    <p className="action-hint">
-      测试仅验证密文可解密读取，不发起计费请求；未配置时生成首帧会前置失败并提示。
-    </p>
-  </section>
+  </details>
 );
 
 export const ImageProviderCard = () => {

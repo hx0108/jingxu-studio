@@ -17,6 +17,7 @@ import { ScriptWorkspaceView } from '../script/ScriptWorkspace';
 import { ProviderSettings } from '../script/ProviderSettings';
 import { EvaluationWorkspace } from '../evaluation/EvaluationWorkspace';
 import { AppShell, ComingSoonPanel, type GlobalArea } from '../ui/AppShell';
+import { WorkspaceTopbar } from '../ui/WorkspaceTopbar';
 
 type Screen =
   | 'home'
@@ -241,14 +242,33 @@ export const ProjectWorkspace = () => {
       onNavigate={navigateGlobal}
       projectName={currentDetail?.name ?? null}
     >
-      <div className="project-shell">
-        <header className="page-header">
-          <div>
-            <p className="eyebrow">{activeArea === 'workspace' ? '项目创作' : '本地创作空间'}</p>
-            <h1>{pageTitle[activeArea]}</h1>
-          </div>
-          <span className="local-first-badge">仅保存在本机</span>
-        </header>
+      <div
+        className={
+          activeArea === 'workspace' ? 'project-shell workspace-area-shell' : 'project-shell'
+        }
+      >
+        {activeArea === 'workspace' || activeArea === 'settings' ? (
+          <WorkspaceTopbar
+            area={
+              activeArea === 'settings'
+                ? '设置'
+                : screen === 'script'
+                  ? '剧本开发'
+                  : screen === 'edit'
+                    ? '编辑创作设定'
+                    : '项目概览'
+            }
+            context={activeArea === 'workspace' ? currentDetail?.name : undefined}
+          />
+        ) : (
+          <header className="page-header">
+            <div>
+              <p className="eyebrow">本地创作空间</p>
+              <h1>{pageTitle[activeArea]}</h1>
+            </div>
+            <span className="local-first-badge">仅保存在本机</span>
+          </header>
+        )}
         {commandError !== null && <ProjectErrorBanner error={commandError} />}
         {screen === 'home' && (
           <section className="home-dashboard">
@@ -305,11 +325,11 @@ export const ProjectWorkspace = () => {
           />
         )}
         {screen === 'settings' && (
-          <section className="settings-workspace">
+          <section className="settings-workspace model-services-page">
             <header>
               <p className="eyebrow">设置</p>
               <h2>模型服务</h2>
-              <p>凭据只由主进程安全保存，完整密钥不会回显。</p>
+              <p>凭据和模型配置集中管理，创作页面只显示脱敏状态。</p>
             </header>
             <ProviderSettings onReadyChange={() => undefined} />
           </section>
@@ -449,7 +469,7 @@ export const ProjectWorkspace = () => {
               找不到项目详情，请返回列表刷新。
             </section>
           ) : screen === 'script' ? (
-            <section className="editor-panel script-shell">
+            <section className="script-shell">
               <div className="script-heading">
                 <div>
                   <p className="eyebrow">剧本工作区</p>
