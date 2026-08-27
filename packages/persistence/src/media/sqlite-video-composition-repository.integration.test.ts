@@ -299,7 +299,11 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
         );
         expect(old).toMatchObject({
           alignmentItems: [
-            expect.objectContaining({ shotId: 'shot_1', strategy: 'FREEZE_EXTEND', extendedMs: 500 }),
+            expect.objectContaining({
+              shotId: 'shot_1',
+              strategy: 'FREEZE_EXTEND',
+              extendedMs: 500,
+            }),
           ],
           audioVolume: 0.2,
           id: 'timeline_v1',

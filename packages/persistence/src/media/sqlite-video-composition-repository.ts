@@ -87,8 +87,8 @@ const parseAlignmentItems = (rows: readonly Row[]): VideoTimelineAlignmentItemDt
       row.manual_override === null
         ? null
         : (requiredString(row, 'manual_override') as NonNullable<
-          VideoTimelineAlignmentItemDto['manualOverride']
-        >),
+            VideoTimelineAlignmentItemDto['manualOverride']
+          >),
     rulesVersion: requiredString(row, 'rules_version'),
     shotDurationMs: requiredNumber(row, 'shot_duration_ms'),
     shotId: requiredString(row, 'shot_id'),

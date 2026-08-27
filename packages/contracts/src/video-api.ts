@@ -174,10 +174,7 @@ export const videoTimelineVoiceItemSchema = z
      * 对齐人工覆盖（design D4；PRD §10.7.1）。缺省 null = 走默认策略；
      * 与偏差类别不构成合法组合时由服务层显式拒绝（不静默改类）。
      */
-    alignmentOverride: z
-      .enum(['TRIM_AUDIO', 'FORCE_TRIM', 'EARLY_CUT_NEXT'])
-      .nullable()
-      .optional(),
+    alignmentOverride: z.enum(['TRIM_AUDIO', 'FORCE_TRIM', 'EARLY_CUT_NEXT']).nullable().optional(),
     candidateId: candidateIdSchema,
     enabled: z.boolean(),
     fileSha256: hashSchema,
