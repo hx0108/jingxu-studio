@@ -1,0 +1,102 @@
+{
+  "cancelled": null,
+  "current": {
+    "errorCode": "STRUCTURE_REPAIR_FAILED",
+    "id": "bd33ade7-5f78-4da4-a372-d0330be44518",
+    "projectId": "project_22a75a4f-928f-48e4-83c9-2239c9c6d0f0",
+    "status": "FAILED",
+    "versionId": "bd33ade7-5f78-4da4-a372-d0330be44518"
+  },
+  "originalHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
+  "projectId": "project_22a75a4f-928f-48e4-83c9-2239c9c6d0f0",
+  "scenario": "repair-failure",
+  "status": "FAILED",
+  "workspace": {
+    "ok": true,
+    "data": {
+      "currentJob": null,
+      "episode": {
+        "id": "episode_7cd1ec1c-23e7-451a-9c98-19397bc3b7c4",
+        "projectId": "project_22a75a4f-928f-48e4-83c9-2239c9c6d0f0",
+        "targetDurationSec": 90,
+        "title": "第 1 集"
+      },
+      "prerequisites": [
+        {
+          "message": "前置条件已满足",
+          "ready": true,
+          "stage": "CONCEPT"
+        },
+        {
+          "message": "请先确认 CONCEPT READY 版本",
+          "ready": false,
+          "stage": "STORY_BIBLE"
+        },
+        {
+          "message": "请先确认 CONCEPT、STORY_BIBLE READY 版本",
+          "ready": false,
+          "stage": "EPISODE_OUTLINE"
+        },
+        {
+          "message": "请先确认 STORY_BIBLE、EPISODE_OUTLINE READY 版本",
+          "ready": false,
+          "stage": "BEAT_SHEET"
+        },
+        {
+          "message": "请先确认 STORY_BIBLE、BEAT_SHEET READY 版本",
+          "ready": false,
+          "stage": "SCENE_SCRIPT"
+        }
+      ],
+      "projectId": "project_22a75a4f-928f-48e4-83c9-2239c9c6d0f0",
+      "source": {
+        "characterCount": 21,
+        "contentHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
+        "creativeText": "一名侦探必须在列车抵达终点前找出记忆窃贼。",
+        "id": "source_a51ba488-3863-4f65-a670-d13fa82661c4",
+        "inputKind": "CREATIVE",
+        "fileName": null,
+        "encoding": null,
+        "projectId": "project_22a75a4f-928f-48e4-83c9-2239c9c6d0f0"
+      },
+      "storyboard": {
+        "current": null,
+        "history": [],
+        "shots": [],
+        "totalDurationSec": 0
+      },
+      "stages": [
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": true,
+          "stage": "CONCEPT"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "STORY_BIBLE"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "EPISODE_OUTLINE"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "BEAT_SHEET"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "SCENE_SCRIPT"
+        }
+      ]
+    }
+  }
+}

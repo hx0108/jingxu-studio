@@ -1,0 +1,152 @@
+{
+  "cancelled": null,
+  "current": {
+    "errorCode": null,
+    "id": "5f3a95a6-6db2-45aa-9217-5678e0f8e686",
+    "projectId": "project_99d33977-4e4f-4b51-b91d-89b0334e06da",
+    "status": "SUCCEEDED",
+    "versionId": "5f3a95a6-6db2-45aa-9217-5678e0f8e686"
+  },
+  "originalHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
+  "projectId": "project_99d33977-4e4f-4b51-b91d-89b0334e06da",
+  "scenario": "invalid-json",
+  "status": "SUCCEEDED",
+  "workspace": {
+    "ok": true,
+    "data": {
+      "currentJob": null,
+      "episode": {
+        "id": "episode_8ba559e3-930c-4db8-8a8c-1a49895adebb",
+        "projectId": "project_99d33977-4e4f-4b51-b91d-89b0334e06da",
+        "targetDurationSec": 90,
+        "title": "第 1 集"
+      },
+      "prerequisites": [
+        {
+          "message": "前置条件已满足",
+          "ready": true,
+          "stage": "CONCEPT"
+        },
+        {
+          "message": "请先确认 CONCEPT READY 版本",
+          "ready": false,
+          "stage": "STORY_BIBLE"
+        },
+        {
+          "message": "请先确认 CONCEPT、STORY_BIBLE READY 版本",
+          "ready": false,
+          "stage": "EPISODE_OUTLINE"
+        },
+        {
+          "message": "请先确认 STORY_BIBLE、EPISODE_OUTLINE READY 版本",
+          "ready": false,
+          "stage": "BEAT_SHEET"
+        },
+        {
+          "message": "请先确认 STORY_BIBLE、BEAT_SHEET READY 版本",
+          "ready": false,
+          "stage": "SCENE_SCRIPT"
+        }
+      ],
+      "projectId": "project_99d33977-4e4f-4b51-b91d-89b0334e06da",
+      "source": {
+        "characterCount": 21,
+        "contentHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
+        "creativeText": "一名侦探必须在列车抵达终点前找出记忆窃贼。",
+        "id": "source_37963455-c5e7-4572-8e25-826fe6f84005",
+        "inputKind": "CREATIVE",
+        "fileName": null,
+        "encoding": null,
+        "projectId": "project_99d33977-4e4f-4b51-b91d-89b0334e06da"
+      },
+      "storyboard": {
+        "current": null,
+        "history": [],
+        "shots": [],
+        "totalDurationSec": 0
+      },
+      "stages": [
+        {
+          "current": {
+            "createdAt": "2026-08-27T08:21:16.099Z",
+            "document": {
+              "data": {
+                "core_conflict": "主角必须在真相与亲情之间做出选择",
+                "genre": "悬疑",
+                "synopsis": "主角追查失窃的记忆，并在终点前找到幕后操控者。",
+                "target_audience": "喜欢悬疑漫剧的成年观众",
+                "theme": "记忆与身份",
+                "title": "午夜列车"
+              },
+              "episode_id": null,
+              "project_id": "project_99d33977-4e4f-4b51-b91d-89b0334e06da",
+              "schema_version": "1.0.0",
+              "source_invocation_id": "2c41379c-0177-4bb0-948d-b29a60649a9d",
+              "stage": "CONCEPT"
+            },
+            "documentHash": "4850e27afd7ad5751c3cdb0cb356a4fd0271749a07b0423f558f3b4041771029",
+            "id": "06923ad8-c69c-4979-abea-498e816f20fe",
+            "parentId": null,
+            "projectId": "project_99d33977-4e4f-4b51-b91d-89b0334e06da",
+            "source": "AI",
+            "status": "DRAFT",
+            "versionNo": 1
+          },
+          "history": [
+            {
+              "createdAt": "2026-08-27T08:21:16.099Z",
+              "document": {
+                "data": {
+                  "core_conflict": "主角必须在真相与亲情之间做出选择",
+                  "genre": "悬疑",
+                  "synopsis": "主角追查失窃的记忆，并在终点前找到幕后操控者。",
+                  "target_audience": "喜欢悬疑漫剧的成年观众",
+                  "theme": "记忆与身份",
+                  "title": "午夜列车"
+                },
+                "episode_id": null,
+                "project_id": "project_99d33977-4e4f-4b51-b91d-89b0334e06da",
+                "schema_version": "1.0.0",
+                "source_invocation_id": "2c41379c-0177-4bb0-948d-b29a60649a9d",
+                "stage": "CONCEPT"
+              },
+              "documentHash": "4850e27afd7ad5751c3cdb0cb356a4fd0271749a07b0423f558f3b4041771029",
+              "id": "06923ad8-c69c-4979-abea-498e816f20fe",
+              "parentId": null,
+              "projectId": "project_99d33977-4e4f-4b51-b91d-89b0334e06da",
+              "source": "AI",
+              "status": "DRAFT",
+              "versionNo": 1
+            }
+          ],
+          "prerequisiteReady": true,
+          "stage": "CONCEPT"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "STORY_BIBLE"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "EPISODE_OUTLINE"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "BEAT_SHEET"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "SCENE_SCRIPT"
+        }
+      ]
+    }
+  }
+}

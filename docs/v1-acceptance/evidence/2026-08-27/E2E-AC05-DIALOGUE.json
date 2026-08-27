@@ -1,0 +1,143 @@
+{
+  "blockOverride": {
+    "ok": false,
+    "error": {
+      "code": "EXPORT_COLLECTION_INVALID",
+      "message": "BLOCK finding 不可覆盖",
+      "retryable": false,
+      "userAction": null,
+      "fieldErrors": null,
+      "traceId": "3c44e177-f875-4038-acaa-44e0cc27c8ac"
+    }
+  },
+  "blocked": {
+    "id": "report_d8303dd7-ad5c-4dfa-8263-ba352aa5ce7a",
+    "capabilitySnapshotId": "volcark-seedance-video/v2",
+    "projectId": "project_daa509bb-0f64-4466-9761-901434e5ec71",
+    "episodeId": "episode_806da0c6-4a36-43dd-931b-361775a459e3",
+    "episodeVersionId": "ae80dfec-d774-42d9-99e0-98d9670ce8ae",
+    "ruleSetVersion": "jingxu-producibility-rules/1",
+    "status": "BLOCK",
+    "findings": [
+      {
+        "id": "finding_57d6b126-debf-45d2-8267-87829a30e05b",
+        "ruleId": "DIALOGUE_MODE_INVALID",
+        "ruleVersion": "jingxu-producibility-rules/1",
+        "severity": "BLOCK",
+        "jsonPointer": "/shot_contracts/0/dialogue/dialogue_render_mode",
+        "observation": "对白渲染模式不在 V1 枚举内。",
+        "recommendation": "选择四种 V1 DialogueRenderMode 之一。",
+        "sourceType": "RULE",
+        "overridden": false,
+        "overrideReason": null
+      }
+    ],
+    "createdAt": "2026-08-27T08:21:32.000Z",
+    "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
+    "referencePriceSnapshotId": "price_shot_package_v1"
+  },
+  "loaded": {
+    "id": "report_0dbd729f-a3a9-47c2-b31a-f1cb2a919783",
+    "capabilitySnapshotId": "volcark-seedance-video/v2",
+    "projectId": "project_daa509bb-0f64-4466-9761-901434e5ec71",
+    "episodeId": "episode_806da0c6-4a36-43dd-931b-361775a459e3",
+    "episodeVersionId": "ae80dfec-d774-42d9-99e0-98d9670ce8ae",
+    "ruleSetVersion": "jingxu-producibility-rules/1",
+    "status": "PASS",
+    "findings": [
+      {
+        "id": "finding_53b6a553-2c23-4e21-9513-e1b3dd4b4776",
+        "ruleId": "WEAK_LIP_SYNC_LONG_DIALOGUE",
+        "ruleVersion": "jingxu-producibility-rules/1",
+        "severity": "WARN",
+        "jsonPointer": "/shot_contracts/1/dialogue",
+        "observation": "正脸对白超过 4 秒且使用 WEAK_LIP_SYNC。",
+        "recommendation": "缩短对白、调整镜头或改用 PRECISE_LIP_SYNC。",
+        "sourceType": "RULE",
+        "overridden": true,
+        "overrideReason": "本集以风格化弱口型呈现，已完成人工确认。"
+      }
+    ],
+    "createdAt": "2026-08-27T08:21:31.975Z",
+    "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
+    "referencePriceSnapshotId": "price_shot_package_v1"
+  },
+  "modes": {
+    "id": "report_0dbd729f-a3a9-47c2-b31a-f1cb2a919783",
+    "capabilitySnapshotId": "volcark-seedance-video/v2",
+    "projectId": "project_daa509bb-0f64-4466-9761-901434e5ec71",
+    "episodeId": "episode_806da0c6-4a36-43dd-931b-361775a459e3",
+    "episodeVersionId": "ae80dfec-d774-42d9-99e0-98d9670ce8ae",
+    "ruleSetVersion": "jingxu-producibility-rules/1",
+    "status": "WARN",
+    "findings": [
+      {
+        "id": "finding_53b6a553-2c23-4e21-9513-e1b3dd4b4776",
+        "ruleId": "WEAK_LIP_SYNC_LONG_DIALOGUE",
+        "ruleVersion": "jingxu-producibility-rules/1",
+        "severity": "WARN",
+        "jsonPointer": "/shot_contracts/1/dialogue",
+        "observation": "正脸对白超过 4 秒且使用 WEAK_LIP_SYNC。",
+        "recommendation": "缩短对白、调整镜头或改用 PRECISE_LIP_SYNC。",
+        "sourceType": "RULE",
+        "overridden": false,
+        "overrideReason": null
+      }
+    ],
+    "createdAt": "2026-08-27T08:21:31.975Z",
+    "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
+    "referencePriceSnapshotId": "price_shot_package_v1"
+  },
+  "overridden": {
+    "id": "report_0dbd729f-a3a9-47c2-b31a-f1cb2a919783",
+    "capabilitySnapshotId": "volcark-seedance-video/v2",
+    "projectId": "project_daa509bb-0f64-4466-9761-901434e5ec71",
+    "episodeId": "episode_806da0c6-4a36-43dd-931b-361775a459e3",
+    "episodeVersionId": "ae80dfec-d774-42d9-99e0-98d9670ce8ae",
+    "ruleSetVersion": "jingxu-producibility-rules/1",
+    "status": "PASS",
+    "findings": [
+      {
+        "id": "finding_53b6a553-2c23-4e21-9513-e1b3dd4b4776",
+        "ruleId": "WEAK_LIP_SYNC_LONG_DIALOGUE",
+        "ruleVersion": "jingxu-producibility-rules/1",
+        "severity": "WARN",
+        "jsonPointer": "/shot_contracts/1/dialogue",
+        "observation": "正脸对白超过 4 秒且使用 WEAK_LIP_SYNC。",
+        "recommendation": "缩短对白、调整镜头或改用 PRECISE_LIP_SYNC。",
+        "sourceType": "RULE",
+        "overridden": true,
+        "overrideReason": "本集以风格化弱口型呈现，已完成人工确认。"
+      }
+    ],
+    "createdAt": "2026-08-27T08:21:31.975Z",
+    "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
+    "referencePriceSnapshotId": "price_shot_package_v1"
+  },
+  "unknown": {
+    "id": "report_eb00b9c7-6bb4-443b-93b4-18e90b8f146e",
+    "capabilitySnapshotId": "volcark-seedance-video/v2",
+    "projectId": "project_daa509bb-0f64-4466-9761-901434e5ec71",
+    "episodeId": "episode_806da0c6-4a36-43dd-931b-361775a459e3",
+    "episodeVersionId": "ae80dfec-d774-42d9-99e0-98d9670ce8ae",
+    "ruleSetVersion": "jingxu-producibility-rules/1",
+    "status": "WARN",
+    "findings": [
+      {
+        "id": "finding_13ec36c7-fb62-4cbf-aa23-4b010888ce8b",
+        "ruleId": "CAPABILITY_UNKNOWN",
+        "ruleVersion": "jingxu-producibility-rules/1",
+        "severity": "WARN",
+        "jsonPointer": "/shot_contracts/0/generation_constraints/capability_requirements",
+        "observation": "镜头引用了能力登记表之外的 UNKNOWN 能力。",
+        "recommendation": "确认 Provider 能力或移除该要求。",
+        "sourceType": "RULE",
+        "overridden": false,
+        "overrideReason": null
+      }
+    ],
+    "createdAt": "2026-08-27T08:21:31.993Z",
+    "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
+    "referencePriceSnapshotId": "price_shot_package_v1"
+  }
+}

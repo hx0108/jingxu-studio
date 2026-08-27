@@ -31,7 +31,7 @@ SQLite Integration 与 Electron E2E 不并行运行。
 
 设置 `JINGXU_E2E_EVIDENCE_DIR` 后，统一 spec 会把白名单 JSON 证据复制到该目录；未设置时证据仅保留在 Playwright 测试报告中。
 
-最近一次六组 AC 自动化证据包：[`evidence/2026-08-22`](./evidence/2026-08-22/)。
+最近一次 AC 自动化证据包（7 条规格，含崩溃恢复独立场景）：[`evidence/2026-08-27`](./evidence/2026-08-27/)。
 
 ## 统一试用任务（≤5 分钟说明）
 
@@ -45,7 +45,7 @@ SQLite Integration 与 Electron E2E 不并行运行。
 
 见 [`trial-runbook.md`](./trial-runbook.md)、[`trial-record-template.md`](./trial-record-template.md) 和 [`trial-roster-template.md`](./trial-roster-template.md)。每位用户独立完成一次；记录开始/结束时间、是否代操作、错误、修改次数和导出结果。
 
-2026-08-24 这一轮的固定构建、参与者画像、时间槽和三份独立记录见 [`trials/2026-08-24/session-plan.md`](./trials/2026-08-24/session-plan.md)。参与者与时间未确认前，不得勾选真实试用门槛。
+当前试用轮次为 2026-08-27：固定构建（SHA-256 `E60F9075…`）、参与者画像、时间槽和三份独立记录见 [`trials/2026-08-27/session-plan.md`](./trials/2026-08-27/session-plan.md)；2026-08-24 组织单钉的旧构建已被本日新构建取代，不得再用作试用固定包。参与者与时间未确认前，不得勾选真实试用门槛。
 
 ## Bad Case 与 V2 决策
 
