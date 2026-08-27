@@ -624,7 +624,7 @@ describe('VideoCompositionService', () => {
 
   it('导出合成载荷—extendedMs 按冻结记录接入片段、配音轨校验后入混音、BGM 音量数据化', async () => {
     const { completeExportMock, composeMock, service } = buildService({
-      candidateQueue: [candidate(), voiceCandidate()],
+      candidateQueue: [candidate()],
       currentTimeline: {
         alignmentItems: [
           {
@@ -690,8 +690,9 @@ describe('VideoCompositionService', () => {
 
   it('导出时配音候选失效—稳定码落库且不进入合成', async () => {
     const { composeMock, service, updateExportStatusMock } = buildService({
-      candidateQueue: [candidate(), null],
+      candidateQueue: [candidate()],
       currentTimeline: { voiceItems: [voiceItem()] },
+      voiceCandidate: null,
     });
     await service.startExport(
       {

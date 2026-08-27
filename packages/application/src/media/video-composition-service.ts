@@ -645,28 +645,34 @@ export const createVideoCompositionService = (
         if (values.length === 0) throw new Error('VIDEO_TRIM_INVALID');
         return values;
       });
-      const voices = await dependencies.mediaUnitOfWork.run(async ({ video }) => {
-        const values = [] as VideoComposerVoiceInput[];
-        for (const voiceItem of timeline.voiceItems) {
-          if (!voiceItem.enabled) continue;
-          const candidate = await video.findCandidateById(input.projectId, voiceItem.candidateId);
-          if (
-            candidate?.status !== 'SUCCEEDED' ||
-            candidate.fileSha256 !== voiceItem.fileSha256 ||
-            candidate.generationInputHash !== voiceItem.generationInputHash ||
-            candidate.storageRelPath === null
-          )
-            throw new Error('VOICE_CANDIDATE_STALE');
-          values.push({
-            offsetMs: voiceItem.offsetMs,
-            storageRelPath: candidate.storageRelPath,
-            trimInMs: voiceItem.trimInMs,
-            trimOutMs: voiceItem.trimOutMs,
-            volume: voiceItem.volume,
-          });
-        }
-        return values;
-      });
+      // 配音候选在导出边界二次核验必须走配音域仓储（voice_candidates 表），
+      // 不能误用视频媒体仓储（video_candidates 表）——否则恒判 STALE（§8.1 E2E 实录）。
+      const voiceRepositories = await dependencies.mediaUnitOfWork.run(({ voice }) =>
+        Promise.resolve(voice === undefined ? null : voice.generation),
+      );
+      if (voiceRepositories === null) throw new Error('PROJECT_PERSISTENCE_FAILED');
+      const voices = [] as VideoComposerVoiceInput[];
+      for (const voiceItem of timeline.voiceItems) {
+        if (!voiceItem.enabled) continue;
+        const candidate = await voiceRepositories.findCandidate(
+          input.projectId,
+          voiceItem.candidateId,
+        );
+        if (
+          candidate?.status !== 'SUCCEEDED' ||
+          candidate.fileSha256 !== voiceItem.fileSha256 ||
+          candidate.generationInputHash !== voiceItem.generationInputHash ||
+          candidate.storageRelPath === null
+        )
+          throw new Error('VOICE_CANDIDATE_STALE');
+        voices.push({
+          offsetMs: voiceItem.offsetMs,
+          storageRelPath: candidate.storageRelPath,
+          trimInMs: voiceItem.trimInMs,
+          trimOutMs: voiceItem.trimOutMs,
+          volume: voiceItem.volume,
+        });
+      }
       const audio =
         timeline.audioAsset === null
           ? null

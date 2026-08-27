@@ -39,7 +39,7 @@
 
 ## 8. 端到端与门禁
 
-- [ ] 8.1 Mock 全链 E2E：映射 → 整集生成 → 候选选择 → 时间线编辑 → 对齐 → 含配音字幕导出 → 审计验证脚本。
+- [x] 8.1 Mock 全链 E2E：映射 → 整集生成 → 候选选择 → 时间线编辑 → 对齐 → 含配音字幕导出 → 审计验证脚本。（2026-08-27 通过；实测中修复导出边界误用视频候选仓储致 `VOICE_CANDIDATE_STALE` 的集成缺陷，改走配音域仓储；全链 23.1s 绿，审计 VOICE_AUDIT_OK targets/selected/candidates=4）
 - [ ] 8.2 真实 DashScope TTS 探针 E2E（凭据门控，`--no-proxy-server` 配方）。
 - [ ] 8.3 TECH_DESIGN / README / 实现快照同步更新。
 - [ ] 8.4 全量门禁：format/lint/typecheck/collection/unit/contract/integration/E2E + `package:win`，记录实际结果。
