@@ -105,6 +105,7 @@ const selectInput = {
 const okTimeline = {
   ok: true as const,
   data: {
+    alignmentItems: [],
     audioAsset: null,
     audioVolume: 0.2,
     createdAt: NOW,

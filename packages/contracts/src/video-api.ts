@@ -170,6 +170,14 @@ export const videoTimelineItemSchema = z
  */
 export const videoTimelineVoiceItemSchema = z
   .object({
+    /**
+     * 对齐人工覆盖（design D4；PRD §10.7.1）。缺省 null = 走默认策略；
+     * 与偏差类别不构成合法组合时由服务层显式拒绝（不静默改类）。
+     */
+    alignmentOverride: z
+      .enum(['TRIM_AUDIO', 'FORCE_TRIM', 'EARLY_CUT_NEXT'])
+      .nullable()
+      .optional(),
     candidateId: candidateIdSchema,
     enabled: z.boolean(),
     fileSha256: hashSchema,
@@ -179,6 +187,33 @@ export const videoTimelineVoiceItemSchema = z
     trimInMs: z.number().int().nonnegative(),
     trimOutMs: z.number().int().positive(),
     volume: z.number().min(0).max(1),
+  })
+  .strict();
+
+/**
+ * 冻结的对齐记录（design D4）：四要素（音频实际时长/镜头实际时长/对齐方式/
+ * 是否分镜层回退）+ extendedMs + 人工覆盖 + 规则版本，随时间线版本逐镜头一行。
+ */
+export const videoTimelineAlignmentItemSchema = z
+  .object({
+    audioDurationMs: z.number().int().positive(),
+    category: z.enum(['ALIGNED', 'SLIGHTLY_LONG', 'FAR_LONG', 'SHORTER']),
+    dialogueComplete: z.boolean(),
+    extendedMs: z.number().int().nonnegative(),
+    manualOverride: z.enum(['TRIM_AUDIO', 'FORCE_TRIM', 'EARLY_CUT_NEXT']).nullable(),
+    rulesVersion: z.string().min(1).max(128),
+    shotDurationMs: z.number().int().positive(),
+    shotId: shotIdSchema,
+    storyboardFallback: z.boolean(),
+    strategy: z.enum([
+      'DIRECT_MIX',
+      'FREEZE_EXTEND',
+      'BLOCK_STORYBOARD_FALLBACK',
+      'TAIL_SILENCE',
+      'MANUAL_TRIM_AUDIO',
+      'FORCE_TRIM_DIALOGUE_INCOMPLETE',
+      'EARLY_CUT_NEXT',
+    ]),
   })
   .strict();
 
@@ -207,6 +242,8 @@ export const videoAudioAssetSummarySchema = z
 
 export const videoTimelineSummarySchema = z
   .object({
+    /** 冻结对齐记录（0021；无配音版本为空数组）。 */
+    alignmentItems: z.array(videoTimelineAlignmentItemSchema).max(20),
     audioAsset: videoAudioAssetSummarySchema.nullable(),
     /** BGM 音量（0020 数据化；既有版本行读出默认 0.2=旧硬编码等效）。 */
     audioVolume: z.number().min(0).max(1),
@@ -356,6 +393,7 @@ export type ListStoryboardVideoStatesInputDto = z.infer<
 >;
 export type VideoTimelineItemDto = z.infer<typeof videoTimelineItemSchema>;
 export type VideoTimelineVoiceItemDto = z.infer<typeof videoTimelineVoiceItemSchema>;
+export type VideoTimelineAlignmentItemDto = z.infer<typeof videoTimelineAlignmentItemSchema>;
 export type VideoTimelineSubtitleItemDto = z.infer<typeof videoTimelineSubtitleItemSchema>;
 export type VideoAudioAssetSummaryDto = z.infer<typeof videoAudioAssetSummarySchema>;
 export type VideoTimelineSummaryDto = z.infer<typeof videoTimelineSummarySchema>;

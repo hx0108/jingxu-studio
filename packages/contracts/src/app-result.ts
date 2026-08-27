@@ -96,11 +96,15 @@ export const projectErrorCodeSchema = z.enum([
   'VIDEO_EXPORT_CANCELLED',
   'VIDEO_EXPORT_INTERRUPTED_UNKNOWN_OUTCOME',
   'VIDEO_EXPORT_WRITE_FAILED',
+  // v2-voice-audio-timeline §5.2：候选冻结音色 ≠ 当前生效映射的合成层拒绝码。
+  'VIDEO_VOICE_MAPPING_STALE',
   // V2 语音音频时间线（v2-voice-audio-timeline）。
   'VOICE_PROVIDER_NOT_CONFIGURED',
   'VOICE_MAPPING_MISSING',
   'VOICE_CANDIDATE_STALE',
   'VOICE_ALIGNMENT_BLOCKED',
+  // 人工覆盖与偏差类别不构成 PRD §10.7.1 合法组合。
+  'VOICE_ALIGNMENT_OVERRIDE_INVALID',
   // V2 批量首帧（batch-first-frame-generation §5.1 批次编排稳定码）。
   'MEDIA_BATCH_NOT_FOUND',
   'MEDIA_BATCH_ALREADY_RUNNING',

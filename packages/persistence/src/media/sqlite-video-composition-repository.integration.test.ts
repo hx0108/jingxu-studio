@@ -205,6 +205,28 @@ const voiceTrackItem = (offsetMs = 0) => ({
   volume: 1,
 });
 
+const alignmentRow = {
+  audioDurationMs: 1_500,
+  category: 'SLIGHTLY_LONG' as const,
+  dialogueComplete: true,
+  extendedMs: 500,
+  manualOverride: null,
+  rulesVersion: 'jingxu-voice-alignment-rules/1',
+  shotDurationMs: 5_000,
+  shotId: 'shot_1',
+  storyboardFallback: false,
+  strategy: 'FREEZE_EXTEND' as const,
+};
+
+const alignmentFallbackRow = {
+  ...alignmentRow,
+  category: 'FAR_LONG' as const,
+  dialogueComplete: false,
+  extendedMs: 0,
+  strategy: 'BLOCK_STORYBOARD_FALLBACK' as const,
+  storyboardFallback: true,
+};
+
 const subtitleTrackItem = {
   enabled: true,
   safeAreaPct: 5,
@@ -213,7 +235,12 @@ const subtitleTrackItem = {
   styleSnapshotJson: '{"styleVersion":1}',
 };
 
-const emptyTracks = { audioVolume: 0.2, subtitleItems: [], voiceItems: [] };
+const emptyTracks = {
+  alignmentItems: [],
+  audioVolume: 0.2,
+  subtitleItems: [],
+  voiceItems: [],
+};
 
 const requireValue = <T>(value: T | null | undefined): T => {
   if (value === null || value === undefined)
@@ -242,6 +269,7 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
             subtitleItems: [subtitleTrackItem],
             totalDurationMs: 5_000,
             voiceItems: [voiceTrackItem()],
+            alignmentItems: [alignmentRow],
           }),
         );
         const second = await uow.run(({ composition }) =>
@@ -256,6 +284,7 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
             subtitleItems: [],
             totalDurationMs: 4_000,
             voiceItems: [voiceTrackItem(120)],
+            alignmentItems: [alignmentFallbackRow],
           }),
         );
         const old = await uow.run(({ composition }) =>
@@ -269,6 +298,9 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
           requireValue(composition).composition.findTimelineVersion('project_1', 'episode_1', null),
         );
         expect(old).toMatchObject({
+          alignmentItems: [
+            expect.objectContaining({ shotId: 'shot_1', strategy: 'FREEZE_EXTEND', extendedMs: 500 }),
+          ],
           audioVolume: 0.2,
           id: 'timeline_v1',
           parentVersionId: null,
@@ -287,6 +319,12 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
         });
         // 子版本音量与偏移生效；旧版本轨道不被改写（不可变语义）。
         expect(current).toMatchObject({
+          alignmentItems: [
+            expect.objectContaining({
+              storyboardFallback: true,
+              strategy: 'BLOCK_STORYBOARD_FALLBACK',
+            }),
+          ],
           audioVolume: 0.35,
           id: 'timeline_v2',
           subtitleItems: [],
@@ -341,6 +379,7 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
           ),
         );
         expect(legacy).toMatchObject({
+          alignmentItems: [],
           audioVolume: 0.2,
           items: [timelineItem()],
           subtitleItems: [],

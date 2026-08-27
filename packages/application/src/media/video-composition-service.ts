@@ -19,11 +19,13 @@ import type {
   VideoAudioAssetRecord,
   VideoCompositionRepository,
   VideoExportJobRecord,
+  VideoTimelineAlignmentItemDto,
   VideoTimelineSubtitleItemInput,
   VideoTimelineVersionRecord,
 } from '../ports/media';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
-import { extractVoiceShotFields } from '../voice';
+import { alignVoiceToShot, extractVoiceShotFields } from '../voice';
+import type { VideoTimelineVoiceItemDto } from '@jingxu/contracts';
 
 /**
  * 字幕默认样式快照（design D5：默认字体 + 安全区；样式编辑器为非目标）。
@@ -151,6 +153,7 @@ const failure = <T>(
 const success = <T>(data: T): AppResultDto<T> => ({ data, ok: true });
 
 const toTimelineDto = (record: VideoTimelineVersionRecord): VideoTimelineSummaryDto => ({
+  alignmentItems: record.alignmentItems,
   audioAsset:
     record.audioAsset === null
       ? null
@@ -211,6 +214,57 @@ const mappingSnapshotOf = (
   [...effective.entries()]
     .map(([speakerId, voiceId]) => ({ speakerId, voiceId }))
     .sort((left, right) => (left.speakerId < right.speakerId ? -1 : 1));
+
+/**
+ * 对齐记录计算（v2 D4）：逐条启用配音 × 同镜头视频裁剪，按"混音有效占用"
+ * （trim_out − trim_in）分类。产出随版本冻结的四要素行 + extendedMs；
+ * 覆盖与类别错配在此显式拒绝（稳定码），不静默改类。
+ */
+const computeAlignmentItems = (
+  items: readonly VideoTimelineItemDto[],
+  voiceItems: readonly VideoTimelineVoiceItemDto[],
+):
+  | { readonly error: null; readonly rows: readonly VideoTimelineAlignmentItemDto[] }
+  | {
+      readonly error: 'VOICE_ALIGNMENT_INPUT_INVALID' | 'VOICE_ALIGNMENT_OVERRIDE_INVALID';
+      readonly rows: readonly [];
+    } => {
+  const rows: VideoTimelineAlignmentItemDto[] = [];
+  for (const voiceItem of voiceItems) {
+    if (!voiceItem.enabled) continue;
+    const shot = items.find((item) => item.shotId === voiceItem.shotId);
+    if (!shot?.enabled) continue;
+    let result;
+    try {
+      result = alignVoiceToShot({
+        audioDurationMs: voiceItem.trimOutMs - voiceItem.trimInMs,
+        manualOverride: voiceItem.alignmentOverride ?? null,
+        shotDurationMs: shot.trimOutMs - shot.trimInMs,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      return {
+        error: message.startsWith('VOICE_ALIGNMENT_OVERRIDE_INVALID')
+          ? 'VOICE_ALIGNMENT_OVERRIDE_INVALID'
+          : 'VOICE_ALIGNMENT_INPUT_INVALID',
+        rows: [],
+      };
+    }
+    rows.push({
+      audioDurationMs: result.audioDurationMs,
+      category: result.category,
+      dialogueComplete: result.dialogueComplete,
+      extendedMs: result.extendedMs,
+      manualOverride: result.manualOverride,
+      rulesVersion: result.rulesVersion,
+      shotDurationMs: result.shotDurationMs,
+      shotId: voiceItem.shotId,
+      storyboardFallback: result.storyboardFallback,
+      strategy: result.strategy,
+    });
+  }
+  return { error: null, rows };
+};
 
 const validateItems = (items: readonly VideoTimelineItemDto[]): string | null => {
   if (items.length === 0 || items.every((item) => !item.enabled)) return 'VIDEO_TRIM_INVALID';
@@ -308,6 +362,8 @@ export const createVideoCompositionService = (
         });
       }
     }
+    const alignment = computeAlignmentItems(items, voiceItems);
+    if (alignment.error !== null) return failure(alignment.error, traceId);
     const mappingSnapshot = mappingSnapshotOf(
       await dependencies.resolveEffectiveVoiceMappings(input.projectId),
     );
@@ -321,6 +377,7 @@ export const createVideoCompositionService = (
     const composition = await compositionOf(dependencies.mediaUnitOfWork);
     if (composition === null) return failure('PROJECT_PERSISTENCE_FAILED', traceId);
     const created = await composition.createTimeline({
+      alignmentItems: alignment.rows,
       audioVolume: DEFAULT_BACKGROUND_MUSIC_VOLUME,
       episodeId: input.episodeId,
       episodeVersionId: current.id,
@@ -425,6 +482,9 @@ export const createVideoCompositionService = (
           return failure('VIDEO_SOURCE_STALE', traceId, '镜头台词已变更，请重新生成字幕轨。');
       }
     }
+    const alignment = computeAlignmentItems(input.items, input.voiceItems);
+    if (alignment.error !== null)
+      return failure(alignment.error, traceId, '人工覆盖与当前配音偏差类别不匹配，请调整后重试。');
     let audio: VideoAudioAssetRecord | null = null;
     if (input.audioAssetId !== null)
       audio = await composition.findAudioAsset(input.projectId, input.audioAssetId);
@@ -447,6 +507,7 @@ export const createVideoCompositionService = (
     return success(
       toTimelineDto(
         await composition.updateTimeline({
+          alignmentItems: alignment.rows,
           audioAssetId: input.audioAssetId,
           audioVolume: input.audioVolume,
           expectedVersionId: input.expectedVersionId,
@@ -586,6 +647,13 @@ export const createVideoCompositionService = (
       input.timelineVersionId,
     );
     if (timeline === null) return failure('VIDEO_SOURCE_MISSING', traceId);
+    // 对齐阻断（v2 D4）：任一冻结记录仍为分镜层回退（FAR_LONG 未处置）即拒绝建 Job。
+    if (timeline.alignmentItems.some((row) => row.storyboardFallback))
+      return failure(
+        'VOICE_ALIGNMENT_BLOCKED',
+        traceId,
+        '存在配音远长于镜头的镜头，请回分镜层调整，或对该镜头选择强制裁剪（对白将不完整）。',
+      );
     const job = await composition.createExportJob({
       episodeId: input.episodeId,
       id: dependencies.newId(),

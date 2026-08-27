@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { VideoCompositionRepository, VideoExportJobRecord } from '../ports/media';
+import { VOICE_ALIGNMENT_RULES_VERSION } from '../voice';
 import {
   createVideoCompositionService,
   DEFAULT_SUBTITLE_STYLE_SNAPSHOT_JSON,
@@ -26,6 +27,7 @@ const item = (overrides: Record<string, unknown> = {}) => ({
 });
 
 const timeline = (overrides: Record<string, unknown> = {}) => ({
+  alignmentItems: [],
   audioAsset: null,
   audioVolume: 0.2,
   createdAt: NOW,
@@ -108,6 +110,7 @@ const workspace = (status: 'READY' | 'DRAFT' = 'READY', spokenText: string | nul
 
 interface BuildOptions {
   readonly candidate?: Record<string, unknown>;
+  readonly currentTimeline?: Record<string, unknown> | null;
   readonly existingExport?: Record<string, unknown> | null;
   readonly mapping?: ReadonlyMap<string, string>;
   readonly status?: 'READY' | 'DRAFT';
@@ -142,7 +145,7 @@ const buildService = (options: BuildOptions = {}) => {
     findAudioAssetByHash: vi.fn(() => Promise.resolve(null)),
     findExportJob: vi.fn(() => Promise.resolve(null)),
     findExportJobByRequestId: vi.fn(() => Promise.resolve(options.existingExport ?? null)),
-    findTimelineVersion: vi.fn(() => Promise.resolve(timeline())),
+    findTimelineVersion: vi.fn(() => Promise.resolve(timeline(options.currentTimeline ?? {}))),
     insertAudioAsset: vi.fn(),
     listUnfinishedExports: vi.fn(() => Promise.resolve([])),
     updateExportStatus: vi.fn(),
@@ -382,6 +385,277 @@ describe('VideoCompositionService', () => {
       'trace_8',
     );
     expect(result).toMatchObject({ error: { code: 'VIDEO_TRIM_INVALID' }, ok: false });
+  });
+
+  it('创建时间线—略长默认 FREEZE_EXTEND 行随版本冻结（extendedMs=差值）', async () => {
+    const { composition, service } = buildService();
+    await service.createTimeline(
+      {
+        episodeId: 'episode_0001',
+        expectedEpisodeVersionId: 'episode_version_0001',
+        projectId: 'project_0001',
+        requestId: 'request_0002c',
+      },
+      'trace_2c',
+    );
+    // 配音占用 1500ms vs 镜头占用 1000ms：tolerance=max(300,5%)=300，diff=500 为略长。
+    expect(composition.createTimeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alignmentItems: [
+          {
+            audioDurationMs: 1_500,
+            category: 'SLIGHTLY_LONG',
+            dialogueComplete: true,
+            extendedMs: 500,
+            manualOverride: null,
+            rulesVersion: VOICE_ALIGNMENT_RULES_VERSION,
+            shotDurationMs: 1_000,
+            shotId: 'shot_0001',
+            storyboardFallback: false,
+            strategy: 'FREEZE_EXTEND',
+          },
+        ],
+      }),
+    );
+  });
+
+  it('TRIM_AUDIO 覆盖—冻结人工裁剪策略且对白标记不完整、extendedMs=0', async () => {
+    const { composition, service } = buildService();
+    const result = await service.updateTimeline(
+      {
+        audioAssetId: null,
+        audioVolume: 0.2,
+        episodeId: 'episode_0001',
+        expectedVersionId: 'timeline_version_0001',
+        items: [item()],
+        projectId: 'project_0001',
+        requestId: 'request_override_trim',
+        subtitleItems: [],
+        voiceItems: [voiceItem({ alignmentOverride: 'TRIM_AUDIO' })],
+      },
+      'trace_ov1',
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(composition.updateTimeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alignmentItems: [
+          expect.objectContaining({
+            category: 'SLIGHTLY_LONG',
+            dialogueComplete: false,
+            extendedMs: 0,
+            manualOverride: 'TRIM_AUDIO',
+            strategy: 'MANUAL_TRIM_AUDIO',
+            storyboardFallback: false,
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('覆盖与偏差类别不匹配—稳定拒绝零写入', async () => {
+    const { composition, service } = buildService();
+    const result = await service.updateTimeline(
+      {
+        audioAssetId: null,
+        audioVolume: 0.2,
+        episodeId: 'episode_0001',
+        expectedVersionId: 'timeline_version_0001',
+        items: [item()],
+        projectId: 'project_0001',
+        requestId: 'request_override_bad',
+        subtitleItems: [],
+        // 略长类别仅允许 TRIM_AUDIO；EARLY_CUT_NEXT 属非法组合。
+        voiceItems: [voiceItem({ alignmentOverride: 'EARLY_CUT_NEXT' })],
+      },
+      'trace_ov2',
+    );
+    expect(result).toMatchObject({
+      error: { code: 'VOICE_ALIGNMENT_OVERRIDE_INVALID' },
+      ok: false,
+    });
+    expect(composition.updateTimeline).not.toHaveBeenCalled();
+  });
+
+  it('FAR_LONG 默认冻结分镜回退行并阻断导出建 Job；FORCE_TRIM 后放行', async () => {
+    const blockedRow = {
+      audioDurationMs: 4_000,
+      category: 'FAR_LONG',
+      dialogueComplete: true,
+      extendedMs: 0,
+      manualOverride: null,
+      rulesVersion: VOICE_ALIGNMENT_RULES_VERSION,
+      shotDurationMs: 1_000,
+      shotId: 'shot_0001',
+      storyboardFallback: true,
+      strategy: 'BLOCK_STORYBOARD_FALLBACK',
+    };
+    // 先证明更新层把 4000ms 配音 vs 1000ms 镜头冻结为回退行。
+    const farLong = buildService({ voiceCandidate: { durationMs: 4_500 } });
+    const saved = await farLong.service.updateTimeline(
+      {
+        audioAssetId: null,
+        audioVolume: 0.2,
+        episodeId: 'episode_0001',
+        expectedVersionId: 'timeline_version_0001',
+        items: [item()],
+        projectId: 'project_0001',
+        requestId: 'request_far_default',
+        subtitleItems: [],
+        voiceItems: [voiceItem({ trimOutMs: 4_000 })],
+      },
+      'trace_far1',
+    );
+    expect(saved).toMatchObject({ ok: true });
+    expect(farLong.composition.updateTimeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alignmentItems: [
+          expect.objectContaining({
+            category: 'FAR_LONG',
+            strategy: 'BLOCK_STORYBOARD_FALLBACK',
+            storyboardFallback: true,
+          }),
+        ],
+      }),
+    );
+
+    // 导出前阻断：任一冻结回退行 → 不创建导出 Job。
+    const blocked = buildService({
+      currentTimeline: { alignmentItems: [blockedRow], id: 'timeline_version_0001' },
+    });
+    const refused = await blocked.service.startExport(
+      {
+        episodeId: 'episode_0001',
+        projectId: 'project_0001',
+        requestId: 'request_export_blocked',
+        timelineVersionId: 'timeline_version_0001',
+      },
+      'trace_far2',
+    );
+    expect(refused).toMatchObject({ error: { code: 'VOICE_ALIGNMENT_BLOCKED' }, ok: false });
+    expect(blocked.composition.createExportJob).not.toHaveBeenCalled();
+
+    // FORCE_TRIM 冻结非回退行后导出放行。
+    const forceTrimRow = {
+      ...blockedRow,
+      dialogueComplete: false,
+      manualOverride: 'FORCE_TRIM',
+      storyboardFallback: false,
+      strategy: 'FORCE_TRIM_DIALOGUE_INCOMPLETE',
+    };
+    const allowed = buildService({
+      currentTimeline: { alignmentItems: [forceTrimRow], id: 'timeline_version_0001' },
+      voiceCandidate: { durationMs: 4_500 },
+    });
+    const forcedSave = await allowed.service.updateTimeline(
+      {
+        audioAssetId: null,
+        audioVolume: 0.2,
+        episodeId: 'episode_0001',
+        expectedVersionId: 'timeline_version_0001',
+        items: [item()],
+        projectId: 'project_0001',
+        requestId: 'request_far_force',
+        subtitleItems: [],
+        voiceItems: [voiceItem({ alignmentOverride: 'FORCE_TRIM', trimOutMs: 4_000 })],
+      },
+      'trace_far3',
+    );
+    expect(forcedSave).toMatchObject({ ok: true });
+    expect(allowed.composition.updateTimeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alignmentItems: [
+          expect.objectContaining({
+            dialogueComplete: false,
+            manualOverride: 'FORCE_TRIM',
+            strategy: 'FORCE_TRIM_DIALOGUE_INCOMPLETE',
+            storyboardFallback: false,
+          }),
+        ],
+      }),
+    );
+    const exported = await allowed.service.startExport(
+      {
+        episodeId: 'episode_0001',
+        projectId: 'project_0001',
+        requestId: 'request_export_force',
+        timelineVersionId: 'timeline_version_0001',
+      },
+      'trace_far4',
+    );
+    expect(exported).toMatchObject({ ok: true });
+    expect(allowed.composition.createExportJob).toHaveBeenCalledTimes(1);
+  });
+
+  it('短于镜头—默认 TAIL_SILENCE；EARLY_CUT_NEXT 覆盖改写策略', async () => {
+    const runWith = async (
+      override: Record<string, unknown>,
+      expectedStrategy: string,
+      requestId: string,
+    ) => {
+      // 600ms vs 1000ms：diff=-400 越过 ±300 容差 → SHORTER（800ms 会被判 ALIGNED）。
+      const harness = buildService({ voiceCandidate: { durationMs: 800 } });
+      const result = await harness.service.updateTimeline(
+        {
+          audioAssetId: null,
+          audioVolume: 0.2,
+          episodeId: 'episode_0001',
+          expectedVersionId: 'timeline_version_0001',
+          items: [item()],
+          projectId: 'project_0001',
+          requestId,
+          subtitleItems: [],
+          voiceItems: [voiceItem({ trimOutMs: 600, ...override })],
+        },
+        `trace_${requestId}`,
+      );
+      expect(result).toMatchObject({ ok: true });
+      expect(harness.composition.updateTimeline).toHaveBeenCalledWith(
+        expect.objectContaining({
+          alignmentItems: [
+            expect.objectContaining({
+              audioDurationMs: 600,
+              category: 'SHORTER',
+              dialogueComplete: true,
+              storyboardFallback: false,
+              strategy: expectedStrategy,
+            }),
+          ],
+        }),
+      );
+    };
+    await runWith({}, 'TAIL_SILENCE', 'request_short_default');
+    await runWith({ alignmentOverride: 'EARLY_CUT_NEXT' }, 'EARLY_CUT_NEXT', 'request_short_cut');
+  });
+
+  it('基本相等—DIRECT_MIX 冻结零延展行', async () => {
+    const harness = buildService({ voiceCandidate: { durationMs: 1_000 } });
+    const result = await harness.service.updateTimeline(
+      {
+        audioAssetId: null,
+        audioVolume: 0.2,
+        episodeId: 'episode_0001',
+        expectedVersionId: 'timeline_version_0001',
+        items: [item()],
+        projectId: 'project_0001',
+        requestId: 'request_aligned',
+        subtitleItems: [],
+        voiceItems: [voiceItem({ trimOutMs: 1_000 })],
+      },
+      'trace_aligned',
+    );
+    expect(result).toMatchObject({ ok: true });
+    expect(harness.composition.updateTimeline).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alignmentItems: [
+          expect.objectContaining({
+            category: 'ALIGNED',
+            extendedMs: 0,
+            manualOverride: null,
+            strategy: 'DIRECT_MIX',
+          }),
+        ],
+      }),
+    );
   });
 
   it('音色映射漂移（候选冻结音色 ≠ 当前生效映射）—VIDEO_VOICE_MAPPING_STALE', async () => {

@@ -2,12 +2,16 @@ import type {
   VideoAudioAssetSummaryDto,
   VideoExportJobDto,
   VideoExportStatus,
+  VideoTimelineAlignmentItemDto,
   VideoTimelineItemDto,
   VideoTimelineSubtitleItemDto,
   VideoTimelineSummaryDto,
   VideoTimelineVoiceItemDto,
 } from '@jingxu/contracts';
 import type { MediaStoredFileRef } from './media-repository';
+
+// 端口面透传的纯契约类型（packages/application 顶层经此统一出口）。
+export type { VideoTimelineAlignmentItemDto } from '@jingxu/contracts';
 
 export interface VideoTimelineVersionRecord extends VideoTimelineSummaryDto {
   readonly timelineId: string;
@@ -22,6 +26,8 @@ export interface VideoTimelineSubtitleItemInput extends VideoTimelineSubtitleIte
 }
 
 export interface VideoTimelineWriteTracks {
+  /** 对齐记录随版本冻结（v2 D4）；由服务层按有效占用逐镜头计算，调用方不手填。 */
+  readonly alignmentItems: readonly VideoTimelineAlignmentItemDto[];
   readonly audioVolume: number;
   readonly subtitleItems: readonly VideoTimelineSubtitleItemInput[];
   readonly voiceItems: readonly VideoTimelineVoiceItemDto[];

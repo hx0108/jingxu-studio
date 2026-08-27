@@ -148,7 +148,20 @@ describe('video-api contracts', () => {
       trimInMs: 0,
       trimOutMs: 5000,
     };
+    const alignmentItem = {
+      audioDurationMs: 5300,
+      category: 'SLIGHTLY_LONG',
+      dialogueComplete: true,
+      extendedMs: 300,
+      manualOverride: null,
+      rulesVersion: 'jingxu-voice-alignment-rules/1',
+      shotDurationMs: 5000,
+      shotId,
+      storyboardFallback: false,
+      strategy: 'FREEZE_EXTEND',
+    };
     const timeline = {
+      alignmentItems: [alignmentItem],
       audioAsset: null,
       audioVolume: 0.2,
       createdAt: iso,

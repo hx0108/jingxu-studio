@@ -10,6 +10,7 @@ import type {
   VideoAudioAssetSummaryDto,
   VideoExportJobDto,
   VideoExportStatus,
+  VideoTimelineAlignmentItemDto,
   VideoTimelineItemDto,
   VideoTimelineSubtitleItemDto,
   VideoTimelineVoiceItemDto,
@@ -73,6 +74,26 @@ const parseSubtitleItems = (rows: readonly Row[]): VideoTimelineSubtitleItemDto[
     safeAreaPct: requiredNumber(row, 'safe_area_pct'),
     shotId: requiredString(row, 'shot_id'),
     spokenTextSha256: requiredString(row, 'spoken_text_sha256'),
+  }));
+
+/** 对齐记录行 → DTO（rules_version 随行冻结，供导出报告回放口径）。 */
+const parseAlignmentItems = (rows: readonly Row[]): VideoTimelineAlignmentItemDto[] =>
+  rows.map((row) => ({
+    audioDurationMs: requiredNumber(row, 'audio_duration_ms'),
+    category: requiredString(row, 'category') as VideoTimelineAlignmentItemDto['category'],
+    dialogueComplete: requiredNumber(row, 'dialogue_complete') === 1,
+    extendedMs: requiredNumber(row, 'extended_ms'),
+    manualOverride:
+      row.manual_override === null
+        ? null
+        : (requiredString(row, 'manual_override') as NonNullable<
+          VideoTimelineAlignmentItemDto['manualOverride']
+        >),
+    rulesVersion: requiredString(row, 'rules_version'),
+    shotDurationMs: requiredNumber(row, 'shot_duration_ms'),
+    shotId: requiredString(row, 'shot_id'),
+    storyboardFallback: requiredNumber(row, 'storyboard_fallback') === 1,
+    strategy: requiredString(row, 'strategy') as VideoTimelineAlignmentItemDto['strategy'],
   }));
 
 const mapAudio = (row: Row): VideoAudioAssetRecord => ({
@@ -150,6 +171,7 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
       this.insertItems(input.id, input.items);
       this.insertVoiceItems(input.id, input.voiceItems);
       this.insertSubtitleItems(input.id, input.subtitleItems);
+      this.insertAlignmentItems(input.id, input.alignmentItems);
       return this.requireTimelineVersion(input.projectId, input.episodeId, input.id);
     });
   }
@@ -220,6 +242,7 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
       this.insertItems(input.id, input.items);
       this.insertVoiceItems(input.id, input.voiceItems);
       this.insertSubtitleItems(input.id, input.subtitleItems);
+      this.insertAlignmentItems(input.id, input.alignmentItems);
       this.database
         .prepare('UPDATE video_timelines SET current_version_id = ?, updated_at = ? WHERE id = ?')
         .run(input.id, now, requiredString(row, 'timeline_id'));
@@ -484,6 +507,33 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
     );
   }
 
+  private insertAlignmentItems(
+    versionId: string,
+    items: readonly VideoTimelineAlignmentItemDto[],
+  ): void {
+    const statement = this.database.prepare(
+      `INSERT INTO video_timeline_alignment_items
+       (timeline_version_id, shot_id, category, strategy, manual_override,
+        audio_duration_ms, shot_duration_ms, extended_ms, dialogue_complete, storyboard_fallback, rules_version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    items.forEach((item) =>
+      statement.run(
+        versionId,
+        item.shotId,
+        item.category,
+        item.strategy,
+        item.manualOverride,
+        item.audioDurationMs,
+        item.shotDurationMs,
+        item.extendedMs,
+        item.dialogueComplete ? 1 : 0,
+        item.storyboardFallback ? 1 : 0,
+        item.rulesVersion,
+      ),
+    );
+  }
+
   private mapTimeline(row: Row): VideoTimelineVersionRecord {
     const id = requiredString(row, 'id');
     const items = this.database
@@ -501,10 +551,16 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
         'SELECT shot_id, enabled, spoken_text_sha256, safe_area_pct FROM video_timeline_subtitle_items WHERE timeline_version_id = ? ORDER BY shot_id',
       )
       .all(id) as Row[];
+    const alignmentItems = this.database
+      .prepare(
+        'SELECT shot_id, category, strategy, manual_override, audio_duration_ms, shot_duration_ms, extended_ms, dialogue_complete, storyboard_fallback, rules_version FROM video_timeline_alignment_items WHERE timeline_version_id = ? ORDER BY shot_id',
+      )
+      .all(id) as Row[];
     const audioId = nullableString(row, 'audio_asset_id');
     const audioAsset =
       audioId === null ? null : this.findAudioAssetSync(requiredString(row, 'project_id'), audioId);
     return {
+      alignmentItems: parseAlignmentItems(alignmentItems),
       audioAsset,
       audioVolume: requiredNumber(row, 'audio_volume'),
       createdAt: requiredString(row, 'created_at'),

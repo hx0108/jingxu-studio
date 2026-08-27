@@ -3,6 +3,7 @@ export type {
   VideoAudioAssetRecord,
   VideoCompositionRepositories,
   VideoCompositionRepository,
+  VideoTimelineAlignmentItemDto,
   VideoExportJobRecord,
   VideoTimelineSubtitleItemInput,
   VideoTimelineVersionRecord,
