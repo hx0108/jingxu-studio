@@ -117,6 +117,7 @@ interface BuildOptions {
   readonly existingExport?: Record<string, unknown> | null;
   readonly mapping?: ReadonlyMap<string, string>;
   readonly status?: 'READY' | 'DRAFT';
+  readonly unfinishedExports?: readonly unknown[];
   readonly voiceCandidate?: Record<string, unknown> | null;
   readonly workspaceSpokenText?: string | null;
 }
@@ -127,7 +128,21 @@ const buildService = (options: BuildOptions = {}) => {
   const completeExportMock = vi.fn((_exportJobId: string, result: { readonly byteSize: number }) =>
     Promise.resolve({ byteSize: result.byteSize } as never),
   );
-  const updateExportStatusMock = vi.fn();
+  const updateExportStatusMock = vi.fn(
+    (exportJobId: string, status: string, errorCode: string | null = null) =>
+      Promise.resolve({
+        byteSize: null,
+        createdAt: NOW,
+        errorCode,
+        fileSha256: null,
+        id: exportJobId,
+        mediaUrl: null,
+        status,
+        timelineVersionId: 'timeline_version_0001',
+        totalDurationMs: 1_000,
+        updatedAt: NOW,
+      } as unknown as VideoExportJobRecord),
+  );
   const composition = {
     createExportJob: vi.fn((input: CreateExportInput) =>
       Promise.resolve({
@@ -156,7 +171,7 @@ const buildService = (options: BuildOptions = {}) => {
     findExportJobByRequestId: vi.fn(() => Promise.resolve(options.existingExport ?? null)),
     findTimelineVersion: vi.fn(() => Promise.resolve(timeline(options.currentTimeline ?? {}))),
     insertAudioAsset: vi.fn(),
-    listUnfinishedExports: vi.fn(() => Promise.resolve([])),
+    listUnfinishedExports: vi.fn(() => Promise.resolve(options.unfinishedExports ?? [])),
     completeExport: completeExportMock,
     updateExportStatus: updateExportStatusMock,
     updateTimeline: vi.fn((input: UpdateTimelineInput) =>
@@ -974,5 +989,108 @@ describe('VideoCompositionService', () => {
     );
     expect(result).toMatchObject({ error: { code: 'REQUEST_ID_REUSED' }, ok: false });
     expect(composition.createExportJob).not.toHaveBeenCalled();
+  });
+
+  it('导出取消分支—中断合成并以 CANCELLED 终态落库（§6.3）', async () => {
+    const { composeMock, composition, service, updateExportStatusMock } = buildService({
+      candidateQueue: [candidate()],
+      currentTimeline: { voiceItems: [], subtitleItems: [] },
+    });
+    const runningRow = {
+      byteSize: null,
+      createdAt: NOW,
+      errorCode: null,
+      fileSha256: null,
+      id: 'timeline_version_0002',
+      mediaUrl: null,
+      status: 'RUNNING',
+      timelineVersionId: 'timeline_version_0001',
+      totalDurationMs: 1_000,
+      updatedAt: NOW,
+    } as unknown as VideoExportJobRecord;
+    // 取消查询命中在飞 Job（默认桩返回 null，这里按该 Job 固定应答）。
+    composition.findExportJob = vi.fn((_projectId: string, exportJobId: string) =>
+      Promise.resolve(exportJobId === 'timeline_version_0002' ? runningRow : null),
+    );
+    composeMock.mockImplementation(
+      ({ signal }: { signal: AbortSignal }) =>
+        // 在飞合成永不自行结束；取消经 signal 显著中断（真实适配器同语义）。
+        new Promise<never>((_resolve, reject) => {
+          signal.addEventListener(
+            'abort',
+            () => {
+              reject(new Error('VIDEO_EXPORT_CANCELLED'));
+            },
+            { once: true },
+          );
+        }),
+    );
+    const started = await service.startExport(
+      {
+        episodeId: 'episode_0001',
+        projectId: 'project_0001',
+        requestId: 'request_export_cancel',
+        timelineVersionId: 'timeline_version_0001',
+      },
+      'trace_export_cancel',
+    );
+    expect(started).toMatchObject({ ok: true });
+    const jobId = (started as { data: { id: string } }).data.id;
+    const cancelled = await service.cancelExport(
+      { exportJobId: jobId, projectId: 'project_0001', requestId: 'request_cancel_export_cancel' },
+      'trace_export_cancel_2',
+    );
+    expect(cancelled).toMatchObject({ data: { status: 'CANCELLED' }, ok: true });
+    // 后台 runExport 的迟到 catch 不回退终态：最终仍稳定为 CANCELLED。
+    await vi.waitFor(() => {
+      expect(updateExportStatusMock).toHaveBeenLastCalledWith(
+        jobId,
+        'CANCELLED',
+        'VIDEO_EXPORT_CANCELLED',
+      );
+    });
+  });
+
+  it('重启恢复—未完成 Job 标记 FAILED/INTERRUPTED_UNKNOWN_OUTCOME 且不自动重跑（§6.3）', async () => {
+    const { service, updateExportStatusMock } = buildService({
+      unfinishedExports: [
+        {
+          byteSize: null,
+          createdAt: NOW,
+          errorCode: null,
+          fileSha256: null,
+          id: 'export_stuck_a',
+          mediaUrl: null,
+          status: 'RUNNING',
+          timelineVersionId: 'timeline_version_0001',
+          totalDurationMs: 1_000,
+          updatedAt: NOW,
+        },
+        {
+          byteSize: null,
+          createdAt: NOW,
+          errorCode: null,
+          fileSha256: null,
+          id: 'export_stuck_b',
+          mediaUrl: null,
+          status: 'VALIDATING',
+          timelineVersionId: 'timeline_version_0001',
+          totalDurationMs: 1_000,
+          updatedAt: NOW,
+        },
+      ],
+    });
+    await service.recoverUnfinishedExports('project_0001');
+    expect(updateExportStatusMock).toHaveBeenCalledTimes(2);
+    expect(updateExportStatusMock).toHaveBeenCalledWith(
+      'export_stuck_a',
+      'FAILED',
+      'VIDEO_EXPORT_INTERRUPTED_UNKNOWN_OUTCOME',
+    );
+    expect(updateExportStatusMock).toHaveBeenCalledWith(
+      'export_stuck_b',
+      'FAILED',
+      'VIDEO_EXPORT_INTERRUPTED_UNKNOWN_OUTCOME',
+    );
   });
 });

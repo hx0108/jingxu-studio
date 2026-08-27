@@ -29,7 +29,7 @@
 
 - [x] 6.1 FFmpeg 滤镜图参数化：N 路混音、配音 adelay 偏移、BGM 音量/淡出数据化、tpad 静帧延展；"无配音字幕导出与现状一致"回归锁定。
 - [x] 6.2 字幕烧录：subtitle_items → 临时 ASS（默认安全区样式快照）、subtitles 滤镜、导出后清理、失败无残留。（2026-08-27：导出侧装配冻结哈希核对，漂移=SUBTITLE_SOURCE_STALE；判据扩参 subtitles；真机烧录+无残留已锁）
-- [ ] 6.3 导出失败/取消/重启恢复分支扩展（VOICE_ALIGNMENT_BLOCKED、配音/字幕来源失效）+ 终态不可覆盖回归。
+- [x] 6.3 导出失败/取消/重启恢复分支扩展（VOICE_ALIGNMENT_BLOCKED、配音/字幕来源失效）+ 终态不可覆盖回归。（2026-08-27：服务层补取消中断与恢复两用例；终态不可覆盖已锁持久层集成[迟到回调]与 completeExport VALIDATING 前置）
 
 ## 7. Renderer
 
