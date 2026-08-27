@@ -82,6 +82,7 @@ export { createVideoCompositionService } from './video-composition-service';
 export type {
   ImportedBackgroundMusic,
   VideoComposerPort,
+  VideoComposerVoiceInput,
   VideoCompositionService,
   VideoCompositionServiceDependencies,
   VideoMetadataProbePort,

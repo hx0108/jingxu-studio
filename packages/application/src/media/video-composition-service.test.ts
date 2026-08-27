@@ -13,6 +13,7 @@ const NOW = '2026-08-24T00:00:00.000Z';
 type CreateExportInput = Parameters<VideoCompositionRepository['createExportJob']>[0];
 type CreateTimelineInput = Parameters<VideoCompositionRepository['createTimeline']>[0];
 type UpdateTimelineInput = Parameters<VideoCompositionRepository['updateTimeline']>[0];
+type ComposeCallInput = Parameters<VideoComposerPort['compose']>[0];
 
 const item = (overrides: Record<string, unknown> = {}) => ({
   candidateId: 'candidate_0001',
@@ -110,6 +111,8 @@ const workspace = (status: 'READY' | 'DRAFT' = 'READY', spokenText: string | nul
 
 interface BuildOptions {
   readonly candidate?: Record<string, unknown>;
+  /** findCandidateById 调用序列化应答；耗尽后回退单例 candidate()。 */
+  readonly candidateQueue?: readonly unknown[];
   readonly currentTimeline?: Record<string, unknown> | null;
   readonly existingExport?: Record<string, unknown> | null;
   readonly mapping?: ReadonlyMap<string, string>;
@@ -119,6 +122,12 @@ interface BuildOptions {
 }
 
 const buildService = (options: BuildOptions = {}) => {
+  // 以裸 Mock 变量暴露（非对象方法引用），供断言处安全 unbound 引用。
+  const composeMock = vi.fn();
+  const completeExportMock = vi.fn((_exportJobId: string, result: { readonly byteSize: number }) =>
+    Promise.resolve({ byteSize: result.byteSize } as never),
+  );
+  const updateExportStatusMock = vi.fn();
   const composition = {
     createExportJob: vi.fn((input: CreateExportInput) =>
       Promise.resolve({
@@ -148,19 +157,24 @@ const buildService = (options: BuildOptions = {}) => {
     findTimelineVersion: vi.fn(() => Promise.resolve(timeline(options.currentTimeline ?? {}))),
     insertAudioAsset: vi.fn(),
     listUnfinishedExports: vi.fn(() => Promise.resolve([])),
-    updateExportStatus: vi.fn(),
+    completeExport: completeExportMock,
+    updateExportStatus: updateExportStatusMock,
     updateTimeline: vi.fn((input: UpdateTimelineInput) =>
       Promise.resolve(timeline({ id: input.id, items: input.items })),
     ),
   };
   const voiceRow =
     options.voiceCandidate === null ? null : voiceCandidate(options.voiceCandidate ?? {});
+  const candidateQueue = [...(options.candidateQueue ?? [])];
   const mediaUnitOfWork = {
     run: async (work: (repositories: never) => Promise<unknown>) =>
       work({
         composition: { composition },
         video: {
-          findCandidateById: () => Promise.resolve(candidate(options.candidate)),
+          findCandidateById: () => {
+            const head = candidateQueue.shift();
+            return Promise.resolve(head === undefined ? candidate(options.candidate) : head);
+          },
           listCandidates: () => Promise.resolve([candidate(options.candidate)]),
         },
         voice: {
@@ -175,7 +189,7 @@ const buildService = (options: BuildOptions = {}) => {
         },
       } as never),
   };
-  const composer: VideoComposerPort = { compose: vi.fn() };
+  const composer: VideoComposerPort = { compose: composeMock };
   const hashPayload = vi.fn(() => HASH);
   const hashText = vi.fn((text: string) => `sha:${text}`);
   const service = createVideoCompositionService({
@@ -195,7 +209,14 @@ const buildService = (options: BuildOptions = {}) => {
       ),
     },
   });
-  return { composition, hashPayload, service };
+  return {
+    completeExportMock,
+    composeMock,
+    composition,
+    hashPayload,
+    service,
+    updateExportStatusMock,
+  };
 };
 
 const voiceItem = (overrides: Record<string, unknown> = {}) => ({
@@ -584,6 +605,96 @@ describe('VideoCompositionService', () => {
     );
     expect(exported).toMatchObject({ ok: true });
     expect(allowed.composition.createExportJob).toHaveBeenCalledTimes(1);
+  });
+
+  it('导出合成载荷—extendedMs 按冻结记录接入片段、配音轨校验后入混音、BGM 音量数据化', async () => {
+    const { completeExportMock, composeMock, service } = buildService({
+      candidateQueue: [candidate(), voiceCandidate()],
+      currentTimeline: {
+        alignmentItems: [
+          {
+            audioDurationMs: 1_500,
+            category: 'SLIGHTLY_LONG',
+            dialogueComplete: true,
+            extendedMs: 500,
+            manualOverride: null,
+            rulesVersion: VOICE_ALIGNMENT_RULES_VERSION,
+            shotDurationMs: 1_000,
+            shotId: 'shot_0001',
+            storyboardFallback: false,
+            strategy: 'FREEZE_EXTEND',
+          },
+        ],
+        audioVolume: 0.35,
+        voiceItems: [voiceItem()],
+      },
+    });
+    composeMock.mockResolvedValue({
+      byteSize: 1_024,
+      fileSha256: HASH,
+      storageRelPath: 'projects/project_0001/exports/aa/' + HASH + '.mp4',
+    });
+    await service.startExport(
+      {
+        episodeId: 'episode_0001',
+        projectId: 'project_0001',
+        requestId: 'request_export_payload',
+        timelineVersionId: 'timeline_version_0001',
+      },
+      'trace_export_payload',
+    );
+    await vi.waitFor(() => {
+      expect(completeExportMock).toHaveBeenCalledTimes(1);
+    });
+    const payload = composeMock.mock.calls[0]?.[0] as ComposeCallInput | undefined;
+    expect(payload).toMatchObject({
+      audioStorageRelPath: null,
+      backgroundMusicVolume: 0.35,
+      clips: [
+        {
+          extendedMs: 500,
+          storageRelPath: 'projects/project_0001/videos/aa/' + HASH + '.mp4',
+          trimInMs: 0,
+          trimOutMs: 1_000,
+        },
+      ],
+      fps: 24,
+      height: 1080,
+      voices: [
+        {
+          offsetMs: 0,
+          storageRelPath: 'projects/project_0001/audio/aa/' + HASH + '.wav',
+          trimInMs: 0,
+          trimOutMs: 1_500,
+          volume: 1,
+        },
+      ],
+      width: 1920,
+    });
+  });
+
+  it('导出时配音候选失效—稳定码落库且不进入合成', async () => {
+    const { composeMock, service, updateExportStatusMock } = buildService({
+      candidateQueue: [candidate(), null],
+      currentTimeline: { voiceItems: [voiceItem()] },
+    });
+    await service.startExport(
+      {
+        episodeId: 'episode_0001',
+        projectId: 'project_0001',
+        requestId: 'request_export_stale_voice',
+        timelineVersionId: 'timeline_version_0001',
+      },
+      'trace_export_stale_voice',
+    );
+    await vi.waitFor(() => {
+      expect(updateExportStatusMock).toHaveBeenLastCalledWith(
+        'timeline_version_0002',
+        'FAILED',
+        'VOICE_CANDIDATE_STALE',
+      );
+    });
+    expect(composeMock).not.toHaveBeenCalled();
   });
 
   it('短于镜头—默认 TAIL_SILENCE；EARLY_CUT_NEXT 覆盖改写策略', async () => {

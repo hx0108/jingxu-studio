@@ -68,10 +68,23 @@ export interface ImportedBackgroundMusic {
   readonly storageRelPath: string;
 }
 
+/** 启用中的配音轨（混音层输入）；storageRelPath 仅存于 Main 边界内，不出 Renderer。 */
+export interface VideoComposerVoiceInput {
+  readonly offsetMs: number;
+  readonly storageRelPath: string;
+  readonly trimInMs: number;
+  readonly trimOutMs: number;
+  readonly volume: number;
+}
+
 export interface VideoComposerPort {
   compose(input: {
     readonly audioStorageRelPath: string | null;
+    /** BGM 音量数据化；缺省沿用旧硬编码 0.20（无配音回归锁的现状值）。 */
+    readonly backgroundMusicVolume?: number | undefined;
     readonly clips: readonly Readonly<{
+      /** FREEZE_EXTEND 的冻末帧静帧延展；缺省 0 → 现状 concat 合成路径。 */
+      extendedMs?: number | undefined;
       storageRelPath: string;
       trimInMs: number;
       trimOutMs: number;
@@ -82,6 +95,8 @@ export interface VideoComposerPort {
     readonly exportJobId: string;
     readonly projectId: string;
     readonly signal: AbortSignal;
+    /** 非空即走滤镜图合成路径（v2-voice-audio-timeline §6.1）。 */
+    readonly voices?: readonly VideoComposerVoiceInput[] | undefined;
     readonly width: number;
   }): Promise<Readonly<{ byteSize: number; fileSha256: string; storageRelPath: string }>>;
 }
@@ -578,8 +593,17 @@ export const createVideoCompositionService = (
       );
       if (profile === null) throw new Error('VIDEO_OUTPUT_INVALID');
       await composition.updateExportStatus(jobId, 'RUNNING');
+      // 对齐记录随版本冻结（§6.1）：FREEZE_EXTEND 的 extendedMs 逐镜头接到导出片段上。
+      const extendedByShot = new Map(
+        timeline.alignmentItems.map((row) => [row.shotId, row.extendedMs]),
+      );
       const clips = await dependencies.mediaUnitOfWork.run(async ({ video }) => {
-        const values = [] as { storageRelPath: string; trimInMs: number; trimOutMs: number }[];
+        const values = [] as {
+          extendedMs: number;
+          storageRelPath: string;
+          trimInMs: number;
+          trimOutMs: number;
+        }[];
         for (const item of timeline.items) {
           if (!item.enabled) continue;
           const candidate = await video.findCandidateById(input.projectId, item.candidateId);
@@ -593,12 +617,35 @@ export const createVideoCompositionService = (
           )
             throw new Error('VIDEO_SOURCE_STALE');
           values.push({
+            extendedMs: extendedByShot.get(item.shotId) ?? 0,
             storageRelPath: candidate.storageRelPath,
             trimInMs: item.trimInMs,
             trimOutMs: item.trimOutMs,
           });
         }
         if (values.length === 0) throw new Error('VIDEO_TRIM_INVALID');
+        return values;
+      });
+      const voices = await dependencies.mediaUnitOfWork.run(async ({ video }) => {
+        const values = [] as VideoComposerVoiceInput[];
+        for (const voiceItem of timeline.voiceItems) {
+          if (!voiceItem.enabled) continue;
+          const candidate = await video.findCandidateById(input.projectId, voiceItem.candidateId);
+          if (
+            candidate?.status !== 'SUCCEEDED' ||
+            candidate.fileSha256 !== voiceItem.fileSha256 ||
+            candidate.generationInputHash !== voiceItem.generationInputHash ||
+            candidate.storageRelPath === null
+          )
+            throw new Error('VOICE_CANDIDATE_STALE');
+          values.push({
+            offsetMs: voiceItem.offsetMs,
+            storageRelPath: candidate.storageRelPath,
+            trimInMs: voiceItem.trimInMs,
+            trimOutMs: voiceItem.trimOutMs,
+            volume: voiceItem.volume,
+          });
+        }
         return values;
       });
       const audio =
@@ -608,12 +655,14 @@ export const createVideoCompositionService = (
       await composition.updateExportStatus(jobId, 'VALIDATING');
       const result = await dependencies.composer.compose({
         audioStorageRelPath: audio?.storageRelPath ?? null,
+        backgroundMusicVolume: timeline.audioVolume,
         clips,
         exportJobId: jobId,
         fps: profile.fps,
         height: profile.height,
         projectId: input.projectId,
         signal: controller.signal,
+        voices,
         width: profile.width,
       });
       await composition.completeExport(jobId, result);
