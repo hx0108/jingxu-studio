@@ -43,11 +43,14 @@ test('§3.2 图片凭据 UI 闭环—保存→解密测试→删除：密文固�
     await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
     await page.getByRole('button', { name: '设置', exact: true }).click();
 
-    const card = page.locator('section[aria-labelledby="image-provider-title"]');
-    await expect(card.getByRole('heading', { name: '图片模型服务（火山方舟 ARK）' })).toBeVisible();
+    const card = page.locator('details.model-service-card', {
+      has: page.locator('#image-provider-title'),
+    });
+    await expect(card.getByRole('heading', { name: '火山方舟 ARK' })).toBeVisible();
+    await card.locator('summary').click();
     // 惰性默认档：模型只读展示、未配置、验证范围如实文案。
     await expect(card.locator('input[readonly]')).toHaveValue('doubao-seedream-5-0-lite-260128');
-    await expect(card.getByText('未配置', { exact: true })).toBeVisible();
+    await expect(card.locator('.model-configuration-status')).toHaveText('未配置');
     await expect(card.getByText('测试仅验证密文可解密读取，不发起计费请求')).toBeVisible();
 
     // 保存：密文按固定 id 真实落盘，输入即清空，状态行只露末 4 位。

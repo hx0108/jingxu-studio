@@ -564,6 +564,45 @@ Prompt 必须：
 | `STALE_INPUT`                 | 上游版本或锁发生变化     |        否 | 不提交业务版本                    |
 | `INTERRUPTED_UNKNOWN_OUTCOME` | 应用退出时请求结果未知   |        否 | 不自动重发，避免潜在重复计费      |
 
+### 6.5 V2 TTS Provider 快照（v2-voice-audio-timeline）
+
+2026-08-26/27 受限预算 Schema Probe 实测快照（免费差分探针 + 2 次计费合成）；原火山方舟 Ark TTS 选型被免费探测证伪（`/api/v3/audio/speech` 裸 404 路由不存在、130 模型目录零 TTS 条目），D1 修订改道 DashScope，凭据复用 QWEN 档同一把 DASHSCOPE_API_KEY（`QWEN_TTS` 同 key 双档，先例 `VOLCARK_SEEDREAM`/`VOLCARK_SEEDANCE`）。
+
+| 配置项   | V2 值                                                                                                                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Provider | Alibaba Cloud DashScope qwen3-tts                                                                                                                                                                       |
+| 模型 ID  | `qwen3-tts-instruct-flash`（稳定版快照 2026-01-26；`qwen3-tts-flash` 存在但未入选）                                                                                                                     |
+| 接口     | 原生 `POST /api/v1/services/aigc/multimodal-generation/generation`（compatible-mode 无 audio/speech，裸 404）                                                                                           |
+| 请求体   | `{model, input:{text, voice}}`；`instructions` 仅 instruct 系可选（≤1600 Token，语速控制唯一途径，无数值参数）                                                                                          |
+| 文本上限 | [0,600] 字符（实测 400 `InvalidParameter`）                                                                                                                                                             |
+| 成功响应 | 顶层仅 `output/usage/request_id`（无 status_code 错误信封字段）；`output.audio.url` 为 OSS http 链接（24h），`audio.data` 恒空串                                                                        |
+| 音频交付 | 适配器内 GET url 下载；`audio/x-wav`、RIFF/WAVE、24kHz、单声道、16bit（实测 1.12s/"你好镜序"）                                                                                                          |
+| 用量     | `usage.characters`（实测每汉字计 2；4 汉字→8）；无自报时长——时长一律 ffprobe 实测                                                                                                                       |
+| 标识     | `audio.id` = `audio_` + `request_id`（providerRequestId 取 audio.id，缺则 request_id）                                                                                                                  |
+| 错误信封 | 顶层 `{"request_id","code":"InvalidParameter","message"}`；音色错误先于文本长度校验（差分探测判据）                                                                                                     |
+| 音色注册 | `Neil`（narrator 旁白男，默认）/`Elias`（旁白女）/`Mochi`（少年男）/`Stella`（少年女）；官方音色表 2026-06-25，其"支持模型"列真实预测非实时支持度（Dylan/Lenn 仅 realtime 系→实测被拒，7 数据点零偏差） |
+| 超时     | 单次合成（POST+GET）120 秒                                                                                                                                                                              |
+
+注册表实现：`packages/model-adapters/src/qwen/tts-voice-models.ts`（VERIFIED/selectable，SELECTABLE_* 导出）；适配器 `qwen-tts-model-adapter.ts`（错误归一化复用 §6.4 码表：401/403→凭据、429→限流、5xx→暂时、400/422→内容拒绝、超文本上限→上下文超限）。
+
+### 6.6 V2 配音时间线与导出对齐快照（v2-voice-audio-timeline）
+
+**对齐引擎**（`packages/application/src/voice/voice-alignment.ts`，纯函数零 I/O 零时钟；规则版本 `jingxu-voice-alignment-rules/1`，阈值调整必须递增）：
+
+| 项            | 值                                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| ALIGNED 容差  | max(300ms, 镜头时长 × 0.05)                                                                                                                      |
+| FAR_LONG 阈值 | max(2000ms, 镜头时长 × 0.5)，越线即默认 BLOCK_STORYBOARD_FALLBACK（storyboardFallback 行阻断导出，导出前 VOICE_ALIGNMENT_BLOCKED 零建 Job）      |
+| 类别          | ALIGNED / SLIGHTLY_LONG / FAR_LONG / SHORTER                                                                                                     |
+| 策略          | DIRECT_MIX / FREEZE_EXTEND / BLOCK_STORYBOARD_FALLBACK / TAIL_SILENCE / MANUAL_TRIM_AUDIO / FORCE_TRIM_DIALOGUE_INCOMPLETE / EARLY_CUT_NEXT      |
+| 人工覆盖      | TRIM_AUDIO / FORCE_TRIM / EARLY_CUT_NEXT（按类别限制合法组合，错配 VOICE_ALIGNMENT_OVERRIDE_INVALID；FORCE_TRIM 唯一回退解除出口且对白记不完整） |
+
+对齐记录（四要素 audioDurationMs/shotDurationMs/category/strategy + extendedMs/dialogueComplete/storyboardFallback/manualOverride/rulesVersion）随时间线版本冻结于 `video_timeline_alignment_items`（迁移 0021）；FREEZE_EXTEND 的 extendedMs 在导出装配时逐镜头接入片段。
+
+**导出链路事实**（§5.2/§6.1–§6.3 实现，Mock 全链 E2E 2026-08-27 锁定）：FFmpeg 滤镜图逐片段 trim+setpts → fps 归一 → tpad stop_mode=clone 冻末帧延展（置于 fps 归一之后避免克隆帧被重采样吃掉）→ concat；配音轨 adelay 偏移 + N 路 amix；BGM 音量数据化；烧录字幕走临时 ASS（安全区样式随 cue 内嵌 margins），明文仅在 Main 边界从当前工作区按冻结 sha256 核对取回，漂移 SUBTITLE_SOURCE_STALE 终止。导出边界对配音候选的二次核验必须走配音域仓储（`mediaUnitOfWork.voice.generation.findCandidate` 查 `voice_candidates`）——早期实现误用视频媒体仓储查 `video_candidates` 恒判 STALE，由 Mock 全链 E2E 揭出修复（2026-08-27 实录）。Mock 全链基准：6 镜头（4 有台词各 2600ms、2 无台词各 1000ms）→ SLIGHTLY_LONG/FREEZE_EXTEND/1600ms × 4 → 成品 MP4 12.4s 双流（视频+混音音频）。
+
+**调度归因边界**（真实 TTS 探针 2026-08-27 实录）：Provider 合成成功后的本地登记故障（`VOICE_AUDIO_INVALID`/`VOICE_AUDIO_MIME_INVALID`，CAS 已落盘、ffprobe 校验阶段失败）在调度器 catch 中直取原码，不经 `normalizeError` 归一——后者对非本适配器错误一律收敛 `MODEL_UNKNOWN`，曾把"合成成功且已计费、仅登记侧 ffprobe 不可执行"误标为模型未知错误。同理，dev electron 直启时 `process.resourcesPath` 无打包 ffmpeg 目录，探测/合成 E2E 必须显式注入 `JINGXU_FFPROBE_PATH`/`JINGXU_FFMPEG_PATH`（Mock 全链配方同源）。
+
 ---
 
 ## 7. 校验架构

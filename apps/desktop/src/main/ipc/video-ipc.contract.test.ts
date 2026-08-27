@@ -105,7 +105,9 @@ const selectInput = {
 const okTimeline = {
   ok: true as const,
   data: {
+    alignmentItems: [],
     audioAsset: null,
+    audioVolume: 0.2,
     createdAt: NOW,
     episodeId: 'episode_12345678',
     episodeVersionId: 'episode_version_12345678',
@@ -114,8 +116,10 @@ const okTimeline = {
     inputHash: hash64('timeline'),
     items: [],
     parentVersionId: null,
+    subtitleItems: [],
     totalDurationMs: 0,
     versionNo: 1,
+    voiceItems: [],
   },
 };
 const okAudio = {

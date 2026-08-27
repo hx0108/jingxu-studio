@@ -1,8 +1,11 @@
-## ADDED Requirements
+# voice-audio-timeline Specification
 
+## Purpose
+TBD - created by archiving change v2-voice-audio-timeline. Update Purpose after archive.
+## Requirements
 ### Requirement: TTS Provider 必须单一接入且模型与音色受注册表冻结
 
-V2 SHALL 仅接入火山方舟 Ark TTS 一个语音 Provider，以新的 `VOLCARK_TTS` 档位复用既有凭据安全通路。TTS 模型与音色 SHALL 由受版本控制的本地受限注册表枚举；Renderer MUST 只提交注册表内的模型与音色值，MUST NOT 接收任意模型 ID、任意音色 ID、Provider URL 或本地路径。模型/音色选择与 API Key 分开保存，切换选择 MUST NOT 读取、回显或替换 API Key；凭据 MUST NOT 以明文落盘，safeStorage 不可用时保存 MUST 失败而非降级。
+V2 SHALL 仅接入 DashScope Qwen3-TTS 一个语音 Provider，以新的 `QWEN_TTS` 档位复用既有凭据安全通路（与 QWEN 文本档共用同一把 DashScope Key；2026-08-26 修订，原 Ark 方案被探测证伪）。TTS 模型与音色 SHALL 由受版本控制的本地受限注册表枚举；Renderer MUST 只提交注册表内的模型与音色值，MUST NOT 接收任意模型 ID、任意音色 ID、Provider URL 或本地路径。模型/音色选择与 API Key 分开保存，切换选择 MUST NOT 读取、回显或替换 API Key；凭据 MUST NOT 以明文落盘，safeStorage 不可用时保存 MUST 失败而非降级。
 
 #### Scenario: 用户保存受限的 TTS 模型与音色映射
 
@@ -19,7 +22,7 @@ V2 SHALL 仅接入火山方舟 Ark TTS 一个语音 Provider，以新的 `VOLCAR
 
 #### Scenario: 实施前完成 Schema Probe 并回写快照
 
-- **GIVEN** TTS 适配器尚未对真实 Ark TTS 端点完成探测
+- **GIVEN** TTS 适配器尚未对真实 DashScope TTS 端点完成探测
 - **WHEN** 执行受限预算的 Schema Probe（验证请求/响应形状与音频格式，不做质量评估）
 - **THEN** 探测结论 SHALL 回写注册表快照与技术设计；探测不通过时 MUST NOT 将该 Provider 投入真实生成
 
@@ -202,3 +205,4 @@ V2 SHALL 仅接入火山方舟 Ark TTS 一个语音 Provider，以新的 `VOLCAR
 - **GIVEN** 用户在 FFmpeg 运行中取消导出且终态已落库为 CANCELLED
 - **WHEN** 迟到的完成回调到达
 - **THEN** 系统 SHALL 保持 CANCELLED 终态且 MUST NOT 登记成功导出
+

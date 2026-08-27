@@ -2,13 +2,18 @@ import type {
   VideoAudioAssetRecord,
   VideoCompositionRepository,
   VideoExportJobRecord,
+  VideoTimelineSubtitleItemInput,
   VideoTimelineVersionRecord,
+  VideoTimelineWriteTracks,
 } from '@jingxu/application';
 import type {
   VideoAudioAssetSummaryDto,
   VideoExportJobDto,
   VideoExportStatus,
+  VideoTimelineAlignmentItemDto,
   VideoTimelineItemDto,
+  VideoTimelineSubtitleItemDto,
+  VideoTimelineVoiceItemDto,
 } from '@jingxu/contracts';
 import type { MediaStoredFileRef } from '@jingxu/application';
 
@@ -48,6 +53,49 @@ const parseItems = (rows: readonly Row[]): VideoTimelineItemDto[] =>
     trimOutMs: requiredNumber(row, 'trim_out_ms'),
   }));
 
+/** 配音轨行 → DTO（shot_id 字母序确定性返回；既有版本行无轨道=空数组）。 */
+const parseVoiceItems = (rows: readonly Row[]): VideoTimelineVoiceItemDto[] =>
+  rows.map((row) => ({
+    candidateId: requiredString(row, 'candidate_id'),
+    enabled: requiredNumber(row, 'enabled') === 1,
+    fileSha256: requiredString(row, 'file_sha256'),
+    generationInputHash: requiredString(row, 'generation_input_hash'),
+    offsetMs: requiredNumber(row, 'offset_ms'),
+    shotId: requiredString(row, 'shot_id'),
+    trimInMs: requiredNumber(row, 'trim_in_ms'),
+    trimOutMs: requiredNumber(row, 'trim_out_ms'),
+    volume: requiredNumber(row, 'volume'),
+  }));
+
+/** 字幕轨行 → DTO（style_snapshot_json 留在库内作版本冻结锚点，不出 DTO 面）。 */
+const parseSubtitleItems = (rows: readonly Row[]): VideoTimelineSubtitleItemDto[] =>
+  rows.map((row) => ({
+    enabled: requiredNumber(row, 'enabled') === 1,
+    safeAreaPct: requiredNumber(row, 'safe_area_pct'),
+    shotId: requiredString(row, 'shot_id'),
+    spokenTextSha256: requiredString(row, 'spoken_text_sha256'),
+  }));
+
+/** 对齐记录行 → DTO（rules_version 随行冻结，供导出报告回放口径）。 */
+const parseAlignmentItems = (rows: readonly Row[]): VideoTimelineAlignmentItemDto[] =>
+  rows.map((row) => ({
+    audioDurationMs: requiredNumber(row, 'audio_duration_ms'),
+    category: requiredString(row, 'category') as VideoTimelineAlignmentItemDto['category'],
+    dialogueComplete: requiredNumber(row, 'dialogue_complete') === 1,
+    extendedMs: requiredNumber(row, 'extended_ms'),
+    manualOverride:
+      row.manual_override === null
+        ? null
+        : (requiredString(row, 'manual_override') as NonNullable<
+            VideoTimelineAlignmentItemDto['manualOverride']
+          >),
+    rulesVersion: requiredString(row, 'rules_version'),
+    shotDurationMs: requiredNumber(row, 'shot_duration_ms'),
+    shotId: requiredString(row, 'shot_id'),
+    storyboardFallback: requiredNumber(row, 'storyboard_fallback') === 1,
+    strategy: requiredString(row, 'strategy') as VideoTimelineAlignmentItemDto['strategy'],
+  }));
+
 const mapAudio = (row: Row): VideoAudioAssetRecord => ({
   byteSize: requiredNumber(row, 'byte_size'),
   fileSha256: requiredString(row, 'file_sha256'),
@@ -82,16 +130,18 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
     private readonly clock: () => string,
   ) {}
 
-  public createTimeline(input: {
-    readonly episodeId: string;
-    readonly episodeVersionId: string;
-    readonly formatProfileId: string;
-    readonly id: string;
-    readonly inputHash: string;
-    readonly items: readonly VideoTimelineItemDto[];
-    readonly projectId: string;
-    readonly totalDurationMs: number;
-  }): Promise<VideoTimelineVersionRecord> {
+  public createTimeline(
+    input: {
+      readonly episodeId: string;
+      readonly episodeVersionId: string;
+      readonly formatProfileId: string;
+      readonly id: string;
+      readonly inputHash: string;
+      readonly items: readonly VideoTimelineItemDto[];
+      readonly projectId: string;
+      readonly totalDurationMs: number;
+    } & VideoTimelineWriteTracks,
+  ): Promise<VideoTimelineVersionRecord> {
     return syncToPromise(() => {
       const now = this.clock();
       const timelineId = `timeline_${input.id}`;
@@ -105,8 +155,8 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
         .prepare(
           `INSERT INTO video_timeline_versions
          (id, timeline_id, episode_version_id, format_profile_id, version_no, parent_version_id,
-          input_hash, audio_asset_id, total_duration_ms, created_at)
-         VALUES (?, ?, ?, ?, 1, NULL, ?, NULL, ?, ?)`,
+          input_hash, audio_asset_id, total_duration_ms, audio_volume, created_at)
+         VALUES (?, ?, ?, ?, 1, NULL, ?, NULL, ?, ?, ?)`,
         )
         .run(
           input.id,
@@ -115,9 +165,13 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
           input.formatProfileId,
           input.inputHash,
           input.totalDurationMs,
+          input.audioVolume,
           now,
         );
       this.insertItems(input.id, input.items);
+      this.insertVoiceItems(input.id, input.voiceItems);
+      this.insertSubtitleItems(input.id, input.subtitleItems);
+      this.insertAlignmentItems(input.id, input.alignmentItems);
       return this.requireTimelineVersion(input.projectId, input.episodeId, input.id);
     });
   }
@@ -131,7 +185,7 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
       const row = this.database
         .prepare(
           `SELECT v.id, v.timeline_id, v.episode_version_id, v.format_profile_id, v.version_no,
-                v.parent_version_id, v.input_hash, v.audio_asset_id, v.total_duration_ms, v.created_at,
+                v.parent_version_id, v.input_hash, v.audio_asset_id, v.total_duration_ms, v.audio_volume, v.created_at,
                 t.project_id, t.episode_id
          FROM video_timeline_versions v JOIN video_timelines t ON t.id = v.timeline_id
          WHERE t.project_id = ? AND t.episode_id = ? AND v.id = COALESCE(?, t.current_version_id)`,
@@ -141,15 +195,17 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
     });
   }
 
-  public updateTimeline(input: {
-    readonly audioAssetId: string | null;
-    readonly expectedVersionId: string;
-    readonly id: string;
-    readonly inputHash: string;
-    readonly items: readonly VideoTimelineItemDto[];
-    readonly projectId: string;
-    readonly totalDurationMs: number;
-  }): Promise<VideoTimelineVersionRecord> {
+  public updateTimeline(
+    input: {
+      readonly audioAssetId: string | null;
+      readonly expectedVersionId: string;
+      readonly id: string;
+      readonly inputHash: string;
+      readonly items: readonly VideoTimelineItemDto[];
+      readonly projectId: string;
+      readonly totalDurationMs: number;
+    } & VideoTimelineWriteTracks,
+  ): Promise<VideoTimelineVersionRecord> {
     return syncToPromise(() => {
       const current = this.database
         .prepare(
@@ -167,8 +223,8 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
         .prepare(
           `INSERT INTO video_timeline_versions
          (id, timeline_id, episode_version_id, format_profile_id, version_no, parent_version_id,
-          input_hash, audio_asset_id, total_duration_ms, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          input_hash, audio_asset_id, total_duration_ms, audio_volume, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.id,
@@ -180,9 +236,13 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
           input.inputHash,
           input.audioAssetId,
           input.totalDurationMs,
+          input.audioVolume,
           now,
         );
       this.insertItems(input.id, input.items);
+      this.insertVoiceItems(input.id, input.voiceItems);
+      this.insertSubtitleItems(input.id, input.subtitleItems);
+      this.insertAlignmentItems(input.id, input.alignmentItems);
       this.database
         .prepare('UPDATE video_timelines SET current_version_id = ?, updated_at = ? WHERE id = ?')
         .run(input.id, now, requiredString(row, 'timeline_id'));
@@ -404,6 +464,76 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
     );
   }
 
+  private insertVoiceItems(versionId: string, items: readonly VideoTimelineVoiceItemDto[]): void {
+    const statement = this.database.prepare(
+      `INSERT INTO video_timeline_voice_items
+       (timeline_version_id, shot_id, candidate_id, file_sha256, generation_input_hash, offset_ms, volume, trim_in_ms, trim_out_ms, enabled)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    items.forEach((item) =>
+      statement.run(
+        versionId,
+        item.shotId,
+        item.candidateId,
+        item.fileSha256,
+        item.generationInputHash,
+        item.offsetMs,
+        item.volume,
+        item.trimInMs,
+        item.trimOutMs,
+        item.enabled ? 1 : 0,
+      ),
+    );
+  }
+
+  private insertSubtitleItems(
+    versionId: string,
+    items: readonly VideoTimelineSubtitleItemInput[],
+  ): void {
+    const statement = this.database.prepare(
+      `INSERT INTO video_timeline_subtitle_items
+       (timeline_version_id, shot_id, enabled, spoken_text_sha256, safe_area_pct, style_snapshot_json)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    items.forEach((item) =>
+      statement.run(
+        versionId,
+        item.shotId,
+        item.enabled ? 1 : 0,
+        item.spokenTextSha256,
+        item.safeAreaPct,
+        item.styleSnapshotJson,
+      ),
+    );
+  }
+
+  private insertAlignmentItems(
+    versionId: string,
+    items: readonly VideoTimelineAlignmentItemDto[],
+  ): void {
+    const statement = this.database.prepare(
+      `INSERT INTO video_timeline_alignment_items
+       (timeline_version_id, shot_id, category, strategy, manual_override,
+        audio_duration_ms, shot_duration_ms, extended_ms, dialogue_complete, storyboard_fallback, rules_version)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    items.forEach((item) =>
+      statement.run(
+        versionId,
+        item.shotId,
+        item.category,
+        item.strategy,
+        item.manualOverride,
+        item.audioDurationMs,
+        item.shotDurationMs,
+        item.extendedMs,
+        item.dialogueComplete ? 1 : 0,
+        item.storyboardFallback ? 1 : 0,
+        item.rulesVersion,
+      ),
+    );
+  }
+
   private mapTimeline(row: Row): VideoTimelineVersionRecord {
     const id = requiredString(row, 'id');
     const items = this.database
@@ -411,11 +541,28 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
         'SELECT shot_id, candidate_id, file_sha256, generation_input_hash, position, enabled, trim_in_ms, trim_out_ms FROM video_timeline_items WHERE timeline_version_id = ? ORDER BY position',
       )
       .all(id) as Row[];
+    const voiceItems = this.database
+      .prepare(
+        'SELECT shot_id, candidate_id, file_sha256, generation_input_hash, offset_ms, volume, trim_in_ms, trim_out_ms, enabled FROM video_timeline_voice_items WHERE timeline_version_id = ? ORDER BY shot_id',
+      )
+      .all(id) as Row[];
+    const subtitleItems = this.database
+      .prepare(
+        'SELECT shot_id, enabled, spoken_text_sha256, safe_area_pct FROM video_timeline_subtitle_items WHERE timeline_version_id = ? ORDER BY shot_id',
+      )
+      .all(id) as Row[];
+    const alignmentItems = this.database
+      .prepare(
+        'SELECT shot_id, category, strategy, manual_override, audio_duration_ms, shot_duration_ms, extended_ms, dialogue_complete, storyboard_fallback, rules_version FROM video_timeline_alignment_items WHERE timeline_version_id = ? ORDER BY shot_id',
+      )
+      .all(id) as Row[];
     const audioId = nullableString(row, 'audio_asset_id');
     const audioAsset =
       audioId === null ? null : this.findAudioAssetSync(requiredString(row, 'project_id'), audioId);
     return {
+      alignmentItems: parseAlignmentItems(alignmentItems),
       audioAsset,
+      audioVolume: requiredNumber(row, 'audio_volume'),
       createdAt: requiredString(row, 'created_at'),
       episodeId: requiredString(row, 'episode_id'),
       episodeVersionId: requiredString(row, 'episode_version_id'),
@@ -424,9 +571,11 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
       inputHash: requiredString(row, 'input_hash'),
       items: parseItems(items),
       parentVersionId: nullableString(row, 'parent_version_id'),
+      subtitleItems: parseSubtitleItems(subtitleItems),
       timelineId: requiredString(row, 'timeline_id'),
       totalDurationMs: requiredNumber(row, 'total_duration_ms'),
       versionNo: requiredNumber(row, 'version_no'),
+      voiceItems: parseVoiceItems(voiceItems),
     };
   }
 
@@ -438,7 +587,7 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
     const row = this.database
       .prepare(
         `SELECT v.id, v.timeline_id, v.episode_version_id, v.format_profile_id, v.version_no,
-              v.parent_version_id, v.input_hash, v.audio_asset_id, v.total_duration_ms, v.created_at,
+              v.parent_version_id, v.input_hash, v.audio_asset_id, v.total_duration_ms, v.audio_volume, v.created_at,
               t.project_id, t.episode_id
        FROM video_timeline_versions v JOIN video_timelines t ON t.id = v.timeline_id
        WHERE t.project_id = ? AND t.episode_id = ? AND v.id = ?`,

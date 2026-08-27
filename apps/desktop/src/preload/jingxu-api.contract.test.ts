@@ -3,6 +3,7 @@ import {
   IMAGE_IPC_CHANNELS,
   PROJECT_IPC_CHANNELS,
   VIDEO_IPC_CHANNELS,
+  VOICE_IPC_CHANNELS,
   type AppResultDto,
   type CreateProjectInputDto,
   type JingxuApi,
@@ -11,6 +12,9 @@ import {
   type ProjectDetailDto,
   type StoryboardVideoStatesDto,
   type VideoCandidateViewDto,
+  type VoiceCandidateViewDto,
+  type VoiceEpisodeBatchViewDto,
+  type VoiceMappingDto,
 } from '@jingxu/contracts';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 
@@ -98,6 +102,7 @@ describe('window.jingxu 白名单 Contract', () => {
       'storyboard',
       'transfer',
       'video',
+      'voice',
     ]);
     expect(Object.isFrozen(api.storyboard)).toBe(true);
     expect(Object.isFrozen(api.evaluation)).toBe(true);
@@ -524,6 +529,142 @@ describe('window.jingxu 白名单 Contract', () => {
           }),
         ),
       ).video.listVideoCandidates(listInput),
+    ).rejects.toThrow();
+  });
+
+  it('Voice Change—voice 仅暴露固定六方法白名单—零路径/SQL/存储入口', () => {
+    const api = createJingxuApi(vi.fn());
+
+    expect(Object.isFrozen(api.voice)).toBe(true);
+    expect(Object.keys(api.voice).sort()).toEqual([
+      'deleteCandidate',
+      'generateForEpisode',
+      'getGenerations',
+      'getMappings',
+      'saveMapping',
+      'selectCandidate',
+    ]);
+    for (const forbidden of ['path', 'sql', 'database', 'repository', 'node', 'persistence']) {
+      expect(Reflect.has(api.voice, forbidden)).toBe(false);
+    }
+  });
+
+  it('调用 voice 方法—输入合法—只 invoke 固定 channel 且校验输出（台词与文件指纹不透出）', async () => {
+    const now = '2026-08-16T00:00:00.000Z';
+    const hash = 'a'.repeat(64);
+    const mapping: VoiceMappingDto = {
+      speakerId: 'narrator',
+      updatedAt: now,
+      voiceId: 'Neil',
+    };
+    const candidate: VoiceCandidateViewDto = {
+      byteSize: 4096,
+      createdAt: now,
+      durationMs: 1500,
+      errorCode: null,
+      generationInputHash: hash,
+      id: 'vcand_12345678',
+      indexInRound: 0,
+      mediaUrl: 'jingxu://media/voice-candidate/vcand_12345678',
+      modelId: 'qwen3-tts-instruct-flash',
+      mimeType: 'audio/wav',
+      roundNo: 1,
+      selectedAt: null,
+      shotId: 'shot_12345678',
+      shotVersionId: 'scv_12345678',
+      speakerId: 'narrator',
+      spokenTextSha256: hash,
+      status: 'SUCCEEDED',
+      voiceId: 'Neil',
+    };
+    const batch: VoiceEpisodeBatchViewDto = {
+      batchId: 'vjob_12345678',
+      createdAt: now,
+      skippedShots: [{ reason: 'NOT_VOICE_TARGET', shotId: 'shot_87654321' }],
+      targetShotIds: ['shot_12345678'],
+    };
+    const invoke = vi.fn((channel: string) => {
+      switch (channel) {
+        case VOICE_IPC_CHANNELS.getMappings:
+        case VOICE_IPC_CHANNELS.saveMapping:
+          return Promise.resolve({ data: [mapping], ok: true });
+        case VOICE_IPC_CHANNELS.getGenerations:
+        case VOICE_IPC_CHANNELS.selectCandidate:
+          return Promise.resolve({ data: [candidate], ok: true });
+        case VOICE_IPC_CHANNELS.deleteCandidate:
+          return Promise.resolve({ data: { candidateId: candidate.id }, ok: true });
+        default:
+          return Promise.resolve({ data: batch, ok: true });
+      }
+    });
+    const api = createJingxuApi(invoke);
+    const mappingsInput = { projectId: 'project_12345678' };
+    const saveInput = {
+      mappings: [{ speakerId: 'narrator', voiceId: 'Neil' }],
+      projectId: 'project_12345678',
+      requestId: 'request_vmap_00001',
+    };
+    const generateInput = {
+      episodeId: 'episode_12345678',
+      projectId: 'project_12345678',
+      requestId: 'request_vgen_00001',
+      shotIds: ['shot_12345678'],
+    };
+    const generationsInput = { projectId: 'project_12345678', shotId: 'shot_12345678' };
+    const selectInput = {
+      candidateId: 'vcand_12345678',
+      projectId: 'project_12345678',
+      requestId: 'request_vsel_00001',
+    };
+    const deleteInput = {
+      candidateId: 'vcand_12345678',
+      projectId: 'project_12345678',
+      requestId: 'request_vdel_00001',
+    };
+
+    await expect(api.voice.getMappings(mappingsInput)).resolves.toEqual({
+      data: [mapping],
+      ok: true,
+    });
+    await expect(api.voice.saveMapping(saveInput)).resolves.toEqual({
+      data: [mapping],
+      ok: true,
+    });
+    await expect(api.voice.generateForEpisode(generateInput)).resolves.toEqual({
+      data: batch,
+      ok: true,
+    });
+    await expect(api.voice.getGenerations(generationsInput)).resolves.toEqual({
+      data: [candidate],
+      ok: true,
+    });
+    await expect(api.voice.selectCandidate(selectInput)).resolves.toEqual({
+      data: [candidate],
+      ok: true,
+    });
+    await expect(api.voice.deleteCandidate(deleteInput)).resolves.toEqual({
+      data: { candidateId: 'vcand_12345678' },
+      ok: true,
+    });
+    expect(invoke.mock.calls).toEqual([
+      [VOICE_IPC_CHANNELS.getMappings, mappingsInput],
+      [VOICE_IPC_CHANNELS.saveMapping, saveInput],
+      [VOICE_IPC_CHANNELS.generateForEpisode, generateInput],
+      [VOICE_IPC_CHANNELS.getGenerations, generationsInput],
+      [VOICE_IPC_CHANNELS.selectCandidate, selectInput],
+      [VOICE_IPC_CHANNELS.deleteCandidate, deleteInput],
+    ]);
+
+    // 输出校验：携带台词原文/文件指纹的越权字段不得进入 Renderer。
+    await expect(
+      createJingxuApi(
+        vi.fn(() =>
+          Promise.resolve({
+            data: [{ ...candidate, spokenText: '台词不透出', storageRelPath: 'projects/p/x.wav' }],
+            ok: true,
+          }),
+        ),
+      ).voice.getGenerations(generationsInput),
     ).rejects.toThrow();
   });
 

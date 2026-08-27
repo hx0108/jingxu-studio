@@ -56,6 +56,8 @@ describe('0003_script_version_receipts.sql', () => {
           { version: 17 },
           { version: 18 },
           { version: 19 },
+          { version: 20 },
+          { version: 21 },
         ]);
         expect(
           database
@@ -175,7 +177,7 @@ describe('0003_script_version_receipts.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 19 });
+        ).toEqual({ version: 21 });
       } finally {
         database.close();
       }
@@ -365,7 +367,7 @@ describe('0008_prompt_templates_shot_contract.sql', () => {
         ).toEqual({ count: 1 });
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 19 });
+        ).toEqual({ version: 21 });
       } finally {
         database.close();
       }

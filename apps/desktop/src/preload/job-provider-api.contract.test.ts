@@ -19,6 +19,7 @@ describe('Job Provider Events Preload Contract', () => {
       'storyboard',
       'transfer',
       'video',
+      'voice',
     ]);
     expect(Object.keys(api.job).sort()).toEqual(['cancel', 'create', 'get', 'list', 'retry']);
     expect(Object.keys(api.provider).sort()).toEqual([

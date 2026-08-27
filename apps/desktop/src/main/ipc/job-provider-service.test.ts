@@ -667,3 +667,110 @@ describe('createJobProviderIpcService — 视频档分发（shot-video-generatio
     expect(imageResult.error.userAction).toContain('图片 Provider 设置');
   });
 });
+
+describe('createJobProviderIpcService — 配音档分发（v2-voice-audio-timeline 3.1）', () => {
+  const VOICE_PROFILE_ID = 'profile-voice-primary';
+  const voiceView: ProviderProfileView = {
+    configured: true,
+    enabled: true,
+    last4: '8888',
+    lastValidatedAt: null,
+    modelId: 'qwen3-tts-instruct-flash',
+    modelSnapshotDate: '2026-01-26',
+    provider: 'QWEN_TTS',
+    region: 'cn-beijing',
+    versionId: VOICE_PROFILE_ID,
+    workspaceId: 'dashscope',
+  };
+
+  const createVoiceHarness = () => {
+    const text = {
+      getProfile: vi.fn(() => Promise.resolve(configuredView)),
+      saveCredential: vi.fn(() => Promise.resolve(configuredView)),
+      testCredential: vi.fn((): Promise<CredentialCheck> => Promise.resolve({ ok: true })),
+      deleteCredential: vi.fn(() => Promise.resolve(defaultView)),
+    };
+    const voice = {
+      getProfile: vi.fn(() => Promise.resolve(voiceView)),
+      saveCredential: vi.fn(() => Promise.resolve(voiceView)),
+      testCredential: vi.fn((): Promise<CredentialCheck> => Promise.resolve({ ok: true })),
+      deleteCredential: vi.fn(() => Promise.resolve(voiceView)),
+    };
+    const service = createJobProviderIpcService({
+      jobs: {} as JobService,
+      newSubscriptionId: () => SUBSCRIPTION_ID,
+      newTraceId: () => TRACE_ID,
+      provider: text as unknown as ProviderService,
+      voice: { profileId: VOICE_PROFILE_ID, service: voice as unknown as ProviderService },
+    });
+    return { service, text, voice };
+  };
+
+  it('配音档 profileId—凭据四通道分发到配音 ProviderService，文本档不受影响', async () => {
+    const h = createVoiceHarness();
+    const voiceMutation: ProviderMutationInputDto = {
+      expectedVersionId: VOICE_PROFILE_ID,
+      profileId: VOICE_PROFILE_ID,
+      requestId: 'request-voice-mutate',
+    };
+    const voiceSaveCredential: ProviderCredentialCommandDto = {
+      apiKey: 'dashscope-secret-1234567890',
+      expectedVersionId: VOICE_PROFILE_ID,
+      profileId: VOICE_PROFILE_ID,
+      requestId: 'request-voice-save',
+    };
+
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.getProfile, { profileId: VOICE_PROFILE_ID }),
+    ).resolves.toEqual({ data: expectedDto(voiceView), ok: true });
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.saveCredential, voiceSaveCredential),
+    ).resolves.toEqual({ data: expectedDto(voiceView), ok: true });
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.testCredential, voiceMutation),
+    ).resolves.toEqual({ data: expectedDto(voiceView), ok: true });
+    await expect(
+      h.service.invoke(PROVIDER_IPC_CHANNELS.deleteCredential, voiceMutation),
+    ).resolves.toEqual({ data: expectedDto(voiceView), ok: true });
+
+    expect(h.voice.getProfile).toHaveBeenCalledWith(VOICE_PROFILE_ID);
+    expect(h.voice.saveCredential).toHaveBeenCalledWith(
+      VOICE_PROFILE_ID,
+      'dashscope-secret-1234567890',
+    );
+    expect(h.voice.testCredential).toHaveBeenCalledWith(VOICE_PROFILE_ID);
+    expect(h.voice.deleteCredential).toHaveBeenCalledWith(VOICE_PROFILE_ID);
+    expect(h.text.saveCredential).not.toHaveBeenCalled();
+    expect(h.text.testCredential).not.toHaveBeenCalled();
+  });
+
+  it('配音档解密失败—MODEL_CREDENTIAL_INVALID—文案按档覆盖并指向配音配置入口', async () => {
+    const h = createVoiceHarness();
+    h.voice.testCredential.mockResolvedValueOnce({
+      detail: 'CREDENTIAL_NOT_FOUND',
+      errorCode: 'MODEL_CREDENTIAL_INVALID' as const,
+      ok: false,
+    });
+    const voiceMutation: ProviderMutationInputDto = {
+      expectedVersionId: VOICE_PROFILE_ID,
+      profileId: VOICE_PROFILE_ID,
+      requestId: 'request-voice-test',
+    };
+
+    const result = (await h.service.invoke(
+      PROVIDER_IPC_CHANNELS.testCredential,
+      voiceMutation,
+    )) as {
+      ok: false;
+      error: { code: string; message: string; userAction: string | null };
+    };
+
+    expect(result.ok).toBe(false);
+    expect(result.error.code).toBe('MODEL_CREDENTIAL_INVALID');
+    expect(result.error.message).toContain('密文无法解密');
+    expect(result.error.userAction).toContain('配音 Provider 设置');
+    expect(result.error.userAction).toContain('DashScope');
+    // 存储层原因码不回显。
+    expect(JSON.stringify(result)).not.toContain('CREDENTIAL_NOT_FOUND');
+  });
+});

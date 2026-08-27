@@ -8,15 +8,17 @@
 - CAS：`ContentAddressedStore` 已有 `'audio'` 命名空间与 MIME→扩展映射，BGM 入库即先例；缺 DB 登记层与时长探测边界。
 - 调度：`MediaTaskScheduler`（同项目串行/两段式证据/恢复只信证据）面向异步 submit/poll/download；导出 Job 用 requestId 幂等 + AbortController + 恢复标失败。
 
-## D1 Provider 选型：火山方舟 Ark TTS（已拍板）
+## D1 Provider 选型：DashScope Qwen3-TTS（2026-08-26 修订）
 
-- `ProviderProfileKind` 增加 `'VOLCARK_TTS'`；凭据档完全复用 Volcark 装配范式（固定 CREDENTIAL_ID、safeStorage 密文、`testCredential`=解密加载校验零计费）。
-- 新增 `packages/model-adapters/src/volcark/tts-voice-models.ts` 冻结注册表：模型（id/label/snapshotDate/能力：语速上限、采样率、输出 mime）+ 音色（含 `narrator` 旁白默认音色与角色可选音色集）。仿 `seedance-video-models.ts` 的 `selectable` 语义。
-- **实施首任务为 Schema Probe**（PRD §10.4）：受限预算实测 Ark TTS 请求/响应形状、音频格式与时长事实，回写注册表快照与 TECH_DESIGN；探测不通过则回本设计评审 D1 假设。
+> **修订记录**：原拍板火山方舟 Ark TTS。2026-08-26 以受限预算免费探测证伪其前提——`POST /api/v3/audio/speech` 路由不存在（裸 404 size=0；同网关已知路由的模型错误均带 JSON 体，二者可区分），`GET /api/v3/models` 130 个模型无任何 TTS 条目，现行 ARK Bearer Key 无法到达 TTS 能力。按本节预留 contingency（探测不通过则回本设计评审）回评审，拍板改道 DashScope Qwen3-TTS，凭据复用现有 QWEN 档同一把 DASHSCOPE_API_KEY。
+
+- `ProviderProfileKind` 增加 `'QWEN_TTS'`；凭据档复用 QWEN 装配范式（固定 CREDENTIAL_ID、safeStorage 密文、`testCredential`=解密加载校验零计费），与 `QWEN` 文本档共用同一把 DashScope Key——同 key 双档先例：`VOLCARK_SEEDREAM`/`VOLCARK_SEEDANCE`。
+- 注册表迁移至 `packages/model-adapters/src/qwen/tts-voice-models.ts`（自 `volcark/` 迁移改名，1.2 已落骨架翻写真实事实）：模型（id/label/snapshotDate/能力：输出 mime；语速控制仅 instruct 系经 `instructions` 自然语言，无数值语速参数）+ 音色（含 `narrator` 旁白默认音色与角色可选音色集）。仿 `seedance-video-models.ts` 的 `selectable` 语义。
+- **实施首任务为 Schema Probe**（PRD §10.4）不变，对象改为 DashScope qwen3-tts 原生路由（`POST /api/v1/services/aigc/multimodal-generation/generation`，官方文档快照 2026-07-27）：受限预算实测请求/响应形状、音频格式与时长事实，回写注册表快照与 TECH_DESIGN；探测不通过则回本设计评审。
 
 ## D2 Port 形态：同步 TtsModelPort 与轻量语音调度器
 
-- Ark TTS 为同步 HTTP 返回音频字节 → 新增 application Port `TtsModelPort { validateCredential; synthesize(request, signal); normalizeError; evidenceOf }`，**不复用** `MediaModelPort` 的 submit/poll/download 三段式。
+- DashScope qwen3-tts 为同步 HTTP：单段 POST 合成（2.2 实测：非流式经 OSS `url` 交付 24h 有效 WAV，`audio.data` 恒空）+ 适配器内 GET 下载字节，URL 不出适配器边界 → 新增 application Port `TtsModelPort { validateCredential; synthesize(request, signal); normalizeError; evidenceOf }`，**不复用** `MediaModelPort` 的 submit/poll/download 三段式。
 - 新增 `VoiceGenerationScheduler`：复用既有语义（同项目严格串行、两段式证据 STARTED+终态、取消先落库再中止、恢复只信已落库证据、无证据即中断失败），不引入 poll 循环——同步单段调用使 lease/deadline 语义足够。
 
 ## D3 数据模型（0020 迁移）

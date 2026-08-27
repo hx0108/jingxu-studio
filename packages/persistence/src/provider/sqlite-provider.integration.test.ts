@@ -133,6 +133,19 @@ describe('provider_profiles Repository 与 UnitOfWork（任务 6.4）', () => {
     });
   });
 
+  it('QWEN_TTS 配音 Profile—按合法 Provider 枚举读取，不误判为损坏行', () => {
+    const row = validRow();
+    row.provider = 'QWEN_TTS';
+    row.model_id = 'qwen3-tts-instruct-flash';
+    row.model_snapshot_date = '2026-01-26';
+    row.workspace_id = 'dashscope';
+
+    expect(mapProviderProfileRow(row)).toMatchObject({
+      modelId: 'qwen3-tts-instruct-flash',
+      provider: 'QWEN_TTS',
+    });
+  });
+
   it('upsert：再次 save 更新启用状态、工作区与 config，不产生第二行', async () => {
     await withSqliteTestContext(async (context) => {
       await withProviderDatabase(context, async (unitOfWork, database) => {

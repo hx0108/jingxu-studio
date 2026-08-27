@@ -1,0 +1,185 @@
+{
+  "after": {
+    "cameraMotion": "STATIC",
+    "document": {
+      "acceptance": {
+        "must_include": [
+          "午夜列车车厢"
+        ],
+        "must_not_include": [],
+        "human_review_required": true
+      },
+      "cinematography": {
+        "shot_size": "MEDIUM",
+        "camera_angle": "EYE_LEVEL",
+        "composition": "中景，主体居左",
+        "focus": "人物面部清晰",
+        "camera_motion": "STATIC",
+        "frontal_face": true,
+        "mouth_visible": true
+      },
+      "content": {
+        "character_ids": [
+          "char_lead"
+        ],
+        "scene_id": "scene_train",
+        "prop_ids": [],
+        "action": "镜 1：开场：车厢全景，无人回应",
+        "emotion": "警惕",
+        "spoken_text": "这趟列车，到底要开去哪里？"
+      },
+      "continuity": {
+        "continuity_mode": "SCENE_CHANGE",
+        "first_frame_requirement": "开场：车厢全景，无人回应起帧",
+        "last_frame_requirement": "开场：车厢全景，无人回应止帧",
+        "asset_version_ids": [],
+        "previous_shot_id": null
+      },
+      "contract_version": 3,
+      "dialogue": {
+        "dialogue_render_mode": "NARRATION_FIRST",
+        "speaker_id": "narrator",
+        "estimated_speech_duration_sec": 3,
+        "audio_required": true,
+        "dialogue_mode_source": "PROJECT_DEFAULT",
+        "lip_sync_required": false,
+        "override_reason": null
+      },
+      "derived_from_shot_ids": [],
+      "format_profile_id": "format_profile_a5474167-6c23-4b2a-8b72-57571ed40ba7",
+      "generation_constraints": {
+        "capability_requirements": [
+          {
+            "capability": "FIRST_FRAME",
+            "required": true
+          }
+        ],
+        "image_prompt": "夜行列车车厢，冷色调，中景",
+        "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+        "negative_constraints": [
+          "文字水印"
+        ],
+        "budget_estimate": {
+          "currency_or_credit": "UNKNOWN",
+          "is_estimate": true,
+          "max": null,
+          "min": null,
+          "price_version": null
+        }
+      },
+      "locked_paths": [
+        "/content/action"
+      ],
+      "narrative_purpose": "开场：车厢全景，无人回应",
+      "parent_version_id": "scv_2c2339f1-4a1e-455b-83e4-be8719f0982c_v2",
+      "provenance": {
+        "last_edit_source": "AI",
+        "source_invocation_id": "8d7c45fe-23a7-4253-8948-d75622aa69be",
+        "source_type": "AI_GENERATED"
+      },
+      "schema_version": "1.1.0",
+      "sequence": 1,
+      "shot_id": "shot_7aca3a35-ae8c-435f-9c88-1841a14fc3a2",
+      "target_duration_sec": 15,
+      "status": "READY",
+      "version_id": "scv_118754d8-7aad-440e-9cc6-31efb26cda64_v3"
+    },
+    "dialogueRenderMode": "NARRATION_FIRST",
+    "lockedPaths": [
+      "/content/action"
+    ],
+    "narrativePurpose": "开场：车厢全景，无人回应",
+    "sequence": 1,
+    "shotId": "shot_7aca3a35-ae8c-435f-9c88-1841a14fc3a2",
+    "shotSize": "MEDIUM",
+    "targetDurationSec": 15,
+    "versionId": "scv_118754d8-7aad-440e-9cc6-31efb26cda64_v3"
+  },
+  "edited": {
+    "ok": false,
+    "error": {
+      "code": "SHOT_LOCK_CONFLICT",
+      "message": "编辑路径已被锁定，请先解锁后再编辑",
+      "retryable": false,
+      "userAction": null,
+      "fieldErrors": {
+        "lockedPaths": "/content/action"
+      },
+      "traceId": "2d74de86-7d5e-4442-9c24-e85d020a14ab"
+    }
+  },
+  "invalid": [
+    {
+      "ok": false,
+      "error": {
+        "code": "SHOT_LOCK_POINTER_INVALID",
+        "message": "锁定路径非法（不在七根白名单 / 含数组下标 / 非法转义 / 不存在）",
+        "retryable": false,
+        "userAction": null,
+        "fieldErrors": {
+          "jsonPointer": "LOCK_POINTER_MALFORMED:/content/action~2"
+        },
+        "traceId": "57f5965f-dbb9-4415-bb9a-5782ae140bcd"
+      }
+    },
+    {
+      "ok": false,
+      "error": {
+        "code": "SHOT_LOCK_POINTER_INVALID",
+        "message": "锁定路径非法（不在七根白名单 / 含数组下标 / 非法转义 / 不存在）",
+        "retryable": false,
+        "userAction": null,
+        "fieldErrors": {
+          "jsonPointer": "LOCK_PATH_UNRESOLVED:/content/missing"
+        },
+        "traceId": "a444cadc-ced9-4b78-8114-b6abb871bf97"
+      }
+    },
+    {
+      "ok": false,
+      "error": {
+        "code": "SHOT_LOCK_POINTER_INVALID",
+        "message": "锁定路径非法（不在七根白名单 / 含数组下标 / 非法转义 / 不存在）",
+        "retryable": false,
+        "userAction": null,
+        "fieldErrors": {
+          "jsonPointer": "LOCK_ARRAY_INDEX_FORBIDDEN:/content/character_ids/0"
+        },
+        "traceId": "9c3d88ef-b87c-4912-be03-6d835b63c5c6"
+      }
+    }
+  ],
+  "lock": {
+    "ok": true,
+    "data": {
+      "episode": {
+        "createdAt": "2026-08-27T08:21:35.438Z",
+        "episodeId": "episode_b3c7c576-bdb9-4e8a-9526-951db1f3f9a4",
+        "formatProfileId": "format_profile_a5474167-6c23-4b2a-8b72-57571ed40ba7",
+        "id": "0018eb97-a3b0-461c-94aa-620e2f3992f3",
+        "parentId": "8c399dad-5db5-428e-92c2-12c8185748c1",
+        "shotCount": 6,
+        "shotSetHash": "cc5ff533cc3c4cef7b669016bd05745f406f6ed7fd27d9c927de4c10585597b0",
+        "status": "READY",
+        "storyBibleVersionId": "7c33c72b-66c5-443e-8e67-de15e9ec1869",
+        "targetDurationSec": 90,
+        "versionNo": 3
+      },
+      "lockedPaths": [
+        "/content/action"
+      ],
+      "shotVersionId": "scv_118754d8-7aad-440e-9cc6-31efb26cda64_v3"
+    }
+  },
+  "stale": {
+    "ok": false,
+    "error": {
+      "code": "SCRIPT_VERSION_CONFLICT",
+      "message": "当前版本已变化，请刷新后重试",
+      "retryable": false,
+      "userAction": null,
+      "fieldErrors": null,
+      "traceId": "275ea2b8-997c-445a-b68f-531f09900131"
+    }
+  }
+}

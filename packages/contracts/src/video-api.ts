@@ -163,6 +163,70 @@ export const videoTimelineItemSchema = z
   })
   .strict();
 
+/**
+ * 配音轨条目（v2-voice-audio-timeline design D3）：并行于 items 的第二轨，
+ * 每镜头至多一项。offsetMs 为该配音相对镜头起点的偏移；候选三元组
+ * （candidateId/fileSha256/generationInputHash）随版本冻结，漂移即拒绝。
+ */
+export const videoTimelineVoiceItemSchema = z
+  .object({
+    /**
+     * 对齐人工覆盖（design D4；PRD §10.7.1）。缺省 null = 走默认策略；
+     * 与偏差类别不构成合法组合时由服务层显式拒绝（不静默改类）。
+     */
+    alignmentOverride: z.enum(['TRIM_AUDIO', 'FORCE_TRIM', 'EARLY_CUT_NEXT']).nullable().optional(),
+    candidateId: candidateIdSchema,
+    enabled: z.boolean(),
+    fileSha256: hashSchema,
+    generationInputHash: hashSchema,
+    offsetMs: z.number().int().nonnegative(),
+    shotId: shotIdSchema,
+    trimInMs: z.number().int().nonnegative(),
+    trimOutMs: z.number().int().positive(),
+    volume: z.number().min(0).max(1),
+  })
+  .strict();
+
+/**
+ * 冻结的对齐记录（design D4）：四要素（音频实际时长/镜头实际时长/对齐方式/
+ * 是否分镜层回退）+ extendedMs + 人工覆盖 + 规则版本，随时间线版本逐镜头一行。
+ */
+export const videoTimelineAlignmentItemSchema = z
+  .object({
+    audioDurationMs: z.number().int().positive(),
+    category: z.enum(['ALIGNED', 'SLIGHTLY_LONG', 'FAR_LONG', 'SHORTER']),
+    dialogueComplete: z.boolean(),
+    extendedMs: z.number().int().nonnegative(),
+    manualOverride: z.enum(['TRIM_AUDIO', 'FORCE_TRIM', 'EARLY_CUT_NEXT']).nullable(),
+    rulesVersion: z.string().min(1).max(128),
+    shotDurationMs: z.number().int().positive(),
+    shotId: shotIdSchema,
+    storyboardFallback: z.boolean(),
+    strategy: z.enum([
+      'DIRECT_MIX',
+      'FREEZE_EXTEND',
+      'BLOCK_STORYBOARD_FALLBACK',
+      'TAIL_SILENCE',
+      'MANUAL_TRIM_AUDIO',
+      'FORCE_TRIM_DIALOGUE_INCOMPLETE',
+      'EARLY_CUT_NEXT',
+    ]),
+  })
+  .strict();
+
+/**
+ * 基础字幕轨条目：文本从镜头 spoken_text 派生（以哈希锚定），仅默认安全区
+ * 样式；safeAreaPct 为百分比整数。样式编辑器为非目标（proposal 非目标）。
+ */
+export const videoTimelineSubtitleItemSchema = z
+  .object({
+    enabled: z.boolean(),
+    safeAreaPct: z.number().int().min(0).max(20),
+    shotId: shotIdSchema,
+    spokenTextSha256: hashSchema,
+  })
+  .strict();
+
 export const videoAudioAssetSummarySchema = z
   .object({
     byteSize: z.number().int().positive(),
@@ -175,7 +239,11 @@ export const videoAudioAssetSummarySchema = z
 
 export const videoTimelineSummarySchema = z
   .object({
+    /** 冻结对齐记录（0021；无配音版本为空数组）。 */
+    alignmentItems: z.array(videoTimelineAlignmentItemSchema).max(20),
     audioAsset: videoAudioAssetSummarySchema.nullable(),
+    /** BGM 音量（0020 数据化；既有版本行读出默认 0.2=旧硬编码等效）。 */
+    audioVolume: z.number().min(0).max(1),
     createdAt: isoDateTimeSchema,
     episodeId: idSchema,
     episodeVersionId: idSchema,
@@ -184,8 +252,10 @@ export const videoTimelineSummarySchema = z
     inputHash: hashSchema,
     items: z.array(videoTimelineItemSchema).max(20),
     parentVersionId: videoTimelineVersionIdSchema.nullable(),
+    subtitleItems: z.array(videoTimelineSubtitleItemSchema).max(20),
     totalDurationMs: z.number().int().nonnegative(),
     versionNo: z.number().int().positive(),
+    voiceItems: z.array(videoTimelineVoiceItemSchema).max(20),
   })
   .strict();
 
@@ -245,13 +315,45 @@ export const getVideoTimelineInputSchema = z
 export const updateVideoTimelineInputSchema = z
   .object({
     audioAssetId: videoAudioAssetIdSchema.nullable(),
+    audioVolume: z.number().min(0).max(1).default(0.2),
     episodeId: idSchema,
     expectedVersionId: videoTimelineVersionIdSchema,
     items: z.array(videoTimelineItemSchema).min(1).max(20),
     projectId: projectIdSchema,
     requestId: requestIdSchema,
+    subtitleItems: z.array(videoTimelineSubtitleItemSchema).max(20).default([]),
+    voiceItems: z.array(videoTimelineVoiceItemSchema).max(20).default([]),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    // 两轨条目都必须锚定在时间线视频轨的镜头集合内，且每镜头至多一项。
+    const shotIds = new Set(value.items.map((item) => item.shotId));
+    for (const [field, entries] of [
+      ['subtitleItems', value.subtitleItems] as const,
+      ['voiceItems', value.voiceItems] as const,
+    ] as const) {
+      const seen = new Set<string>();
+      for (const entry of entries) {
+        if (seen.has(entry.shotId)) {
+          context.addIssue({
+            code: 'custom',
+            message: `${field} 的 shotId 不得重复。`,
+            path: [field],
+          });
+          break;
+        }
+        seen.add(entry.shotId);
+        if (!shotIds.has(entry.shotId)) {
+          context.addIssue({
+            code: 'custom',
+            message: `${field} 引用了不在视频轨中的镜头。`,
+            path: [field],
+          });
+          break;
+        }
+      }
+    }
+  });
 export const importVideoBackgroundMusicInputSchema = z
   .object({ projectId: projectIdSchema, requestId: requestIdSchema })
   .strict();
@@ -287,6 +389,9 @@ export type ListStoryboardVideoStatesInputDto = z.infer<
   typeof listStoryboardVideoStatesInputSchema
 >;
 export type VideoTimelineItemDto = z.infer<typeof videoTimelineItemSchema>;
+export type VideoTimelineVoiceItemDto = z.infer<typeof videoTimelineVoiceItemSchema>;
+export type VideoTimelineAlignmentItemDto = z.infer<typeof videoTimelineAlignmentItemSchema>;
+export type VideoTimelineSubtitleItemDto = z.infer<typeof videoTimelineSubtitleItemSchema>;
 export type VideoAudioAssetSummaryDto = z.infer<typeof videoAudioAssetSummarySchema>;
 export type VideoTimelineSummaryDto = z.infer<typeof videoTimelineSummarySchema>;
 export type VideoExportJobDto = z.infer<typeof videoExportJobSchema>;

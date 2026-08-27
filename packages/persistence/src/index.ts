@@ -13,6 +13,8 @@ export * from './media/sqlite-media-repository';
 export * from './media/sqlite-media-unit-of-work';
 export * from './media/sqlite-video-media-repository';
 export * from './media/sqlite-video-composition-repository';
+export * from './voice/sqlite-voice-generation-repository';
+export * from './voice/sqlite-voice-mapping-repository';
 export * from './project/sqlite-project-unit-of-work';
 export * from './provider/sqlite-provider-unit-of-work';
 export * from './recovery/recovery-manager';

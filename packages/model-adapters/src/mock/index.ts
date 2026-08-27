@@ -16,3 +16,12 @@ export {
   createMockModelError,
 } from './mock-text-model-adapter';
 export type { MockTextModelAdapterOptions, MockTextModelStep } from './mock-text-model-adapter';
+export {
+  encodeMockWav,
+  MOCK_TTS_MIME_TYPE,
+  MOCK_TTS_MS_PER_CHAR,
+  MOCK_TTS_SAMPLE_RATE,
+  MockTtsModelAdapter,
+  MockTtsModelError,
+} from './mock-tts-model-adapter';
+export type { MockTtsModelAdapterOptions, MockTtsSynthesisStep } from './mock-tts-model-adapter';

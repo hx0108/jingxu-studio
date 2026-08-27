@@ -11,6 +11,7 @@ import type {
 } from '@jingxu/contracts';
 
 import { ExportDeviationDialog } from './ExportDeviationDialog';
+import { ImageProviderCardView } from './ImageProviderCard';
 import { OriginalInput } from './OriginalInput';
 import { ProviderSettings } from './ProviderSettings';
 import { StoryboardPanel } from './StoryboardPanel';
@@ -68,6 +69,26 @@ describe('Staged Script Renderer 可观察基线', () => {
     expect(html).toContain('正在读取文本模型状态');
     expect(html).not.toContain('sk-');
     expect(html).not.toContain('已验证');
+  });
+
+  it('模型服务卡使用宽松布局并提供独立配置状态槽', () => {
+    const html = renderToStaticMarkup(
+      <ImageProviderCardView
+        apiKey=""
+        error={null}
+        feedback=""
+        onApiKeyChange={vi.fn()}
+        onDelete={vi.fn()}
+        onSave={vi.fn()}
+        onTest={vi.fn()}
+        pending={false}
+        profile={null}
+      />,
+    );
+    expect(html).toContain('model-service-card');
+    expect(html).toContain('model-service-heading');
+    expect(html).toContain('model-configuration-status');
+    expect(html).toContain('未配置');
   });
 });
 

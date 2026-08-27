@@ -33,7 +33,7 @@ try {
     if (!actionNames.has(expected)) violations.push(`AUDIT:${expected}`);
   }
   const latest = database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get();
-  if (latest?.version !== 19) violations.push(`MIGRATION:${String(latest?.version)}`);
+  if (latest?.version !== 21) violations.push(`MIGRATION:${String(latest?.version)}`);
   if (violations.length > 0) throw new Error(violations.join(','));
   console.log(
     `EVALUATION_AUDIT_OK ${JSON.stringify({ evaluationAudits: actions, seeds: seeds?.total })}`,

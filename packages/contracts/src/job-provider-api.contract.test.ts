@@ -158,4 +158,22 @@ describe('Job Provider Events IPC Contract', () => {
     expect(providerProfileSchema.safeParse({ ...view, provider: 'OPENAI' }).success).toBe(false);
     expect(providerProfileSchema.safeParse({ ...view, apiKey: 'secret' }).success).toBe(false);
   });
+
+  it('Provider 输出—配音档（QWEN_TTS）round-trip、脱敏面不变', () => {
+    const view = {
+      configured: true,
+      enabled: true,
+      last4: '4321',
+      modelId: 'qwen3-tts-instruct-flash',
+      provider: 'QWEN_TTS',
+      region: 'cn-beijing',
+      validated: true,
+      versionId: 'version_12345678',
+      workspaceId: 'dashscope',
+    };
+    expect(providerProfileSchema.safeParse(view).success).toBe(true);
+    expect(providerProfileSchema.parse(view).provider).toBe('QWEN_TTS');
+    expect(providerProfileSchema.safeParse({ ...view, apiKey: 'secret' }).success).toBe(false);
+    expect(providerProfileSchema.safeParse({ ...view, provider: 'ARK_TTS' }).success).toBe(false);
+  });
 });

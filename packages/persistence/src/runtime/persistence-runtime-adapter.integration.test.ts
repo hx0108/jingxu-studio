@@ -226,8 +226,8 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
     await createOnlineBackup({
       backupId: 'backup_invalidaudit',
       clock: () => '2026-08-08T00:00:00.000Z',
-      // 迁移 head 0019 后备份基线包含视频合成与导出表。
-      currentVersion: 19,
+      // 迁移 head 0021 后备份基线包含视频合成/导出与配音时间线表。
+      currentVersion: 21,
       database,
       paths,
     });

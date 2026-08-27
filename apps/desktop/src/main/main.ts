@@ -28,6 +28,10 @@ import {
   type VideoFeatureRegistration,
 } from './composition/register-video-features';
 import {
+  createVoiceFeatureRegistration,
+  type VoiceFeatureRegistration,
+} from './composition/register-voice-features';
+import {
   createProjectFeatureRegistration,
   type ProjectFeatureRegistration,
 } from './composition/register-project-features';
@@ -76,6 +80,7 @@ let transferFeatureRegistration: TransferFeatureRegistration | null = null;
 let evaluationFeatureRegistration: EvaluationFeatureRegistration | null = null;
 let imageFeatureRegistration: ImageFeatureRegistration | null = null;
 let videoFeatureRegistration: VideoFeatureRegistration | null = null;
+let voiceFeatureRegistration: VoiceFeatureRegistration | null = null;
 let shutdownStarted = false;
 
 const createSafeStorageFacade = (): SafeStorageFacade => ({
@@ -331,6 +336,15 @@ if (!singleInstanceLockAcquired) {
           audioImportFile: process.env.JINGXU_E2E_VIDEO_AUDIO_FILE,
           useE2eMock: process.env.JINGXU_E2E === '1',
         });
+        voiceFeatureRegistration = createVoiceFeatureRegistration({
+          clock: () => new Date().toISOString(),
+          ipcRegistrar,
+          managedRoot,
+          persistenceRuntime,
+          safeStorage: createSafeStorageFacade(),
+          trustedUrl: getTrustedUrl(),
+          useE2eMock: process.env.JINGXU_E2E === '1',
+        });
         const producibilityUnitOfWork = persistenceRuntime.getScriptUnitOfWork();
         const producibilityService =
           producibilityUnitOfWork === null
@@ -377,6 +391,7 @@ if (!singleInstanceLockAcquired) {
           evaluationFeatureRegistration?.ensureRegistered();
           imageFeatureRegistration?.ensureRegistered();
           videoFeatureRegistration?.ensureRegistered();
+          voiceFeatureRegistration?.ensureRegistered();
         });
         projectFeatureRegistration.ensureRegistered();
         jobProviderFeatureRegistration.ensureRegistered();
@@ -386,6 +401,7 @@ if (!singleInstanceLockAcquired) {
         evaluationFeatureRegistration.ensureRegistered();
         imageFeatureRegistration.ensureRegistered();
         videoFeatureRegistration.ensureRegistered();
+        voiceFeatureRegistration.ensureRegistered();
       }
       await createMainWindow();
     })
@@ -406,6 +422,7 @@ if (!singleInstanceLockAcquired) {
       shutdownStarted = true;
       void imageFeatureRegistration?.stop();
       void videoFeatureRegistration?.stop();
+      void voiceFeatureRegistration?.stop();
       void jobProviderFeatureRegistration.stop().finally(() => {
         app.quit();
       });
@@ -418,6 +435,7 @@ if (!singleInstanceLockAcquired) {
     transferFeatureRegistration = null;
     imageFeatureRegistration = null;
     videoFeatureRegistration = null;
+    voiceFeatureRegistration = null;
     persistenceRuntime?.close();
     persistenceRuntime = null;
   });

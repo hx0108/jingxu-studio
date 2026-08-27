@@ -258,11 +258,14 @@ test(compositionE2eName, async () => {
         }));
         const saved = await window.jingxu.video.updateTimeline({
           audioAssetId: audio.data.id,
+          audioVolume: 0.2,
           episodeId,
           expectedVersionId: created.data.id,
           items: reordered,
           projectId,
           requestId: `composition_timeline_save_${crypto.randomUUID()}`,
+          subtitleItems: [],
+          voiceItems: [],
         });
         if (!saved.ok) throw new Error(saved.error.code);
         const started = await window.jingxu.video.startExport({
@@ -354,11 +357,14 @@ test('E2E-V2-VIDEO-COMPOSE-FAILURE—FFmpeg 缺失时无假成功或部分 MP4',
         if (!created.ok) throw new Error(created.error.code);
         const invalidTimeline = await window.jingxu.video.updateTimeline({
           audioAssetId: null,
+          audioVolume: 0.2,
           episodeId: workspace.data.episode.id,
           expectedVersionId: created.data.id,
           items: created.data.items.map((item) => ({ ...item, trimInMs: 500, trimOutMs: 500 })),
           projectId,
           requestId: `composition_failure_trim_${crypto.randomUUID()}`,
+          subtitleItems: [],
+          voiceItems: [],
         });
         if (invalidTimeline.ok || invalidTimeline.error.code !== 'VIDEO_TRIM_INVALID')
           throw new Error('E2E_INVALID_TRIM_NOT_BLOCKED');

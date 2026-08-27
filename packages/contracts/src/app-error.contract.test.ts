@@ -30,6 +30,10 @@ describe('AppError / AppResult Contract', () => {
         'PROVIDER_CREDENTIAL_UNAVAILABLE',
         'PROVIDER_CALL_FAILED',
         'MEDIA_FIRST_FRAME_NOT_SELECTED',
+        'VOICE_PROVIDER_NOT_CONFIGURED',
+        'VOICE_MAPPING_MISSING',
+        'VOICE_CANDIDATE_STALE',
+        'VOICE_ALIGNMENT_BLOCKED',
       ];
       for (const code of codes) {
         expect(projectErrorCodeSchema.parse(code)).toBe(code);

@@ -31,6 +31,9 @@ describe('VideoCompositionPanel', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*name="start-video-export"/u);
     expect(html).not.toContain('ffmpeg');
     expect(html).not.toContain('C:');
+    // 未载入时间线：BGM 音量与对齐摘要均不渲染（对齐摘要随版本数据出现）。
+    expect(html).not.toContain('bgm-volume');
+    expect(html).not.toContain('对齐摘要');
   });
 
   it('运行、失败、取消与成功—仅展示稳定状态和受限预览 URL', () => {

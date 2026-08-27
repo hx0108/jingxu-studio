@@ -41,76 +41,104 @@ export const VideoProviderCardView = ({
   pending,
   profile,
 }: VideoProviderCardViewProps) => (
-  <section className="script-card" aria-labelledby="video-provider-title">
-    <h2 id="video-provider-title">视频模型服务（火山方舟 ARK）</h2>
-    <p>
-      用于逐镜头视频段生成（Seedance 首帧图生视频）。选择模型后自行保存 ARK API Key；完整 Key
-      不回显、不进入页面长期状态。
-    </p>
-    {error !== null && (
-      <p className="field-error" role="alert">
-        {error.code}：{error.message}
+  <details className="script-card model-service-card">
+    <summary className="model-service-heading">
+      <span aria-hidden="true" className="model-service-mark">
+        视
+      </span>
+      <div>
+        <p className="eyebrow">视频模型</p>
+        <h2 id="video-provider-title">火山方舟 ARK</h2>
+      </div>
+      <span
+        className={`model-configuration-status${profile?.configured === true ? ' configured' : ''}`}
+      >
+        {profile?.configured === true ? '已配置' : '未配置'}
+      </span>
+      <span className="model-current-summary">
+        <small>当前模型</small>
+        <strong>{VIDEO_MODELS.find((model) => model.id === modelId)?.label ?? modelId}</strong>
+      </span>
+      <span className="model-credential-summary">
+        <small>凭据</small>
+        <strong>
+          {profile?.configured === true
+            ? `已安全保存 · 末四位 ${profile.last4 ?? '不可用'}`
+            : '尚未保存'}
+        </strong>
+      </span>
+      <span className="model-manage-label">管理配置</span>
+    </summary>
+    <div className="model-service-body" aria-labelledby="video-provider-title">
+      <p>
+        用于逐镜头视频段生成（Seedance 首帧图生视频）。选择模型后自行保存 ARK API Key；完整 Key
+        不回显、不进入页面长期状态。
       </p>
-    )}
-    <label>
-      模型
-      <select
-        disabled={pending}
-        onChange={(event) => {
-          onModelChange(event.target.value);
-        }}
-        value={modelId}
-      >
-        {VIDEO_MODELS.map((model) => (
-          <option key={model.id} value={model.id}>
-            {model.label}
-          </option>
-        ))}
-      </select>
-    </label>
-    <label>
-      ARK API Key
-      <input
-        autoComplete="new-password"
-        onChange={(event) => {
-          onApiKeyChange(event.target.value);
-        }}
-        type="password"
-        value={apiKey}
-      />
-    </label>
-    <div className="script-actions">
-      <button
-        disabled={pending || profile?.modelId === modelId}
-        onClick={onModelSave}
-        type="button"
-      >
-        保存模型选择
-      </button>
-      <button disabled={pending || apiKey === ''} onClick={onSave} type="button">
-        保存凭据
-      </button>
-      <button disabled={pending || profile?.configured !== true} onClick={onTest} type="button">
-        测试凭据
-      </button>
-      <button
-        className="danger-button"
-        disabled={pending || profile?.configured !== true}
-        onClick={onDelete}
-        type="button"
-      >
-        删除凭据
-      </button>
+      {error !== null && (
+        <p className="field-error" role="alert">
+          {error.code}：{error.message}
+        </p>
+      )}
+      <label>
+        模型
+        <select
+          disabled={pending}
+          onChange={(event) => {
+            onModelChange(event.target.value);
+          }}
+          value={modelId}
+        >
+          {VIDEO_MODELS.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label>
+        ARK API Key
+        <input
+          autoComplete="new-password"
+          onChange={(event) => {
+            onApiKeyChange(event.target.value);
+          }}
+          type="password"
+          value={apiKey}
+        />
+      </label>
+      <div className="script-actions">
+        <button
+          disabled={pending || profile?.modelId === modelId}
+          onClick={onModelSave}
+          type="button"
+        >
+          保存模型选择
+        </button>
+        <button disabled={pending || apiKey === ''} onClick={onSave} type="button">
+          保存凭据
+        </button>
+        <button disabled={pending || profile?.configured !== true} onClick={onTest} type="button">
+          测试凭据
+        </button>
+        <button
+          className="danger-button"
+          disabled={pending || profile?.configured !== true}
+          onClick={onDelete}
+          type="button"
+        >
+          删除凭据
+        </button>
+      </div>
+      <p aria-live="polite">
+        {profile?.configured === true ? `已配置（末四位 ${profile.last4 ?? '不可用'}）` : '未配置'}
+        {feedback === '' ? '' : ` · ${feedback}`}
+      </p>
+      <p className="action-hint">
+        测试仅验证密文可解密读取，不发起计费请求，也不代表模型已开通。若生成提示模型不可用，请在火山方舟为该
+        API Key 开通所选模型或配置接入点。
+      </p>
     </div>
-    <p aria-live="polite">
-      {profile?.configured === true ? `已配置（末四位 ${profile.last4 ?? '不可用'}）` : '未配置'}
-      {feedback === '' ? '' : ` · ${feedback}`}
-    </p>
-    <p className="action-hint">
-      测试仅验证密文可解密读取，不发起计费请求，也不代表模型已开通。若生成提示模型不可用，请在火山方舟为该
-      API Key 开通所选模型或配置接入点。
-    </p>
-  </section>
+  </details>
 );
 
 export const VideoProviderCard = () => {

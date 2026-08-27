@@ -8,6 +8,7 @@ import type { EventsApi, JobApi, ProviderApi } from './job-provider-api';
 import type { ScriptApi } from './script-api';
 import type { StoryboardApi } from './storyboard-api';
 import type { VideoApi } from './video-api';
+import type { VoiceApi } from './voice-api';
 import type { TransferApi } from './transfer-api';
 
 export const startupStateSchema = z.enum([
@@ -136,6 +137,7 @@ export * from './script-api';
 export * from './stage';
 export * from './storyboard-api';
 export * from './video-api';
+export * from './voice-api';
 export * from './transfer-api';
 
 export interface JingxuApi {
@@ -150,6 +152,7 @@ export interface JingxuApi {
   readonly script: ScriptApi;
   readonly storyboard: StoryboardApi;
   readonly video: VideoApi;
+  readonly voice: VoiceApi;
   readonly transfer: TransferApi;
 }
 

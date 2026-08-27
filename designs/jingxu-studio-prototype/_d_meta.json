@@ -9,7 +9,7 @@
           "path": "index.html",
           "createdAt": "2026-08-25T08:16:06.141Z",
           "status": "needs-review",
-          "subtitle": "修复本地文件直接打开",
+          "subtitle": "模型服务左对齐与状态标签溢出修复",
           "viewport": {
             "width": 1728,
             "height": 1080
@@ -19,5 +19,5 @@
     }
   },
   "createdAt": "2026-08-25T08:16:06.155Z",
-  "updatedAt": "2026-08-25T10:05:22.159Z"
+  "updatedAt": "2026-08-25T15:55:29.209Z"
 }

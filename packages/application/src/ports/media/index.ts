@@ -3,8 +3,11 @@ export type {
   VideoAudioAssetRecord,
   VideoCompositionRepositories,
   VideoCompositionRepository,
+  VideoTimelineAlignmentItemDto,
   VideoExportJobRecord,
+  VideoTimelineSubtitleItemInput,
   VideoTimelineVersionRecord,
+  VideoTimelineWriteTracks,
 } from './video-composition-repository';
 export type { MediaModelPort } from './media-model-port';
 export type {

@@ -1,4 +1,4 @@
 - [x] 固定六组 E2E ID、执行顺序和证据字段。
 - [x] 交付 ≤5 分钟任务脚本、试用记录、Bad Case、V2 决策模板。
 - [x] 统一 Electron AC-V1-01～06 全量通过并生成证据包。
-- [ ] 组织三名目标用户独立试用并记录结果。
+- [ ] 组织三名目标用户独立试用并记录结果。（2026-08-27 试用包已就绪：固定构建 SHA-256 `E60F9075…`、AC 自动化证据包 [`docs/v1-acceptance/evidence/2026-08-27`](../../docs/v1-acceptance/evidence/2026-08-27/)（7 规格 0 failed）、组织单 [`docs/v1-acceptance/trials/2026-08-27/session-plan.md`](../../docs/v1-acceptance/trials/2026-08-27/session-plan.md)；仅剩参与者代号与时间槽两项外部确认）

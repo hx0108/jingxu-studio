@@ -104,6 +104,22 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
     '检查时间线后使用新的请求重新导出。',
   ],
   VIDEO_EXPORT_WRITE_FAILED: ['导出文件写入失败', '检查保存位置可用后重试。'],
+  VIDEO_VOICE_MAPPING_STALE: [
+    '音色映射已变更',
+    '重新生成配音候选，或在音色映射中恢复原音色后重试。',
+  ],
+  VOICE_PROVIDER_NOT_CONFIGURED: ['语音服务尚未配置', '先在设置中完成语音模型服务配置。'],
+  VOICE_MAPPING_MISSING: ['音色映射不完整', '在音色映射中补齐所有说话人后重试。'],
+  VOICE_CANDIDATE_STALE: ['配音候选已过期', '重新生成候选后再选择。'],
+  VOICE_ALIGNMENT_BLOCKED: [
+    '配音时长远超镜头，已阻断导出',
+    '返回分镜层调整镜头时长，或强制裁剪（对白将不完整）。',
+  ],
+  VOICE_ALIGNMENT_OVERRIDE_INVALID: [
+    '对齐处理方式与当前偏差不匹配',
+    '按提示选择该镜头支持的覆盖方式，或清除覆盖后重试。',
+  ],
+  SUBTITLE_SOURCE_STALE: ['字幕内容已过期', '重新生成时间线同步最新台词后再导出。'],
   TRANSFER_BUNDLE_INVALID: ['项目快照格式无效', '选择有效的 ProjectTransferBundle 文件后重试。'],
   TRANSFER_BUNDLE_UNSUPPORTED: ['项目快照版本不受支持', '使用当前版本导出的 Bundle 后重试。'],
   TRANSFER_FILE_READ_FAILED: ['项目快照读取失败', '检查文件权限后重试。'],

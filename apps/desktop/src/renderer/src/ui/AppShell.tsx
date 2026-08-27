@@ -4,14 +4,14 @@ export type GlobalArea =
   'home' | 'projects' | 'workspace' | 'assets' | 'tasks' | 'exports' | 'evaluation' | 'settings';
 
 const GLOBAL_AREAS: readonly [GlobalArea, string, string][] = [
-  ['home', '首页', '⌂'],
-  ['projects', '我的项目', '▦'],
-  ['workspace', '创作工作台', '✦'],
-  ['assets', '素材库', '◇'],
-  ['tasks', '生成任务', '◌'],
-  ['exports', '导出记录', '⇩'],
-  ['evaluation', '质量与评测', '✓'],
-  ['settings', '设置', '⚙'],
+  ['home', '首页', '首'],
+  ['projects', '我的项目', '项'],
+  ['workspace', '创作工作台', '创'],
+  ['assets', '素材库', '素'],
+  ['tasks', '生成任务', '任'],
+  ['exports', '导出记录', '出'],
+  ['evaluation', '质量与评测', '质'],
+  ['settings', '设置', '设'],
 ];
 
 export interface AppShellProps {
@@ -54,6 +54,7 @@ export const AppShell = ({ activeArea, children, onNavigate, projectName }: AppS
       <div className="sidebar-project-context">
         <small>当前项目</small>
         <strong>{projectName ?? '尚未选择项目'}</strong>
+        {projectName !== null && projectName !== undefined && <span>第 1 集 · 竖屏 9:16</span>}
       </div>
     </aside>
     <section className="app-content">{children}</section>

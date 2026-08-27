@@ -10,6 +10,8 @@ import {
   updateVideoTimelineInputSchema,
   videoCandidateMediaUrl,
   videoCandidateViewSchema,
+  videoTimelineSubtitleItemSchema,
+  videoTimelineVoiceItemSchema,
   videoExportJobSchema,
   videoTimelineSummarySchema,
 } from './video-api';
@@ -146,8 +148,22 @@ describe('video-api contracts', () => {
       trimInMs: 0,
       trimOutMs: 5000,
     };
+    const alignmentItem = {
+      audioDurationMs: 5300,
+      category: 'SLIGHTLY_LONG',
+      dialogueComplete: true,
+      extendedMs: 300,
+      manualOverride: null,
+      rulesVersion: 'jingxu-voice-alignment-rules/1',
+      shotDurationMs: 5000,
+      shotId,
+      storyboardFallback: false,
+      strategy: 'FREEZE_EXTEND',
+    };
     const timeline = {
+      alignmentItems: [alignmentItem],
       audioAsset: null,
+      audioVolume: 0.2,
       createdAt: iso,
       episodeId: 'episode_00001',
       episodeVersionId: 'epver_00000001',
@@ -156,8 +172,10 @@ describe('video-api contracts', () => {
       inputHash: hash,
       items: [item],
       parentVersionId: null,
+      subtitleItems: [],
       totalDurationMs: 5000,
       versionNo: 1,
+      voiceItems: [],
     };
     expect(videoTimelineSummarySchema.safeParse(timeline).success).toBe(true);
     expect(
@@ -170,6 +188,63 @@ describe('video-api contracts', () => {
         requestId,
       }).success,
     ).toBe(true);
+    // 旧调用兼容：缺省 voiceItems/subtitleItems/audioVolume 由 zod 回填（D6 双兜底）。
+    const defaulted = updateVideoTimelineInputSchema.parse({
+      audioAssetId: null,
+      episodeId: timeline.episodeId,
+      expectedVersionId: timeline.id,
+      items: [{ ...item, trimInMs: 5000, trimOutMs: 5000 }],
+      projectId,
+      requestId,
+    });
+    expect(defaulted.audioVolume).toBe(0.2);
+    expect(defaulted.subtitleItems).toEqual([]);
+    expect(defaulted.voiceItems).toEqual([]);
+    // 两轨条目必须锚定视频轨镜头集合；越界镜头与重复 shotId 均拒绝。
+    const voiceItem = {
+      candidateId: id,
+      enabled: true,
+      fileSha256: hash,
+      generationInputHash: hash,
+      offsetMs: 0,
+      shotId,
+      trimInMs: 0,
+      trimOutMs: 4000,
+      volume: 1,
+    };
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items: [item],
+        projectId,
+        requestId,
+        voiceItems: [voiceItem],
+      }).success,
+    ).toBe(true);
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items: [item],
+        projectId,
+        requestId,
+        voiceItems: [{ ...voiceItem, shotId: 'shot_99999999' }],
+      }).success,
+    ).toBe(false);
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items: [item],
+        projectId,
+        requestId,
+        voiceItems: [voiceItem, { ...voiceItem, offsetMs: 100 }],
+      }).success,
+    ).toBe(false);
     expect(
       startVideoExportInputSchema.safeParse({
         episodeId: timeline.episodeId,
@@ -289,6 +364,43 @@ describe('video-api contracts', () => {
         ...states,
         shots: [{ ...states.shots[0], activeTaskPhase: 'RUNNING' }],
       }).success,
+    ).toBe(false);
+  });
+
+  it('配音轨条目—合法输入通过、音量越界与负偏移拒绝', () => {
+    const voiceItem = {
+      candidateId: id,
+      enabled: true,
+      fileSha256: hash,
+      generationInputHash: hash,
+      offsetMs: 0,
+      shotId,
+      trimInMs: 0,
+      trimOutMs: 3200,
+      volume: 1,
+    };
+    expect(videoTimelineVoiceItemSchema.safeParse(voiceItem).success).toBe(true);
+    expect(videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, volume: 1.01 }).success).toBe(
+      false,
+    );
+    expect(videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, offsetMs: -1 }).success).toBe(
+      false,
+    );
+  });
+
+  it('字幕轨条目—安全区百分比整数 0–20 之外拒绝', () => {
+    const subtitleItem = {
+      enabled: true,
+      safeAreaPct: 5,
+      shotId,
+      spokenTextSha256: hash,
+    };
+    expect(videoTimelineSubtitleItemSchema.safeParse(subtitleItem).success).toBe(true);
+    expect(
+      videoTimelineSubtitleItemSchema.safeParse({ ...subtitleItem, safeAreaPct: 21 }).success,
+    ).toBe(false);
+    expect(
+      videoTimelineSubtitleItemSchema.safeParse({ ...subtitleItem, safeAreaPct: 5.5 }).success,
     ).toBe(false);
   });
 });

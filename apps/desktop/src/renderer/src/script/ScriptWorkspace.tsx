@@ -540,10 +540,26 @@ export const ScriptWorkspaceView = ({
         flow={
           <>
             <div className="flow-heading">
-              <small>剧本开发</small>
-              <strong>5 个创作阶段</strong>
+              <small>当前作品</small>
+              <strong>六阶段创作流程</strong>
             </div>
-            <nav aria-label="五阶段剧本" className="stage-navigation">
+            <div className="production-phase done">
+              <span className="stage-index">01</span>
+              <span className="stage-copy">
+                <strong>创作输入</strong>
+                <small>已完成</small>
+              </span>
+              <span aria-hidden="true" className="phase-indicator" />
+            </div>
+            <div className="production-phase active">
+              <span className="stage-index">02</span>
+              <span className="stage-copy">
+                <strong>剧本开发</strong>
+                <small>{workspaceStatusLabel(current?.status)}</small>
+              </span>
+              <span aria-hidden="true" className="phase-indicator" />
+            </div>
+            <nav aria-label="五阶段剧本" className="stage-navigation script-substage-navigation">
               {STAGES.map(([stage, label]) => {
                 const item = workspace.stages.find((candidate) => candidate.stage === stage);
                 return (
@@ -569,24 +585,21 @@ export const ScriptWorkspaceView = ({
               })}
             </nav>
             <div className="flow-divider" />
-            <ol className="production-step-list" start={2}>
-              <li>
-                <span>分镜设计</span>
-                <small>{workspaceStatusLabel(workspace.storyboard.current?.status)}</small>
-              </li>
-              <li>
-                <span>画面生成</span>
-                <small>按镜头推进</small>
-              </li>
-              <li>
-                <span>视频生成</span>
-                <small>按镜头推进</small>
-              </li>
-              <li>
-                <span>合成导出</span>
-                <small>分镜确认后开放</small>
-              </li>
-            </ol>
+            {[
+              ['03', '分镜设计', workspaceStatusLabel(workspace.storyboard.current?.status)],
+              ['04', '画面生成', '按镜头推进'],
+              ['05', '视频生成', '按镜头推进'],
+              ['06', '合成导出', '分镜确认后开放'],
+            ].map(([index, label, status]) => (
+              <div className="production-phase" key={index}>
+                <span className="stage-index">{index}</span>
+                <span className="stage-copy">
+                  <strong>{label}</strong>
+                  <small>{status}</small>
+                </span>
+                <span aria-hidden="true" className="phase-indicator" />
+              </div>
+            ))}
           </>
         }
         inspector={
@@ -851,75 +864,77 @@ export const ScriptWorkspaceView = ({
           </section>
         </section>
       </WorkspaceLayout>
-      <StoryboardPanel
-        batchBusy={batchBusy}
-        episodeTargetDurationSec={workspace.episode.targetDurationSec}
-        exportNotice={exportNotice}
-        generateHint={storyboardGenerateHint}
-        imageStates={imageStates.states}
-        job={job}
-        onBatchCancel={cancelBatch}
-        onBatchRetryFailed={retryFailedShots}
-        onGenerateVideos={generateVideos}
-        onVideoBatchCancel={cancelVideoBatch}
-        onVideoBatchRetryFailed={retryFailedVideoShots}
-        onConfirm={() => {
-          if (globalThis.confirm('确认当前整集分镜为可用版本？')) {
-            const currentStoryboard = workspace.storyboard.current;
-            if (currentStoryboard !== null) {
-              void performStoryboardCommand('confirm', currentStoryboard);
+      {sceneScriptCurrent?.status === 'READY' && (
+        <StoryboardPanel
+          batchBusy={batchBusy}
+          episodeTargetDurationSec={workspace.episode.targetDurationSec}
+          exportNotice={exportNotice}
+          generateHint={storyboardGenerateHint}
+          imageStates={imageStates.states}
+          job={job}
+          onBatchCancel={cancelBatch}
+          onBatchRetryFailed={retryFailedShots}
+          onGenerateVideos={generateVideos}
+          onVideoBatchCancel={cancelVideoBatch}
+          onVideoBatchRetryFailed={retryFailedVideoShots}
+          onConfirm={() => {
+            if (globalThis.confirm('确认当前整集分镜为可用版本？')) {
+              const currentStoryboard = workspace.storyboard.current;
+              if (currentStoryboard !== null) {
+                void performStoryboardCommand('confirm', currentStoryboard);
+              }
             }
-          }
-        }}
-        onExportEpisode={(format) => {
-          void performStoryboardExport({ format });
-        }}
-        onExportSnapshot={() => {
-          void performTransferExport(false);
-        }}
-        onRestoreSnapshot={() => {
-          void performTransferRestore();
-        }}
-        snapshotNotice={snapshotNotice}
-        onGenerate={() => {
-          if (sceneScriptCurrent?.status !== 'READY') return;
-          setError(null);
-          void getJobClient()
-            .create({
-              episodeId: workspace.episode.id,
-              expectedInputVersionId: sceneScriptCurrent.id,
-              idempotencyKey: createScriptRequestId('storyboard-job-idempotency'),
-              operationType: 'GENERATE',
-              projectId,
-              requestId: createScriptRequestId('storyboard-job-create'),
-              stage: 'SHOT_CONTRACT',
-            })
-            .then((result) => {
-              if (result.ok) setJob(result.data);
-              else setError(result.error);
-            });
-        }}
-        onGenerateFirstFrames={generateFirstFrames}
-        onEditShot={(input) => {
-          void performShotEditLockCommand(() => getStoryboardClient().editShot(input));
-        }}
-        onLockShot={(input) => {
-          void performShotEditLockCommand(() => getStoryboardClient().lockShot(input));
-        }}
-        onUnlockShot={(input) => {
-          void performShotEditLockCommand(() => getStoryboardClient().unlockShot(input));
-        }}
-        onRestore={(version) => {
-          if (globalThis.confirm(`基于 v${String(version.versionNo)} 创建新的 DRAFT 整集？`)) {
-            void performStoryboardCommand('restore', version);
-          }
-        }}
-        pending={pending}
-        projectId={projectId}
-        storyboard={workspace.storyboard}
-        videoBatchBusy={videoBatchBusy}
-        videoStates={videoStates.states}
-      />
+          }}
+          onExportEpisode={(format) => {
+            void performStoryboardExport({ format });
+          }}
+          onExportSnapshot={() => {
+            void performTransferExport(false);
+          }}
+          onRestoreSnapshot={() => {
+            void performTransferRestore();
+          }}
+          snapshotNotice={snapshotNotice}
+          onGenerate={() => {
+            if (sceneScriptCurrent.status !== 'READY') return;
+            setError(null);
+            void getJobClient()
+              .create({
+                episodeId: workspace.episode.id,
+                expectedInputVersionId: sceneScriptCurrent.id,
+                idempotencyKey: createScriptRequestId('storyboard-job-idempotency'),
+                operationType: 'GENERATE',
+                projectId,
+                requestId: createScriptRequestId('storyboard-job-create'),
+                stage: 'SHOT_CONTRACT',
+              })
+              .then((result) => {
+                if (result.ok) setJob(result.data);
+                else setError(result.error);
+              });
+          }}
+          onGenerateFirstFrames={generateFirstFrames}
+          onEditShot={(input) => {
+            void performShotEditLockCommand(() => getStoryboardClient().editShot(input));
+          }}
+          onLockShot={(input) => {
+            void performShotEditLockCommand(() => getStoryboardClient().lockShot(input));
+          }}
+          onUnlockShot={(input) => {
+            void performShotEditLockCommand(() => getStoryboardClient().unlockShot(input));
+          }}
+          onRestore={(version) => {
+            if (globalThis.confirm(`基于 v${String(version.versionNo)} 创建新的 DRAFT 整集？`)) {
+              void performStoryboardCommand('restore', version);
+            }
+          }}
+          pending={pending}
+          projectId={projectId}
+          storyboard={workspace.storyboard}
+          videoBatchBusy={videoBatchBusy}
+          videoStates={videoStates.states}
+        />
+      )}
       <DirtyLeaveDialog
         onCancel={() => {
           setPendingStage(null);

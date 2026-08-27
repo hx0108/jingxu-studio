@@ -124,7 +124,6 @@ function Topbar({ stageLabel, density, setDensity, inspectorOpen, setInspectorOp
     <header className="topbar">
       <div>
         <div className="breadcrumbs"><span>创作工作台</span><i></i><strong>{stageLabel}</strong></div>
-        <p>项目进度自动保存 · 最近保存于刚刚</p>
       </div>
       <div className="top-actions">
         <div className="density-switch" aria-label="布局密度">
