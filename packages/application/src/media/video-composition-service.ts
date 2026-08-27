@@ -77,6 +77,14 @@ export interface VideoComposerVoiceInput {
   readonly volume: number;
 }
 
+/** 启用中的字幕条（烧录层输入）；spokenText 明文仅存于 Main 边界内，不入日志/审计行。 */
+export interface VideoComposerSubtitleInput {
+  readonly endMs: number;
+  readonly safeAreaPct: number;
+  readonly spokenText: string;
+  readonly startMs: number;
+}
+
 export interface VideoComposerPort {
   compose(input: {
     readonly audioStorageRelPath: string | null;
@@ -95,6 +103,8 @@ export interface VideoComposerPort {
     readonly exportJobId: string;
     readonly projectId: string;
     readonly signal: AbortSignal;
+    /** 非空即走滤镜图合成路径并烧录字幕（v2-voice-audio-timeline §6.2）。 */
+    readonly subtitles?: readonly VideoComposerSubtitleInput[] | undefined;
     /** 非空即走滤镜图合成路径（v2-voice-audio-timeline §6.1）。 */
     readonly voices?: readonly VideoComposerVoiceInput[] | undefined;
     readonly width: number;
@@ -597,6 +607,8 @@ export const createVideoCompositionService = (
       const extendedByShot = new Map(
         timeline.alignmentItems.map((row) => [row.shotId, row.extendedMs]),
       );
+      // 镜头在成片时间轴上的窗口（含延展）与合成片段序一致；字幕条按此窗口落位。
+      const clipSpans = new Map<string, { readonly endMs: number; readonly startMs: number }>();
       const clips = await dependencies.mediaUnitOfWork.run(async ({ video }) => {
         const values = [] as {
           extendedMs: number;
@@ -604,6 +616,7 @@ export const createVideoCompositionService = (
           trimInMs: number;
           trimOutMs: number;
         }[];
+        let cursorMs = 0;
         for (const item of timeline.items) {
           if (!item.enabled) continue;
           const candidate = await video.findCandidateById(input.projectId, item.candidateId);
@@ -616,8 +629,14 @@ export const createVideoCompositionService = (
             candidate.storageRelPath === null
           )
             throw new Error('VIDEO_SOURCE_STALE');
+          const extendedMs = extendedByShot.get(item.shotId) ?? 0;
+          clipSpans.set(item.shotId, {
+            endMs: cursorMs + (item.trimOutMs - item.trimInMs) + extendedMs,
+            startMs: cursorMs,
+          });
+          cursorMs += item.trimOutMs - item.trimInMs + extendedMs;
           values.push({
-            extendedMs: extendedByShot.get(item.shotId) ?? 0,
+            extendedMs,
             storageRelPath: candidate.storageRelPath,
             trimInMs: item.trimInMs,
             trimOutMs: item.trimOutMs,
@@ -652,6 +671,36 @@ export const createVideoCompositionService = (
         timeline.audioAsset === null
           ? null
           : await composition.findAudioAsset(input.projectId, timeline.audioAsset.id);
+      // 字幕装配（§6.2）：导出时从当前工作区重新读取台词明文并核对冻结哈希，
+      // 漂移即稳定码终止（不烧录过期字幕）。明文仅在本边界内传给 Main Adapter。
+      const subtitles: VideoComposerSubtitleInput[] = [];
+      if (timeline.subtitleItems.some((sub) => sub.enabled)) {
+        const workspace = await getWorkspace(input.projectId, input.episodeId);
+        if (workspace === null) throw new Error('SUBTITLE_SOURCE_STALE');
+        for (const sub of timeline.subtitleItems) {
+          if (!sub.enabled) continue;
+          const span = clipSpans.get(sub.shotId);
+          const shot = workspace.storyboard.currentShots.find(
+            (entry) => entry.shotId === sub.shotId,
+          );
+          const text =
+            shot === undefined
+              ? null
+              : (extractVoiceShotFields(shot.version.document)?.spokenText ?? null);
+          if (
+            span === undefined ||
+            text === null ||
+            dependencies.hashText(text) !== sub.spokenTextSha256
+          )
+            throw new Error('SUBTITLE_SOURCE_STALE');
+          subtitles.push({
+            endMs: span.endMs,
+            safeAreaPct: sub.safeAreaPct,
+            spokenText: text,
+            startMs: span.startMs,
+          });
+        }
+      }
       await composition.updateExportStatus(jobId, 'VALIDATING');
       const result = await dependencies.composer.compose({
         audioStorageRelPath: audio?.storageRelPath ?? null,
@@ -662,6 +711,7 @@ export const createVideoCompositionService = (
         height: profile.height,
         projectId: input.projectId,
         signal: controller.signal,
+        subtitles,
         voices,
         width: profile.width,
       });

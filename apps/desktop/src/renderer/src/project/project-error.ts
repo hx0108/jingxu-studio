@@ -119,6 +119,7 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
     '对齐处理方式与当前偏差不匹配',
     '按提示选择该镜头支持的覆盖方式，或清除覆盖后重试。',
   ],
+  SUBTITLE_SOURCE_STALE: ['字幕内容已过期', '重新生成时间线同步最新台词后再导出。'],
   TRANSFER_BUNDLE_INVALID: ['项目快照格式无效', '选择有效的 ProjectTransferBundle 文件后重试。'],
   TRANSFER_BUNDLE_UNSUPPORTED: ['项目快照版本不受支持', '使用当前版本导出的 Bundle 后重试。'],
   TRANSFER_FILE_READ_FAILED: ['项目快照读取失败', '检查文件权限后重试。'],

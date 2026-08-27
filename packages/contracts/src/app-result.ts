@@ -105,6 +105,8 @@ export const projectErrorCodeSchema = z.enum([
   'VOICE_ALIGNMENT_BLOCKED',
   // 人工覆盖与偏差类别不构成 PRD §10.7.1 合法组合。
   'VOICE_ALIGNMENT_OVERRIDE_INVALID',
+  // 导出时冻结的 spoken_text_sha256 ≠ 当前工作区台词（字幕来源失效）。
+  'SUBTITLE_SOURCE_STALE',
   // V2 批量首帧（batch-first-frame-generation §5.1 批次编排稳定码）。
   'MEDIA_BATCH_NOT_FOUND',
   'MEDIA_BATCH_ALREADY_RUNNING',

@@ -202,13 +202,80 @@ export const buildExtendedVideoFilterGraph = ({
 };
 
 /**
- * 路径判据（“无配音导出与现状一致”回归锁）：无配音且零延展 → concat demuxer
- * 现状路径不动；否则走滤镜图路径（配音混音/静帧延展无法用 demuxer 表达）。
+ * 路径判据（“无配音导出与现状一致”回归锁）：无配音、零延展且无字幕 → concat
+ * demuxer 现状路径不动；否则走滤镜图路径（混音/静帧延展/字幕烧录均无法用
+ * demuxer 表达）。
  */
 export const usesFilterGraphPath = (
   clips: readonly Readonly<{ extendedMs?: number | undefined }>[],
   voiceCount: number,
-): boolean => voiceCount > 0 || clips.some((clip) => (clip.extendedMs ?? 0) > 0);
+  subtitleCount = 0,
+): boolean =>
+  voiceCount > 0 || subtitleCount > 0 || clips.some((clip) => (clip.extendedMs ?? 0) > 0);
+
+export interface SubtitleAssCueSpec {
+  readonly endMs: number;
+  readonly safeAreaPct: number;
+  readonly spokenText: string;
+  readonly startMs: number;
+}
+
+/** 字幕样式常量：与服务端 DEFAULT_SUBTITLE_STYLE_SNAPSHOT_JSON 冻结快照一一对应。 */
+const SUBTITLE_FONT_FAMILY = 'Noto Sans SC';
+
+/** h:mm:ss.cc（libass 时间戳约定：小时不补零，厘秒两位）。 */
+const assTimestamp = (ms: number): string => {
+  const totalCentiseconds = Math.max(0, Math.round(ms / 10));
+  const centiseconds = totalCentiseconds % 100;
+  const totalSeconds = Math.floor(totalCentiseconds / 100);
+  const second = totalSeconds % 60;
+  const minute = Math.floor(totalSeconds / 60) % 60;
+  const hour = Math.floor(totalSeconds / 3600);
+  return `${String(hour)}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
+};
+
+/** Dialogue 文本段规整：换行转 \N；花括号替换防 override 注入；文本为末字段可含逗号。 */
+const assEscapeText = (text: string): string =>
+  text.replaceAll('\r', '').replaceAll('\n', '\\N').replaceAll('{', '(').replaceAll('}', ')');
+
+/**
+ * subtitle_items → 临时 ASS 内容（v2 §6.2）：PlayRes 取输出分辨率，字号/边距由
+ * 安全区百分比确定推导，保证同输入字节级一致（临时文件随导出结束清理）。
+ */
+export const buildSubtitleAss = (
+  subtitles: readonly SubtitleAssCueSpec[],
+  dimensions: Readonly<{ height: number; width: number }>,
+): string => {
+  const fontSize = Math.max(8, Math.round(dimensions.height * 0.05));
+  const marginSide = Math.round((dimensions.width * 5) / 100);
+  const header = [
+    '[Script Info]',
+    'ScriptType: v4.00+',
+    `PlayResX: ${String(dimensions.width)}`,
+    `PlayResY: ${String(dimensions.height)}`,
+    'WrapStyle: 2',
+    'ScaledBorderAndShadow: yes',
+    '',
+    '[V4+ Styles]',
+    'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
+    `Style: Default,${SUBTITLE_FONT_FAMILY},${String(fontSize)},&H00FFFFFF,&H00FFFFFF,&H00101010,&H7F000000,-1,0,0,0,100,100,0,0,1,${String(Math.max(1, Math.round(dimensions.height * 0.002)))},1,2,${String(marginSide)},${String(marginSide)},${String(Math.round((dimensions.height * 5) / 100))},1`,
+    '',
+    '[Events]',
+    'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
+  ];
+  const dialogues = subtitles.map((subtitle) => {
+    // 每条字幕的安全区在 Dialogue 行覆盖（镜头行冻结的 safe_area_pct）。
+    const marginSide = String(Math.round((dimensions.width * subtitle.safeAreaPct) / 100));
+    const marginVertical = String(Math.round((dimensions.height * subtitle.safeAreaPct) / 100));
+    return `Dialogue: 0,${assTimestamp(subtitle.startMs)},${assTimestamp(subtitle.endMs)},Default,,${marginSide},${marginSide},${marginVertical},,${assEscapeText(subtitle.spokenText)}`;
+  });
+  return `${[...header, ...dialogues].join('\n')}\n`;
+};
+
+/** subtitles 滤镜的文件名转义（Windows 盘符冒号 / 引号在 filtergraph 内需保护）。 */
+export const escapeSubtitleFilterPath = (value: string): string =>
+  value.replaceAll('\\', '/').replaceAll(':', '\\:').replaceAll("'", "\\'");
+
 const ratio = (value: unknown): number | null => {
   if (typeof value !== 'string') return null;
   const [numerator, denominator] = value.split('/').map(Number);
@@ -240,6 +307,7 @@ export const createFfmpegVideoComposer = ({
     height,
     projectId,
     signal,
+    subtitles = [],
     voices = [],
     width,
   }) => {
@@ -247,6 +315,7 @@ export const createFfmpegVideoComposer = ({
     await mkdir(temporaryRoot, { recursive: true });
     const suffix = randomUUID();
     const listPath = path.join(temporaryRoot, `video-compose-${suffix}.txt`);
+    const assPath = path.join(temporaryRoot, `video-compose-${suffix}.ass`);
     const outputPath = path.join(temporaryRoot, `video-compose-${suffix}.mp4`);
     const resolve = async (storageRelPath: string): Promise<string> => {
       try {
@@ -331,7 +400,7 @@ export const createFfmpegVideoComposer = ({
           storageRelPath: stored.storageRelPath,
         };
       };
-      if (!usesFilterGraphPath(clips, voices.length)) {
+      if (!usesFilterGraphPath(clips, voices.length, subtitles.length)) {
         // 现状路径（回归锁）：无配音无延展时保持 concat demuxer 行为不变。
         await writeFile(listPath, `${concatLines.join('\n')}\n`, 'utf8');
         const args = [
@@ -394,6 +463,15 @@ export const createFfmpegVideoComposer = ({
         height,
         width,
       });
+      // 字幕烧录（§6.2）：临时 ASS 写入 managed tmp，subtitles 滤镜接在 concat 之后；
+      // 文件随 finally 强制清理（失败/取消无残留）。
+      const burnSubtitles = subtitles.length > 0;
+      if (burnSubtitles) {
+        await writeFile(assPath, buildSubtitleAss(subtitles, { height, width }), 'utf8');
+      }
+      const videoSection = burnSubtitles
+        ? `${videoFilters};[vout]subtitles=filename='${escapeSubtitleFilterPath(assPath)}'[vfin]`
+        : videoFilters;
       const audioFilters = buildAudioFilterGraph({
         backgroundMusic:
           resolvedAudio === null
@@ -413,8 +491,9 @@ export const createFfmpegVideoComposer = ({
           volume: voice.volume,
         })),
       });
-      const filterComplex =
-        audioFilters.length > 0 ? `${videoFilters};${audioFilters}` : videoFilters;
+      const filterComplex = [videoSection, audioFilters]
+        .filter((section) => section.length > 0)
+        .join(';');
       const args = [
         '-hide_banner',
         '-y',
@@ -422,7 +501,7 @@ export const createFfmpegVideoComposer = ({
         '-filter_complex',
         filterComplex,
         '-map',
-        '[vout]',
+        burnSubtitles ? '[vfin]' : '[vout]',
         ...(audioFilters.length > 0 ? ['-map', '[aout]'] : []),
         '-c:v',
         'libx264',
@@ -450,7 +529,11 @@ export const createFfmpegVideoComposer = ({
           : 'FFMPEG_FAILED';
       throw new Error(code);
     } finally {
-      await Promise.all([rm(listPath, { force: true }), rm(outputPath, { force: true })]);
+      await Promise.all([
+        rm(listPath, { force: true }),
+        rm(assPath, { force: true }),
+        rm(outputPath, { force: true }),
+      ]);
     }
   },
 });

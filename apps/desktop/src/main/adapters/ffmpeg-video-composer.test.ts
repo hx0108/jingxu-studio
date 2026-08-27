@@ -12,9 +12,11 @@ import {
   buildAudioFilterGraph,
   buildBackgroundMusicFilter,
   buildExtendedVideoFilterGraph,
+  buildSubtitleAss,
   buildVideoCompositionFilter,
   createFfmpegVideoComposer,
   createFfmpegVideoMetadataProbe,
+  escapeSubtitleFilterPath,
   isValidVideoCompositionProbe,
   usesFilterGraphPath,
 } from './ffmpeg-video-composer';
@@ -247,6 +249,33 @@ describe('FfmpegVideoComposer', () => {
     ).toBe('');
   });
 
+  it('字幕烧录构建（§6.2）—判据扩参、ASS 确定性生成与滤镜路径转义', () => {
+    // 判据：仅字幕也走滤镜图路径；无配音/延展/字幕维持现状 concat 路径。
+    expect(usesFilterGraphPath([], 0, 0)).toBe(false);
+    expect(usesFilterGraphPath([{ extendedMs: 1 }], 0, 0)).toBe(true);
+    expect(usesFilterGraphPath([], 0, 1)).toBe(true);
+
+    const ass = buildSubtitleAss(
+      [
+        { endMs: 1_500, safeAreaPct: 5, spokenText: '雨巷,深处；{淡入}\n第二行。', startMs: 0 },
+        { endMs: 2_000, safeAreaPct: 8, spokenText: '字幕二。', startMs: 1_500 },
+      ],
+      { height: 1920, width: 1080 },
+    );
+    expect(ass).toContain('PlayResX: 1080');
+    expect(ass).toContain('PlayResY: 1920');
+    // 字号 = 高度 5%；Bold 行对应服务端冻结样式快照（Noto Sans SC Bold）。
+    expect(ass).toContain(',Noto Sans SC,96,');
+    // 首条安全区 5%：MarginL/R=54、MarginV=96；文本含逗号与花括号按规整输出。
+    expect(ass).toContain(
+      'Dialogue: 0,0:00:00.00,0:00:01.50,Default,,54,54,96,,雨巷,深处；(淡入)\\N第二行。',
+    );
+    // 第二条安全区 8%：MarginL/R=86、MarginV=154；时间戳跨段正确。
+    expect(ass).toContain('Dialogue: 0,0:00:01.50,0:00:02.00,Default,,86,86,154,,字幕二。');
+    expect(ass.endsWith('\n')).toBe(true);
+    expect(escapeSubtitleFilterPath('C:\\tmp\\a b.ass')).toBe('C\\:/tmp/a b.ass');
+  });
+
   it('真实滤镜图导出—配音 adelay 混音 + tpad 静帧延展按时长校验通过且无临时残留', async () => {
     const store = createContentAddressedStore(root);
     const source = await store.write({
@@ -366,6 +395,53 @@ describe('FfmpegVideoComposer', () => {
       outputPath,
     ]);
     expect((JSON.parse(stdout) as { streams: unknown[] }).streams).toHaveLength(0);
+  }, 30_000);
+
+  it('真实字幕烧录—subtitles 滤镜接入滤镜图且临时文件无残留', async () => {
+    const store = createContentAddressedStore(root);
+    const source = await store.write({
+      bytes: MOCK_VIDEO_MP4_BYTES,
+      mimeType: 'video/mp4',
+      namespace: 'videos',
+      projectId: 'project_00000006',
+    });
+    const composer = createFfmpegVideoComposer({
+      ffmpegPath: path.join(resourceDirectory, 'ffmpeg.exe'),
+      ffprobePath: path.join(resourceDirectory, 'ffprobe.exe'),
+      managedRoot: root,
+      store,
+    });
+    const result = await composer.compose({
+      audioStorageRelPath: null,
+      clips: [
+        { storageRelPath: source.storageRelPath, trimInMs: 0, trimOutMs: 500 },
+        { storageRelPath: source.storageRelPath, trimInMs: 200, trimOutMs: 700 },
+      ],
+      exportJobId: 'export_00000006',
+      fps: 6,
+      height: 48,
+      projectId: 'project_00000006',
+      signal: new AbortController().signal,
+      subtitles: [
+        { endMs: 800, safeAreaPct: 5, spokenText: '第一句,含逗号。', startMs: 0 },
+        { endMs: 1_000, safeAreaPct: 8, spokenText: '第二句。', startMs: 800 },
+      ],
+      width: 48,
+    });
+    expect(result.byteSize).toBeGreaterThan(0);
+    const outputPath = await store.resolvePathWithinProjects(result.storageRelPath);
+    const { stdout } = await execFileAsync(path.join(resourceDirectory, 'ffprobe.exe'), [
+      '-v',
+      'error',
+      '-show_streams',
+      '-of',
+      'json',
+      outputPath,
+    ]);
+    const parsed = JSON.parse(stdout) as { streams?: { codec_type?: string }[] };
+    expect(parsed.streams?.filter((stream) => stream.codec_type === 'video')).toHaveLength(1);
+    // 失败/成功均无临时残留：ASS 与输出文件已在 finally 强制清理。
+    await expect(readdir(path.join(root, 'tmp'))).resolves.toHaveLength(0);
   }, 30_000);
 
   it('源视频哈希复检失败—阻断 FFmpeg 且不写出成功产物', async () => {

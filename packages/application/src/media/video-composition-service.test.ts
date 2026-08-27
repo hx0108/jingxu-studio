@@ -697,6 +697,93 @@ describe('VideoCompositionService', () => {
     expect(composeMock).not.toHaveBeenCalled();
   });
 
+  it('导出合成载荷—启用字幕按冻结哈希取回台词明文并按镜头窗口落位（§6.2）', async () => {
+    const { completeExportMock, composeMock, service } = buildService({
+      candidateQueue: [candidate()],
+      currentTimeline: {
+        alignmentItems: [
+          {
+            audioDurationMs: 1_500,
+            category: 'SLIGHTLY_LONG',
+            dialogueComplete: true,
+            extendedMs: 500,
+            manualOverride: null,
+            rulesVersion: VOICE_ALIGNMENT_RULES_VERSION,
+            shotDurationMs: 1_000,
+            shotId: 'shot_0001',
+            storyboardFallback: false,
+            strategy: 'FREEZE_EXTEND',
+          },
+        ],
+        subtitleItems: [
+          {
+            enabled: true,
+            safeAreaPct: 5,
+            shotId: 'shot_0001',
+            spokenTextSha256: `sha:${SPOKEN_TEXT}`,
+            styleSnapshotJson: DEFAULT_SUBTITLE_STYLE_SNAPSHOT_JSON,
+          },
+        ],
+      },
+    });
+    composeMock.mockResolvedValue({
+      byteSize: 1_024,
+      fileSha256: HASH,
+      storageRelPath: 'projects/project_0001/exports/aa/' + HASH + '.mp4',
+    });
+    await service.startExport(
+      {
+        episodeId: 'episode_0001',
+        projectId: 'project_0001',
+        requestId: 'request_export_subtitles',
+        timelineVersionId: 'timeline_version_0001',
+      },
+      'trace_export_subtitles',
+    );
+    await vi.waitFor(() => {
+      expect(completeExportMock).toHaveBeenCalledTimes(1);
+    });
+    // 字幕窗口含延展：镜头占位 1000ms + FREEZE_EXTEND 500ms → [0, 1500]。
+    expect((composeMock.mock.calls[0]?.[0] as ComposeCallInput | undefined)?.subtitles).toEqual([
+      { endMs: 1_500, safeAreaPct: 5, spokenText: SPOKEN_TEXT, startMs: 0 },
+    ]);
+  });
+
+  it('导出时字幕来源失效—稳定码落库且不进入合成', async () => {
+    const { composeMock, service, updateExportStatusMock } = buildService({
+      candidateQueue: [candidate()],
+      currentTimeline: {
+        subtitleItems: [
+          {
+            enabled: true,
+            safeAreaPct: 5,
+            shotId: 'shot_0001',
+            spokenTextSha256: `sha:${SPOKEN_TEXT}`,
+            styleSnapshotJson: DEFAULT_SUBTITLE_STYLE_SNAPSHOT_JSON,
+          },
+        ],
+      },
+      workspaceSpokenText: '镜头已改文的新台词。',
+    });
+    await service.startExport(
+      {
+        episodeId: 'episode_0001',
+        projectId: 'project_0001',
+        requestId: 'request_export_stale_subtitle',
+        timelineVersionId: 'timeline_version_0001',
+      },
+      'trace_export_stale_subtitle',
+    );
+    await vi.waitFor(() => {
+      expect(updateExportStatusMock).toHaveBeenLastCalledWith(
+        'timeline_version_0002',
+        'FAILED',
+        'SUBTITLE_SOURCE_STALE',
+      );
+    });
+    expect(composeMock).not.toHaveBeenCalled();
+  });
+
   it('短于镜头—默认 TAIL_SILENCE；EARLY_CUT_NEXT 覆盖改写策略', async () => {
     const runWith = async (
       override: Record<string, unknown>,
