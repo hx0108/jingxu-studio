@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type {
-  VideoTimelineItemDto,
-  VideoTimelineSummaryDto,
   VideoExportJobDto,
+  VideoTimelineItemDto,
+  VideoTimelineSubtitleItemDto,
+  VideoTimelineSummaryDto,
+  VideoTimelineVoiceItemDto,
 } from '@jingxu/contracts';
 
 import { getVideoClient, createScriptRequestId } from './script-api';
+import { ExportAlignmentSummary } from './ExportAlignmentSummary';
+import { OVERRIDE_OPTIONS } from './video-timeline-ui';
 import { workspaceStatusLabel } from '../ui/workspace-status';
 
 interface VideoCompositionPanelProps {
@@ -48,6 +52,9 @@ export const VideoCompositionPanel = ({
 }: VideoCompositionPanelProps) => {
   const [timeline, setTimeline] = useState<VideoTimelineSummaryDto | null>(null);
   const [items, setItems] = useState<VideoTimelineItemDto[]>([]);
+  const [voiceItems, setVoiceItems] = useState<VideoTimelineVoiceItemDto[]>([]);
+  const [subtitleItems, setSubtitleItems] = useState<VideoTimelineSubtitleItemDto[]>([]);
+  const [audioVolume, setAudioVolume] = useState(0.2);
   const [audioAssetId, setAudioAssetId] = useState<string | null>(null);
   const [job, setJob] = useState<VideoExportJobDto | null>(null);
   const [busy, setBusy] = useState(false);
@@ -55,15 +62,29 @@ export const VideoCompositionPanel = ({
 
   const enabledCount = useMemo(() => items.filter((item) => item.enabled).length, [items]);
 
+  // 载入/新建/保存共用回填：两轨与 BGM 音量随版本数据往返，不再硬编码。
+  const applyTimeline = (data: VideoTimelineSummaryDto) => {
+    setTimeline(data);
+    setItems(data.items);
+    setVoiceItems(data.voiceItems);
+    setSubtitleItems(data.subtitleItems);
+    setAudioVolume(data.audioVolume);
+    setAudioAssetId(data.audioAsset?.id ?? null);
+  };
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void getVideoClient()
         .getTimeline({ episodeId, projectId, timelineVersionId: null })
         .then((result) => {
           if (result.ok) {
-            setTimeline(result.data);
-            setItems(result.data.items);
-            setAudioAssetId(result.data.audioAsset?.id ?? null);
+            const data = result.data;
+            setTimeline(data);
+            setItems(data.items);
+            setVoiceItems(data.voiceItems);
+            setSubtitleItems(data.subtitleItems);
+            setAudioVolume(data.audioVolume);
+            setAudioAssetId(data.audioAsset?.id ?? null);
           }
         });
     }, 0);
@@ -82,13 +103,8 @@ export const VideoCompositionPanel = ({
       projectId,
       requestId: createScriptRequestId('video-timeline-create'),
     });
-    if (result.ok) {
-      setTimeline(result.data);
-      setItems(result.data.items);
-      setAudioAssetId(result.data.audioAsset?.id ?? null);
-    } else {
-      setNotice(formatError(result.error.message));
-    }
+    if (result.ok) applyTimeline(result.data);
+    else setNotice(formatError(result.error.message));
     setBusy(false);
   };
 
@@ -98,19 +114,17 @@ export const VideoCompositionPanel = ({
     setNotice(null);
     const result = await getVideoClient().updateTimeline({
       audioAssetId,
-      audioVolume: 0.2,
+      audioVolume,
       episodeId,
       expectedVersionId: timeline.id,
       items,
       projectId,
       requestId: createScriptRequestId('video-timeline-update'),
-      subtitleItems: [],
-      voiceItems: [],
+      subtitleItems,
+      voiceItems,
     });
     if (result.ok) {
-      setTimeline(result.data);
-      setItems(result.data.items);
-      setAudioAssetId(result.data.audioAsset?.id ?? null);
+      applyTimeline(result.data);
       setNotice('时间线已保存为新版本。');
     } else {
       setNotice(formatError(result.error.message));
@@ -196,6 +210,19 @@ export const VideoCompositionPanel = ({
     });
   };
 
+  // 配音/字幕两轨条目由时间线版本派生（每镜头至多一项），此处仅编辑参数与启停。
+  const updateVoiceItem = (shotId: string, patch: Partial<VideoTimelineVoiceItemDto>) => {
+    setVoiceItems((current) =>
+      current.map((voice) => (voice.shotId === shotId ? { ...voice, ...patch } : voice)),
+    );
+  };
+
+  const toggleSubtitleItem = (shotId: string, enabled: boolean) => {
+    setSubtitleItems((current) =>
+      current.map((subtitle) => (subtitle.shotId === shotId ? { ...subtitle, enabled } : subtitle)),
+    );
+  };
+
   return (
     <section aria-labelledby="video-composition-title" className="script-card">
       <header className="script-heading">
@@ -266,12 +293,31 @@ export const VideoCompositionPanel = ({
           </button>
         )}
       </div>
-      {audioAssetId !== null && <p className="action-hint">已选择背景音乐（内容哈希资产）。</p>}
+      {audioAssetId !== null && (
+        <>
+          <p className="action-hint">已选择背景音乐（内容哈希资产）。</p>
+          <label className="action-hint">
+            背景音乐音量
+            <input
+              max={1}
+              min={0}
+              name="bgm-volume"
+              onChange={(event) => {
+                setAudioVolume(Number(event.target.value));
+              }}
+              step={0.05}
+              type="number"
+              value={audioVolume}
+            />
+          </label>
+        </>
+      )}
       {notice !== null && (
         <p aria-live="polite" className="action-hint">
           {notice}
         </p>
       )}
+      {timeline !== null && <ExportAlignmentSummary alignmentItems={timeline.alignmentItems} />}
       <VideoExportJobStatus job={job} />
       {items.length > 0 && (
         <ol aria-label="视频时间线镜头列表" className="shot-card-list">
@@ -313,6 +359,86 @@ export const VideoCompositionPanel = ({
                     value={item.trimOutMs}
                   />
                 </label>
+                {(() => {
+                  const subtitle = subtitleItems.find((sub) => sub.shotId === item.shotId);
+                  return subtitle === undefined ? null : (
+                    <label>
+                      <input
+                        checked={subtitle.enabled}
+                        onChange={(event) => {
+                          toggleSubtitleItem(item.shotId, event.target.checked);
+                        }}
+                        type="checkbox"
+                      />
+                      烧录字幕
+                    </label>
+                  );
+                })()}
+                {(() => {
+                  const voice = voiceItems.find((entry) => entry.shotId === item.shotId);
+                  if (voice === undefined) return null;
+                  return (
+                    <>
+                      <label>
+                        <input
+                          checked={voice.enabled}
+                          onChange={(event) => {
+                            updateVoiceItem(item.shotId, { enabled: event.target.checked });
+                          }}
+                          type="checkbox"
+                        />
+                        启用配音
+                      </label>
+                      <label>
+                        音量
+                        <input
+                          max={1}
+                          min={0}
+                          name={`voice-volume-${item.shotId}`}
+                          onChange={(event) => {
+                            updateVoiceItem(item.shotId, { volume: Number(event.target.value) });
+                          }}
+                          step={0.05}
+                          type="number"
+                          value={voice.volume}
+                        />
+                      </label>
+                      <label>
+                        偏移(ms)
+                        <input
+                          min={0}
+                          name={`voice-offset-${item.shotId}`}
+                          onChange={(event) => {
+                            updateVoiceItem(item.shotId, {
+                              offsetMs: Math.max(0, Number(event.target.value)),
+                            });
+                          }}
+                          type="number"
+                          value={voice.offsetMs}
+                        />
+                      </label>
+                      <label>
+                        对齐覆盖
+                        <select
+                          name={`voice-override-${item.shotId}`}
+                          onChange={(event) => {
+                            updateVoiceItem(item.shotId, {
+                              alignmentOverride:
+                                event.target.value === '' ? null : (event.target.value as never),
+                            });
+                          }}
+                          value={voice.alignmentOverride ?? ''}
+                        >
+                          {OVERRIDE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </>
+                  );
+                })()}
                 <button
                   className="secondary-button"
                   disabled={index === 0}

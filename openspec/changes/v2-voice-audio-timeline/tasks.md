@@ -33,9 +33,9 @@
 
 ## 7. Renderer
 
-- [ ] 7.1 `VoicePanel`：音色映射编辑、整集批量生成、逐镜头候选选择与受限 URL 试听、STALE 徽标；职责测试。
-- [ ] 7.2 `VideoCompositionPanel`：配音/字幕轨列、对齐状态与人工覆盖入口、BGM 音量调节；视图测试。
-- [ ] 7.3 导出面板对齐摘要（分类/策略/规则版本/记录）展示。
+- [x] 7.1 `VoicePanel`：音色映射编辑、整集批量生成、逐镜头候选选择与受限 URL 试听、STALE 徽标；职责测试。（2026-08-27：VoicePanel.tsx + video-timeline-ui 标签映射，静态红线测试 2 例）
+- [x] 7.2 `VideoCompositionPanel`：配音/字幕轨列、对齐状态与人工覆盖入口、BGM 音量调节；视图测试。（2026-08-27：两轨往返保存、逐镜头配音/字幕控制行，视图测试保留并补 bgm-volume/摘要缺席断言）
+- [x] 7.3 导出面板对齐摘要（分类/策略/规则版本/记录）展示。（2026-08-27：ExportAlignmentSummary.tsx 挂 VideoCompositionPanel，未知枚举原码直出测试）
 
 ## 8. 端到端与门禁
 

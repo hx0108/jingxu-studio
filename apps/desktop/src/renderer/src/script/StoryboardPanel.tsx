@@ -14,6 +14,7 @@ import type {
 } from '@jingxu/contracts';
 
 import { FirstFramePanel } from './FirstFramePanel';
+import { VoicePanel } from './VoicePanel';
 import { VideoPanel } from './VideoPanel';
 import { VideoCompositionPanel } from './VideoCompositionPanel';
 import { createScriptRequestId } from './script-api';
@@ -686,11 +687,14 @@ export const StoryboardPanel = ({
       )}
       <div className="composition-stage-content" hidden={activeMediaStep !== 'composition'}>
         {current?.status === 'READY' ? (
-          <VideoCompositionPanel
-            episodeId={current.episodeId}
-            episodeVersionId={current.id}
-            projectId={projectId}
-          />
+          <>
+            <VoicePanel episodeId={current.episodeId} projectId={projectId} />
+            <VideoCompositionPanel
+              episodeId={current.episodeId}
+              episodeVersionId={current.id}
+              projectId={projectId}
+            />
+          </>
         ) : (
           <section className="empty-state-panel">
             <h3>合成导出尚不可用</h3>

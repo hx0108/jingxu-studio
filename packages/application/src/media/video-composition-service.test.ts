@@ -1011,7 +1011,7 @@ describe('VideoCompositionService', () => {
     // 取消查询命中在飞 Job（默认桩返回 null，这里按该 Job 固定应答）。
     composition.findExportJob = vi.fn((_projectId: string, exportJobId: string) =>
       Promise.resolve(exportJobId === 'timeline_version_0002' ? runningRow : null),
-    );
+    ) as unknown as typeof composition.findExportJob;
     composeMock.mockImplementation(
       ({ signal }: { signal: AbortSignal }) =>
         // 在飞合成永不自行结束；取消经 signal 显著中断（真实适配器同语义）。
