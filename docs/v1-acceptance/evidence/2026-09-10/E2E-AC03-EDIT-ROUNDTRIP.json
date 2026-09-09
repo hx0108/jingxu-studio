@@ -1,0 +1,639 @@
+{
+  "imported": {
+    "importId": "import_52d1bb20-3739-48e1-b6cd-ad32ab4b86e3",
+    "projectId": "project_project_defbbcfd-f318-46e3-9b3c-76763c03b5bd",
+    "sourceProjectId": "project_6923dcd5-a3c5-49fd-b197-5d3490c7937c",
+    "warningCodes": [
+      "TRANSFER_CURRENT_ONLY",
+      "TRANSFER_IMPORTED_SNAPSHOT_REQUIRES_SOURCE"
+    ],
+    "createdObjectCount": 34
+  },
+  "result": {
+    "afterCopyShotIds": [
+      "shot_076c507b-6ac4-4f19-9e77-b3a41a9e394e",
+      "shot_5d6ea8b9-7873-481d-b9ac-585c0bef6b7b",
+      "shot_d1d9353b-e941-4ab8-8b93-de11db44a4ef",
+      "shot_ad69c7cd-a4ee-4b1d-808b-ef3b41200980",
+      "shot_aea441c0-ca1d-4de5-a656-7e75729e455f",
+      "shot_d50190cc-3b00-4b38-9efa-dd8f000a4c35",
+      "shot_e42e469b-c6e2-449a-a770-8b7e70f04d20",
+      "shot_4431fcd8-2e1d-4ace-96bb-e86d66d113e5"
+    ],
+    "afterRestore": [
+      {
+        "document": {
+          "acceptance": {
+            "must_include": [
+              "午夜列车车厢"
+            ],
+            "must_not_include": [],
+            "human_review_required": true
+          },
+          "cinematography": {
+            "shot_size": "MEDIUM",
+            "camera_angle": "EYE_LEVEL",
+            "composition": "中景，主体居左",
+            "focus": "人物面部清晰",
+            "camera_motion": "STATIC",
+            "frontal_face": true,
+            "mouth_visible": true
+          },
+          "content": {
+            "character_ids": [
+              "char_lead"
+            ],
+            "scene_id": "scene_train",
+            "prop_ids": [],
+            "action": "镜 1：开场：车厢全景，无人回应",
+            "emotion": "警惕",
+            "spoken_text": "这趟列车，到底要开去哪里？"
+          },
+          "continuity": {
+            "continuity_mode": "SCENE_CHANGE",
+            "first_frame_requirement": "开场：车厢全景，无人回应起帧",
+            "last_frame_requirement": "开场：车厢全景，无人回应止帧",
+            "asset_version_ids": [],
+            "previous_shot_id": null
+          },
+          "contract_version": 2,
+          "dialogue": {
+            "dialogue_render_mode": "NARRATION_FIRST",
+            "speaker_id": "narrator",
+            "estimated_speech_duration_sec": 3,
+            "audio_required": true,
+            "dialogue_mode_source": "PROJECT_DEFAULT",
+            "lip_sync_required": false,
+            "override_reason": null
+          },
+          "derived_from_shot_ids": [
+            "shot_65c795aa-5a2d-4c03-a6a6-13572f8fa1e8"
+          ],
+          "format_profile_id": "format_profile_b2883822-c3e8-466b-a94a-b4878987668b",
+          "generation_constraints": {
+            "capability_requirements": [
+              {
+                "capability": "FIRST_FRAME",
+                "required": true
+              }
+            ],
+            "image_prompt": "夜行列车车厢，冷色调，中景",
+            "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+            "negative_constraints": [
+              "文字水印"
+            ],
+            "budget_estimate": {
+              "currency_or_credit": "UNKNOWN",
+              "is_estimate": true,
+              "max": null,
+              "min": null,
+              "price_version": null
+            }
+          },
+          "locked_paths": [],
+          "narrative_purpose": "开场：车厢全景，无人回应",
+          "parent_version_id": "scv_9f545461-4f40-4238-9c77-a34e1f6e2218_v1",
+          "provenance": {
+            "last_edit_source": "AI",
+            "source_invocation_id": "b6ade61b-21f2-4b5c-ac0e-0738ebe28411",
+            "source_type": "AI_GENERATED"
+          },
+          "schema_version": "1.1.0",
+          "sequence": 1,
+          "shot_id": "shot_d1d9353b-e941-4ab8-8b93-de11db44a4ef",
+          "target_duration_sec": 15,
+          "status": "READY",
+          "version_id": "scv_38d17fa2-da2b-463d-b892-a33ede6b57cf_v2"
+        },
+        "sequence": 1,
+        "shotId": "shot_d1d9353b-e941-4ab8-8b93-de11db44a4ef",
+        "versionId": "scv_38d17fa2-da2b-463d-b892-a33ede6b57cf_v2"
+      },
+      {
+        "document": {
+          "acceptance": {
+            "must_include": [
+              "午夜列车车厢"
+            ],
+            "must_not_include": [],
+            "human_review_required": true
+          },
+          "cinematography": {
+            "shot_size": "MEDIUM",
+            "camera_angle": "EYE_LEVEL",
+            "composition": "中景，主体居左",
+            "focus": "人物面部清晰",
+            "camera_motion": "DOLLY",
+            "frontal_face": true,
+            "mouth_visible": true
+          },
+          "content": {
+            "character_ids": [
+              "char_lead"
+            ],
+            "scene_id": "scene_train",
+            "prop_ids": [],
+            "action": "镜 2：林夜攥紧怀表起身，动作连贯",
+            "emotion": "警惕",
+            "spoken_text": "这趟列车，到底要开去哪里？"
+          },
+          "continuity": {
+            "continuity_mode": "CONTINUOUS_ACTION",
+            "first_frame_requirement": "林夜攥紧怀表起身，动作连贯起帧",
+            "last_frame_requirement": "林夜攥紧怀表起身，动作连贯止帧",
+            "asset_version_ids": [],
+            "previous_shot_id": "shot_65c795aa-5a2d-4c03-a6a6-13572f8fa1e8"
+          },
+          "contract_version": 3,
+          "dialogue": {
+            "dialogue_render_mode": "NARRATION_FIRST",
+            "speaker_id": "narrator",
+            "estimated_speech_duration_sec": 3,
+            "audio_required": true,
+            "dialogue_mode_source": "PROJECT_DEFAULT",
+            "lip_sync_required": false,
+            "override_reason": null
+          },
+          "derived_from_shot_ids": [],
+          "format_profile_id": "format_profile_b2883822-c3e8-466b-a94a-b4878987668b",
+          "generation_constraints": {
+            "capability_requirements": [
+              {
+                "capability": "FIRST_FRAME",
+                "required": true
+              }
+            ],
+            "image_prompt": "夜行列车车厢，冷色调，中景",
+            "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+            "negative_constraints": [
+              "文字水印"
+            ],
+            "budget_estimate": {
+              "currency_or_credit": "UNKNOWN",
+              "is_estimate": true,
+              "max": null,
+              "min": null,
+              "price_version": null
+            }
+          },
+          "locked_paths": [],
+          "narrative_purpose": "林夜攥紧怀表起身，动作连贯",
+          "parent_version_id": "scv_3e0b2617-9522-4799-85f1-9641c783ef51_v2",
+          "provenance": {
+            "last_edit_source": "AI",
+            "source_invocation_id": "b6ade61b-21f2-4b5c-ac0e-0738ebe28411",
+            "source_type": "AI_GENERATED"
+          },
+          "schema_version": "1.1.0",
+          "sequence": 2,
+          "shot_id": "shot_ad69c7cd-a4ee-4b1d-808b-ef3b41200980",
+          "target_duration_sec": 15,
+          "status": "READY",
+          "version_id": "scv_d3ddb134-8658-47c5-a1ef-3f14d0e954a5_v3"
+        },
+        "sequence": 2,
+        "shotId": "shot_ad69c7cd-a4ee-4b1d-808b-ef3b41200980",
+        "versionId": "scv_d3ddb134-8658-47c5-a1ef-3f14d0e954a5_v3"
+      },
+      {
+        "document": {
+          "acceptance": {
+            "must_include": [
+              "午夜列车车厢"
+            ],
+            "must_not_include": [],
+            "human_review_required": true
+          },
+          "cinematography": {
+            "shot_size": "LONG",
+            "camera_angle": "EYE_LEVEL",
+            "composition": "中景，主体居左",
+            "focus": "人物面部清晰",
+            "camera_motion": "STATIC",
+            "frontal_face": true,
+            "mouth_visible": false
+          },
+          "content": {
+            "character_ids": [],
+            "scene_id": "scene_train",
+            "prop_ids": [],
+            "action": "镜 3：空镜：窗外流动的夜色",
+            "emotion": "警惕",
+            "spoken_text": ""
+          },
+          "continuity": {
+            "continuity_mode": "SCENE_CHANGE",
+            "first_frame_requirement": "空镜：窗外流动的夜色起帧",
+            "last_frame_requirement": "空镜：窗外流动的夜色止帧",
+            "asset_version_ids": [],
+            "previous_shot_id": null
+          },
+          "contract_version": 3,
+          "dialogue": {
+            "dialogue_render_mode": "NARRATION_FIRST",
+            "speaker_id": null,
+            "estimated_speech_duration_sec": 0,
+            "audio_required": false,
+            "dialogue_mode_source": "PROJECT_DEFAULT",
+            "lip_sync_required": false,
+            "override_reason": null
+          },
+          "derived_from_shot_ids": [],
+          "format_profile_id": "format_profile_b2883822-c3e8-466b-a94a-b4878987668b",
+          "generation_constraints": {
+            "capability_requirements": [
+              {
+                "capability": "FIRST_FRAME",
+                "required": true
+              }
+            ],
+            "image_prompt": "夜行列车车厢，冷色调，中景",
+            "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+            "negative_constraints": [
+              "文字水印"
+            ],
+            "budget_estimate": {
+              "currency_or_credit": "UNKNOWN",
+              "is_estimate": true,
+              "max": null,
+              "min": null,
+              "price_version": null
+            }
+          },
+          "locked_paths": [],
+          "narrative_purpose": "空镜：窗外流动的夜色",
+          "parent_version_id": "scv_888756a9-a4c7-45e0-96bf-844a8b1e1f71_v2",
+          "provenance": {
+            "last_edit_source": "AI",
+            "source_invocation_id": "b6ade61b-21f2-4b5c-ac0e-0738ebe28411",
+            "source_type": "AI_GENERATED"
+          },
+          "schema_version": "1.1.0",
+          "sequence": 3,
+          "shot_id": "shot_aea441c0-ca1d-4de5-a656-7e75729e455f",
+          "target_duration_sec": 15,
+          "status": "READY",
+          "version_id": "scv_fcdefe95-b62c-45fc-86b9-1a5863a3af7a_v3"
+        },
+        "sequence": 3,
+        "shotId": "shot_aea441c0-ca1d-4de5-a656-7e75729e455f",
+        "versionId": "scv_fcdefe95-b62c-45fc-86b9-1a5863a3af7a_v3"
+      },
+      {
+        "document": {
+          "acceptance": {
+            "must_include": [
+              "午夜列车车厢"
+            ],
+            "must_not_include": [],
+            "human_review_required": true
+          },
+          "cinematography": {
+            "shot_size": "MEDIUM",
+            "camera_angle": "EYE_LEVEL",
+            "composition": "中景，主体居左",
+            "focus": "人物面部清晰",
+            "camera_motion": "DOLLY",
+            "frontal_face": true,
+            "mouth_visible": true
+          },
+          "content": {
+            "character_ids": [
+              "char_lead"
+            ],
+            "scene_id": "scene_train",
+            "prop_ids": [],
+            "action": "镜 4：林夜质问列车长",
+            "emotion": "警惕",
+            "spoken_text": "这趟列车，到底要开去哪里？"
+          },
+          "continuity": {
+            "continuity_mode": "SCENE_CHANGE",
+            "first_frame_requirement": "林夜质问列车长起帧",
+            "last_frame_requirement": "林夜质问列车长止帧",
+            "asset_version_ids": [],
+            "previous_shot_id": null
+          },
+          "contract_version": 3,
+          "dialogue": {
+            "dialogue_render_mode": "NARRATION_FIRST",
+            "speaker_id": "narrator",
+            "estimated_speech_duration_sec": 3,
+            "audio_required": true,
+            "dialogue_mode_source": "PROJECT_DEFAULT",
+            "lip_sync_required": false,
+            "override_reason": null
+          },
+          "derived_from_shot_ids": [],
+          "format_profile_id": "format_profile_b2883822-c3e8-466b-a94a-b4878987668b",
+          "generation_constraints": {
+            "capability_requirements": [
+              {
+                "capability": "FIRST_FRAME",
+                "required": true
+              }
+            ],
+            "image_prompt": "夜行列车车厢，冷色调，中景",
+            "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+            "negative_constraints": [
+              "文字水印"
+            ],
+            "budget_estimate": {
+              "currency_or_credit": "UNKNOWN",
+              "is_estimate": true,
+              "max": null,
+              "min": null,
+              "price_version": null
+            }
+          },
+          "locked_paths": [],
+          "narrative_purpose": "林夜质问列车长",
+          "parent_version_id": "scv_7916fbdc-b546-4ef7-8914-7ab511022ff1_v2",
+          "provenance": {
+            "last_edit_source": "AI",
+            "source_invocation_id": "b6ade61b-21f2-4b5c-ac0e-0738ebe28411",
+            "source_type": "AI_GENERATED"
+          },
+          "schema_version": "1.1.0",
+          "sequence": 4,
+          "shot_id": "shot_d50190cc-3b00-4b38-9efa-dd8f000a4c35",
+          "target_duration_sec": 15,
+          "status": "READY",
+          "version_id": "scv_facf3618-5c95-4663-9c1a-56a0be618e94_v3"
+        },
+        "sequence": 4,
+        "shotId": "shot_d50190cc-3b00-4b38-9efa-dd8f000a4c35",
+        "versionId": "scv_facf3618-5c95-4663-9c1a-56a0be618e94_v3"
+      },
+      {
+        "document": {
+          "acceptance": {
+            "must_include": [
+              "午夜列车车厢"
+            ],
+            "must_not_include": [],
+            "human_review_required": true
+          },
+          "cinematography": {
+            "shot_size": "MEDIUM",
+            "camera_angle": "EYE_LEVEL",
+            "composition": "中景，主体居左",
+            "focus": "人物面部清晰",
+            "camera_motion": "STATIC",
+            "frontal_face": true,
+            "mouth_visible": true
+          },
+          "content": {
+            "character_ids": [
+              "char_lead"
+            ],
+            "scene_id": "scene_train",
+            "prop_ids": [],
+            "action": "镜 5：连续动作：林夜追向车尾",
+            "emotion": "警惕",
+            "spoken_text": "这趟列车，到底要开去哪里？"
+          },
+          "continuity": {
+            "continuity_mode": "CONTINUOUS_ACTION",
+            "first_frame_requirement": "连续动作：林夜追向车尾起帧",
+            "last_frame_requirement": "连续动作：林夜追向车尾止帧",
+            "asset_version_ids": [],
+            "previous_shot_id": "shot_d50190cc-3b00-4b38-9efa-dd8f000a4c35"
+          },
+          "contract_version": 3,
+          "dialogue": {
+            "dialogue_render_mode": "NARRATION_FIRST",
+            "speaker_id": "narrator",
+            "estimated_speech_duration_sec": 3,
+            "audio_required": true,
+            "dialogue_mode_source": "PROJECT_DEFAULT",
+            "lip_sync_required": false,
+            "override_reason": null
+          },
+          "derived_from_shot_ids": [],
+          "format_profile_id": "format_profile_b2883822-c3e8-466b-a94a-b4878987668b",
+          "generation_constraints": {
+            "capability_requirements": [
+              {
+                "capability": "FIRST_FRAME",
+                "required": true
+              }
+            ],
+            "image_prompt": "夜行列车车厢，冷色调，中景",
+            "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+            "negative_constraints": [
+              "文字水印"
+            ],
+            "budget_estimate": {
+              "currency_or_credit": "UNKNOWN",
+              "is_estimate": true,
+              "max": null,
+              "min": null,
+              "price_version": null
+            }
+          },
+          "locked_paths": [],
+          "narrative_purpose": "连续动作：林夜追向车尾",
+          "parent_version_id": "scv_7cfad90d-825e-4ed1-9d6f-908e0e18a1c7_v2",
+          "provenance": {
+            "last_edit_source": "AI",
+            "source_invocation_id": "b6ade61b-21f2-4b5c-ac0e-0738ebe28411",
+            "source_type": "AI_GENERATED"
+          },
+          "schema_version": "1.1.0",
+          "sequence": 5,
+          "shot_id": "shot_e42e469b-c6e2-449a-a770-8b7e70f04d20",
+          "target_duration_sec": 15,
+          "status": "READY",
+          "version_id": "scv_1e148e7e-1c38-46cd-986a-a7b1920a144e_v3"
+        },
+        "sequence": 5,
+        "shotId": "shot_e42e469b-c6e2-449a-a770-8b7e70f04d20",
+        "versionId": "scv_1e148e7e-1c38-46cd-986a-a7b1920a144e_v3"
+      },
+      {
+        "document": {
+          "acceptance": {
+            "must_include": [
+              "午夜列车车厢"
+            ],
+            "must_not_include": [],
+            "human_review_required": true
+          },
+          "cinematography": {
+            "shot_size": "LONG",
+            "camera_angle": "EYE_LEVEL",
+            "composition": "中景，主体居左",
+            "focus": "人物面部清晰",
+            "camera_motion": "DOLLY",
+            "frontal_face": true,
+            "mouth_visible": false
+          },
+          "content": {
+            "character_ids": [],
+            "scene_id": "scene_train",
+            "prop_ids": [],
+            "action": "镜 6：结尾钩子：怀表传出声音",
+            "emotion": "震惊",
+            "spoken_text": ""
+          },
+          "continuity": {
+            "continuity_mode": "SCENE_CHANGE",
+            "first_frame_requirement": "结尾钩子：怀表传出声音起帧",
+            "last_frame_requirement": "结尾钩子：怀表传出声音止帧",
+            "asset_version_ids": [],
+            "previous_shot_id": null
+          },
+          "contract_version": 3,
+          "dialogue": {
+            "dialogue_render_mode": "NARRATION_FIRST",
+            "speaker_id": null,
+            "estimated_speech_duration_sec": 0,
+            "audio_required": false,
+            "dialogue_mode_source": "PROJECT_DEFAULT",
+            "lip_sync_required": false,
+            "override_reason": null
+          },
+          "derived_from_shot_ids": [],
+          "format_profile_id": "format_profile_b2883822-c3e8-466b-a94a-b4878987668b",
+          "generation_constraints": {
+            "capability_requirements": [
+              {
+                "capability": "FIRST_FRAME",
+                "required": true
+              }
+            ],
+            "image_prompt": "夜行列车车厢，冷色调，中景",
+            "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+            "negative_constraints": [
+              "文字水印"
+            ],
+            "budget_estimate": {
+              "currency_or_credit": "UNKNOWN",
+              "is_estimate": true,
+              "max": null,
+              "min": null,
+              "price_version": null
+            }
+          },
+          "locked_paths": [],
+          "narrative_purpose": "结尾钩子：怀表传出声音",
+          "parent_version_id": "scv_cf4cb349-f59d-40cb-bb04-a0935feceb00_v2",
+          "provenance": {
+            "last_edit_source": "AI",
+            "source_invocation_id": "b6ade61b-21f2-4b5c-ac0e-0738ebe28411",
+            "source_type": "AI_GENERATED"
+          },
+          "schema_version": "1.1.0",
+          "sequence": 6,
+          "shot_id": "shot_4431fcd8-2e1d-4ace-96bb-e86d66d113e5",
+          "target_duration_sec": 15,
+          "status": "READY",
+          "version_id": "scv_ea7b4a42-1e50-4807-b03d-e47f08875aad_v3"
+        },
+        "sequence": 6,
+        "shotId": "shot_4431fcd8-2e1d-4ace-96bb-e86d66d113e5",
+        "versionId": "scv_ea7b4a42-1e50-4807-b03d-e47f08875aad_v3"
+      },
+      {
+        "document": {
+          "acceptance": {
+            "must_include": [
+              "午夜列车车厢"
+            ],
+            "must_not_include": [],
+            "human_review_required": true
+          },
+          "cinematography": {
+            "shot_size": "MEDIUM",
+            "camera_angle": "EYE_LEVEL",
+            "composition": "中景，主体居左",
+            "focus": "人物面部清晰",
+            "camera_motion": "STATIC",
+            "frontal_face": true,
+            "mouth_visible": true
+          },
+          "content": {
+            "character_ids": [
+              "char_lead"
+            ],
+            "scene_id": "scene_train",
+            "prop_ids": [],
+            "action": "镜 1：开场：车厢全景，无人回应",
+            "emotion": "警惕",
+            "spoken_text": "这趟列车，到底要开去哪里？"
+          },
+          "continuity": {
+            "continuity_mode": "SCENE_CHANGE",
+            "first_frame_requirement": "开场：车厢全景，无人回应起帧",
+            "last_frame_requirement": "开场：车厢全景，无人回应止帧",
+            "asset_version_ids": [],
+            "previous_shot_id": null
+          },
+          "contract_version": 2,
+          "dialogue": {
+            "dialogue_render_mode": "NARRATION_FIRST",
+            "speaker_id": "narrator",
+            "estimated_speech_duration_sec": 3,
+            "audio_required": true,
+            "dialogue_mode_source": "PROJECT_DEFAULT",
+            "lip_sync_required": false,
+            "override_reason": null
+          },
+          "derived_from_shot_ids": [
+            "shot_65c795aa-5a2d-4c03-a6a6-13572f8fa1e8"
+          ],
+          "format_profile_id": "format_profile_b2883822-c3e8-466b-a94a-b4878987668b",
+          "generation_constraints": {
+            "capability_requirements": [
+              {
+                "capability": "FIRST_FRAME",
+                "required": true
+              }
+            ],
+            "image_prompt": "夜行列车车厢，冷色调，中景",
+            "video_prompt": "镜头缓慢推近，人物轻微呼吸起伏",
+            "negative_constraints": [
+              "文字水印"
+            ],
+            "budget_estimate": {
+              "currency_or_credit": "UNKNOWN",
+              "is_estimate": true,
+              "max": null,
+              "min": null,
+              "price_version": null
+            }
+          },
+          "locked_paths": [],
+          "narrative_purpose": "开场：车厢全景，无人回应",
+          "parent_version_id": "scv_80d8aef2-435a-4a7d-b2a0-4add81697c59_v1",
+          "provenance": {
+            "last_edit_source": "AI",
+            "source_invocation_id": "b6ade61b-21f2-4b5c-ac0e-0738ebe28411",
+            "source_type": "AI_GENERATED"
+          },
+          "schema_version": "1.1.0",
+          "sequence": 7,
+          "shot_id": "shot_e7f65bfb-06f2-4f58-b9b1-3152d3e57f2d",
+          "target_duration_sec": 15,
+          "status": "READY",
+          "version_id": "scv_939a5b9b-3060-40b7-9b42-47c1fd4dfb78_v2"
+        },
+        "sequence": 7,
+        "shotId": "shot_e7f65bfb-06f2-4f58-b9b1-3152d3e57f2d",
+        "versionId": "scv_939a5b9b-3060-40b7-9b42-47c1fd4dfb78_v2"
+      }
+    ],
+    "copiedSourceId": "shot_076c507b-6ac4-4f19-9e77-b3a41a9e394e",
+    "exportResult": {
+      "byteSize": 17718,
+      "exportId": "export_eba7bf6f-60ff-4478-b7fd-467a09ab8871",
+      "fileSha256": "ff7443befeaf2b33904ff6d09245ff0c27e91d4e8ab16bb6d750495193b87df7",
+      "warningCodes": [
+        "TRANSFER_CURRENT_ONLY"
+      ]
+    },
+    "initialShotCount": 6,
+    "projectId": "project_6923dcd5-a3c5-49fd-b197-5d3490c7937c"
+  }
+}

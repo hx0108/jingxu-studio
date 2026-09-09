@@ -1,0 +1,13 @@
+{
+  "jobId": "80df4c60-bf01-4950-8d12-bad8caebc731",
+  "recovered": {
+    "ok": true,
+    "data": {
+      "errorCode": "INTERRUPTED_UNKNOWN_OUTCOME",
+      "id": "80df4c60-bf01-4950-8d12-bad8caebc731",
+      "projectId": "project_908ba299-9fb4-406c-b05a-99b2b4645ae3",
+      "status": "FAILED",
+      "versionId": "80df4c60-bf01-4950-8d12-bad8caebc731"
+    }
+  }
+}

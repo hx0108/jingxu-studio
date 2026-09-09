@@ -1,0 +1,139 @@
+{
+  "imported": {
+    "ok": true,
+    "data": {
+      "currentJob": null,
+      "episode": {
+        "id": "episode_7ed871a2-1c74-403c-86bd-be788f71fdbe",
+        "projectId": "project_f476118d-a869-42f6-8b5f-20bb367a20cf",
+        "targetDurationSec": 90,
+        "title": "第 1 集"
+      },
+      "prerequisites": [
+        {
+          "message": "前置条件已满足",
+          "ready": true,
+          "stage": "CONCEPT"
+        },
+        {
+          "message": "请先确认 CONCEPT READY 版本",
+          "ready": false,
+          "stage": "STORY_BIBLE"
+        },
+        {
+          "message": "请先确认 CONCEPT、STORY_BIBLE READY 版本",
+          "ready": false,
+          "stage": "EPISODE_OUTLINE"
+        },
+        {
+          "message": "请先确认 STORY_BIBLE、EPISODE_OUTLINE READY 版本",
+          "ready": false,
+          "stage": "BEAT_SHEET"
+        },
+        {
+          "message": "请先确认 STORY_BIBLE、BEAT_SHEET READY 版本",
+          "ready": false,
+          "stage": "SCENE_SCRIPT"
+        }
+      ],
+      "projectId": "project_f476118d-a869-42f6-8b5f-20bb367a20cf",
+      "source": {
+        "characterCount": 17,
+        "contentHash": "a0484663545141c3ebab4748e0e492ce7ed3c4a76c5304e0da2d6378e7be52a2",
+        "creativeText": "# 已有剧本\n林岚在站台等候列车。",
+        "id": "source_093016ec-d38c-4660-ac13-8893dc923d31",
+        "inputKind": "MARKDOWN",
+        "fileName": "existing.md",
+        "encoding": "UTF-8",
+        "projectId": "project_f476118d-a869-42f6-8b5f-20bb367a20cf"
+      },
+      "storyboard": {
+        "current": null,
+        "history": [],
+        "shots": [],
+        "totalDurationSec": 0
+      },
+      "stages": [
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": true,
+          "stage": "CONCEPT"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "STORY_BIBLE"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "EPISODE_OUTLINE"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "BEAT_SHEET"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "SCENE_SCRIPT"
+        }
+      ]
+    }
+  },
+  "rewrite": {
+    "afterHash": "dfd512c21b08d4aa114220ab659f81897e76baf1ea06032965b98165c777daa3",
+    "afterValue": "林夜揭穿列车长的记忆交易\n[STRENGTHEN_CONFLICT]",
+    "beforeHash": "c3bee286b03af835f111772549692ec1563aff6662f7fa233ffe27082292ab76",
+    "beforeValue": "林夜揭穿列车长的记忆交易",
+    "parentId": "f88089a8-ef2e-4e5f-8282-fd3cb6f4bbc2",
+    "sourceHash": "1fcd8455e8d7b5ca520049d4c8fbead417d250e9b474c1f6c64fa1fbfd773ed3",
+    "lock": {
+      "ok": true,
+      "data": {
+        "objectType": "SCRIPT_VERSION",
+        "objectVersionId": "f88089a8-ef2e-4e5f-8282-fd3cb6f4bbc2",
+        "lockedPaths": [
+          "/data/climax"
+        ]
+      }
+    },
+    "lockedRewrite": {
+      "ok": false,
+      "error": {
+        "code": "SHOT_LOCK_CONFLICT",
+        "message": "改写范围包含已锁定字段",
+        "retryable": false,
+        "userAction": null,
+        "fieldErrors": null,
+        "traceId": "3eada7dd-20d5-44a0-86ff-916bd7a8114e"
+      }
+    },
+    "lockedCurrentHash": "c3bee286b03af835f111772549692ec1563aff6662f7fa233ffe27082292ab76",
+    "unlocked": {
+      "ok": true,
+      "data": {
+        "objectType": "SCRIPT_VERSION",
+        "objectVersionId": "f88089a8-ef2e-4e5f-8282-fd3cb6f4bbc2",
+        "lockedPaths": []
+      }
+    },
+    "stale": {
+      "ok": false,
+      "error": {
+        "code": "STALE_INPUT",
+        "message": "输入版本或锁已变化，请刷新后重试",
+        "retryable": false,
+        "userAction": null,
+        "fieldErrors": null,
+        "traceId": "68a6b91e-1660-4f00-9895-7f63579c49c5"
+      }
+    }
+  }
+}

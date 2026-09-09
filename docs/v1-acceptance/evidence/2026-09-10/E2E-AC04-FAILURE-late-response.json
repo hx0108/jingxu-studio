@@ -1,0 +1,111 @@
+{
+  "cancelled": {
+    "ok": true,
+    "data": {
+      "errorCode": null,
+      "id": "3bc5b159-3035-4940-bef4-ebe3d6bcd26a",
+      "projectId": "project_30fc3804-0ea3-4ccf-b2b7-060e3c3db914",
+      "status": "CANCELLED",
+      "versionId": "3bc5b159-3035-4940-bef4-ebe3d6bcd26a"
+    }
+  },
+  "current": {
+    "errorCode": null,
+    "id": "3bc5b159-3035-4940-bef4-ebe3d6bcd26a",
+    "projectId": "project_30fc3804-0ea3-4ccf-b2b7-060e3c3db914",
+    "status": "CANCELLED",
+    "versionId": "3bc5b159-3035-4940-bef4-ebe3d6bcd26a"
+  },
+  "originalHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
+  "projectId": "project_30fc3804-0ea3-4ccf-b2b7-060e3c3db914",
+  "scenario": "late-response",
+  "status": "CANCELLED",
+  "workspace": {
+    "ok": true,
+    "data": {
+      "currentJob": null,
+      "episode": {
+        "id": "episode_26f0388c-b7cb-4858-8e13-152f5e2375fb",
+        "projectId": "project_30fc3804-0ea3-4ccf-b2b7-060e3c3db914",
+        "targetDurationSec": 90,
+        "title": "第 1 集"
+      },
+      "prerequisites": [
+        {
+          "message": "前置条件已满足",
+          "ready": true,
+          "stage": "CONCEPT"
+        },
+        {
+          "message": "请先确认 CONCEPT READY 版本",
+          "ready": false,
+          "stage": "STORY_BIBLE"
+        },
+        {
+          "message": "请先确认 CONCEPT、STORY_BIBLE READY 版本",
+          "ready": false,
+          "stage": "EPISODE_OUTLINE"
+        },
+        {
+          "message": "请先确认 STORY_BIBLE、EPISODE_OUTLINE READY 版本",
+          "ready": false,
+          "stage": "BEAT_SHEET"
+        },
+        {
+          "message": "请先确认 STORY_BIBLE、BEAT_SHEET READY 版本",
+          "ready": false,
+          "stage": "SCENE_SCRIPT"
+        }
+      ],
+      "projectId": "project_30fc3804-0ea3-4ccf-b2b7-060e3c3db914",
+      "source": {
+        "characterCount": 21,
+        "contentHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
+        "creativeText": "一名侦探必须在列车抵达终点前找出记忆窃贼。",
+        "id": "source_5dd09ce8-1e23-4b39-a256-885669f8c15f",
+        "inputKind": "CREATIVE",
+        "fileName": null,
+        "encoding": null,
+        "projectId": "project_30fc3804-0ea3-4ccf-b2b7-060e3c3db914"
+      },
+      "storyboard": {
+        "current": null,
+        "history": [],
+        "shots": [],
+        "totalDurationSec": 0
+      },
+      "stages": [
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": true,
+          "stage": "CONCEPT"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "STORY_BIBLE"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "EPISODE_OUTLINE"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "BEAT_SHEET"
+        },
+        {
+          "current": null,
+          "history": [],
+          "prerequisiteReady": false,
+          "stage": "SCENE_SCRIPT"
+        }
+      ]
+    }
+  }
+}
