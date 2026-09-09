@@ -1,0 +1,23 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "镜序 Studio UI 重设计（剪辑台/墨韵）": {
+      "versions": [
+        {
+          "path": "index.html",
+          "createdAt": "2026-09-09T19:45:35.691Z",
+          "status": "needs-review",
+          "subtitle": "去 AI 味双方向 · 全六阶段+设置 · 无头验证通过",
+          "viewport": {
+            "width": 1728,
+            "height": 1080
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-09-09T19:45:35.708Z",
+  "updatedAt": "2026-09-09T19:49:59.734Z"
+}

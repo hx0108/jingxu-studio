@@ -6,7 +6,7 @@
 .global-sidebar {
   height: 100vh;
   padding: 0;
-  background: #090f1e;
+  background: #0a0a0c;
 }
 .brand-lockup {
   height: 64px;
@@ -40,7 +40,7 @@
   border: 1px solid var(--jx-line-soft);
   border-radius: 10px;
   margin: 10px;
-  background: #0d1526;
+  background: #141418;
 }
 .project-shell {
   min-height: 100vh;
@@ -55,7 +55,7 @@
   padding: 0 20px;
   border-bottom: 1px solid var(--jx-line-soft);
   margin: 0;
-  background: rgb(8 13 25 / 96%);
+  background: rgb(14 14 17 / 96%);
 }
 .workspace-breadcrumbs {
   display: flex;
@@ -68,7 +68,7 @@
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: #586780;
+  background: #4a4a52;
 }
 .workspace-breadcrumbs strong {
   color: var(--jx-text);
@@ -150,7 +150,7 @@
   font-size: 13px;
 }
 .inspector-tabs button.active {
-  background: #2c437d;
+  background: #42301c;
   color: var(--jx-text);
 }
 .inspector-content,
@@ -184,21 +184,21 @@
   border-radius: 8px;
 }
 .production-phase.active {
-  border-color: #425aab;
+  border-color: #8a5a28;
   background: var(--jx-accent-soft);
 }
 .phase-indicator {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #3d4960;
+  background: #3a3a42;
 }
 .production-phase.done .phase-indicator {
   background: var(--jx-success);
 }
 .production-phase.active .phase-indicator {
   background: var(--jx-accent);
-  box-shadow: 0 0 0 4px rgb(143 168 255 / 10%);
+  box-shadow: 0 0 0 3px rgb(226 133 61 / 14%);
 }
 .script-substage-navigation {
   gap: 2px;
@@ -283,8 +283,8 @@
   width: 48px;
   height: 48px;
   border-radius: 9px;
-  background: #294584;
-  color: #f6f8ff;
+  background: #42301c;
+  color: #f0c88f;
   font-size: 18px;
   place-items: center;
 }
@@ -335,19 +335,19 @@
   min-width: 76px;
   min-height: 36px;
   padding: 0 10px;
-  border: 1px solid #435780;
+  border: 1px solid #3a3a42;
   border-radius: 8px;
-  background: #182541;
-  color: #cbd6ef;
+  background: #1e1e24;
+  color: #b5b3ac;
   font-size: 13px;
   line-height: 1;
   place-items: center;
   white-space: nowrap;
 }
 .model-configuration-status.configured {
-  border-color: #347360;
-  background: #143a36;
-  color: #6ce5b1;
+  border-color: #2e4a3a;
+  background: #15271e;
+  color: #74b98d;
 }
 
 @media (width <= 1360px) {

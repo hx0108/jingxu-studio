@@ -1,0 +1,6 @@
+- [x] 设计原型：双方向（CINE 剪辑台 / INK 墨韵）全六阶段 + 设置，CINE 深化（状态系统、密度、累计时间码），Playwright 无头验证通过（`designs/jingxu-studio-redesign/`）。
+- [x] `styles.css` / `prototype-alignment.css` 全量色值角色映射到 CINE（靛蓝→琥珀、海军蓝→碳灰、蓝调白→暖中性；渐变光晕改平涂）。
+- [x] `:root` 定义 `--jx-*` 令牌与字体栈，修复 `var(--jx-*)` 未定义引用（此前边框/面板底/指示点静默失效）。
+- [x] IBM Plex Sans/Mono + Noto Sans SC 共 117 个 woff2 切片本地打包至 `src/renderer/src/assets/fonts/`，`main.tsx` 接线（CSP `default-src 'self'` 兼容）。
+- [x] `tsc --noEmit` 与三段 vite 构建（main/preload/renderer）通过。
+- [x] `prototype-aligned-workspace.e2e.spec.ts` 通过（216/264/368 布局断言不变），renderer ui 单测 23 项通过。

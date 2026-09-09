@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 
 import { App } from './App';
 import { createQueryClient } from './lib/query-client';
+import './assets/fonts/fonts.css';
 import './styles.css';
 import './prototype-alignment.css';
 
