@@ -46,7 +46,7 @@
         "override_reason": null
       },
       "derived_from_shot_ids": [],
-      "format_profile_id": "format_profile_349522c6-2ff6-4cfa-9de5-7fc0227671b7",
+      "format_profile_id": "format_profile_72e3982f-5870-46d2-8f85-8db3143334b4",
       "generation_constraints": {
         "capability_requirements": [
           {
@@ -71,18 +71,18 @@
         "/content/action"
       ],
       "narrative_purpose": "开场：车厢全景，无人回应",
-      "parent_version_id": "scv_a3865e2c-9c33-468a-abe8-96ce1cf3abcd_v2",
+      "parent_version_id": "scv_1a656808-3069-4673-b432-58b6a81e55cd_v2",
       "provenance": {
         "last_edit_source": "AI",
-        "source_invocation_id": "495f88e5-6920-4006-9d4f-bbc256f546d0",
+        "source_invocation_id": "57fdf9d2-f49e-471e-8b0e-4472e8bd2f97",
         "source_type": "AI_GENERATED"
       },
       "schema_version": "1.1.0",
       "sequence": 1,
-      "shot_id": "shot_fec3bcf1-6f38-46ff-9a2f-799e7d13f3d1",
+      "shot_id": "shot_1f9a5018-5796-41c6-b40a-94e7d970f206",
       "target_duration_sec": 15,
       "status": "READY",
-      "version_id": "scv_564da24d-e941-422a-a926-e104652a0545_v3"
+      "version_id": "scv_ae822e3d-a225-4f1d-86aa-bca9775bcb5f_v3"
     },
     "dialogueRenderMode": "NARRATION_FIRST",
     "lockedPaths": [
@@ -90,10 +90,10 @@
     ],
     "narrativePurpose": "开场：车厢全景，无人回应",
     "sequence": 1,
-    "shotId": "shot_fec3bcf1-6f38-46ff-9a2f-799e7d13f3d1",
+    "shotId": "shot_1f9a5018-5796-41c6-b40a-94e7d970f206",
     "shotSize": "MEDIUM",
     "targetDurationSec": 15,
-    "versionId": "scv_564da24d-e941-422a-a926-e104652a0545_v3"
+    "versionId": "scv_ae822e3d-a225-4f1d-86aa-bca9775bcb5f_v3"
   },
   "edited": {
     "ok": false,
@@ -105,7 +105,7 @@
       "fieldErrors": {
         "lockedPaths": "/content/action"
       },
-      "traceId": "ec9bf24c-9f7b-48d5-a588-d38b9f91d075"
+      "traceId": "e0c3644a-76e7-453e-a416-eeb7478b0a7b"
     }
   },
   "invalid": [
@@ -119,7 +119,7 @@
         "fieldErrors": {
           "jsonPointer": "LOCK_POINTER_MALFORMED:/content/action~2"
         },
-        "traceId": "2cd15888-b4a4-4744-9b82-af0f2ed3e912"
+        "traceId": "4723dda3-9447-4c7a-b0e2-cf57e2b7b6a0"
       }
     },
     {
@@ -132,7 +132,7 @@
         "fieldErrors": {
           "jsonPointer": "LOCK_PATH_UNRESOLVED:/content/missing"
         },
-        "traceId": "3a893203-fbe8-4b8e-bde7-5d5ad581658e"
+        "traceId": "68b3edd5-4e14-45e6-a600-a97b66802c6e"
       }
     },
     {
@@ -145,7 +145,7 @@
         "fieldErrors": {
           "jsonPointer": "LOCK_ARRAY_INDEX_FORBIDDEN:/content/character_ids/0"
         },
-        "traceId": "7430a744-8ed3-49bc-a569-97a7035db282"
+        "traceId": "5e299bdb-a2ad-44e3-8207-48ffa4e41c11"
       }
     }
   ],
@@ -153,22 +153,22 @@
     "ok": true,
     "data": {
       "episode": {
-        "createdAt": "2026-09-10T02:40:16.290Z",
-        "episodeId": "episode_2aa48f0d-0a89-48c7-9cc5-a23b116719d5",
-        "formatProfileId": "format_profile_349522c6-2ff6-4cfa-9de5-7fc0227671b7",
-        "id": "546e5291-3a68-4fe2-bc06-2f19d7b07258",
-        "parentId": "b3e11772-7524-4966-b6e3-21b862a1dd7f",
+        "createdAt": "2026-09-10T09:11:12.328Z",
+        "episodeId": "episode_22f9e69b-cfb4-49bb-bf3e-731d709d9e41",
+        "formatProfileId": "format_profile_72e3982f-5870-46d2-8f85-8db3143334b4",
+        "id": "92f05678-1475-4d22-ad26-233efded29a2",
+        "parentId": "2de4161a-9ab6-4ebc-9db8-c3809ee51d75",
         "shotCount": 6,
-        "shotSetHash": "6fb837dbbe7394272ad1d6156068519491929cad6b4c097765039414cc23f523",
+        "shotSetHash": "c49e5b00904d635f97c4022d03c8cceefb09fa8cad0d84c67e62e29efb7bfe06",
         "status": "READY",
-        "storyBibleVersionId": "4f3f706c-742c-44c1-b782-2afabe851bb8",
+        "storyBibleVersionId": "e0fbca25-01da-41e7-b056-b4f31c712713",
         "targetDurationSec": 90,
         "versionNo": 3
       },
       "lockedPaths": [
         "/content/action"
       ],
-      "shotVersionId": "scv_564da24d-e941-422a-a926-e104652a0545_v3"
+      "shotVersionId": "scv_ae822e3d-a225-4f1d-86aa-bca9775bcb5f_v3"
     }
   },
   "stale": {
@@ -179,7 +179,7 @@
       "retryable": false,
       "userAction": null,
       "fieldErrors": null,
-      "traceId": "5516fb58-88a2-4117-95db-6e2c31c5be67"
+      "traceId": "88e65096-0f47-49db-89bd-12ceb35788b4"
     }
   }
 }

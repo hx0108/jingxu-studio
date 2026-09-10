@@ -1,8 +1,8 @@
 {
   "imported": {
-    "importId": "import_b84c81ef-9f5e-40ae-a71a-31bf0f6fefd2",
-    "projectId": "project_project_d3bca560-d17d-4082-84f4-dc1d3cb6a780",
-    "sourceProjectId": "project_8cd587b1-4488-43e4-8d6d-8e4061943b96",
+    "importId": "import_f657b590-c40e-4499-b686-2f4c93502b1a",
+    "projectId": "project_project_b1628a68-ae92-4101-8de0-ea5e7589f36c",
+    "sourceProjectId": "project_083e039c-3cf9-4d78-8f4d-7da6e4be5286",
     "warningCodes": [
       "TRANSFER_CURRENT_ONLY",
       "TRANSFER_IMPORTED_SNAPSHOT_REQUIRES_SOURCE"
@@ -11,14 +11,14 @@
   },
   "result": {
     "afterCopyShotIds": [
-      "shot_91f91833-e405-4fd9-a6da-a0aedfb9cd12",
-      "shot_7e676fa0-9462-4cfb-968f-22b2ffc7b3dc",
-      "shot_3aa2f253-52ca-4339-b339-58a2ac7f3b12",
-      "shot_fa915d82-2102-45c1-ad8f-c038ff6c7e82",
-      "shot_c52db02b-da9e-4085-ac2a-83ef31fc5f29",
-      "shot_53260d97-490b-427f-b8a0-8f3ef46cb677",
-      "shot_6686c3dd-25c2-4df3-9cdf-aeb6539120c0",
-      "shot_5e9fb8e3-a0ba-47e7-8c45-6965a5257218"
+      "shot_19e7470a-eaee-4ff9-9434-f79baf5499ca",
+      "shot_7e12ed31-10c2-4949-b4c0-f3db51feb47c",
+      "shot_2c8394c6-5a76-4e24-aba7-54c89ee5de5a",
+      "shot_f8a982ad-1c01-43e6-b9bd-2415e6305b63",
+      "shot_8b5e9f1c-d73a-4b76-a880-5a0fc4a2c6e2",
+      "shot_2a7d753c-74cc-48df-9c90-ad676093b681",
+      "shot_dfd2338f-7bcf-46a1-884c-a4e27364b650",
+      "shot_3e0d9c8a-41a0-4cc6-88e4-27ed248dbf95"
     ],
     "afterRestore": [
       {
@@ -67,9 +67,9 @@
             "override_reason": null
           },
           "derived_from_shot_ids": [
-            "shot_b7c33249-f22b-4153-a020-e4de5cfc7082"
+            "shot_e4d03b7b-e18a-41b7-947f-5193ad490906"
           ],
-          "format_profile_id": "format_profile_4e044c02-eb5a-41f1-bb0b-8b85cc2fb6df",
+          "format_profile_id": "format_profile_ed7d1d31-73aa-44ff-99f9-8a5bf7c690c0",
           "generation_constraints": {
             "capability_requirements": [
               {
@@ -92,22 +92,22 @@
           },
           "locked_paths": [],
           "narrative_purpose": "开场：车厢全景，无人回应",
-          "parent_version_id": "scv_cb9515d7-05a7-4040-93fb-64ee269630f2_v1",
+          "parent_version_id": "scv_b1206742-6344-4413-9235-a617074a5862_v1",
           "provenance": {
             "last_edit_source": "AI",
-            "source_invocation_id": "c7e40f95-33d0-435a-a7ed-959dcc5620ef",
+            "source_invocation_id": "2f7a8bba-a9f6-46f3-9137-9e9f4f92e4a9",
             "source_type": "AI_GENERATED"
           },
           "schema_version": "1.1.0",
           "sequence": 1,
-          "shot_id": "shot_3aa2f253-52ca-4339-b339-58a2ac7f3b12",
+          "shot_id": "shot_2c8394c6-5a76-4e24-aba7-54c89ee5de5a",
           "target_duration_sec": 15,
           "status": "READY",
-          "version_id": "scv_cb7f52c5-2421-4828-9b47-19626a9ef80d_v2"
+          "version_id": "scv_60e1868b-1d09-44b4-bef4-c21f42bf4631_v2"
         },
         "sequence": 1,
-        "shotId": "shot_3aa2f253-52ca-4339-b339-58a2ac7f3b12",
-        "versionId": "scv_cb7f52c5-2421-4828-9b47-19626a9ef80d_v2"
+        "shotId": "shot_2c8394c6-5a76-4e24-aba7-54c89ee5de5a",
+        "versionId": "scv_60e1868b-1d09-44b4-bef4-c21f42bf4631_v2"
       },
       {
         "document": {
@@ -142,7 +142,7 @@
             "first_frame_requirement": "林夜攥紧怀表起身，动作连贯起帧",
             "last_frame_requirement": "林夜攥紧怀表起身，动作连贯止帧",
             "asset_version_ids": [],
-            "previous_shot_id": "shot_b7c33249-f22b-4153-a020-e4de5cfc7082"
+            "previous_shot_id": "shot_e4d03b7b-e18a-41b7-947f-5193ad490906"
           },
           "contract_version": 3,
           "dialogue": {
@@ -155,7 +155,7 @@
             "override_reason": null
           },
           "derived_from_shot_ids": [],
-          "format_profile_id": "format_profile_4e044c02-eb5a-41f1-bb0b-8b85cc2fb6df",
+          "format_profile_id": "format_profile_ed7d1d31-73aa-44ff-99f9-8a5bf7c690c0",
           "generation_constraints": {
             "capability_requirements": [
               {
@@ -178,22 +178,22 @@
           },
           "locked_paths": [],
           "narrative_purpose": "林夜攥紧怀表起身，动作连贯",
-          "parent_version_id": "scv_da012fc4-02da-4eb4-b529-abbc1fb83505_v2",
+          "parent_version_id": "scv_ce65b2c3-5feb-4d6e-8e22-d1a90b86ae17_v2",
           "provenance": {
             "last_edit_source": "AI",
-            "source_invocation_id": "c7e40f95-33d0-435a-a7ed-959dcc5620ef",
+            "source_invocation_id": "2f7a8bba-a9f6-46f3-9137-9e9f4f92e4a9",
             "source_type": "AI_GENERATED"
           },
           "schema_version": "1.1.0",
           "sequence": 2,
-          "shot_id": "shot_fa915d82-2102-45c1-ad8f-c038ff6c7e82",
+          "shot_id": "shot_f8a982ad-1c01-43e6-b9bd-2415e6305b63",
           "target_duration_sec": 15,
           "status": "READY",
-          "version_id": "scv_864e6963-82e6-4eb9-86bc-dac43c5e17c7_v3"
+          "version_id": "scv_b698afc6-e349-4345-8305-490510ae1ac6_v3"
         },
         "sequence": 2,
-        "shotId": "shot_fa915d82-2102-45c1-ad8f-c038ff6c7e82",
-        "versionId": "scv_864e6963-82e6-4eb9-86bc-dac43c5e17c7_v3"
+        "shotId": "shot_f8a982ad-1c01-43e6-b9bd-2415e6305b63",
+        "versionId": "scv_b698afc6-e349-4345-8305-490510ae1ac6_v3"
       },
       {
         "document": {
@@ -239,7 +239,7 @@
             "override_reason": null
           },
           "derived_from_shot_ids": [],
-          "format_profile_id": "format_profile_4e044c02-eb5a-41f1-bb0b-8b85cc2fb6df",
+          "format_profile_id": "format_profile_ed7d1d31-73aa-44ff-99f9-8a5bf7c690c0",
           "generation_constraints": {
             "capability_requirements": [
               {
@@ -262,22 +262,22 @@
           },
           "locked_paths": [],
           "narrative_purpose": "空镜：窗外流动的夜色",
-          "parent_version_id": "scv_d8968e3a-e5e2-4a94-9e3f-c11e03a51a2c_v2",
+          "parent_version_id": "scv_46d7351c-223a-4788-a6ad-7a6b00e0eb45_v2",
           "provenance": {
             "last_edit_source": "AI",
-            "source_invocation_id": "c7e40f95-33d0-435a-a7ed-959dcc5620ef",
+            "source_invocation_id": "2f7a8bba-a9f6-46f3-9137-9e9f4f92e4a9",
             "source_type": "AI_GENERATED"
           },
           "schema_version": "1.1.0",
           "sequence": 3,
-          "shot_id": "shot_c52db02b-da9e-4085-ac2a-83ef31fc5f29",
+          "shot_id": "shot_8b5e9f1c-d73a-4b76-a880-5a0fc4a2c6e2",
           "target_duration_sec": 15,
           "status": "READY",
-          "version_id": "scv_86a28f0c-f90b-49ef-b11e-2f88ed605ccc_v3"
+          "version_id": "scv_345feff5-df49-470c-b7d0-5b1cc5526bc5_v3"
         },
         "sequence": 3,
-        "shotId": "shot_c52db02b-da9e-4085-ac2a-83ef31fc5f29",
-        "versionId": "scv_86a28f0c-f90b-49ef-b11e-2f88ed605ccc_v3"
+        "shotId": "shot_8b5e9f1c-d73a-4b76-a880-5a0fc4a2c6e2",
+        "versionId": "scv_345feff5-df49-470c-b7d0-5b1cc5526bc5_v3"
       },
       {
         "document": {
@@ -325,7 +325,7 @@
             "override_reason": null
           },
           "derived_from_shot_ids": [],
-          "format_profile_id": "format_profile_4e044c02-eb5a-41f1-bb0b-8b85cc2fb6df",
+          "format_profile_id": "format_profile_ed7d1d31-73aa-44ff-99f9-8a5bf7c690c0",
           "generation_constraints": {
             "capability_requirements": [
               {
@@ -348,22 +348,22 @@
           },
           "locked_paths": [],
           "narrative_purpose": "林夜质问列车长",
-          "parent_version_id": "scv_217bbd8a-c890-4fe2-a7cd-dbf354ecb3b4_v2",
+          "parent_version_id": "scv_2639a18e-45ad-42a7-b712-22d3a5287ed8_v2",
           "provenance": {
             "last_edit_source": "AI",
-            "source_invocation_id": "c7e40f95-33d0-435a-a7ed-959dcc5620ef",
+            "source_invocation_id": "2f7a8bba-a9f6-46f3-9137-9e9f4f92e4a9",
             "source_type": "AI_GENERATED"
           },
           "schema_version": "1.1.0",
           "sequence": 4,
-          "shot_id": "shot_53260d97-490b-427f-b8a0-8f3ef46cb677",
+          "shot_id": "shot_2a7d753c-74cc-48df-9c90-ad676093b681",
           "target_duration_sec": 15,
           "status": "READY",
-          "version_id": "scv_6330217b-35c8-4951-b6f2-dfa8893b235f_v3"
+          "version_id": "scv_4a26d5a5-0f7c-4929-91af-40fd04a556c5_v3"
         },
         "sequence": 4,
-        "shotId": "shot_53260d97-490b-427f-b8a0-8f3ef46cb677",
-        "versionId": "scv_6330217b-35c8-4951-b6f2-dfa8893b235f_v3"
+        "shotId": "shot_2a7d753c-74cc-48df-9c90-ad676093b681",
+        "versionId": "scv_4a26d5a5-0f7c-4929-91af-40fd04a556c5_v3"
       },
       {
         "document": {
@@ -398,7 +398,7 @@
             "first_frame_requirement": "连续动作：林夜追向车尾起帧",
             "last_frame_requirement": "连续动作：林夜追向车尾止帧",
             "asset_version_ids": [],
-            "previous_shot_id": "shot_53260d97-490b-427f-b8a0-8f3ef46cb677"
+            "previous_shot_id": "shot_2a7d753c-74cc-48df-9c90-ad676093b681"
           },
           "contract_version": 3,
           "dialogue": {
@@ -411,7 +411,7 @@
             "override_reason": null
           },
           "derived_from_shot_ids": [],
-          "format_profile_id": "format_profile_4e044c02-eb5a-41f1-bb0b-8b85cc2fb6df",
+          "format_profile_id": "format_profile_ed7d1d31-73aa-44ff-99f9-8a5bf7c690c0",
           "generation_constraints": {
             "capability_requirements": [
               {
@@ -434,22 +434,22 @@
           },
           "locked_paths": [],
           "narrative_purpose": "连续动作：林夜追向车尾",
-          "parent_version_id": "scv_665f3e1d-5624-46bd-bc9e-48e33af7ff47_v2",
+          "parent_version_id": "scv_9b0fee5b-97e5-4a23-a197-c0a1124d7e35_v2",
           "provenance": {
             "last_edit_source": "AI",
-            "source_invocation_id": "c7e40f95-33d0-435a-a7ed-959dcc5620ef",
+            "source_invocation_id": "2f7a8bba-a9f6-46f3-9137-9e9f4f92e4a9",
             "source_type": "AI_GENERATED"
           },
           "schema_version": "1.1.0",
           "sequence": 5,
-          "shot_id": "shot_6686c3dd-25c2-4df3-9cdf-aeb6539120c0",
+          "shot_id": "shot_dfd2338f-7bcf-46a1-884c-a4e27364b650",
           "target_duration_sec": 15,
           "status": "READY",
-          "version_id": "scv_e15db81d-c528-4e5f-9046-a48258f43ab0_v3"
+          "version_id": "scv_d9f18d07-f27d-4a37-8591-bc70414478b9_v3"
         },
         "sequence": 5,
-        "shotId": "shot_6686c3dd-25c2-4df3-9cdf-aeb6539120c0",
-        "versionId": "scv_e15db81d-c528-4e5f-9046-a48258f43ab0_v3"
+        "shotId": "shot_dfd2338f-7bcf-46a1-884c-a4e27364b650",
+        "versionId": "scv_d9f18d07-f27d-4a37-8591-bc70414478b9_v3"
       },
       {
         "document": {
@@ -495,7 +495,7 @@
             "override_reason": null
           },
           "derived_from_shot_ids": [],
-          "format_profile_id": "format_profile_4e044c02-eb5a-41f1-bb0b-8b85cc2fb6df",
+          "format_profile_id": "format_profile_ed7d1d31-73aa-44ff-99f9-8a5bf7c690c0",
           "generation_constraints": {
             "capability_requirements": [
               {
@@ -518,22 +518,22 @@
           },
           "locked_paths": [],
           "narrative_purpose": "结尾钩子：怀表传出声音",
-          "parent_version_id": "scv_4b325a5c-9e9c-405e-ab11-d932c84e37e3_v2",
+          "parent_version_id": "scv_e8362556-7f58-41a0-91ef-d43a4b4fcca3_v2",
           "provenance": {
             "last_edit_source": "AI",
-            "source_invocation_id": "c7e40f95-33d0-435a-a7ed-959dcc5620ef",
+            "source_invocation_id": "2f7a8bba-a9f6-46f3-9137-9e9f4f92e4a9",
             "source_type": "AI_GENERATED"
           },
           "schema_version": "1.1.0",
           "sequence": 6,
-          "shot_id": "shot_5e9fb8e3-a0ba-47e7-8c45-6965a5257218",
+          "shot_id": "shot_3e0d9c8a-41a0-4cc6-88e4-27ed248dbf95",
           "target_duration_sec": 15,
           "status": "READY",
-          "version_id": "scv_c2cd57a3-de74-4621-8798-a7fea0f30a3f_v3"
+          "version_id": "scv_df8f14d2-1b92-4d41-ace8-0ab29f4d3026_v3"
         },
         "sequence": 6,
-        "shotId": "shot_5e9fb8e3-a0ba-47e7-8c45-6965a5257218",
-        "versionId": "scv_c2cd57a3-de74-4621-8798-a7fea0f30a3f_v3"
+        "shotId": "shot_3e0d9c8a-41a0-4cc6-88e4-27ed248dbf95",
+        "versionId": "scv_df8f14d2-1b92-4d41-ace8-0ab29f4d3026_v3"
       },
       {
         "document": {
@@ -581,9 +581,9 @@
             "override_reason": null
           },
           "derived_from_shot_ids": [
-            "shot_b7c33249-f22b-4153-a020-e4de5cfc7082"
+            "shot_e4d03b7b-e18a-41b7-947f-5193ad490906"
           ],
-          "format_profile_id": "format_profile_4e044c02-eb5a-41f1-bb0b-8b85cc2fb6df",
+          "format_profile_id": "format_profile_ed7d1d31-73aa-44ff-99f9-8a5bf7c690c0",
           "generation_constraints": {
             "capability_requirements": [
               {
@@ -606,34 +606,34 @@
           },
           "locked_paths": [],
           "narrative_purpose": "开场：车厢全景，无人回应",
-          "parent_version_id": "scv_5a5d1930-15e7-4a79-9706-14d2a28b3c1e_v1",
+          "parent_version_id": "scv_97b5c630-9ff0-4b14-9f59-dd62761273de_v1",
           "provenance": {
             "last_edit_source": "AI",
-            "source_invocation_id": "c7e40f95-33d0-435a-a7ed-959dcc5620ef",
+            "source_invocation_id": "2f7a8bba-a9f6-46f3-9137-9e9f4f92e4a9",
             "source_type": "AI_GENERATED"
           },
           "schema_version": "1.1.0",
           "sequence": 7,
-          "shot_id": "shot_37617ec1-1aa4-4519-aa2e-2be3e7b81e0f",
+          "shot_id": "shot_bd8cce6f-b12e-4fa7-83ee-ad59804c740e",
           "target_duration_sec": 15,
           "status": "READY",
-          "version_id": "scv_d448a803-e460-46db-b21d-9da9cad7ecd6_v2"
+          "version_id": "scv_c24de742-17bb-40be-a36d-999c16c0b423_v2"
         },
         "sequence": 7,
-        "shotId": "shot_37617ec1-1aa4-4519-aa2e-2be3e7b81e0f",
-        "versionId": "scv_d448a803-e460-46db-b21d-9da9cad7ecd6_v2"
+        "shotId": "shot_bd8cce6f-b12e-4fa7-83ee-ad59804c740e",
+        "versionId": "scv_c24de742-17bb-40be-a36d-999c16c0b423_v2"
       }
     ],
-    "copiedSourceId": "shot_91f91833-e405-4fd9-a6da-a0aedfb9cd12",
+    "copiedSourceId": "shot_19e7470a-eaee-4ff9-9434-f79baf5499ca",
     "exportResult": {
       "byteSize": 17718,
-      "exportId": "export_ae2dde2c-a6bb-4ddf-b3e6-82eef6fd36ad",
-      "fileSha256": "4384ea9d6f265991d2d838efd964007ab5973944bbb1b3112d57f3ec1b37c278",
+      "exportId": "export_24d2d98f-6102-4d73-b88f-ec2672f441ed",
+      "fileSha256": "d3addeccb3feed0e1eaec94baad58888308538d19b399ca96ea891d551eaa54e",
       "warningCodes": [
         "TRANSFER_CURRENT_ONLY"
       ]
     },
     "initialShotCount": 6,
-    "projectId": "project_8cd587b1-4488-43e4-8d6d-8e4061943b96"
+    "projectId": "project_083e039c-3cf9-4d78-8f4d-7da6e4be5286"
   }
 }

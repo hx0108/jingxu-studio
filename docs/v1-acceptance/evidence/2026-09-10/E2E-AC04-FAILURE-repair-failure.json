@@ -2,13 +2,13 @@
   "cancelled": null,
   "current": {
     "errorCode": "STRUCTURE_REPAIR_FAILED",
-    "id": "1dd4ac2d-1e6a-46dc-afd9-9d88d1b26bb8",
-    "projectId": "project_c960171a-7fb5-4f85-9a3e-594d916d2cda",
+    "id": "a6ad34c6-e5f8-44d1-b3c3-5fa8d568fe03",
+    "projectId": "project_21d17d31-a5f9-4c5c-891d-3199bdc2f9d6",
     "status": "FAILED",
-    "versionId": "1dd4ac2d-1e6a-46dc-afd9-9d88d1b26bb8"
+    "versionId": "a6ad34c6-e5f8-44d1-b3c3-5fa8d568fe03"
   },
   "originalHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
-  "projectId": "project_c960171a-7fb5-4f85-9a3e-594d916d2cda",
+  "projectId": "project_21d17d31-a5f9-4c5c-891d-3199bdc2f9d6",
   "scenario": "repair-failure",
   "status": "FAILED",
   "workspace": {
@@ -16,8 +16,8 @@
     "data": {
       "currentJob": null,
       "episode": {
-        "id": "episode_de5bcbfc-e2fd-4bc4-bf48-4df2a7a377dd",
-        "projectId": "project_c960171a-7fb5-4f85-9a3e-594d916d2cda",
+        "id": "episode_8b838460-e73a-4b0e-8f86-228d917bfec5",
+        "projectId": "project_21d17d31-a5f9-4c5c-891d-3199bdc2f9d6",
         "targetDurationSec": 90,
         "title": "第 1 集"
       },
@@ -48,16 +48,16 @@
           "stage": "SCENE_SCRIPT"
         }
       ],
-      "projectId": "project_c960171a-7fb5-4f85-9a3e-594d916d2cda",
+      "projectId": "project_21d17d31-a5f9-4c5c-891d-3199bdc2f9d6",
       "source": {
         "characterCount": 21,
         "contentHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
         "creativeText": "一名侦探必须在列车抵达终点前找出记忆窃贼。",
-        "id": "source_3d8048af-9c8d-4879-bc90-58f5dd545b87",
+        "id": "source_f3418c8c-4b2a-4649-83c6-aa36ea8b0b7d",
         "inputKind": "CREATIVE",
         "fileName": null,
         "encoding": null,
-        "projectId": "project_c960171a-7fb5-4f85-9a3e-594d916d2cda"
+        "projectId": "project_21d17d31-a5f9-4c5c-891d-3199bdc2f9d6"
       },
       "storyboard": {
         "current": null,

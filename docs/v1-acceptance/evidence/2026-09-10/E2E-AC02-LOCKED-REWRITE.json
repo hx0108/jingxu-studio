@@ -4,8 +4,8 @@
     "data": {
       "currentJob": null,
       "episode": {
-        "id": "episode_ed34d2d7-afae-46f9-8403-a2892ac79e6d",
-        "projectId": "project_7f6aeb65-251e-4cfd-b7fd-d0be8488a676",
+        "id": "episode_6d601d56-3e46-4cb7-a27c-ad8651365360",
+        "projectId": "project_27195edc-b88b-44ac-97e9-d03aa726d31f",
         "targetDurationSec": 90,
         "title": "第 1 集"
       },
@@ -36,16 +36,16 @@
           "stage": "SCENE_SCRIPT"
         }
       ],
-      "projectId": "project_7f6aeb65-251e-4cfd-b7fd-d0be8488a676",
+      "projectId": "project_27195edc-b88b-44ac-97e9-d03aa726d31f",
       "source": {
         "characterCount": 17,
         "contentHash": "a0484663545141c3ebab4748e0e492ce7ed3c4a76c5304e0da2d6378e7be52a2",
         "creativeText": "# 已有剧本\n林岚在站台等候列车。",
-        "id": "source_0f49a2d3-208a-4260-97df-b49429b83308",
+        "id": "source_d25c3f00-b629-4916-b87b-4ddeb40328f6",
         "inputKind": "MARKDOWN",
         "fileName": "existing.md",
         "encoding": "UTF-8",
-        "projectId": "project_7f6aeb65-251e-4cfd-b7fd-d0be8488a676"
+        "projectId": "project_27195edc-b88b-44ac-97e9-d03aa726d31f"
       },
       "storyboard": {
         "current": null,
@@ -88,17 +88,17 @@
     }
   },
   "rewrite": {
-    "afterHash": "bf57150c393977cb582da4729ef923ff6df5754091c336a3bad54451951752be",
+    "afterHash": "4be05af65b6e89ac29960ab7e2fcb2f3e856e7270241d1fe2440cdb65221d17e",
     "afterValue": "林夜揭穿列车长的记忆交易\n[STRENGTHEN_CONFLICT]",
-    "beforeHash": "3a7644b81ba7147e041f53c8e5e787a65cacb6c1cc9c489143dde9146dbaabb6",
+    "beforeHash": "687c8c5ab7d46ea0088c0eff4c2fe1015b691c892985090e89d089c9b997bbaa",
     "beforeValue": "林夜揭穿列车长的记忆交易",
-    "parentId": "41b60705-5d8a-4fca-ac72-d5658c5fed24",
+    "parentId": "3f48d953-c32f-4c0e-b4bc-4cf86c7676d3",
     "sourceHash": "1fcd8455e8d7b5ca520049d4c8fbead417d250e9b474c1f6c64fa1fbfd773ed3",
     "lock": {
       "ok": true,
       "data": {
         "objectType": "SCRIPT_VERSION",
-        "objectVersionId": "41b60705-5d8a-4fca-ac72-d5658c5fed24",
+        "objectVersionId": "3f48d953-c32f-4c0e-b4bc-4cf86c7676d3",
         "lockedPaths": [
           "/data/climax"
         ]
@@ -112,15 +112,15 @@
         "retryable": false,
         "userAction": null,
         "fieldErrors": null,
-        "traceId": "035bc08c-106b-413d-9794-8b3ed0677430"
+        "traceId": "b45bb6ec-dfb6-411f-b102-c0b04c2e9a4d"
       }
     },
-    "lockedCurrentHash": "3a7644b81ba7147e041f53c8e5e787a65cacb6c1cc9c489143dde9146dbaabb6",
+    "lockedCurrentHash": "687c8c5ab7d46ea0088c0eff4c2fe1015b691c892985090e89d089c9b997bbaa",
     "unlocked": {
       "ok": true,
       "data": {
         "objectType": "SCRIPT_VERSION",
-        "objectVersionId": "41b60705-5d8a-4fca-ac72-d5658c5fed24",
+        "objectVersionId": "3f48d953-c32f-4c0e-b4bc-4cf86c7676d3",
         "lockedPaths": []
       }
     },
@@ -132,7 +132,7 @@
         "retryable": false,
         "userAction": null,
         "fieldErrors": null,
-        "traceId": "badabee0-da0a-4e60-8b6a-4360cf1a7842"
+        "traceId": "3e40bdbd-2b17-46d4-9bf7-2ebd9a3f4a35"
       }
     }
   }

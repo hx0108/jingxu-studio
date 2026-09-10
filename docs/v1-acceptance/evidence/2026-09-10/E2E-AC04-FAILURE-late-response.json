@@ -3,21 +3,21 @@
     "ok": true,
     "data": {
       "errorCode": null,
-      "id": "b21f8a85-7bdd-4e70-b1e0-4d8c0444dded",
-      "projectId": "project_2b172c17-89da-4aa2-a564-1732f9cbe7ba",
+      "id": "5eb2588b-01a5-4a29-b1a0-7bde438d25d7",
+      "projectId": "project_ad9a2ca0-6779-47e5-8627-344aaa443311",
       "status": "CANCELLED",
-      "versionId": "b21f8a85-7bdd-4e70-b1e0-4d8c0444dded"
+      "versionId": "5eb2588b-01a5-4a29-b1a0-7bde438d25d7"
     }
   },
   "current": {
     "errorCode": null,
-    "id": "b21f8a85-7bdd-4e70-b1e0-4d8c0444dded",
-    "projectId": "project_2b172c17-89da-4aa2-a564-1732f9cbe7ba",
+    "id": "5eb2588b-01a5-4a29-b1a0-7bde438d25d7",
+    "projectId": "project_ad9a2ca0-6779-47e5-8627-344aaa443311",
     "status": "CANCELLED",
-    "versionId": "b21f8a85-7bdd-4e70-b1e0-4d8c0444dded"
+    "versionId": "5eb2588b-01a5-4a29-b1a0-7bde438d25d7"
   },
   "originalHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
-  "projectId": "project_2b172c17-89da-4aa2-a564-1732f9cbe7ba",
+  "projectId": "project_ad9a2ca0-6779-47e5-8627-344aaa443311",
   "scenario": "late-response",
   "status": "CANCELLED",
   "workspace": {
@@ -25,8 +25,8 @@
     "data": {
       "currentJob": null,
       "episode": {
-        "id": "episode_693221be-0434-4a07-b401-83240f359c6b",
-        "projectId": "project_2b172c17-89da-4aa2-a564-1732f9cbe7ba",
+        "id": "episode_08c12605-afd7-4323-9f6c-5f722103c032",
+        "projectId": "project_ad9a2ca0-6779-47e5-8627-344aaa443311",
         "targetDurationSec": 90,
         "title": "第 1 集"
       },
@@ -57,16 +57,16 @@
           "stage": "SCENE_SCRIPT"
         }
       ],
-      "projectId": "project_2b172c17-89da-4aa2-a564-1732f9cbe7ba",
+      "projectId": "project_ad9a2ca0-6779-47e5-8627-344aaa443311",
       "source": {
         "characterCount": 21,
         "contentHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
         "creativeText": "一名侦探必须在列车抵达终点前找出记忆窃贼。",
-        "id": "source_8f44f156-c682-4be0-b1a2-bd014a5e1ec8",
+        "id": "source_09d888ce-dd60-4e5c-b3d5-5352ba26a389",
         "inputKind": "CREATIVE",
         "fileName": null,
         "encoding": null,
-        "projectId": "project_2b172c17-89da-4aa2-a564-1732f9cbe7ba"
+        "projectId": "project_ad9a2ca0-6779-47e5-8627-344aaa443311"
       },
       "storyboard": {
         "current": null,

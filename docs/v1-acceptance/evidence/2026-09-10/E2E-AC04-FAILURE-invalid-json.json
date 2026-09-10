@@ -2,13 +2,13 @@
   "cancelled": null,
   "current": {
     "errorCode": null,
-    "id": "94086f72-be86-4210-a6aa-d82c552056bd",
-    "projectId": "project_313bbfa7-e54c-404b-ac66-5f6ba3cd9e4e",
+    "id": "2e457319-ec6c-4e36-9ad7-cd3c26fbfa74",
+    "projectId": "project_83116449-458c-47de-9cb9-2cd31b0951db",
     "status": "SUCCEEDED",
-    "versionId": "94086f72-be86-4210-a6aa-d82c552056bd"
+    "versionId": "2e457319-ec6c-4e36-9ad7-cd3c26fbfa74"
   },
   "originalHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
-  "projectId": "project_313bbfa7-e54c-404b-ac66-5f6ba3cd9e4e",
+  "projectId": "project_83116449-458c-47de-9cb9-2cd31b0951db",
   "scenario": "invalid-json",
   "status": "SUCCEEDED",
   "workspace": {
@@ -16,8 +16,8 @@
     "data": {
       "currentJob": null,
       "episode": {
-        "id": "episode_8aa1768c-aae3-4369-9e9e-3ec29ba13318",
-        "projectId": "project_313bbfa7-e54c-404b-ac66-5f6ba3cd9e4e",
+        "id": "episode_ac8c8f28-529e-4ab8-9b2f-1e44e68b3eb2",
+        "projectId": "project_83116449-458c-47de-9cb9-2cd31b0951db",
         "targetDurationSec": 90,
         "title": "第 1 集"
       },
@@ -48,16 +48,16 @@
           "stage": "SCENE_SCRIPT"
         }
       ],
-      "projectId": "project_313bbfa7-e54c-404b-ac66-5f6ba3cd9e4e",
+      "projectId": "project_83116449-458c-47de-9cb9-2cd31b0951db",
       "source": {
         "characterCount": 21,
         "contentHash": "8d29eee951b403a3619be4d23b96be10e5ef418ed257ac311f11f2e34d724789",
         "creativeText": "一名侦探必须在列车抵达终点前找出记忆窃贼。",
-        "id": "source_959d47d3-3b3a-4c84-8e29-c0127d3ab264",
+        "id": "source_1461b6e7-44ca-4bb9-b724-1cf17c06293b",
         "inputKind": "CREATIVE",
         "fileName": null,
         "encoding": null,
-        "projectId": "project_313bbfa7-e54c-404b-ac66-5f6ba3cd9e4e"
+        "projectId": "project_83116449-458c-47de-9cb9-2cd31b0951db"
       },
       "storyboard": {
         "current": null,
@@ -68,7 +68,7 @@
       "stages": [
         {
           "current": {
-            "createdAt": "2026-09-10T02:40:02.804Z",
+            "createdAt": "2026-09-10T09:10:54.797Z",
             "document": {
               "data": {
                 "core_conflict": "主角必须在真相与亲情之间做出选择",
@@ -79,22 +79,22 @@
                 "title": "午夜列车"
               },
               "episode_id": null,
-              "project_id": "project_313bbfa7-e54c-404b-ac66-5f6ba3cd9e4e",
+              "project_id": "project_83116449-458c-47de-9cb9-2cd31b0951db",
               "schema_version": "1.0.0",
-              "source_invocation_id": "e4116d94-3361-4a9a-bfcc-42442728665f",
+              "source_invocation_id": "707d04bb-f538-4839-94ab-2d6521a78c5a",
               "stage": "CONCEPT"
             },
-            "documentHash": "fd6398301db8b0598101bc2ff6ea4672ed1889a7ce5485aaec5ef935645007bd",
-            "id": "fe7c2723-4cd4-4d21-9243-e107f6c06589",
+            "documentHash": "398c6f277b254ce2bc6546af83b7a94f138a44412c41a2d477ad3da92d8c207a",
+            "id": "7f7cd031-a6d4-45c4-a091-5e5094e4395c",
             "parentId": null,
-            "projectId": "project_313bbfa7-e54c-404b-ac66-5f6ba3cd9e4e",
+            "projectId": "project_83116449-458c-47de-9cb9-2cd31b0951db",
             "source": "AI",
             "status": "DRAFT",
             "versionNo": 1
           },
           "history": [
             {
-              "createdAt": "2026-09-10T02:40:02.804Z",
+              "createdAt": "2026-09-10T09:10:54.797Z",
               "document": {
                 "data": {
                   "core_conflict": "主角必须在真相与亲情之间做出选择",
@@ -105,15 +105,15 @@
                   "title": "午夜列车"
                 },
                 "episode_id": null,
-                "project_id": "project_313bbfa7-e54c-404b-ac66-5f6ba3cd9e4e",
+                "project_id": "project_83116449-458c-47de-9cb9-2cd31b0951db",
                 "schema_version": "1.0.0",
-                "source_invocation_id": "e4116d94-3361-4a9a-bfcc-42442728665f",
+                "source_invocation_id": "707d04bb-f538-4839-94ab-2d6521a78c5a",
                 "stage": "CONCEPT"
               },
-              "documentHash": "fd6398301db8b0598101bc2ff6ea4672ed1889a7ce5485aaec5ef935645007bd",
-              "id": "fe7c2723-4cd4-4d21-9243-e107f6c06589",
+              "documentHash": "398c6f277b254ce2bc6546af83b7a94f138a44412c41a2d477ad3da92d8c207a",
+              "id": "7f7cd031-a6d4-45c4-a091-5e5094e4395c",
               "parentId": null,
-              "projectId": "project_313bbfa7-e54c-404b-ac66-5f6ba3cd9e4e",
+              "projectId": "project_83116449-458c-47de-9cb9-2cd31b0951db",
               "source": "AI",
               "status": "DRAFT",
               "versionNo": 1

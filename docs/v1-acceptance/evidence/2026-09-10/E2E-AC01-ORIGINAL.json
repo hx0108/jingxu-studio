@@ -3,8 +3,8 @@
   "data": {
     "currentJob": null,
     "episode": {
-      "id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-      "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+      "id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+      "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
       "targetDurationSec": 90,
       "title": "第 1 集"
     },
@@ -35,55 +35,55 @@
         "stage": "SCENE_SCRIPT"
       }
     ],
-    "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+    "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
     "source": {
       "characterCount": 35,
       "contentHash": "bf3955cb8b55f4cc6d3127400c0cd0c91fb2033365d9638063bed8d892078039",
       "creativeText": "一名失忆侦探在午夜列车醒来，必须在终点前找出偷走所有乘客被偷走的记忆。",
-      "id": "source_b26d6f95-2cff-4b62-ac08-6b170b324b9f",
+      "id": "source_4bbbcc66-e7a7-4801-9135-98dac79fc0a4",
       "inputKind": "CREATIVE",
       "fileName": null,
       "encoding": null,
-      "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344"
+      "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768"
     },
     "storyboard": {
       "current": {
-        "createdAt": "2026-09-10T02:39:23.513Z",
-        "episodeId": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-        "formatProfileId": "format_profile_728b7e78-fa92-4c14-bb0e-c96bc5db064a",
-        "id": "52623473-2e2c-430d-a7c6-7e688da95e38",
-        "parentId": "1792e1b6-9ba3-43db-9665-b576223a48c4",
+        "createdAt": "2026-09-10T09:10:29.225Z",
+        "episodeId": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+        "formatProfileId": "format_profile_8a35b8df-b377-4d92-9c43-af89bd54aee3",
+        "id": "515fa78e-801b-4a10-a3ba-187f390d6f7a",
+        "parentId": "28e88881-e5d2-42ad-8380-b9ea437f4327",
         "shotCount": 6,
-        "shotSetHash": "3d2a55d7a0d6d95e37b8c4a3f1673b39b6b10de3389502847691bd7b0350e9ba",
+        "shotSetHash": "0f3400117202a17008c3e98324663558f3729bce20cc493aaea07686de63c4e3",
         "status": "READY",
-        "storyBibleVersionId": "6aff876b-4a98-4a8b-9364-f959b4a24b1a",
+        "storyBibleVersionId": "a8efad5c-0d01-4c8d-952c-d3f3bf68380f",
         "targetDurationSec": 90,
         "versionNo": 2
       },
       "history": [
         {
-          "createdAt": "2026-09-10T02:39:23.513Z",
-          "episodeId": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-          "formatProfileId": "format_profile_728b7e78-fa92-4c14-bb0e-c96bc5db064a",
-          "id": "52623473-2e2c-430d-a7c6-7e688da95e38",
-          "parentId": "1792e1b6-9ba3-43db-9665-b576223a48c4",
+          "createdAt": "2026-09-10T09:10:29.225Z",
+          "episodeId": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+          "formatProfileId": "format_profile_8a35b8df-b377-4d92-9c43-af89bd54aee3",
+          "id": "515fa78e-801b-4a10-a3ba-187f390d6f7a",
+          "parentId": "28e88881-e5d2-42ad-8380-b9ea437f4327",
           "shotCount": 6,
-          "shotSetHash": "3d2a55d7a0d6d95e37b8c4a3f1673b39b6b10de3389502847691bd7b0350e9ba",
+          "shotSetHash": "0f3400117202a17008c3e98324663558f3729bce20cc493aaea07686de63c4e3",
           "status": "READY",
-          "storyBibleVersionId": "6aff876b-4a98-4a8b-9364-f959b4a24b1a",
+          "storyBibleVersionId": "a8efad5c-0d01-4c8d-952c-d3f3bf68380f",
           "targetDurationSec": 90,
           "versionNo": 2
         },
         {
-          "createdAt": "2026-09-10T02:39:23.490Z",
-          "episodeId": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-          "formatProfileId": "format_profile_728b7e78-fa92-4c14-bb0e-c96bc5db064a",
-          "id": "1792e1b6-9ba3-43db-9665-b576223a48c4",
+          "createdAt": "2026-09-10T09:10:29.201Z",
+          "episodeId": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+          "formatProfileId": "format_profile_8a35b8df-b377-4d92-9c43-af89bd54aee3",
+          "id": "28e88881-e5d2-42ad-8380-b9ea437f4327",
           "parentId": null,
           "shotCount": 6,
-          "shotSetHash": "e3664f46058a3afc015a9351d407ee5daa68bb2190c143888c0130b3fde92e16",
+          "shotSetHash": "daa893ba51a3a2d7f81f81686b661e0a505224636983c0179d2b74e03eef9734",
           "status": "DRAFT",
-          "storyBibleVersionId": "6aff876b-4a98-4a8b-9364-f959b4a24b1a",
+          "storyBibleVersionId": "a8efad5c-0d01-4c8d-952c-d3f3bf68380f",
           "targetDurationSec": 90,
           "versionNo": 1
         }
@@ -136,7 +136,7 @@
               "override_reason": null
             },
             "derived_from_shot_ids": [],
-            "format_profile_id": "format_profile_728b7e78-fa92-4c14-bb0e-c96bc5db064a",
+            "format_profile_id": "format_profile_8a35b8df-b377-4d92-9c43-af89bd54aee3",
             "generation_constraints": {
               "capability_requirements": [
                 {
@@ -159,27 +159,27 @@
             },
             "locked_paths": [],
             "narrative_purpose": "开场：车厢全景，无人回应",
-            "parent_version_id": "scv_585beafa-e6c2-4692-804c-2e84e4cafa93_v1",
+            "parent_version_id": "scv_de094e17-8064-4a16-bddb-8423d7ca506e_v1",
             "provenance": {
               "last_edit_source": "AI",
-              "source_invocation_id": "29225644-fa6a-4b9c-8d49-e7f005e2bcc0",
+              "source_invocation_id": "8cfcfbc5-955e-4da1-813f-2e567f42ad84",
               "source_type": "AI_GENERATED"
             },
             "schema_version": "1.1.0",
             "sequence": 1,
-            "shot_id": "shot_78c5d540-fb12-4bff-a052-a5c190c96708",
+            "shot_id": "shot_365aa00a-baf4-4b1c-af0c-92d0da1ceb13",
             "target_duration_sec": 15,
             "status": "READY",
-            "version_id": "scv_aa380cc7-7cd3-4f25-bf87-4d43db30cec3_v2"
+            "version_id": "scv_1926ff2c-5f6b-43fd-bcd0-3aa066f9f19d_v2"
           },
           "dialogueRenderMode": "NARRATION_FIRST",
           "lockedPaths": [],
           "narrativePurpose": "开场：车厢全景，无人回应",
           "sequence": 1,
-          "shotId": "shot_78c5d540-fb12-4bff-a052-a5c190c96708",
+          "shotId": "shot_365aa00a-baf4-4b1c-af0c-92d0da1ceb13",
           "shotSize": "MEDIUM",
           "targetDurationSec": 15,
-          "versionId": "scv_aa380cc7-7cd3-4f25-bf87-4d43db30cec3_v2"
+          "versionId": "scv_1926ff2c-5f6b-43fd-bcd0-3aa066f9f19d_v2"
         },
         {
           "cameraMotion": "DOLLY",
@@ -215,7 +215,7 @@
               "first_frame_requirement": "林夜攥紧怀表起身，动作连贯起帧",
               "last_frame_requirement": "林夜攥紧怀表起身，动作连贯止帧",
               "asset_version_ids": [],
-              "previous_shot_id": "shot_78c5d540-fb12-4bff-a052-a5c190c96708"
+              "previous_shot_id": "shot_365aa00a-baf4-4b1c-af0c-92d0da1ceb13"
             },
             "contract_version": 2,
             "dialogue": {
@@ -228,7 +228,7 @@
               "override_reason": null
             },
             "derived_from_shot_ids": [],
-            "format_profile_id": "format_profile_728b7e78-fa92-4c14-bb0e-c96bc5db064a",
+            "format_profile_id": "format_profile_8a35b8df-b377-4d92-9c43-af89bd54aee3",
             "generation_constraints": {
               "capability_requirements": [
                 {
@@ -251,27 +251,27 @@
             },
             "locked_paths": [],
             "narrative_purpose": "林夜攥紧怀表起身，动作连贯",
-            "parent_version_id": "scv_82716a2e-27d6-4731-9849-9c37a69abe44_v1",
+            "parent_version_id": "scv_51b208f5-a3c1-414e-9653-96749fc05429_v1",
             "provenance": {
               "last_edit_source": "AI",
-              "source_invocation_id": "29225644-fa6a-4b9c-8d49-e7f005e2bcc0",
+              "source_invocation_id": "8cfcfbc5-955e-4da1-813f-2e567f42ad84",
               "source_type": "AI_GENERATED"
             },
             "schema_version": "1.1.0",
             "sequence": 2,
-            "shot_id": "shot_443be85e-a1e5-4f7c-a7a7-0244346765d8",
+            "shot_id": "shot_5e9e0c32-1185-4ad7-a6da-6bd083132325",
             "target_duration_sec": 15,
             "status": "READY",
-            "version_id": "scv_a4417ec2-ffcd-4925-a996-ee406be622d0_v2"
+            "version_id": "scv_3e256370-1da5-413a-a687-aefa04c11e21_v2"
           },
           "dialogueRenderMode": "NARRATION_FIRST",
           "lockedPaths": [],
           "narrativePurpose": "林夜攥紧怀表起身，动作连贯",
           "sequence": 2,
-          "shotId": "shot_443be85e-a1e5-4f7c-a7a7-0244346765d8",
+          "shotId": "shot_5e9e0c32-1185-4ad7-a6da-6bd083132325",
           "shotSize": "MEDIUM",
           "targetDurationSec": 15,
-          "versionId": "scv_a4417ec2-ffcd-4925-a996-ee406be622d0_v2"
+          "versionId": "scv_3e256370-1da5-413a-a687-aefa04c11e21_v2"
         },
         {
           "cameraMotion": "STATIC",
@@ -318,7 +318,7 @@
               "override_reason": null
             },
             "derived_from_shot_ids": [],
-            "format_profile_id": "format_profile_728b7e78-fa92-4c14-bb0e-c96bc5db064a",
+            "format_profile_id": "format_profile_8a35b8df-b377-4d92-9c43-af89bd54aee3",
             "generation_constraints": {
               "capability_requirements": [
                 {
@@ -341,27 +341,27 @@
             },
             "locked_paths": [],
             "narrative_purpose": "空镜：窗外流动的夜色",
-            "parent_version_id": "scv_59844118-a1c5-4cec-b875-7db8f02b9caf_v1",
+            "parent_version_id": "scv_25eb9b0b-c085-4cb3-8745-25c454240bd7_v1",
             "provenance": {
               "last_edit_source": "AI",
-              "source_invocation_id": "29225644-fa6a-4b9c-8d49-e7f005e2bcc0",
+              "source_invocation_id": "8cfcfbc5-955e-4da1-813f-2e567f42ad84",
               "source_type": "AI_GENERATED"
             },
             "schema_version": "1.1.0",
             "sequence": 3,
-            "shot_id": "shot_8e906709-0ef5-4cc5-8484-642376cf4dbd",
+            "shot_id": "shot_2600a2c7-4142-49bc-8665-100520f62c51",
             "target_duration_sec": 15,
             "status": "READY",
-            "version_id": "scv_2c4a25c1-8a3d-415d-9b5f-a7b943c94260_v2"
+            "version_id": "scv_4a7dede1-24fe-4991-92b0-b20e081326f3_v2"
           },
           "dialogueRenderMode": "NARRATION_FIRST",
           "lockedPaths": [],
           "narrativePurpose": "空镜：窗外流动的夜色",
           "sequence": 3,
-          "shotId": "shot_8e906709-0ef5-4cc5-8484-642376cf4dbd",
+          "shotId": "shot_2600a2c7-4142-49bc-8665-100520f62c51",
           "shotSize": "LONG",
           "targetDurationSec": 15,
-          "versionId": "scv_2c4a25c1-8a3d-415d-9b5f-a7b943c94260_v2"
+          "versionId": "scv_4a7dede1-24fe-4991-92b0-b20e081326f3_v2"
         },
         {
           "cameraMotion": "DOLLY",
@@ -410,7 +410,7 @@
               "override_reason": null
             },
             "derived_from_shot_ids": [],
-            "format_profile_id": "format_profile_728b7e78-fa92-4c14-bb0e-c96bc5db064a",
+            "format_profile_id": "format_profile_8a35b8df-b377-4d92-9c43-af89bd54aee3",
             "generation_constraints": {
               "capability_requirements": [
                 {
@@ -433,27 +433,27 @@
             },
             "locked_paths": [],
             "narrative_purpose": "林夜质问列车长",
-            "parent_version_id": "scv_176fca0b-bb23-44e7-bc87-a17e3541a97e_v1",
+            "parent_version_id": "scv_bcc50914-53f3-4164-b520-a8bcf0dcbb18_v1",
             "provenance": {
               "last_edit_source": "AI",
-              "source_invocation_id": "29225644-fa6a-4b9c-8d49-e7f005e2bcc0",
+              "source_invocation_id": "8cfcfbc5-955e-4da1-813f-2e567f42ad84",
               "source_type": "AI_GENERATED"
             },
             "schema_version": "1.1.0",
             "sequence": 4,
-            "shot_id": "shot_21e8f53d-d9f0-4d17-afec-f6789659d677",
+            "shot_id": "shot_062d8406-5878-4183-bb3d-d5bafc678603",
             "target_duration_sec": 15,
             "status": "READY",
-            "version_id": "scv_918964cf-e554-40c7-a136-187b5d69c41d_v2"
+            "version_id": "scv_3fa19140-403e-4802-a48d-9af69f637696_v2"
           },
           "dialogueRenderMode": "NARRATION_FIRST",
           "lockedPaths": [],
           "narrativePurpose": "林夜质问列车长",
           "sequence": 4,
-          "shotId": "shot_21e8f53d-d9f0-4d17-afec-f6789659d677",
+          "shotId": "shot_062d8406-5878-4183-bb3d-d5bafc678603",
           "shotSize": "MEDIUM",
           "targetDurationSec": 15,
-          "versionId": "scv_918964cf-e554-40c7-a136-187b5d69c41d_v2"
+          "versionId": "scv_3fa19140-403e-4802-a48d-9af69f637696_v2"
         },
         {
           "cameraMotion": "STATIC",
@@ -489,7 +489,7 @@
               "first_frame_requirement": "连续动作：林夜追向车尾起帧",
               "last_frame_requirement": "连续动作：林夜追向车尾止帧",
               "asset_version_ids": [],
-              "previous_shot_id": "shot_21e8f53d-d9f0-4d17-afec-f6789659d677"
+              "previous_shot_id": "shot_062d8406-5878-4183-bb3d-d5bafc678603"
             },
             "contract_version": 2,
             "dialogue": {
@@ -502,7 +502,7 @@
               "override_reason": null
             },
             "derived_from_shot_ids": [],
-            "format_profile_id": "format_profile_728b7e78-fa92-4c14-bb0e-c96bc5db064a",
+            "format_profile_id": "format_profile_8a35b8df-b377-4d92-9c43-af89bd54aee3",
             "generation_constraints": {
               "capability_requirements": [
                 {
@@ -525,27 +525,27 @@
             },
             "locked_paths": [],
             "narrative_purpose": "连续动作：林夜追向车尾",
-            "parent_version_id": "scv_bf1c6848-3511-4598-9b84-9012f617bd94_v1",
+            "parent_version_id": "scv_87a10bd1-9cf8-4afc-9b6b-c77bc5fad44f_v1",
             "provenance": {
               "last_edit_source": "AI",
-              "source_invocation_id": "29225644-fa6a-4b9c-8d49-e7f005e2bcc0",
+              "source_invocation_id": "8cfcfbc5-955e-4da1-813f-2e567f42ad84",
               "source_type": "AI_GENERATED"
             },
             "schema_version": "1.1.0",
             "sequence": 5,
-            "shot_id": "shot_a4cc8912-5966-44ea-9e6f-284eda014d02",
+            "shot_id": "shot_c421f7f5-1a58-492e-9bdf-fd3b83e1c5e4",
             "target_duration_sec": 15,
             "status": "READY",
-            "version_id": "scv_d757de85-27e3-4f2b-8af3-e4d3a4d5dc1b_v2"
+            "version_id": "scv_0cabd01d-e54b-49b2-b0e3-07637f5c575d_v2"
           },
           "dialogueRenderMode": "NARRATION_FIRST",
           "lockedPaths": [],
           "narrativePurpose": "连续动作：林夜追向车尾",
           "sequence": 5,
-          "shotId": "shot_a4cc8912-5966-44ea-9e6f-284eda014d02",
+          "shotId": "shot_c421f7f5-1a58-492e-9bdf-fd3b83e1c5e4",
           "shotSize": "MEDIUM",
           "targetDurationSec": 15,
-          "versionId": "scv_d757de85-27e3-4f2b-8af3-e4d3a4d5dc1b_v2"
+          "versionId": "scv_0cabd01d-e54b-49b2-b0e3-07637f5c575d_v2"
         },
         {
           "cameraMotion": "DOLLY",
@@ -592,7 +592,7 @@
               "override_reason": null
             },
             "derived_from_shot_ids": [],
-            "format_profile_id": "format_profile_728b7e78-fa92-4c14-bb0e-c96bc5db064a",
+            "format_profile_id": "format_profile_8a35b8df-b377-4d92-9c43-af89bd54aee3",
             "generation_constraints": {
               "capability_requirements": [
                 {
@@ -615,27 +615,27 @@
             },
             "locked_paths": [],
             "narrative_purpose": "结尾钩子：怀表传出声音",
-            "parent_version_id": "scv_9afc310f-c34d-4423-bc68-7a83c01cafd7_v1",
+            "parent_version_id": "scv_72f93e96-4210-42f8-8c6e-9af63e9a80a1_v1",
             "provenance": {
               "last_edit_source": "AI",
-              "source_invocation_id": "29225644-fa6a-4b9c-8d49-e7f005e2bcc0",
+              "source_invocation_id": "8cfcfbc5-955e-4da1-813f-2e567f42ad84",
               "source_type": "AI_GENERATED"
             },
             "schema_version": "1.1.0",
             "sequence": 6,
-            "shot_id": "shot_f5b87769-5707-43e4-bc76-a66760474e3f",
+            "shot_id": "shot_377149f0-e52b-4119-8693-c8af4aa51c37",
             "target_duration_sec": 15,
             "status": "READY",
-            "version_id": "scv_58f0cf16-af4f-4ecf-ac6f-069fff4138c9_v2"
+            "version_id": "scv_aadafa0e-e765-4f1e-9376-1eea9bc89adb_v2"
           },
           "dialogueRenderMode": "NARRATION_FIRST",
           "lockedPaths": [],
           "narrativePurpose": "结尾钩子：怀表传出声音",
           "sequence": 6,
-          "shotId": "shot_f5b87769-5707-43e4-bc76-a66760474e3f",
+          "shotId": "shot_377149f0-e52b-4119-8693-c8af4aa51c37",
           "shotSize": "LONG",
           "targetDurationSec": 15,
-          "versionId": "scv_58f0cf16-af4f-4ecf-ac6f-069fff4138c9_v2"
+          "versionId": "scv_aadafa0e-e765-4f1e-9376-1eea9bc89adb_v2"
         }
       ],
       "totalDurationSec": 90
@@ -643,7 +643,7 @@
     "stages": [
       {
         "current": {
-          "createdAt": "2026-09-10T02:39:23.276Z",
+          "createdAt": "2026-09-10T09:10:28.981Z",
           "document": {
             "data": {
               "core_conflict": "主角必须在真相与亲情之间做出选择",
@@ -654,22 +654,22 @@
               "title": "午夜列车"
             },
             "episode_id": null,
-            "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "schema_version": "1.0.0",
-            "source_invocation_id": "cd9b8457-269e-41cf-9f42-37db88b5eaee",
+            "source_invocation_id": "3094dabf-2ba4-4a4b-bd06-21a5969923e2",
             "stage": "CONCEPT"
           },
-          "documentHash": "2d7dd067aa3165194d14ea14c06225be41fa1d4993bf249a7fe14c706b3e7411",
-          "id": "bb0842f1-0232-4fe3-8ef0-573665862563",
-          "parentId": "6b6f6d0a-49ed-4cb5-a3bd-fddf46ecc1cb",
-          "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+          "documentHash": "8d160b5ecb4b5a2c6d7bbffe9dcd6fc20238d5b44ec104e318daf375a851b12b",
+          "id": "9c147138-749f-4b51-82c0-60540ce89bf1",
+          "parentId": "5748de7d-21c4-4780-b0fb-5363630428b0",
+          "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
           "source": "USER",
           "status": "READY",
           "versionNo": 2
         },
         "history": [
           {
-            "createdAt": "2026-09-10T02:39:23.276Z",
+            "createdAt": "2026-09-10T09:10:28.981Z",
             "document": {
               "data": {
                 "core_conflict": "主角必须在真相与亲情之间做出选择",
@@ -680,21 +680,21 @@
                 "title": "午夜列车"
               },
               "episode_id": null,
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "cd9b8457-269e-41cf-9f42-37db88b5eaee",
+              "source_invocation_id": "3094dabf-2ba4-4a4b-bd06-21a5969923e2",
               "stage": "CONCEPT"
             },
-            "documentHash": "2d7dd067aa3165194d14ea14c06225be41fa1d4993bf249a7fe14c706b3e7411",
-            "id": "bb0842f1-0232-4fe3-8ef0-573665862563",
-            "parentId": "6b6f6d0a-49ed-4cb5-a3bd-fddf46ecc1cb",
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "documentHash": "8d160b5ecb4b5a2c6d7bbffe9dcd6fc20238d5b44ec104e318daf375a851b12b",
+            "id": "9c147138-749f-4b51-82c0-60540ce89bf1",
+            "parentId": "5748de7d-21c4-4780-b0fb-5363630428b0",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "USER",
             "status": "READY",
             "versionNo": 2
           },
           {
-            "createdAt": "2026-09-10T02:39:23.259Z",
+            "createdAt": "2026-09-10T09:10:28.960Z",
             "document": {
               "data": {
                 "core_conflict": "主角必须在真相与亲情之间做出选择",
@@ -705,15 +705,15 @@
                 "title": "午夜列车"
               },
               "episode_id": null,
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "cd9b8457-269e-41cf-9f42-37db88b5eaee",
+              "source_invocation_id": "3094dabf-2ba4-4a4b-bd06-21a5969923e2",
               "stage": "CONCEPT"
             },
-            "documentHash": "2d7dd067aa3165194d14ea14c06225be41fa1d4993bf249a7fe14c706b3e7411",
-            "id": "6b6f6d0a-49ed-4cb5-a3bd-fddf46ecc1cb",
+            "documentHash": "8d160b5ecb4b5a2c6d7bbffe9dcd6fc20238d5b44ec104e318daf375a851b12b",
+            "id": "5748de7d-21c4-4780-b0fb-5363630428b0",
             "parentId": null,
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "AI",
             "status": "DRAFT",
             "versionNo": 1
@@ -724,7 +724,7 @@
       },
       {
         "current": {
-          "createdAt": "2026-09-10T02:39:23.316Z",
+          "createdAt": "2026-09-10T09:10:29.026Z",
           "document": {
             "data": {
               "characters": {
@@ -747,22 +747,22 @@
               ]
             },
             "episode_id": null,
-            "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "schema_version": "1.0.0",
-            "source_invocation_id": "54a24d59-60c3-4a6a-b498-e1e411caceaa",
+            "source_invocation_id": "8c3e135b-f579-4eab-b8bb-6568a0f4a639",
             "stage": "STORY_BIBLE"
           },
-          "documentHash": "048009406c8de3c39eb752705d2a1d3c9aa9efdf1a417d9820ee6efd3755e8ef",
-          "id": "6aff876b-4a98-4a8b-9364-f959b4a24b1a",
-          "parentId": "acb6f643-ffcf-40f5-8059-80e0efa0c140",
-          "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+          "documentHash": "f6f70812beba8b85d2426190dccf1f93d65d492d8e489ff023e1cd94c8f81084",
+          "id": "a8efad5c-0d01-4c8d-952c-d3f3bf68380f",
+          "parentId": "036e8bb6-ae50-4d49-ad04-a56531241c9d",
+          "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
           "source": "USER",
           "status": "READY",
           "versionNo": 2
         },
         "history": [
           {
-            "createdAt": "2026-09-10T02:39:23.316Z",
+            "createdAt": "2026-09-10T09:10:29.026Z",
             "document": {
               "data": {
                 "characters": {
@@ -785,21 +785,21 @@
                 ]
               },
               "episode_id": null,
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "54a24d59-60c3-4a6a-b498-e1e411caceaa",
+              "source_invocation_id": "8c3e135b-f579-4eab-b8bb-6568a0f4a639",
               "stage": "STORY_BIBLE"
             },
-            "documentHash": "048009406c8de3c39eb752705d2a1d3c9aa9efdf1a417d9820ee6efd3755e8ef",
-            "id": "6aff876b-4a98-4a8b-9364-f959b4a24b1a",
-            "parentId": "acb6f643-ffcf-40f5-8059-80e0efa0c140",
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "documentHash": "f6f70812beba8b85d2426190dccf1f93d65d492d8e489ff023e1cd94c8f81084",
+            "id": "a8efad5c-0d01-4c8d-952c-d3f3bf68380f",
+            "parentId": "036e8bb6-ae50-4d49-ad04-a56531241c9d",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "USER",
             "status": "READY",
             "versionNo": 2
           },
           {
-            "createdAt": "2026-09-10T02:39:23.306Z",
+            "createdAt": "2026-09-10T09:10:29.014Z",
             "document": {
               "data": {
                 "characters": {
@@ -822,15 +822,15 @@
                 ]
               },
               "episode_id": null,
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "54a24d59-60c3-4a6a-b498-e1e411caceaa",
+              "source_invocation_id": "8c3e135b-f579-4eab-b8bb-6568a0f4a639",
               "stage": "STORY_BIBLE"
             },
-            "documentHash": "048009406c8de3c39eb752705d2a1d3c9aa9efdf1a417d9820ee6efd3755e8ef",
-            "id": "acb6f643-ffcf-40f5-8059-80e0efa0c140",
+            "documentHash": "f6f70812beba8b85d2426190dccf1f93d65d492d8e489ff023e1cd94c8f81084",
+            "id": "036e8bb6-ae50-4d49-ad04-a56531241c9d",
             "parentId": null,
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "AI",
             "status": "DRAFT",
             "versionNo": 1
@@ -841,7 +841,7 @@
       },
       {
         "current": {
-          "createdAt": "2026-09-10T02:39:23.359Z",
+          "createdAt": "2026-09-10T09:10:29.070Z",
           "document": {
             "data": {
               "climax": "林夜揭穿列车长的记忆交易",
@@ -851,23 +851,23 @@
               "opening": "林夜在没有终点站名的列车中醒来",
               "target_duration_sec": 90
             },
-            "episode_id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-            "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "episode_id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+            "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "schema_version": "1.0.0",
-            "source_invocation_id": "26c90fb7-e579-4307-8229-1c72f38124b8",
+            "source_invocation_id": "98efb40c-adef-4224-875e-f9bd63e3ffd1",
             "stage": "EPISODE_OUTLINE"
           },
-          "documentHash": "a73b5a133c07e4d4498db1469d6d7e06641a876e94561a4df9e0d333a444d599",
-          "id": "3bbfb260-bc64-4f13-b0c8-928514c1d01c",
-          "parentId": "ee7e10bb-b0aa-4be4-b25a-c88c83d88d64",
-          "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+          "documentHash": "23abe5d341fc9b6b28381c78a51ee116d26231081656be75ea3e22101556fe6b",
+          "id": "1bae7579-baaa-4708-a9be-a5c4f0bc32bf",
+          "parentId": "a7d38ed7-ed16-4c46-922f-427b911e15f0",
+          "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
           "source": "USER",
           "status": "READY",
           "versionNo": 2
         },
         "history": [
           {
-            "createdAt": "2026-09-10T02:39:23.359Z",
+            "createdAt": "2026-09-10T09:10:29.070Z",
             "document": {
               "data": {
                 "climax": "林夜揭穿列车长的记忆交易",
@@ -877,22 +877,22 @@
                 "opening": "林夜在没有终点站名的列车中醒来",
                 "target_duration_sec": 90
               },
-              "episode_id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "episode_id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "26c90fb7-e579-4307-8229-1c72f38124b8",
+              "source_invocation_id": "98efb40c-adef-4224-875e-f9bd63e3ffd1",
               "stage": "EPISODE_OUTLINE"
             },
-            "documentHash": "a73b5a133c07e4d4498db1469d6d7e06641a876e94561a4df9e0d333a444d599",
-            "id": "3bbfb260-bc64-4f13-b0c8-928514c1d01c",
-            "parentId": "ee7e10bb-b0aa-4be4-b25a-c88c83d88d64",
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "documentHash": "23abe5d341fc9b6b28381c78a51ee116d26231081656be75ea3e22101556fe6b",
+            "id": "1bae7579-baaa-4708-a9be-a5c4f0bc32bf",
+            "parentId": "a7d38ed7-ed16-4c46-922f-427b911e15f0",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "USER",
             "status": "READY",
             "versionNo": 2
           },
           {
-            "createdAt": "2026-09-10T02:39:23.346Z",
+            "createdAt": "2026-09-10T09:10:29.058Z",
             "document": {
               "data": {
                 "climax": "林夜揭穿列车长的记忆交易",
@@ -902,16 +902,16 @@
                 "opening": "林夜在没有终点站名的列车中醒来",
                 "target_duration_sec": 90
               },
-              "episode_id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "episode_id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "26c90fb7-e579-4307-8229-1c72f38124b8",
+              "source_invocation_id": "98efb40c-adef-4224-875e-f9bd63e3ffd1",
               "stage": "EPISODE_OUTLINE"
             },
-            "documentHash": "a73b5a133c07e4d4498db1469d6d7e06641a876e94561a4df9e0d333a444d599",
-            "id": "ee7e10bb-b0aa-4be4-b25a-c88c83d88d64",
+            "documentHash": "23abe5d341fc9b6b28381c78a51ee116d26231081656be75ea3e22101556fe6b",
+            "id": "a7d38ed7-ed16-4c46-922f-427b911e15f0",
             "parentId": null,
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "AI",
             "status": "DRAFT",
             "versionNo": 1
@@ -922,7 +922,7 @@
       },
       {
         "current": {
-          "createdAt": "2026-09-10T02:39:23.402Z",
+          "createdAt": "2026-09-10T09:10:29.115Z",
           "document": {
             "data": {
               "beats": [
@@ -949,23 +949,23 @@
                 }
               ]
             },
-            "episode_id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-            "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "episode_id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+            "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "schema_version": "1.0.0",
-            "source_invocation_id": "f27318c0-c38f-4671-990d-6ea10415379b",
+            "source_invocation_id": "9ad8b4cd-a336-4705-83ba-edadd8456519",
             "stage": "BEAT_SHEET"
           },
-          "documentHash": "1b5b7eea90ded43447562f1f3b89f0ac2f983de65b5e8fb9d47467faed76597e",
-          "id": "f3bebb37-02b0-42f4-9128-90b3d8cbfd3e",
-          "parentId": "3ee6f885-5349-4279-8af9-7f313df8ef76",
-          "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+          "documentHash": "77d0e4f7fcdc6285d276cec488b10f0f28075fe98dfcb058bf53f4befe8fb11e",
+          "id": "054dfc3e-d26a-469f-b283-4081c4653401",
+          "parentId": "a5878ca6-1b93-4e13-ade8-b8945440bec4",
+          "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
           "source": "USER",
           "status": "READY",
           "versionNo": 2
         },
         "history": [
           {
-            "createdAt": "2026-09-10T02:39:23.402Z",
+            "createdAt": "2026-09-10T09:10:29.115Z",
             "document": {
               "data": {
                 "beats": [
@@ -992,22 +992,22 @@
                   }
                 ]
               },
-              "episode_id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "episode_id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "f27318c0-c38f-4671-990d-6ea10415379b",
+              "source_invocation_id": "9ad8b4cd-a336-4705-83ba-edadd8456519",
               "stage": "BEAT_SHEET"
             },
-            "documentHash": "1b5b7eea90ded43447562f1f3b89f0ac2f983de65b5e8fb9d47467faed76597e",
-            "id": "f3bebb37-02b0-42f4-9128-90b3d8cbfd3e",
-            "parentId": "3ee6f885-5349-4279-8af9-7f313df8ef76",
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "documentHash": "77d0e4f7fcdc6285d276cec488b10f0f28075fe98dfcb058bf53f4befe8fb11e",
+            "id": "054dfc3e-d26a-469f-b283-4081c4653401",
+            "parentId": "a5878ca6-1b93-4e13-ade8-b8945440bec4",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "USER",
             "status": "READY",
             "versionNo": 2
           },
           {
-            "createdAt": "2026-09-10T02:39:23.388Z",
+            "createdAt": "2026-09-10T09:10:29.101Z",
             "document": {
               "data": {
                 "beats": [
@@ -1034,16 +1034,16 @@
                   }
                 ]
               },
-              "episode_id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "episode_id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "f27318c0-c38f-4671-990d-6ea10415379b",
+              "source_invocation_id": "9ad8b4cd-a336-4705-83ba-edadd8456519",
               "stage": "BEAT_SHEET"
             },
-            "documentHash": "1b5b7eea90ded43447562f1f3b89f0ac2f983de65b5e8fb9d47467faed76597e",
-            "id": "3ee6f885-5349-4279-8af9-7f313df8ef76",
+            "documentHash": "77d0e4f7fcdc6285d276cec488b10f0f28075fe98dfcb058bf53f4befe8fb11e",
+            "id": "a5878ca6-1b93-4e13-ade8-b8945440bec4",
             "parentId": null,
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "AI",
             "status": "DRAFT",
             "versionNo": 1
@@ -1054,7 +1054,7 @@
       },
       {
         "current": {
-          "createdAt": "2026-09-10T02:39:23.448Z",
+          "createdAt": "2026-09-10T09:10:29.157Z",
           "document": {
             "data": {
               "scenes": [
@@ -1077,23 +1077,23 @@
                 }
               ]
             },
-            "episode_id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-            "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "episode_id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+            "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "schema_version": "1.0.0",
-            "source_invocation_id": "59e815a9-c237-4715-8223-083ce72832ee",
+            "source_invocation_id": "1b62cbff-2bb6-4b2a-ba8d-a72ccda280fe",
             "stage": "SCENE_SCRIPT"
           },
-          "documentHash": "63b583964d21b7b762883026c5fba6893d30165b7a5eae8509aab83ed6ca6cc1",
-          "id": "c28c16f2-a72e-44e6-9f83-9ac3fb0f9088",
-          "parentId": "cf3d818f-870a-4cd6-9604-12c31797ad34",
-          "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+          "documentHash": "e3af93d3c55dc318b6e3a8b4f15fcfddf06419629d8c5bf3a555970589429507",
+          "id": "1ab76fe8-01b7-45e6-939d-35569492a2e2",
+          "parentId": "4122c1f1-44a9-4cb6-8cf4-63db99de666e",
+          "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
           "source": "USER",
           "status": "READY",
           "versionNo": 2
         },
         "history": [
           {
-            "createdAt": "2026-09-10T02:39:23.448Z",
+            "createdAt": "2026-09-10T09:10:29.157Z",
             "document": {
               "data": {
                 "scenes": [
@@ -1116,22 +1116,22 @@
                   }
                 ]
               },
-              "episode_id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "episode_id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "59e815a9-c237-4715-8223-083ce72832ee",
+              "source_invocation_id": "1b62cbff-2bb6-4b2a-ba8d-a72ccda280fe",
               "stage": "SCENE_SCRIPT"
             },
-            "documentHash": "63b583964d21b7b762883026c5fba6893d30165b7a5eae8509aab83ed6ca6cc1",
-            "id": "c28c16f2-a72e-44e6-9f83-9ac3fb0f9088",
-            "parentId": "cf3d818f-870a-4cd6-9604-12c31797ad34",
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "documentHash": "e3af93d3c55dc318b6e3a8b4f15fcfddf06419629d8c5bf3a555970589429507",
+            "id": "1ab76fe8-01b7-45e6-939d-35569492a2e2",
+            "parentId": "4122c1f1-44a9-4cb6-8cf4-63db99de666e",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "USER",
             "status": "READY",
             "versionNo": 2
           },
           {
-            "createdAt": "2026-09-10T02:39:23.436Z",
+            "createdAt": "2026-09-10T09:10:29.144Z",
             "document": {
               "data": {
                 "scenes": [
@@ -1154,16 +1154,16 @@
                   }
                 ]
               },
-              "episode_id": "episode_371c57a1-d142-44aa-b036-7c0e68e5053b",
-              "project_id": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+              "episode_id": "episode_8a983f2d-128f-4bb5-b640-5673b5281051",
+              "project_id": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
               "schema_version": "1.0.0",
-              "source_invocation_id": "59e815a9-c237-4715-8223-083ce72832ee",
+              "source_invocation_id": "1b62cbff-2bb6-4b2a-ba8d-a72ccda280fe",
               "stage": "SCENE_SCRIPT"
             },
-            "documentHash": "63b583964d21b7b762883026c5fba6893d30165b7a5eae8509aab83ed6ca6cc1",
-            "id": "cf3d818f-870a-4cd6-9604-12c31797ad34",
+            "documentHash": "e3af93d3c55dc318b6e3a8b4f15fcfddf06419629d8c5bf3a555970589429507",
+            "id": "4122c1f1-44a9-4cb6-8cf4-63db99de666e",
             "parentId": null,
-            "projectId": "project_6eb45793-814a-4c38-90b7-35a38acda344",
+            "projectId": "project_18c9eee7-2def-467b-ba85-77f6cebda768",
             "source": "AI",
             "status": "DRAFT",
             "versionNo": 1
