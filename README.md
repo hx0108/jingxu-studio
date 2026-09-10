@@ -4,6 +4,18 @@
 
 截至 2026-08-24，仓库已具备可运行的 Windows x64 Electron/React 工程、SQLite 启动与恢复运行时、Project/FormatProfile 管理、离线 Schema Registry、JobRunner、文本模型 Adapter、凭据安全、剧本五阶段链路、已有剧本 Main Dialog 导入与受锁选区改写、结构化分镜、评测集与标注闭环、首帧图片、视频和单集合成工作流。Renderer 正在通过 `guided-workspace-shell-localization` 与 `storyboard-media-workspace-redesign` 改造为中文引导式三栏工作台；自动化 AC-V1-01～06 和 UI 改造后的发布结论必须以最新门禁日志为准，三名目标用户的新版复测尚未完成，因此不能宣称 V1 已正式发布。
 
+## 界面预览
+
+真实 Windows 构建的 Electron 界面（1728 × 1080，CINE 剪辑台视觉，E2E 自动捕获）：
+
+| 剧本工作区 | 分镜工作台 |
+| --- | --- |
+| ![剧本工作区](docs/screenshots/script-workspace.png) | ![分镜工作台](docs/screenshots/storyboard.png) |
+
+| 画面生成 | 合成导出 | 模型服务 |
+| --- | --- | --- |
+| ![画面生成](docs/screenshots/image-generation.png) | ![合成导出](docs/screenshots/composition.png) | ![模型服务](docs/screenshots/settings.png) |
+
 ## 支持环境
 
 - Windows x64
