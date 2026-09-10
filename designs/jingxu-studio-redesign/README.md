@@ -40,9 +40,11 @@
 
 ```bash
 cd AI项目/designs
-python -m http.server 4311
-# http://localhost:4311/jingxu-studio-redesign/index.html
+python -m http.server 4312
+# http://localhost:4312/jingxu-studio-redesign/index.html
 ```
+
+端口可任选空闲值；本机 4311 常被质检系统的 designs 服务占用（其根目录无 jingxu-studio-redesign，访问会 404）。
 
 字体经 CDN（loli 镜像）加载，离线时回退 PingFang / 雅黑；正式落地时应打包本地字体。
 
