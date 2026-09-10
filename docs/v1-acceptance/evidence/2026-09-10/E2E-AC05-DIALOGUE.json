@@ -7,20 +7,20 @@
       "retryable": false,
       "userAction": null,
       "fieldErrors": null,
-      "traceId": "56afa649-f8e3-4977-8972-621d5d2dd447"
+      "traceId": "2665ab9f-1287-4d7d-887e-e16c1d46f3f8"
     }
   },
   "blocked": {
-    "id": "report_82135247-e389-4782-9561-4c4d6b9decd9",
+    "id": "report_b44f4a6a-4b18-4773-95dd-34816ad02867",
     "capabilitySnapshotId": "volcark-seedance-video/v2",
-    "projectId": "project_3f59212f-ec57-4e29-a14b-8fb7c73618c8",
-    "episodeId": "episode_6c21d15f-5813-4265-adb6-063dfd9bf18b",
-    "episodeVersionId": "4e535c60-38ce-4a2b-b33e-4248a99e6c56",
+    "projectId": "project_913bd6b5-f3bd-4cb5-a9d6-41818c347c3e",
+    "episodeId": "episode_d776fc66-1246-43d9-92d4-a925bb3c21da",
+    "episodeVersionId": "bfc54a97-c6af-4e75-8ec9-c63cb69977d8",
     "ruleSetVersion": "jingxu-producibility-rules/1",
     "status": "BLOCK",
     "findings": [
       {
-        "id": "finding_70f7e4f8-7ea3-4867-8356-a8dea9de8611",
+        "id": "finding_90640dc1-5680-465c-98b2-38818ad8a674",
         "ruleId": "DIALOGUE_MODE_INVALID",
         "ruleVersion": "jingxu-producibility-rules/1",
         "severity": "BLOCK",
@@ -32,21 +32,21 @@
         "overrideReason": null
       }
     ],
-    "createdAt": "2026-09-09T20:32:49.237Z",
+    "createdAt": "2026-09-10T02:40:13.653Z",
     "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
     "referencePriceSnapshotId": "price_shot_package_v1"
   },
   "loaded": {
-    "id": "report_1e425172-d99d-4c75-b8d3-3fea166aa58d",
+    "id": "report_98129f41-a323-4f1e-b2c6-d7a1a52c7004",
     "capabilitySnapshotId": "volcark-seedance-video/v2",
-    "projectId": "project_3f59212f-ec57-4e29-a14b-8fb7c73618c8",
-    "episodeId": "episode_6c21d15f-5813-4265-adb6-063dfd9bf18b",
-    "episodeVersionId": "4e535c60-38ce-4a2b-b33e-4248a99e6c56",
+    "projectId": "project_913bd6b5-f3bd-4cb5-a9d6-41818c347c3e",
+    "episodeId": "episode_d776fc66-1246-43d9-92d4-a925bb3c21da",
+    "episodeVersionId": "bfc54a97-c6af-4e75-8ec9-c63cb69977d8",
     "ruleSetVersion": "jingxu-producibility-rules/1",
     "status": "PASS",
     "findings": [
       {
-        "id": "finding_c3678bc7-473f-49b2-8c14-40d922c38989",
+        "id": "finding_beee9bc1-6603-40fc-83ef-27b73dbc0dd0",
         "ruleId": "WEAK_LIP_SYNC_LONG_DIALOGUE",
         "ruleVersion": "jingxu-producibility-rules/1",
         "severity": "WARN",
@@ -58,21 +58,21 @@
         "overrideReason": "本集以风格化弱口型呈现，已完成人工确认。"
       }
     ],
-    "createdAt": "2026-09-09T20:32:49.207Z",
+    "createdAt": "2026-09-10T02:40:13.622Z",
     "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
     "referencePriceSnapshotId": "price_shot_package_v1"
   },
   "modes": {
-    "id": "report_1e425172-d99d-4c75-b8d3-3fea166aa58d",
+    "id": "report_98129f41-a323-4f1e-b2c6-d7a1a52c7004",
     "capabilitySnapshotId": "volcark-seedance-video/v2",
-    "projectId": "project_3f59212f-ec57-4e29-a14b-8fb7c73618c8",
-    "episodeId": "episode_6c21d15f-5813-4265-adb6-063dfd9bf18b",
-    "episodeVersionId": "4e535c60-38ce-4a2b-b33e-4248a99e6c56",
+    "projectId": "project_913bd6b5-f3bd-4cb5-a9d6-41818c347c3e",
+    "episodeId": "episode_d776fc66-1246-43d9-92d4-a925bb3c21da",
+    "episodeVersionId": "bfc54a97-c6af-4e75-8ec9-c63cb69977d8",
     "ruleSetVersion": "jingxu-producibility-rules/1",
     "status": "WARN",
     "findings": [
       {
-        "id": "finding_c3678bc7-473f-49b2-8c14-40d922c38989",
+        "id": "finding_beee9bc1-6603-40fc-83ef-27b73dbc0dd0",
         "ruleId": "WEAK_LIP_SYNC_LONG_DIALOGUE",
         "ruleVersion": "jingxu-producibility-rules/1",
         "severity": "WARN",
@@ -84,21 +84,21 @@
         "overrideReason": null
       }
     ],
-    "createdAt": "2026-09-09T20:32:49.207Z",
+    "createdAt": "2026-09-10T02:40:13.622Z",
     "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
     "referencePriceSnapshotId": "price_shot_package_v1"
   },
   "overridden": {
-    "id": "report_1e425172-d99d-4c75-b8d3-3fea166aa58d",
+    "id": "report_98129f41-a323-4f1e-b2c6-d7a1a52c7004",
     "capabilitySnapshotId": "volcark-seedance-video/v2",
-    "projectId": "project_3f59212f-ec57-4e29-a14b-8fb7c73618c8",
-    "episodeId": "episode_6c21d15f-5813-4265-adb6-063dfd9bf18b",
-    "episodeVersionId": "4e535c60-38ce-4a2b-b33e-4248a99e6c56",
+    "projectId": "project_913bd6b5-f3bd-4cb5-a9d6-41818c347c3e",
+    "episodeId": "episode_d776fc66-1246-43d9-92d4-a925bb3c21da",
+    "episodeVersionId": "bfc54a97-c6af-4e75-8ec9-c63cb69977d8",
     "ruleSetVersion": "jingxu-producibility-rules/1",
     "status": "PASS",
     "findings": [
       {
-        "id": "finding_c3678bc7-473f-49b2-8c14-40d922c38989",
+        "id": "finding_beee9bc1-6603-40fc-83ef-27b73dbc0dd0",
         "ruleId": "WEAK_LIP_SYNC_LONG_DIALOGUE",
         "ruleVersion": "jingxu-producibility-rules/1",
         "severity": "WARN",
@@ -110,21 +110,21 @@
         "overrideReason": "本集以风格化弱口型呈现，已完成人工确认。"
       }
     ],
-    "createdAt": "2026-09-09T20:32:49.207Z",
+    "createdAt": "2026-09-10T02:40:13.622Z",
     "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
     "referencePriceSnapshotId": "price_shot_package_v1"
   },
   "unknown": {
-    "id": "report_e9af249f-907c-48dc-9efc-d46a1a85ce49",
+    "id": "report_10bcf778-5373-49a1-a336-addb9a49720d",
     "capabilitySnapshotId": "volcark-seedance-video/v2",
-    "projectId": "project_3f59212f-ec57-4e29-a14b-8fb7c73618c8",
-    "episodeId": "episode_6c21d15f-5813-4265-adb6-063dfd9bf18b",
-    "episodeVersionId": "4e535c60-38ce-4a2b-b33e-4248a99e6c56",
+    "projectId": "project_913bd6b5-f3bd-4cb5-a9d6-41818c347c3e",
+    "episodeId": "episode_d776fc66-1246-43d9-92d4-a925bb3c21da",
+    "episodeVersionId": "bfc54a97-c6af-4e75-8ec9-c63cb69977d8",
     "ruleSetVersion": "jingxu-producibility-rules/1",
     "status": "WARN",
     "findings": [
       {
-        "id": "finding_d015b25c-cb31-4b0f-8580-bf05d56e1c1a",
+        "id": "finding_f21eb0bd-e77d-4c2f-a6e1-f622da7c0a91",
         "ruleId": "CAPABILITY_UNKNOWN",
         "ruleVersion": "jingxu-producibility-rules/1",
         "severity": "WARN",
@@ -136,7 +136,7 @@
         "overrideReason": null
       }
     ],
-    "createdAt": "2026-09-09T20:32:49.229Z",
+    "createdAt": "2026-09-10T02:40:13.646Z",
     "disclaimer": "可生产性报告是规则提示，不代表视觉生成成功或质量保证。",
     "referencePriceSnapshotId": "price_shot_package_v1"
   }
