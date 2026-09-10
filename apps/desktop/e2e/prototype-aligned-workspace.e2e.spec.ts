@@ -62,6 +62,9 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
         inspectorFontSize: fontSize('.workspace-inspector'),
         inspectorWidth: Math.round(rect('.workspace-inspector').width),
         navFontSize: fontSize('.global-nav-item'),
+        pillBorderRadius: getComputedStyle(
+          document.querySelector('.status-pill') ?? document.body,
+        ).borderRadius,
         sidebarWidth: Math.round(rect('.global-sidebar').width),
         topbarText: document.querySelector('.workspace-topbar')?.textContent ?? '',
       };
@@ -69,9 +72,10 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
     expect(metrics).toMatchObject({
       flowWidth: 264,
       inspectorFontSize: '13px',
-      inspectorWidth: 368,
-      navFontSize: '15px',
-      sidebarWidth: 216,
+      inspectorWidth: 360,
+      navFontSize: '13px',
+      pillBorderRadius: '0px',
+      sidebarWidth: 208,
     });
     expect(metrics.topbarText).not.toContain('项目进度自动保存');
     expect(metrics.topbarText).not.toContain('最近保存于刚刚');
@@ -92,14 +96,18 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
         throw new Error('missing model service layout');
       }
       const pageRect = pageElement.getBoundingClientRect();
-      const statusRect = status.getBoundingClientRect();
+      const statusStyle = getComputedStyle(status);
       return {
         contentLeft: Math.round(pageRect.left),
-        statusHeight: Math.round(statusRect.height),
-        statusWidth: Math.round(statusRect.width),
+        statusBorder: statusStyle.borderTopStyle,
+        statusMarkWidth: getComputedStyle(status, '::before').width,
       };
     });
-    expect(settingsMetrics).toMatchObject({ contentLeft: 216, statusHeight: 36, statusWidth: 76 });
+    expect(settingsMetrics).toMatchObject({
+      contentLeft: 208,
+      statusBorder: 'none',
+      statusMarkWidth: '6px',
+    });
     await page.screenshot({
       path: testInfo.outputPath('implementation-settings.png'),
     });

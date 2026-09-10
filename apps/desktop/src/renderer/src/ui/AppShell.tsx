@@ -1,17 +1,19 @@
 import type { ReactNode } from 'react';
 
+import { Icon, type IconName } from './icons';
+
 export type GlobalArea =
   'home' | 'projects' | 'workspace' | 'assets' | 'tasks' | 'exports' | 'evaluation' | 'settings';
 
-const GLOBAL_AREAS: readonly [GlobalArea, string, string][] = [
-  ['home', '首页', '首'],
-  ['projects', '我的项目', '项'],
-  ['workspace', '创作工作台', '创'],
-  ['assets', '素材库', '素'],
-  ['tasks', '生成任务', '任'],
-  ['exports', '导出记录', '出'],
-  ['evaluation', '质量与评测', '质'],
-  ['settings', '设置', '设'],
+const GLOBAL_AREAS: readonly [GlobalArea, string, IconName][] = [
+  ['home', '首页', 'home'],
+  ['projects', '我的项目', 'folder'],
+  ['workspace', '创作工作台', 'clapper'],
+  ['assets', '素材库', 'layers'],
+  ['tasks', '生成任务', 'tasks'],
+  ['exports', '导出记录', 'export'],
+  ['evaluation', '质量与评测', 'gauge'],
+  ['settings', '设置', 'sliders'],
 ];
 
 export interface AppShellProps {
@@ -45,7 +47,7 @@ export const AppShell = ({ activeArea, children, onNavigate, projectName }: AppS
             type="button"
           >
             <span aria-hidden="true" className="global-nav-icon">
-              {icon}
+              <Icon name={icon} />
             </span>
             <span>{label}</span>
           </button>

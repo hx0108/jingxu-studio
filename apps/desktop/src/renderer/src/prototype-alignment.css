@@ -1,6 +1,8 @@
-/* Loaded after legacy styles so the approved prototype remains the final visual source. */
+/* Loaded after legacy styles so the approved prototype remains the final visual source.
+   2026-09-10 起视觉来源为 CINE 剪辑台方向（designs/jingxu-studio-redesign）：
+   状态文字化、无眉标间距、1px 分割线、48px 顶栏、208/264/360 三栏。 */
 .app-shell {
-  grid-template-columns: 216px minmax(0, 1fr);
+  grid-template-columns: 208px minmax(0, 1fr);
   background: var(--jx-bg);
 }
 .global-sidebar {
@@ -9,36 +11,66 @@
   background: #0a0a0c;
 }
 .brand-lockup {
-  height: 64px;
-  padding: 0 18px;
+  height: 48px;
+  padding: 0 16px;
+}
+.brand-mark {
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--jx-accent);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--jx-accent);
+  font-size: 13px;
+  font-weight: 600;
 }
 .global-navigation {
-  gap: 4px;
-  padding: 18px 10px;
+  gap: 1px;
+  padding: 14px 10px;
 }
 .global-nav-item {
-  grid-template-columns: 25px 1fr;
-  min-height: 42px;
-  gap: 12px;
-  padding: 0 12px;
+  position: relative;
+  grid-template-columns: 20px 1fr;
+  min-height: 36px;
+  gap: 10px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 8px;
-  font-size: 15px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+.global-nav-item:hover,
+.global-nav-item.active {
+  border-color: transparent;
+  background: var(--jx-panel-3);
+}
+.global-nav-item.active {
+  box-shadow: none;
+}
+.global-nav-item.active::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 2px;
+  background: var(--jx-accent);
 }
 .global-nav-icon {
   display: grid;
-  width: 25px;
-  height: 25px;
-  border: 1px solid var(--jx-line);
-  border-radius: 6px;
-  font-size: 11px;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  color: var(--jx-muted);
   place-items: center;
+}
+.global-nav-item.active .global-nav-icon {
+  color: var(--jx-accent);
 }
 .sidebar-project-context {
   gap: 6px;
   padding: 12px;
   border: 1px solid var(--jx-line-soft);
-  border-radius: 10px;
+  border-radius: 6px;
   margin: 10px;
   background: #141418;
 }
@@ -51,8 +83,8 @@
 .workspace-topbar {
   display: flex;
   align-items: center;
-  min-height: 64px;
-  padding: 0 20px;
+  min-height: 48px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--jx-line-soft);
   margin: 0;
   background: rgb(14 14 17 / 96%);
@@ -60,15 +92,14 @@
 .workspace-breadcrumbs {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   color: var(--jx-muted);
   font-size: 12px;
 }
 .workspace-breadcrumbs i {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: #4a4a52;
+  width: 1px;
+  height: 10px;
+  background: var(--jx-line);
 }
 .workspace-breadcrumbs strong {
   color: var(--jx-text);
@@ -87,13 +118,13 @@
   display: none;
 }
 .guided-workspace {
-  grid-template-columns: 264px minmax(500px, 1fr) 368px;
+  grid-template-columns: 264px minmax(500px, 1fr) 360px;
   gap: 0;
   align-items: stretch;
   min-height: calc(100vh - 152px);
   overflow: hidden;
   border: 1px solid var(--jx-line-soft);
-  border-radius: 10px;
+  border-radius: 6px;
   background: var(--jx-panel);
 }
 .workspace-flow,
@@ -127,36 +158,39 @@
 }
 .inspector-header small {
   color: var(--jx-muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 .inspector-header strong {
-  font-size: 17px;
+  font-size: 14px;
 }
 .inspector-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--jx-line);
-  border-radius: 8px;
-  margin: 14px 0 16px;
+  display: flex;
+  gap: 1px;
+  padding: 0 2px;
+  border: 0;
+  border-bottom: 1px solid var(--jx-line-soft);
+  margin: 10px 0 0;
 }
 .inspector-tabs button {
-  min-height: 36px;
-  padding: 0 8px;
+  min-height: 34px;
+  padding: 0 10px;
   border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--jx-muted);
-  font-size: 13px;
+  font-size: 12.5px;
 }
 .inspector-tabs button.active {
-  background: #42301c;
+  background: transparent;
+  border-bottom-color: var(--jx-accent);
   color: var(--jx-text);
 }
 .inspector-content,
 .inspector-tab-placeholder {
   display: grid;
   gap: 12px;
+  padding-top: 14px;
 }
 .workspace-canvas > .script-card {
   padding: 0;
@@ -170,27 +204,47 @@
   gap: 5px;
 }
 .stage-navigation button {
-  grid-template-columns: 30px minmax(0, 1fr);
-  min-height: 56px;
+  grid-template-columns: 26px minmax(0, 1fr);
+  min-height: 48px;
 }
 .production-phase {
+  position: relative;
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 8px;
+  grid-template-columns: 26px minmax(0, 1fr) 8px;
   align-items: center;
   gap: 10px;
-  min-height: 50px;
-  padding: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 4px;
 }
 .production-phase.active {
-  border-color: #8a5a28;
-  background: var(--jx-accent-soft);
+  border-color: transparent;
+  background: var(--jx-panel-3);
+}
+.production-phase.active::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  width: 2px;
+  background: var(--jx-accent);
+}
+.stage-index {
+  color: var(--jx-muted);
+  font-family: var(--jx-font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+.production-phase.active .stage-index {
+  color: var(--jx-accent);
 }
 .phase-indicator {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 0;
   background: #3a3a42;
 }
 .production-phase.done .phase-indicator {
@@ -198,7 +252,6 @@
 }
 .production-phase.active .phase-indicator {
   background: var(--jx-accent);
-  box-shadow: 0 0 0 3px rgb(226 133 61 / 14%);
 }
 .script-substage-navigation {
   gap: 2px;
@@ -235,7 +288,7 @@
 .flow-heading strong,
 .stage-copy strong,
 .production-step-list li > span {
-  font-size: 14px;
+  font-size: 13px;
 }
 .workspace-inspector :is(p, dt, dd, li, small, button, summary),
 .script-card :is(p, label, li, dt, dd, small, button, input, select, textarea),
@@ -246,10 +299,10 @@
   line-height: 1.6;
 }
 .media-workspace {
-  grid-template-columns: 264px minmax(500px, 1fr) 368px;
+  grid-template-columns: 264px minmax(500px, 1fr) 360px;
   gap: 0;
   overflow: hidden;
-  border-radius: 10px;
+  border-radius: 6px;
 }
 .settings-workspace.model-services-page {
   width: auto;
@@ -269,7 +322,7 @@
 }
 .model-service-heading {
   display: grid;
-  grid-template-columns: 48px minmax(145px, 1fr) 76px minmax(160px, 1fr) minmax(210px, 1.2fr) 124px;
+  grid-template-columns: 48px minmax(145px, 1fr) auto minmax(160px, 1fr) minmax(210px, 1.2fr) 124px;
   align-items: center;
   gap: 14px;
   cursor: pointer;
@@ -282,9 +335,10 @@
   display: grid;
   width: 48px;
   height: 48px;
-  border-radius: 9px;
-  background: #42301c;
-  color: #f0c88f;
+  border: 1px solid var(--jx-line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--jx-muted);
   font-size: 18px;
   place-items: center;
 }
@@ -331,22 +385,24 @@
   grid-column: 1 / -1;
 }
 .model-configuration-status {
-  display: grid;
-  min-width: 76px;
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid #3a3a42;
-  border-radius: 8px;
-  background: #1e1e24;
-  color: #b5b3ac;
-  font-size: 13px;
-  line-height: 1;
-  place-items: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--jx-muted);
+  font-size: 12px;
+  font-weight: 500;
   white-space: nowrap;
 }
+.model-configuration-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  background: currentcolor;
+}
 .model-configuration-status.configured {
-  border-color: #2e4a3a;
-  background: #15271e;
   color: #74b98d;
 }
 
@@ -416,4 +472,55 @@
     grid-column: 1 / -1;
     justify-self: start;
   }
+}
+
+/* ---- CINE 组件语言（2026-09-10 全量对齐）：状态文字化、去眉标间距、
+        平涂占位帧、等宽数字。与 designs/jingxu-studio-redesign 同源。 ---- */
+button {
+  border-radius: 4px;
+}
+
+.status-pill {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 0;
+}
+
+.local-first-badge {
+  padding: 0;
+  border: 0;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.eyebrow {
+  color: var(--jx-muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+.candidate-placeholder {
+  display: grid;
+  min-height: 180px;
+  border: 1px solid var(--jx-line-soft);
+  border-radius: 4px;
+  background: var(--jx-panel-3);
+  color: var(--jx-muted);
+  font-size: 12px;
+  place-items: center;
+}
+
+.shot-card input[type='number'] {
+  font-family: var(--jx-font-mono);
+  font-variant-numeric: tabular-nums;
 }

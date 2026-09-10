@@ -4,3 +4,10 @@
 - [x] IBM Plex Sans/Mono + Noto Sans SC 共 117 个 woff2 切片本地打包至 `src/renderer/src/assets/fonts/`，`main.tsx` 接线（CSP `default-src 'self'` 兼容）。
 - [x] `tsc --noEmit` 与三段 vite 构建（main/preload/renderer）通过。
 - [x] `prototype-aligned-workspace.e2e.spec.ts` 通过（216/264/368 布局断言不变），renderer ui 单测 23 项通过。
+- [x] 组件级全量对齐（2026-09-10 第二轮，消除“tokens 落地但观感与原型有差距”）：
+  - 状态文字化：`.status-pill` / `.model-configuration-status` / `.local-first-badge` 去药丸盒，改 6px 方标 + 文字。
+  - 眉标 `.eyebrow` 去 0.18em 间距与强调色，改 11px 弱化 kicker。
+  - 布局：208px 侧栏、48px 顶栏、360px 检查器（原 216/64/368）。
+  - 全局导航 16px 线性 SVG 图标（`ui/icons.tsx`）替换字符图标框，激活项 2px tally。
+  - 检查器页签改下划线式；阶段轨等宽序号 + tally + 方形指示标；时间线数字输入等宽；候选占位平涂块；按钮圆角 4px。
+  - E2E 断言同步改写（208/264/360、nav 13px、状态 border-radius 0 + ::before 6px 方标、设置 contentLeft 208）；`design-qa.md` 第五轮记录。
