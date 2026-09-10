@@ -107,6 +107,7 @@
 .workspace-area-shell > :is(.editor-panel, .detail-panel, .notice) {
   max-width: none;
   padding: 24px;
+  border-radius: 6px;
   margin: 0;
 }
 .workspace-area-shell > .script-shell {
@@ -478,6 +479,25 @@
         平涂占位帧、等宽数字。与 designs/jingxu-studio-redesign 同源。 ---- */
 button {
   border-radius: 4px;
+  font-size: 13px;
+}
+
+/* 容器圆角统一 CINE 刻度：输入页 script-card、详情面板与模型卡不再沿用 12/14px。 */
+.script-card,
+.editor-panel,
+.detail-panel,
+.model-service-card,
+.notice {
+  border-radius: 6px;
+}
+
+.page-header h1 {
+  font-size: 24px;
+}
+
+.settings-workspace > header h2 {
+  font-size: 24px;
+  font-weight: 600;
 }
 
 .status-pill {
