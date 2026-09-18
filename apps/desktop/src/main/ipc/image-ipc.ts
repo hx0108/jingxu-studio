@@ -6,6 +6,8 @@ import {
   cancelBatchInputSchema,
   generateCandidatesForShotsInputSchema,
   generateCandidatesInputSchema,
+  getConsistencyPreflightInputSchema,
+  consistencyPreflightSchema,
   getMediaTaskInputSchema,
   IMAGE_IPC_CHANNELS,
   imageCandidateViewSchema,
@@ -25,6 +27,8 @@ import type {
   CancelBatchInputDto,
   GenerateCandidatesForShotsInputDto,
   GenerateCandidatesInputDto,
+  GetConsistencyPreflightInputDto,
+  ConsistencyPreflightDto,
   GetMediaTaskInputDto,
   ImageCandidateViewDto,
   ListAssetsInputDto,
@@ -68,6 +72,10 @@ export interface ImageIpcService {
     input: ListAssetsInputDto,
     traceId: string,
   ) => Promise<AppResultDto<AssetViewDto[]>>;
+  readonly getConsistencyPreflight: (
+    input: GetConsistencyPreflightInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<ConsistencyPreflightDto>>;
   readonly uploadAssetReference: (
     input: UploadAssetReferenceInputDto,
     traceId: string,
@@ -182,6 +190,7 @@ export const registerImageIpc = (
   const uploadResult = appResultSchema(uploadAssetReferenceResultSchema);
   const batchResult = appResultSchema(mediaBatchViewSchema);
   const storyboardStatesResult = appResultSchema(storyboardImageStatesSchema);
+  const consistencyResult = appResultSchema(consistencyPreflightSchema);
 
   const registerQuery = <TInput, TOutput>(
     channel: string,
@@ -260,6 +269,12 @@ export const registerImageIpc = (
     listAssetsInputSchema,
     assetsResult,
     (input, traceId) => service.listAssets(input, traceId),
+  );
+  registerQuery(
+    IMAGE_IPC_CHANNELS.getConsistencyPreflight,
+    getConsistencyPreflightInputSchema,
+    consistencyResult,
+    (input, traceId) => service.getConsistencyPreflight(input, traceId),
   );
   registerQuery(IMAGE_IPC_CHANNELS.getTask, getMediaTaskInputSchema, taskResult, (input, traceId) =>
     service.getMediaTask(input, traceId),

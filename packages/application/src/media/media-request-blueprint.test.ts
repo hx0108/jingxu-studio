@@ -200,7 +200,7 @@ const seedTask = async (repository: InMemoryMediaRepository): Promise<string> =>
 
 const seedAsset = async (
   repository: InMemoryMediaRepository,
-  assetType: 'CHARACTER' | 'SCENE',
+  assetType: 'CHARACTER' | 'SCENE' | 'STYLE',
   bibleRefId: string,
 ): Promise<void> => {
   const unitOfWork: MediaUnitOfWorkPort = {
@@ -224,6 +224,7 @@ const seedAsset = async (
     media.appendAssetVersion({
       assetId: asset.id,
       byteSize: 3,
+      description: assetType === 'STYLE' ? '二维国漫厚涂，冷青色电影光' : null,
       fileSha256: hash64(`file_${bibleRefId}`),
       id: `assetv_${bibleRefId}`,
       mimeType: 'image/png',
@@ -243,6 +244,7 @@ describe('createMediaRequestBlueprintBuilder', () => {
       snapshotOf([shot1(shotDocument(['char_hero'], 'scene_alley'))], bibleDocument()),
     );
     await seedTask(fixture_.repository);
+    await seedAsset(fixture_.repository, 'STYLE', 'project-style');
     await seedAsset(fixture_.repository, 'CHARACTER', 'char_hero');
     await seedAsset(fixture_.repository, 'SCENE', 'scene_alley');
     const blueprint = await fixture_.build(await unitOfWorkTask(fixture_.repository));
@@ -255,33 +257,58 @@ describe('createMediaRequestBlueprintBuilder', () => {
     expect(request.referenceImages).toEqual([
       { bytes: Uint8Array.from([1, 2, 3]), mimeType: 'image/png' },
       { bytes: Uint8Array.from([1, 2, 3]), mimeType: 'image/png' },
+      { bytes: Uint8Array.from([1, 2, 3]), mimeType: 'image/png' },
     ]);
     expect(JSON.parse(blueprint.submitSnapshotJson)).toEqual({
       modelId: MODEL_ID,
       prompt: request.prompt,
-      referenceImageSha256s: [hash64('file_char_hero'), hash64('file_scene_alley')],
+      referenceImages: [
+        {
+          assetVersionId: 'assetv_project-style',
+          bibleRefId: 'project-style',
+          kind: 'STYLE',
+          sha256: hash64('file_project-style'),
+        },
+        {
+          assetVersionId: 'assetv_char_hero',
+          bibleRefId: 'char_hero',
+          kind: 'CHARACTER',
+          sha256: hash64('file_char_hero'),
+        },
+        {
+          assetVersionId: 'assetv_scene_alley',
+          bibleRefId: 'scene_alley',
+          kind: 'SCENE',
+          sha256: hash64('file_scene_alley'),
+        },
+      ],
+      referenceImageSha256s: [
+        hash64('file_project-style'),
+        hash64('file_char_hero'),
+        hash64('file_scene_alley'),
+      ],
       responseFormat: 'url',
       size: { height: 2560, width: 1440 },
       watermark: true,
     });
     expect(fixture_.reads.map((read) => read.fileSha256)).toEqual([
+      hash64('file_project-style'),
       hash64('file_char_hero'),
       hash64('file_scene_alley'),
     ]);
   });
 
-  it('STORY_BIBLE 缺失—Prompt 降级仍可构建—参考图不受影响', async () => {
+  it('STORY_BIBLE 缺失—稳定阻断而非静默降级', async () => {
     const fixture_ = fixture(snapshotOf([shot1(shotDocument(['char_hero'], 'scene_alley'))], null));
     await seedTask(fixture_.repository);
+    await seedAsset(fixture_.repository, 'STYLE', 'project-style');
     await seedAsset(fixture_.repository, 'CHARACTER', 'char_hero');
-    const blueprint = await fixture_.build(await unitOfWorkTask(fixture_.repository));
-    const request = blueprint.buildRequest('inv_1');
-    expect(request.prompt).toContain('雨巷中的少女');
-    expect(request.prompt).not.toContain('白裙少女');
-    expect(request.referenceImages).toHaveLength(1);
+    await expect(fixture_.build(await unitOfWorkTask(fixture_.repository))).rejects.toThrow(
+      'MEDIA_CONSISTENCY_STORY_BIBLE_INVALID',
+    );
   });
 
-  it('绑定超过契约上限 14—参考图读取截断到前 14', async () => {
+  it('必需绑定超过契约上限 14—稳定阻断且不静默截断', async () => {
     const characterIds = Array.from(
       { length: 20 },
       (_, index) => `char_${String(index).padStart(2, '0')}`,
@@ -299,12 +326,13 @@ describe('createMediaRequestBlueprintBuilder', () => {
       ),
     );
     await seedTask(fixture_.repository);
+    await seedAsset(fixture_.repository, 'STYLE', 'project-style');
     for (const id of characterIds) {
       await seedAsset(fixture_.repository, 'CHARACTER', id);
     }
-    const blueprint = await fixture_.build(await unitOfWorkTask(fixture_.repository));
-    expect(fixture_.reads).toHaveLength(14);
-    expect(blueprint.buildRequest('inv_1').referenceImages).toHaveLength(14);
+    await expect(fixture_.build(await unitOfWorkTask(fixture_.repository))).rejects.toThrow(
+      'MEDIA_CONSISTENCY_REFERENCE_LIMIT_EXCEEDED',
+    );
   });
 
   it('工作区缺失 / 分镜版本不一致—稳定 message 标记', async () => {

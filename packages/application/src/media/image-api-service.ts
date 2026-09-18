@@ -13,6 +13,8 @@ import type {
   CancelBatchInputDto,
   GenerateCandidatesForShotsInputDto,
   GenerateCandidatesInputDto,
+  GetConsistencyPreflightInputDto,
+  ConsistencyPreflightDto,
   GetMediaTaskInputDto,
   ImageCandidateViewDto,
   ListAssetsInputDto,
@@ -36,6 +38,7 @@ import type {
 } from '../ports/media/media-repository';
 import type { MediaBatchService } from './media-batch-service';
 import type { MediaGenerationService } from './media-generation-service';
+import type { MediaConsistencyService } from './media-consistency-service';
 import { mediaFailure, mediaPersistenceFailure } from './media-service-error';
 
 /** 资产参考图字节落盘（组合根包装 ContentAddressedStore.write 的 assets 命名空间）。 */
@@ -66,6 +69,10 @@ export interface ImageApiService {
     traceId: string,
   ): Promise<AppResultDto<ImageCandidateViewDto[]>>;
   listAssets(input: ListAssetsInputDto, traceId: string): Promise<AppResultDto<AssetViewDto[]>>;
+  getConsistencyPreflight(
+    input: GetConsistencyPreflightInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<ConsistencyPreflightDto>>;
   uploadAssetReference(
     input: UploadAssetReferenceInputDto,
     traceId: string,
@@ -98,6 +105,7 @@ export interface ImageApiServiceDependencies {
   /** 批量首帧编排（batch-first-frame-generation；progressBatch 由调度器钩子驱动）。 */
   readonly batch: MediaBatchService;
   readonly generation: MediaGenerationService;
+  readonly consistency: MediaConsistencyService;
   readonly mediaUnitOfWork: MediaUnitOfWorkPort;
   readonly newId: () => string;
   /** 生成建档成功后触发该项目后台排空（幂等；重放旧任务时无可排空即空转）。 */
@@ -248,8 +256,17 @@ export const createImageApiService = (
       }
     },
 
+    getConsistencyPreflight: (input, traceId) =>
+      dependencies.consistency.getPreflight(input, traceId),
+
     uploadAssetReference: async (input, traceId) => {
       try {
+        if (
+          (input.assetType === 'STYLE' && input.bibleRefId !== 'project-style') ||
+          (input.assetType !== 'STYLE' && input.bibleRefId === 'project-style')
+        ) {
+          return mediaFailure('IPC_INVALID_REQUEST', '画风资产保留键与资产类型不匹配。', traceId);
+        }
         const stored = await dependencies.assetFileStore.writeAsset({
           bytes: input.bytes,
           mimeType: input.mimeType,

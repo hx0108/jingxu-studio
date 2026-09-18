@@ -204,6 +204,7 @@ describe('0009_media_assets_images.sql', () => {
           { version: 19 },
           { version: 20 },
           { version: 21 },
+          { version: 22 },
         ]);
         const objects = database
           .prepare(
@@ -288,7 +289,7 @@ describe('0009_media_assets_images.sql', () => {
     });
   });
 
-  it('v8 库—升级到 head 21—既有资产图保留且新表可写', async () => {
+  it('v8 库—升级到 head 22—既有资产图保留且新表可写', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const database = await openMigratedDatabase(root, 'media_upgrade.sqlite', 8);
       try {
@@ -296,7 +297,7 @@ describe('0009_media_assets_images.sql', () => {
         applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 21 });
+        ).toEqual({ version: 22 });
         // v8 既有行在升级后原样保留。
         expect(
           database.prepare("SELECT id, lifecycle_status FROM shots WHERE id = 'shot_media'").get(),
@@ -322,7 +323,7 @@ describe('0009_media_assets_images.sql', () => {
     });
   });
 
-  it('v8 受管理库—performManagedMigration 升级—先备份 schema v8 再到 head 21', async () => {
+  it('v8 受管理库—performManagedMigration 升级—先备份 schema v8 再到 head 22', async () => {
     await withSqliteTestContext(async ({ root }) => {
       const migrations = await loadMigrationSet(MIGRATIONS);
       const paths = createManagedPaths(path.join(root, 'managed'));
@@ -346,7 +347,7 @@ describe('0009_media_assets_images.sql', () => {
         ]);
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 21 });
+        ).toEqual({ version: 22 });
       } finally {
         database.close();
       }
@@ -948,6 +949,139 @@ describe('0012_shot_video_generation.sql', () => {
             )
             .run('d'.repeat(64), NOW, NOW);
         }).toThrow();
+        expect(database.pragma('foreign_key_check')).toEqual([]);
+      } finally {
+        database.close();
+      }
+    });
+  });
+});
+
+describe('0022_media_style_assets 迁移矩阵（enforce-character-style-consistency 2.2/2.3）', () => {
+  /** 在 v21 库建立 100+ 版本父链的资产图。 */
+  const seedLongVersionChain = (database: SqliteTestDatabase): void => {
+    seedShotGraph(database);
+    insertAsset(database, 'asset_chain', 'CHARACTER', 'char_chain');
+    for (let versionNo = 1; versionNo <= 120; versionNo += 1) {
+      database
+        .prepare(
+          `INSERT INTO asset_versions
+           (id, asset_id, version_no, provenance, file_sha256, byte_size, mime_type, created_at)
+           VALUES (?, 'asset_chain', ?, 'UPLOADED', ?, 2048, 'image/png', ?)`,
+        )
+        .run(
+          `assetv_chain_${String(versionNo)}`,
+          versionNo,
+          createHash('sha256')
+            .update(`v${String(versionNo)}`)
+            .digest('hex'),
+          NOW,
+        );
+    }
+  };
+
+  it('v21 库—0022 表重建—100+ 版本父链/唯一约束/immutable trigger/外键完整', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await openMigratedDatabase(root, 'style_0022.sqlite', 21);
+      try {
+        seedLongVersionChain(database);
+        // 升级前快照：行数、头版本行、中段行，迁移后逐一对账。
+        const beforeHead = database
+          .prepare(
+            'SELECT id, version_no, parent_id FROM asset_versions WHERE asset_id = ? ORDER BY version_no DESC LIMIT 1',
+          )
+          .get('asset_chain');
+        const beforeMid = database
+          .prepare('SELECT id, version_no, parent_id FROM asset_versions WHERE id = ?')
+          .get('assetv_chain_60');
+        applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
+
+        // 行数与父链原样：120 个版本、头/中版本行逐列一致。
+        expect(
+          database
+            .prepare('SELECT COUNT(*) AS count FROM asset_versions WHERE asset_id = ?')
+            .get('asset_chain'),
+        ).toEqual({ count: 120 });
+        expect(
+          database
+            .prepare(
+              'SELECT id, version_no, parent_id FROM asset_versions WHERE asset_id = ? ORDER BY version_no DESC LIMIT 1',
+            )
+            .get('asset_chain'),
+        ).toEqual(beforeHead);
+        expect(
+          database
+            .prepare('SELECT id, version_no, parent_id FROM asset_versions WHERE id = ?')
+            .get('assetv_chain_60'),
+        ).toEqual(beforeMid);
+
+        // 重建后唯一约束仍在：重复 (project, asset_type, bible_ref_id) 拒绝。
+        expect(() => {
+          insertAsset(database, 'asset_dup', 'CHARACTER', 'char_chain');
+        }).toThrow();
+
+        // 重建后 immutable trigger 仍在：UPDATE 任何列被拒绝。
+        expect(() => {
+          database
+            .prepare("UPDATE asset_versions SET file_sha256 = ? WHERE id = 'assetv_chain_1'")
+            .run('b'.repeat(64));
+        }).toThrow();
+
+        expect(database.pragma('foreign_key_check')).toEqual([]);
+      } finally {
+        database.close();
+      }
+    });
+  });
+
+  it('0022 STYLE 约束—仅允许保留键 project-style 且每项目至多一个 STYLE 资产', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await openMigratedDatabase(root, 'style_rules.sqlite');
+      try {
+        seedShotGraph(database);
+        insertAsset(database, 'asset_style_ok', 'STYLE', 'project-style');
+        // 第二个 STYLE 资产（即使换 ID）被 UNIQUE(project_id, asset_type, bible_ref_id) 拒绝。
+        expect(() => {
+          insertAsset(database, 'asset_style_dup', 'STYLE', 'project-style');
+        }).toThrow();
+        // 非 project-style 保留键的 STYLE 被 CHECK 拒绝。
+        expect(() => {
+          insertAsset(database, 'asset_style_bad', 'STYLE', 'style_album');
+        }).toThrow();
+        // 非 STYLE 资产占用保留键同样被 CHECK 拒绝。
+        expect(() => {
+          insertAsset(database, 'asset_char_style', 'CHARACTER', 'project-style');
+        }).toThrow();
+        expect(database.pragma('foreign_key_check')).toEqual([]);
+      } finally {
+        database.close();
+      }
+    });
+  });
+
+  it('0022 升级失败—预置遗留表名冲突—迁移回滚且 v21 库原样可读', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await openMigratedDatabase(root, 'style_conflict.sqlite', 21);
+      try {
+        seedShotGraph(database);
+        insertAsset(database, 'asset_v21', 'CHARACTER', 'char_v21');
+        insertAssetVersion(database, 'assetv_v21', 'asset_v21', 1);
+        // 预置同名遗留表，令 0022 的 RENAME 失败。
+        database.prepare('CREATE TABLE assets_legacy_0022 (id TEXT PRIMARY KEY)').run();
+        const migrations = await loadMigrationSet(MIGRATIONS);
+        expect(() => applyMigrations(database, migrations, () => NOW)).toThrow();
+        // 回滚对账：schema_migrations 无 22，业务表未被改名破坏，数据仍可读。
+        expect(
+          database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
+        ).toEqual({ version: 21 });
+        expect(database.prepare("SELECT id FROM assets WHERE id = 'asset_v21'").get()).toEqual({
+          id: 'asset_v21',
+        });
+        expect(
+          database
+            .prepare('SELECT COUNT(*) AS count FROM asset_versions WHERE asset_id = ?')
+            .get('asset_v21'),
+        ).toEqual({ count: 1 });
         expect(database.pragma('foreign_key_check')).toEqual([]);
       } finally {
         database.close();

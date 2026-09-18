@@ -100,7 +100,7 @@ test('§5.3 逐镜头首帧面板—生成/选择/参考图升版 STALE 与受�
     await expect(panel.getByRole('button', { name: '设为当前首帧' })).toHaveCount(3);
 
     // 参考图升版 v2：旧世代候选全员 STALE_INPUT + 受影响镜头清单。
-    await page.getByLabel('圣经引用 ID（char_*/scene_*）').fill('scene_train');
+    await page.getByLabel('资产引用 ID（char_*/scene_*/project-style）').fill('scene_train');
     await page.getByLabel('资产显示名称').fill('午夜列车');
     await page.locator('#reference-upload-form input[type="file"]').setInputFiles({
       buffer: Buffer.from([4, 5, 6]),

@@ -73,12 +73,14 @@ describe('buildFirstFramePrompt', () => {
       boundCharacters: [{ appearance: '16 岁少女，白裙，长发', name: '小雨' }],
       creative,
       scene: { description: '江南雨巷，青石板路与两侧老墙', name: '雨巷' },
+      style: { description: '二维国漫厚涂，冷青色电影光', name: '项目画风' },
     });
     expect(prompt).toBe(
       [
+        '画风锚点：项目画风——二维国漫厚涂，冷青色电影光。全片保持相同的材质、线条、色彩、光影与渲染方式。',
         '雨巷中的少女，中景，电影感',
         '场景：雨巷——江南雨巷，青石板路与两侧老墙',
-        '人物：小雨（16 岁少女，白裙，长发）',
+        '人物身份：小雨（16 岁少女，白裙，长发）。严格保持角色身份、脸部特征、发型、服装与配饰一致，不新增或替换角色。',
         '机位：MEDIUM / LOW；构图：人物居右，雨幕占左三分之二；焦点：人物面部与手中的伞',
         '首帧要求：雨幕中的巷口，少女半身入画',
         '避免：文字水印、多余人物',
@@ -94,9 +96,15 @@ describe('buildFirstFramePrompt', () => {
     });
     const creative = extractShotCreativeFields(document);
     if (creative === null) throw new Error('镜头创意字段应可解析');
-    const prompt = buildFirstFramePrompt({ boundCharacters: [], creative, scene: null });
+    const prompt = buildFirstFramePrompt({
+      boundCharacters: [],
+      creative,
+      scene: null,
+      style: { description: '黑白水墨', name: '项目画风' },
+    });
     expect(prompt).toBe(
       [
+        '画风锚点：项目画风——黑白水墨。全片保持相同的材质、线条、色彩、光影与渲染方式。',
         '少女撑伞缓步走过雨巷，忧郁而克制',
         '机位：CLOSE_UP / EYE_LEVEL',
         '本镜头与前一镜头为同场景切镜：保持人物、服装与场景外观一致，仅按上述机位切换取景。',

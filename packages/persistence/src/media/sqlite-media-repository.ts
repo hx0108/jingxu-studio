@@ -186,6 +186,12 @@ export class SqliteMediaRepository implements MediaRepository {
     projectId: string;
   }): Promise<MediaAssetRecord> {
     return syncToPromise(() => {
+      if (
+        (input.assetType === 'STYLE' && input.bibleRefId !== 'project-style') ||
+        (input.assetType !== 'STYLE' && input.bibleRefId === 'project-style')
+      ) {
+        throw new PersistenceRuntimeError('MEDIA_ASSET_CONFLICT');
+      }
       const now = this.clock();
       try {
         this.database

@@ -20,6 +20,8 @@ import {
   evaluationSampleSummarySchema,
   generateCandidatesForShotsInputSchema,
   generateCandidatesInputSchema,
+  getConsistencyPreflightInputSchema,
+  consistencyPreflightSchema,
   getMediaTaskInputSchema,
   IMAGE_IPC_CHANNELS,
   imageCandidateViewSchema,
@@ -151,6 +153,7 @@ import {
   type GenerateCandidatesForShotsInputDto,
   type GenerateCandidatesInputDto,
   type GetMediaTaskInputDto,
+  type GetConsistencyPreflightInputDto,
   type JobCreateInputDto,
   type JobGetInputDto,
   type JobListInputDto,
@@ -315,6 +318,13 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
       getMediaTask: async (input: GetMediaTaskInputDto) =>
         appResultSchema(mediaTaskViewSchema).parse(
           await invoke(IMAGE_IPC_CHANNELS.getTask, getMediaTaskInputSchema.parse(input)),
+        ),
+      getConsistencyPreflight: async (input: GetConsistencyPreflightInputDto) =>
+        appResultSchema(consistencyPreflightSchema).parse(
+          await invoke(
+            IMAGE_IPC_CHANNELS.getConsistencyPreflight,
+            getConsistencyPreflightInputSchema.parse(input),
+          ),
         ),
       generateCandidatesForShots: async (input: GenerateCandidatesForShotsInputDto) =>
         appResultSchema(mediaBatchViewSchema).parse(

@@ -24,9 +24,14 @@ export const seedStoryboardReady = async (
   page: Page,
   projectName: string,
   existingInput?: ExistingScriptSeedInput,
+  options?: { readonly consistencyAssets?: boolean },
 ): Promise<StoryboardSeedResult> =>
   page.evaluate(
-    async (input: { readonly existing: ExistingScriptSeedInput | null; readonly name: string }) => {
+    async (input: {
+      readonly existing: ExistingScriptSeedInput | null;
+      readonly name: string;
+      readonly options: { readonly consistencyAssets: boolean } | null;
+    }) => {
       const requestId = (prefix: string): string => `${prefix}_${crypto.randomUUID()}`;
       const created = await window.jingxu.project.create({
         aspectRatio: '9:16',
@@ -189,11 +194,59 @@ export const seedStoryboardReady = async (
       }
       const firstShot = afterReady.data.storyboard.shots[0];
       if (firstShot === undefined) throw new Error('shot:missing-shots');
+
+      // 一致性门禁（enforce-character-style-consistency）：为整集生成补齐
+      // STYLE 画风锚点与全部出场角色参考图；可经 options.consistencyAssets 关闭
+      // 以复现阻断态。沿用 image 上传通道，风格与真实 UI 上传一致。
+      if (input.options?.consistencyAssets ?? true) {
+        const characterIds = new Set<string>();
+        for (const shot of afterReady.data.storyboard.shots) {
+          const ids = (shot.document as { content?: { character_ids?: unknown } }).content
+            ?.character_ids;
+          if (Array.isArray(ids)) {
+            for (const id of ids) {
+              if (typeof id === 'string' && id.length > 0) characterIds.add(id);
+            }
+          }
+        }
+        const styleUpload = await window.jingxu.image.uploadAssetReference({
+          assetType: 'STYLE',
+          bibleRefId: 'project-style',
+          byteSize: 3,
+          bytes: new Uint8Array([1, 2, 3]),
+          description: 'E2E 画风锚点：冷青水墨风',
+          displayName: '项目画风',
+          mimeType: 'image/png',
+          projectId,
+          requestId: requestId('asset-style'),
+        });
+        if (!styleUpload.ok) throw new Error(`style-asset:${styleUpload.error.code}`);
+        for (const characterId of characterIds) {
+          const upload = await window.jingxu.image.uploadAssetReference({
+            assetType: 'CHARACTER',
+            bibleRefId: characterId,
+            byteSize: 3,
+            bytes: new Uint8Array([1, 2, 3]),
+            description: null,
+            displayName: characterId,
+            mimeType: 'image/png',
+            projectId,
+            requestId: requestId(`asset-${characterId}`),
+          });
+          if (!upload.ok) throw new Error(`char-asset:${characterId}:${upload.error.code}`);
+        }
+      }
+
       return {
         projectId,
         shotCount: afterReady.data.storyboard.shots.length,
         shotId: firstShot.shotId,
       };
     },
-    { existing: existingInput ?? null, name: projectName },
+    {
+      existing: existingInput ?? null,
+      name: projectName,
+      options:
+        options === undefined ? null : { consistencyAssets: options.consistencyAssets ?? true },
+    },
   );

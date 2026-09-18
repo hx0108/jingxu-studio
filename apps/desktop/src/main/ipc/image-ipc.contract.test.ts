@@ -5,6 +5,7 @@ import type {
   AppResultDto,
   AssetVersionViewDto,
   AssetViewDto,
+  ConsistencyPreflightDto,
   ImageCandidateViewDto,
   MediaBatchViewDto,
   MediaTaskViewDto,
@@ -150,6 +151,19 @@ const createHarness = (ready = true) => {
   >();
   const service: ImageIpcService = {
     generateCandidates: vi.fn(() => Promise.resolve(okTask)),
+    getConsistencyPreflight: vi.fn(() =>
+      Promise.resolve({
+        data: {
+          missingItems: [],
+          ready: true,
+          shots: [],
+          storyBibleValid: true,
+          styleAssetVersionId: null,
+          warnings: [],
+        },
+        ok: true,
+      } as AppResultDto<ConsistencyPreflightDto>),
+    ),
     generateCandidatesForShots: vi.fn(() => Promise.resolve(okBatch)),
     cancelBatch: vi.fn(() => Promise.resolve(okBatch)),
     listStoryboardImageStates: vi.fn(() => Promise.resolve(okStates)),
@@ -170,7 +184,7 @@ const createHarness = (ready = true) => {
 };
 
 describe('Image Main IPC Contract', () => {
-  it('注册边界—固定九方法—可信 sender 与 strict DTO 后委托 Application', async () => {
+  it('注册边界—固定十方法—可信 sender 与 strict DTO 后委托 Application', async () => {
     const { handlers, service } = createHarness();
     expect([...handlers.keys()].sort()).toEqual(Object.values(IMAGE_IPC_CHANNELS).sort());
 
@@ -211,7 +225,7 @@ describe('Image Main IPC Contract', () => {
     );
   });
 
-  it('非 READY—九方法（含只读查询）统一阻断—Service 零调用', async () => {
+  it('非 READY—十方法（含只读查询）统一阻断—Service 零调用', async () => {
     const { handlers, service } = createHarness(false);
     const inputs: readonly [string, unknown][] = [
       [IMAGE_IPC_CHANNELS.generateCandidates, generateInput],

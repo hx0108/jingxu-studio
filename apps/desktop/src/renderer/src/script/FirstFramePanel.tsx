@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import type {
   AppErrorDto,
+  ConsistencyPreflightDto,
   ImageCandidateViewDto,
   MediaTaskViewDto,
   ShotImageStateDto,
@@ -128,8 +129,9 @@ export const FirstFrameBoard = ({
 };
 
 export interface ReferenceUploadInput {
-  readonly assetType: 'CHARACTER' | 'SCENE';
+  readonly assetType: 'CHARACTER' | 'SCENE' | 'STYLE';
   readonly bibleRefId: string;
+  readonly description: string | null;
   readonly displayName: string;
   readonly file: File;
 }
@@ -141,9 +143,10 @@ export interface FirstFrameUploadFormProps {
 }
 
 export const FirstFrameUploadForm = ({ busy, onSubmit }: FirstFrameUploadFormProps) => {
-  const [assetType, setAssetType] = useState<'CHARACTER' | 'SCENE'>('SCENE');
+  const [assetType, setAssetType] = useState<'CHARACTER' | 'SCENE' | 'STYLE'>('SCENE');
   const [bibleRefId, setBibleRefId] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -165,6 +168,7 @@ export const FirstFrameUploadForm = ({ busy, onSubmit }: FirstFrameUploadFormPro
         onSubmit({
           assetType,
           bibleRefId: bibleRefId.trim(),
+          description: description.trim() === '' ? null : description.trim(),
           displayName: displayName.trim(),
           file: picked,
         });
@@ -174,24 +178,48 @@ export const FirstFrameUploadForm = ({ busy, onSubmit }: FirstFrameUploadFormPro
         资产类型
         <select
           onChange={(event) => {
-            setAssetType(event.target.value === 'CHARACTER' ? 'CHARACTER' : 'SCENE');
+            const next =
+              event.target.value === 'CHARACTER'
+                ? 'CHARACTER'
+                : event.target.value === 'STYLE'
+                  ? 'STYLE'
+                  : 'SCENE';
+            setAssetType(next);
+            if (next === 'STYLE') {
+              setBibleRefId('project-style');
+              setDisplayName('项目画风');
+            }
           }}
           value={assetType}
         >
           <option value="SCENE">场景</option>
           <option value="CHARACTER">角色</option>
+          <option value="STYLE">项目画风</option>
         </select>
       </label>
       <label>
-        圣经引用 ID（char_*/scene_*）
+        资产引用 ID（char_*/scene_*/project-style）
         <input
           onChange={(event) => {
             setBibleRefId(event.target.value);
           }}
           placeholder="scene_train"
+          readOnly={assetType === 'STYLE'}
           value={bibleRefId}
         />
       </label>
+      {assetType === 'STYLE' && (
+        <label>
+          画风描述
+          <textarea
+            onChange={(event) => {
+              setDescription(event.target.value);
+            }}
+            placeholder="例如：二维国漫厚涂，冷青与琥珀色对比光，电影级体积雾"
+            value={description}
+          />
+        </label>
+      )}
       <label>
         资产显示名称
         <input
@@ -216,7 +244,10 @@ export const FirstFrameUploadForm = ({ busy, onSubmit }: FirstFrameUploadFormPro
       </label>
       {fileError !== null && <p className="field-error">{fileError}</p>}
       <div className="script-actions">
-        <button disabled={busy || file === null} type="submit">
+        <button
+          disabled={busy || file === null || (assetType === 'STYLE' && description.trim() === '')}
+          type="submit"
+        >
           {busy ? '上传中…' : '上传参考图'}
         </button>
       </div>
@@ -235,6 +266,7 @@ export const FirstFramePanel = ({
   const [error, setError] = useState<AppErrorDto | null>(null);
   const [pendingCandidateId, setPendingCandidateId] = useState<string | null>(null);
   const [uploadBusy, setUploadBusy] = useState(false);
+  const [consistency, setConsistency] = useState<ConsistencyPreflightDto | null>(null);
   const [uploadOutcome, setUploadOutcome] = useState<{
     affectedShots: readonly StaleAffectedShotDto[];
     versionNo: number;
@@ -253,9 +285,21 @@ export const FirstFramePanel = ({
         setError(rendererTransportError());
       });
 
+  const loadConsistency = (): Promise<void> =>
+    getImageClient()
+      .getConsistencyPreflight({ projectId, shotIds: [shot.shotId] })
+      .then((result) => {
+        if (result.ok) setConsistency(result.data);
+        else setError(result.error);
+      })
+      .catch(() => {
+        setError(rendererTransportError());
+      });
+
   // 挂载即加载候选；切换镜头由父级以 key 重挂载整面板，状态天然归零。
   useEffect(() => {
     void loadCandidates();
+    void loadConsistency();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -357,7 +401,7 @@ export const FirstFramePanel = ({
           bibleRefId: input.bibleRefId,
           byteSize: input.file.size,
           bytes: new Uint8Array(buffer),
-          description: null,
+          description: input.description,
           displayName: input.displayName,
           mimeType: input.file.type as 'image/png' | 'image/jpeg' | 'image/webp',
           projectId,
@@ -370,7 +414,7 @@ export const FirstFramePanel = ({
             affectedShots: result.data.affectedShots,
             versionNo: result.data.version.versionNo,
           });
-          return loadCandidates();
+          return Promise.all([loadCandidates(), loadConsistency()]).then(() => undefined);
         }
         setError(result.error);
         return undefined;
@@ -383,7 +427,8 @@ export const FirstFramePanel = ({
       });
   };
 
-  const generateDisabled = storyboardStatus !== 'READY' || shotBusy;
+  const generateDisabled =
+    storyboardStatus !== 'READY' || shotBusy || (consistency !== null && !consistency.ready);
   const generateHint =
     storyboardStatus === null
       ? '分镜尚未生成；生成整集分镜并确认可用后可生成首帧。'
@@ -393,7 +438,9 @@ export const FirstFramePanel = ({
           ? '该镜头已在首帧批次队列中，将按顺序自动生成。'
           : shotBusy
             ? '媒体任务运行中，完成后可再次生成新一轮。'
-            : null;
+            : consistency !== null && !consistency.ready
+              ? '请先补齐项目画风与全部出场角色参考图。'
+              : null;
   const errorView = error === null ? null : describeProjectError(error);
 
   return (
@@ -403,6 +450,28 @@ export const FirstFramePanel = ({
       id="first-frame-panel"
     >
       <h3 id="first-frame-title">首帧候选 · 镜头 #{String(shot.sequence)}</h3>
+      {consistency !== null && (
+        <section aria-label="角色与画风一致性" className="consistency-status">
+          <h4>角色与画风一致性</h4>
+          <p>{consistency.ready ? '一致性输入已就绪' : '一致性输入未就绪'}</p>
+          {!consistency.storyBibleValid && <p className="field-error">故事圣经结构无效。</p>}
+          {consistency.missingItems.length > 0 && (
+            <ul>
+              {consistency.missingItems.map((item) => (
+                <li key={`${item.kind}:${item.bibleRefId}`}>
+                  缺少{item.kind === 'STYLE' ? '画风锚点' : '角色参考图'}：{item.displayName}
+                </li>
+              ))}
+            </ul>
+          )}
+          {consistency.warnings.map((warning) => (
+            <p className="action-hint" key={warning}>
+              {warning}
+            </p>
+          ))}
+          <p className="action-hint">参考图与提示词可降低漂移，但不承诺模型输出完全一致。</p>
+        </section>
+      )}
       {errorView !== null && (
         <p className="field-error" role="alert">
           {errorView.summary}。{errorView.nextAction}

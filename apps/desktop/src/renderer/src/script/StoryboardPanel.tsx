@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type {
   JobSummaryDto,
+  ConsistencyPreflightDto,
   StoryboardEditShotInputDto,
   StoryboardExportFormat,
   StoryboardImageStatesDto,
@@ -17,7 +18,7 @@ import { FirstFramePanel } from './FirstFramePanel';
 import { VoicePanel } from './VoicePanel';
 import { VideoPanel } from './VideoPanel';
 import { VideoCompositionPanel } from './VideoCompositionPanel';
-import { createScriptRequestId } from './script-api';
+import { createScriptRequestId, getImageClient } from './script-api';
 import { isTerminalJob } from './script-ui-policy';
 import {
   MEDIA_BATCH_STATUS_LABELS,
@@ -149,6 +150,7 @@ export const StoryboardPanel = ({
   const [shotEditorText, setShotEditorText] = useState('');
   const [shotEditorError, setShotEditorError] = useState<string | null>(null);
   const [activeMediaStep, setActiveMediaStep] = useState<MediaWorkspaceStep>('storyboard');
+  const [consistency, setConsistency] = useState<ConsistencyPreflightDto | null>(null);
   const selectedShot =
     storyboard.shots.find((shot) => shot.shotId === selectedShotId) ?? storyboard.shots[0] ?? null;
   const current = storyboard.current;
@@ -173,6 +175,25 @@ export const StoryboardPanel = ({
   const latestProgress = latestBatch === null ? null : batchProgressOf(latestBatch);
   const shotStates = new Map((imageStates?.shots ?? []).map((state) => [state.shotId, state]));
   const batchReady = current?.status === 'READY' && storyboard.shots.length > 0;
+  const consistencyKey = storyboard.shots.map((shot) => shot.shotId).join('|');
+  useEffect(() => {
+    if (!batchReady) {
+      return;
+    }
+    let active = true;
+    void getImageClient()
+      .getConsistencyPreflight({
+        projectId,
+        shotIds: storyboard.shots.map((shot) => shot.shotId),
+      })
+      .then((result) => {
+        if (active && result.ok) setConsistency(result.data);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, [batchReady, consistencyKey, projectId, storyboard.shots]);
   const runningVideoBatch =
     videoStates?.batches.find((batch) => batch.status === 'RUNNING') ?? null;
   const latestVideoBatch = runningVideoBatch ?? videoStates?.batches[0] ?? null;
@@ -254,13 +275,30 @@ export const StoryboardPanel = ({
           </button>
           {/* 整集首帧（batch-first-frame 5.2）：READY 才可用；发起全量镜头，服务端按当前世代跳过。 */}
           <button
-            disabled={!batchReady || runningBatch !== null || batchBusy}
+            disabled={
+              !batchReady ||
+              runningBatch !== null ||
+              batchBusy ||
+              (consistency !== null && !consistency.ready)
+            }
             name="generate-first-frames-batch"
             onClick={onGenerateFirstFrames}
             type="button"
           >
             为整集生成首帧
           </button>
+          {consistency !== null && !consistency.ready && (
+            <div className="consistency-status" role="status">
+              <p>整集一致性预检未通过，请先补齐：</p>
+              <ul>
+                {consistency.missingItems.map((item) => (
+                  <li key={`${item.kind}:${item.bibleRefId}`}>
+                    {item.kind === 'STYLE' ? '画风锚点' : '角色参考图'} · {item.displayName}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <button
             disabled={!batchReady || runningVideoBatch !== null || videoBatchBusy}
             name="generate-videos-batch"

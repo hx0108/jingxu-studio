@@ -59,6 +59,18 @@ export class InMemoryMediaRepository implements MediaRepository {
     id: string;
     projectId: string;
   }): Promise<MediaAssetRecord> {
+    if (
+      (input.assetType === 'STYLE' && input.bibleRefId !== 'project-style') ||
+      (input.assetType !== 'STYLE' && input.bibleRefId === 'project-style') ||
+      this.assets.some(
+        (asset) =>
+          asset.projectId === input.projectId &&
+          asset.assetType === input.assetType &&
+          asset.bibleRefId === input.bibleRefId,
+      )
+    ) {
+      return Promise.reject(new Error('MEDIA_ASSET_CONFLICT'));
+    }
     const record: MediaAssetRecord = { ...input, createdAt: NOW, updatedAt: NOW };
     this.assets.push(record);
     return Promise.resolve(record);

@@ -7,6 +7,7 @@
  */
 
 import type { AppResultDto, GenerateCandidatesInputDto } from '@jingxu/contracts';
+import { MEDIA_REFERENCE_MAX_COUNT, PROJECT_STYLE_BIBLE_REF_ID } from '@jingxu/contracts';
 
 import type { FormatProfileRepository } from '../ports/project/format-profile-repository';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
@@ -25,6 +26,8 @@ import {
   type ShotCreativeFields,
 } from './media-generation-prompt';
 import { mediaFailure, mediaPersistenceFailure } from './media-service-error';
+import type { MediaConsistencyService } from './media-consistency-service';
+import { consistencyPreflightFailure } from './media-consistency-service';
 
 export interface MediaGenerationServiceDependencies {
   /** 每轮候选数 N（design D6-1：方舟无 n 参数，N 次独立请求聚合为一个任务行）。 */
@@ -38,6 +41,7 @@ export interface MediaGenerationServiceDependencies {
   /** 归一化参数指纹（快照 client_defaults + 画幅派生尺寸），随尺寸变化。 */
   readonly parametersFingerprint: (size: Readonly<{ height: number; width: number }>) => string;
   readonly workspaceQuery: ScriptWorkspaceQueryPort;
+  readonly consistency: MediaConsistencyService;
 }
 
 export interface MediaGenerationService {
@@ -77,28 +81,43 @@ export const resolveGenerationInput = async (
   dependencies: MediaGenerationServiceDependencies,
   projectId: string,
   shot: StoryboardShotSnapshot,
+  strictConsistency = true,
 ): Promise<ResolvedGenerationInput> => {
   const creative = extractShotCreativeFields(shot.version.document);
   if (creative === null) throw new Error('SHOT_DOCUMENT_INVALID');
   const size = await resolveShotSize(dependencies, projectId, shot);
   const references: readonly { bibleRefId: string; type: MediaAssetType }[] = [
-    ...creative.characterIds.map((bibleRefId) => ({ bibleRefId, type: 'CHARACTER' as const })),
+    { bibleRefId: PROJECT_STYLE_BIBLE_REF_ID, type: 'STYLE' },
+    ...[...new Set(creative.characterIds)].map((bibleRefId) => ({
+      bibleRefId,
+      type: 'CHARACTER' as const,
+    })),
     ...(creative.sceneId === null
       ? []
       : [{ bibleRefId: creative.sceneId, type: 'SCENE' as const }]),
   ];
   const boundAssetVersionIds: string[] = [];
   for (const reference of references) {
-    // 绑定解析不因资产缺失而阻断（spec：缺失项跳过）。
     const version = await media.findCurrentAssetVersion(
       projectId,
       reference.type,
       reference.bibleRefId,
     );
-    if (version !== null) boundAssetVersionIds.push(version.id);
+    if (version !== null) {
+      if (boundAssetVersionIds.length < MEDIA_REFERENCE_MAX_COUNT) {
+        boundAssetVersionIds.push(version.id);
+      } else if (strictConsistency && reference.type !== 'SCENE') {
+        throw new Error('MEDIA_CONSISTENCY_REFERENCE_LIMIT_EXCEEDED');
+      }
+    } else if (strictConsistency && reference.type !== 'SCENE') {
+      throw new Error(
+        reference.type === 'STYLE'
+          ? 'MEDIA_CONSISTENCY_STYLE_REQUIRED'
+          : 'MEDIA_CONSISTENCY_CHARACTER_REFERENCE_REQUIRED',
+      );
+    }
   }
-  // 防御性上限：契约 boundAssetVersionIds ≤14（方舟参考图同限）。
-  const sorted = [...boundAssetVersionIds].sort().slice(0, 14);
+  const sorted = [...boundAssetVersionIds].sort();
   return {
     boundAssetVersionIds: sorted,
     creative,
@@ -158,6 +177,12 @@ export const createMediaGenerationService = (
           traceId,
         );
       }
+      const preflight = await dependencies.consistency.getPreflight(
+        { projectId: input.projectId, shotIds: [input.shotId] },
+        traceId,
+      );
+      if (!preflight.ok) return preflight;
+      if (!preflight.data.ready) return consistencyPreflightFailure(preflight.data, traceId);
       const task = await dependencies.mediaUnitOfWork.run(async ({ media }) => {
         const prior = await media.findTaskByIdempotencyKey(input.projectId, input.requestId);
         if (prior !== null) {
@@ -197,6 +222,16 @@ export const createMediaGenerationService = (
       if (marker === 'MEDIA_TASK_IDEMPOTENCY_CONFLICT') {
         return mediaFailure('REQUEST_ID_REUSED', 'requestId 已被并发使用', traceId);
       }
+      if (marker.startsWith('MEDIA_CONSISTENCY_')) {
+        return mediaFailure(
+          marker as
+            | 'MEDIA_CONSISTENCY_STYLE_REQUIRED'
+            | 'MEDIA_CONSISTENCY_CHARACTER_REFERENCE_REQUIRED'
+            | 'MEDIA_CONSISTENCY_REFERENCE_LIMIT_EXCEEDED',
+          '一致性输入在建档前发生变化，请刷新后重试。',
+          traceId,
+        );
+      }
       return mediaPersistenceFailure(traceId);
     }
   },
@@ -221,8 +256,15 @@ export const createMediaGenerationService = (
       const affected = await dependencies.mediaUnitOfWork.run(async ({ media }) => {
         const summaries: MediaStaleAffectedShot[] = [];
         for (const shot of storyboard.currentShots) {
-          const resolved = await resolveGenerationInput(media, dependencies, input.projectId, shot);
+          const resolved = await resolveGenerationInput(
+            media,
+            dependencies,
+            input.projectId,
+            shot,
+            false,
+          );
           const bindsRef =
+            input.bibleRefId === PROJECT_STYLE_BIBLE_REF_ID ||
             resolved.creative.sceneId === input.bibleRefId ||
             resolved.creative.characterIds.includes(input.bibleRefId);
           if (!bindsRef) continue;

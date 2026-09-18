@@ -19,6 +19,8 @@
 >
 > 实施注记（V2 Change）：`v2-video-composition-export` 已增加单集不可变时间线、音频资产和导出 Job 的 SQLite 结构、Main 侧 Dialog/FFprobe/FFmpeg 边界及 `jingxu://media/video-export` 受限预览。固定 FFmpeg/FFprobe 制品、真实本地合成、V2 Electron E2E 与 Windows 打包已有历史门禁证据；任何后续 Renderer 改造仍须重新验证，且该能力不改变 V1 发布门槛。
 
+> 实施注记（V2 Change）：`enforce-character-style-consistency` 将首帧一致性落实为确定性输入与可见预检。媒体资产枚举扩为 `CHARACTER | SCENE | STYLE`（migration 0022 表重建，head 22；`STYLE ⇔ 保留键 project-style`，每项目至多一个画风锚点，升版沿 STALE_INPUT 传播）；正式 `ScriptStageOutput/STORY_BIBLE` 信封按 `data.characters/scenes` 解析（兼容合法裸 data，坏信封以 `MEDIA_CONSISTENCY_STORY_BIBLE_INVALID` 阻断）；新增只读预检 `image.getConsistencyPreflight`，单镜头与整集批量在任何写事务前复检，缺画风/缺出场角色参考图/必需参考图超限分别以 `MEDIA_CONSISTENCY_STYLE_REQUIRED`、`MEDIA_CONSISTENCY_CHARACTER_REFERENCE_REQUIRED`、`MEDIA_CONSISTENCY_REFERENCE_LIMIT_EXCEEDED` 前置阻断且零写入；Prompt 模板 `first-frame-consistency-v1` 固化“画风→镜头→场景→角色身份/外观→机位→连续性→避免项”顺序，模板版本进入参数指纹、全部绑定 AssetVersion ID 进入 `generation_input_hash`、有序参考图 kind/ref/version/sha256 进入调用证据（不含字节与路径）；Renderer 一致性卡与批量去重汇总只消费主进程预检结果，服务端提交仍二次复检。产品文案明确“不承诺模型输出完全一致”。
+
 ---
 
 ## 1. 设计目标与约束

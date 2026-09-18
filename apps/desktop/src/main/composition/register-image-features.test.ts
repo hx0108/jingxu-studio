@@ -74,7 +74,34 @@ const workspaceOf = (shotCount: number) => ({
   episode: null,
   projectId: 'project_00000001',
   sourceInput: null,
-  stages: [],
+  stages: [
+    {
+      current: {
+        createdAt: NOW,
+        document: JSON.stringify({
+          data: {
+            characters: {},
+            scenes: { scene_alley: { description: '雨后青石巷', name: '雨巷' } },
+          },
+          schema_version: '1.0.0',
+          stage: 'STORY_BIBLE',
+        }),
+        documentSha256: hash64('bible'),
+        id: 'sbv_00000001',
+        parentId: null,
+        projectId: 'project_00000001',
+        source: 'AI',
+        sourceInvocationId: null,
+        status: 'READY',
+        versionNo: 1,
+      },
+      episodeId: 'episode_1',
+      head: null,
+      history: [],
+      historyTruncated: false,
+      stage: 'STORY_BIBLE',
+    },
+  ],
   storyboard: {
     current: {
       createdAt: NOW,
@@ -182,7 +209,7 @@ describe('createImageFeatureRegistration', () => {
   it('注册边界—固定九 image 频道—READY 前统一 STARTUP_WRITE_BLOCKED', () => {
     const harness = buildHarness(false);
     expect([...harness.handlers.keys()].sort()).toEqual(Object.values(IMAGE_IPC_CHANNELS).sort());
-    expect(harness.handlers.size).toBe(9);
+    expect(harness.handlers.size).toBe(10);
     expect(harness.registration.ensureRegistered()).toBe(false);
   });
 
@@ -218,6 +245,20 @@ describe('createImageFeatureRegistration', () => {
         .data;
       expect(uploaded.version.versionNo).toBe(1);
       expect(uploaded.version.mediaUrl.startsWith('jingxu://media/asset-version/')).toBe(true);
+
+      // 一致性门禁：项目必须有画风锚点才能生成（STYLE/PROJECT_STYLE_BIBLE_REF_ID）。
+      const styleUpload = await harness.invoke(IMAGE_IPC_CHANNELS.uploadAssetReference, {
+        assetType: 'STYLE',
+        bibleRefId: 'project-style',
+        byteSize: 3,
+        bytes: Uint8Array.from([1, 2, 3]),
+        description: '冷青水墨风',
+        displayName: '项目画风',
+        mimeType: 'image/png',
+        projectId: 'project_00000001',
+        requestId: 'request_upload_style',
+      });
+      expect(styleUpload).toMatchObject({ ok: true });
 
       const generated = await harness.invoke(IMAGE_IPC_CHANNELS.generateCandidates, {
         projectId: 'project_00000001',
@@ -255,6 +296,20 @@ describe('createImageFeatureRegistration', () => {
   it('选择切换—selectCandidate 返回全量候选且指针唯一', { timeout: 15_000 }, async () => {
     const harness = buildHarness(true);
     expect(harness.registration.ensureRegistered()).toBe(true);
+
+    // 一致性门禁：项目必须有画风锚点才能生成（STYLE/PROJECT_STYLE_BIBLE_REF_ID）。
+    const styleUpload = await harness.invoke(IMAGE_IPC_CHANNELS.uploadAssetReference, {
+      assetType: 'STYLE',
+      bibleRefId: 'project-style',
+      byteSize: 3,
+      bytes: Uint8Array.from([1, 2, 3]),
+      description: '冷青水墨风',
+      displayName: '项目画风',
+      mimeType: 'image/png',
+      projectId: 'project_00000001',
+      requestId: 'request_upload_style',
+    });
+    expect(styleUpload).toMatchObject({ ok: true });
     await harness.invoke(IMAGE_IPC_CHANNELS.generateCandidates, {
       projectId: 'project_00000001',
       requestId: 'request_gen_0000003',
@@ -294,6 +349,21 @@ describe('createImageFeatureRegistration', () => {
     async () => {
       const harness = buildHarness(true, 2);
       expect(harness.registration.ensureRegistered()).toBe(true);
+
+      // 一致性门禁：先补项目画风锚点。
+      expect(
+        await harness.invoke(IMAGE_IPC_CHANNELS.uploadAssetReference, {
+          assetType: 'STYLE',
+          bibleRefId: 'project-style',
+          byteSize: 3,
+          bytes: Uint8Array.from([1, 2, 3]),
+          description: '冷青水墨风',
+          displayName: '项目画风',
+          mimeType: 'image/png',
+          projectId: 'project_00000001',
+          requestId: 'request_upload_style_batch',
+        }),
+      ).toMatchObject({ ok: true });
 
       const created = (await harness.invoke(IMAGE_IPC_CHANNELS.generateCandidatesForShots, {
         projectId: 'project_00000001',

@@ -89,6 +89,22 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
     '所选镜头当前世代均已有首帧',
     '如需重新生成，请在镜头详情中单独发起。',
   ],
+  MEDIA_CONSISTENCY_STORY_BIBLE_INVALID: [
+    '故事圣经无法读取',
+    '回到剧本开发阶段重新确认故事圣经后，再生成首帧。',
+  ],
+  MEDIA_CONSISTENCY_STYLE_REQUIRED: [
+    '项目还没有画风锚点',
+    '先在首帧工作区上传一张画风参考图，再开始生成。',
+  ],
+  MEDIA_CONSISTENCY_CHARACTER_REFERENCE_REQUIRED: [
+    '出场角色缺少参考图',
+    '按提示为缺少参考图的角色上传定妆图后重试。',
+  ],
+  MEDIA_CONSISTENCY_REFERENCE_LIMIT_EXCEEDED: [
+    '参考图数量超出模型上限',
+    '减少该镜头的出场角色或拆分镜头后再生成。',
+  ],
   VIDEO_COMPOSITION_NOT_READY: ['分镜尚未准备好合成', '先确认整集分镜，并为镜头选择成功视频候选。'],
   VIDEO_SOURCE_MISSING: ['时间线缺少可用视频片段', '返回镜头面板补齐成功候选后重新生成时间线。'],
   VIDEO_SOURCE_STALE: ['时间线输入已变化', '重新生成时间线并确认当前视频候选。'],

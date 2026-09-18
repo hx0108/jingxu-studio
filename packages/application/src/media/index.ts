@@ -11,6 +11,11 @@ export type {
 } from './media-generation-prompt';
 export { createMediaGenerationService } from './media-generation-service';
 export { resolveGenerationInput } from './media-generation-service';
+export {
+  consistencyPreflightFailure,
+  createMediaConsistencyService,
+  type MediaConsistencyService,
+} from './media-consistency-service';
 export type {
   MediaGenerationService,
   MediaGenerationServiceDependencies,

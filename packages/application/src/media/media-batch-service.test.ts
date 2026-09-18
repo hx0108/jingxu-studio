@@ -8,10 +8,12 @@ import type {
   StoryboardShotSnapshot,
 } from '../ports/script/script-types';
 import type { FormatProfile } from '@jingxu/domain';
+import { PROJECT_STYLE_BIBLE_REF_ID } from '@jingxu/contracts';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
 import { InMemoryMediaInvocationRepository } from './in-memory-media-invocation-repository';
 import { InMemoryMediaRepository } from './in-memory-media-repository';
 import { InMemoryVideoMediaRepository } from './in-memory-video-media-repository';
+import { createMediaConsistencyService } from './media-consistency-service';
 import { computeGenerationInputHash } from './media-generation-prompt';
 import { createMediaGenerationService } from './media-generation-service';
 import { createMediaBatchService } from './media-batch-service';
@@ -50,6 +52,16 @@ const shotN = (index: number): StoryboardShotSnapshot => ({
   } satisfies ShotContractVersion,
 });
 
+const storyBibleDocument = (): string =>
+  JSON.stringify({
+    data: {
+      characters: { char_hero: { appearance: '银白短发，黑色风衣', name: '林峥' } },
+      scenes: { scene_alley: { description: '雨后青石巷，霓虹倒影', name: '雨巷' } },
+    },
+    schema_version: '1.0.0',
+    stage: 'STORY_BIBLE',
+  });
+
 const workspaceOf = (
   shots: readonly StoryboardShotSnapshot[],
   status: EpisodeVersion['status'] = 'READY',
@@ -57,7 +69,27 @@ const workspaceOf = (
   episode: null,
   projectId: 'project_1',
   sourceInput: null,
-  stages: [],
+  stages: [
+    {
+      current: {
+        createdAt: NOW,
+        document: storyBibleDocument(),
+        documentSha256: hash64('bible'),
+        id: 'sbv_1',
+        parentId: null,
+        projectId: 'project_1',
+        source: 'AI',
+        sourceInvocationId: null,
+        status: 'READY',
+        versionNo: 1,
+      },
+      episodeId: 'episode_1',
+      head: null,
+      history: [],
+      historyTruncated: false,
+      stage: 'STORY_BIBLE',
+    },
+  ],
   storyboard: {
     current: {
       createdAt: NOW,
@@ -100,11 +132,11 @@ const hashPayload = (value: Readonly<Record<string, unknown>>): string =>
 const parametersFingerprint = (size: Readonly<{ height: number; width: number }>): string =>
   `seedream-v1/${String(size.width)}x${String(size.height)}`;
 
-/** 与服务同口径独立复算 shot_N 的当前世代哈希（无资产绑定 + 9:16 画幅指纹）。 */
+/** 与服务同口径独立复算 shot_N 的当前世代哈希（STYLE+出场角色绑定 + 9:16 画幅指纹）。 */
 const currentGenHash = (index: number): string =>
   computeGenerationInputHash(
     {
-      boundAssetVersionIds: [],
+      boundAssetVersionIds: ['ver_char_hero_v1', 'ver_style_v1'].sort(),
       modelId: MODEL_ID,
       parametersFingerprint: parametersFingerprint({ height: 2560, width: 1440 }),
       shotContentHash: hash64(`doc_scv_${String(index)}`),
@@ -121,10 +153,45 @@ interface Fixture {
   readonly workspaceQuery: { snapshot: ScriptWorkspaceSnapshot | null };
 }
 
-const fixture = (
+/** 为一致性预检播种画风与出场角色锚点。 */
+const seedConsistencyAssets = async (repository: InMemoryMediaRepository): Promise<void> => {
+  const styleAsset = await repository.createAsset({
+    assetType: 'STYLE',
+    bibleRefId: PROJECT_STYLE_BIBLE_REF_ID,
+    displayName: '项目画风',
+    id: 'asset_style',
+    projectId: 'project_1',
+  });
+  await repository.appendAssetVersion({
+    assetId: styleAsset.id,
+    byteSize: 1024,
+    description: '赛博朋克水墨风，冷青主色调',
+    fileSha256: hash64('style_v1'),
+    id: 'ver_style_v1',
+    mimeType: 'image/png',
+  });
+  const hero = await repository.createAsset({
+    assetType: 'CHARACTER',
+    bibleRefId: 'char_hero',
+    displayName: '林峥',
+    id: 'asset_char_hero',
+    projectId: 'project_1',
+  });
+  await repository.appendAssetVersion({
+    assetId: hero.id,
+    byteSize: 1024,
+    description: null,
+    fileSha256: hash64('char_hero_v1'),
+    id: 'ver_char_hero_v1',
+    mimeType: 'image/png',
+  });
+};
+
+const fixture = async (
   shots: readonly StoryboardShotSnapshot[],
   status: EpisodeVersion['status'] = 'READY',
-): Fixture => {
+  seedAssets = true,
+): Promise<Fixture> => {
   const repository = new InMemoryMediaRepository();
   const unitOfWork: MediaUnitOfWorkPort = {
     run: (work) =>
@@ -141,10 +208,15 @@ const fixture = (
     getWorkspace: () => Promise.resolve(workspaceQuery.snapshot),
     getVersionDocument: () => Promise.resolve(null),
   };
+  const consistency = createMediaConsistencyService({
+    mediaUnitOfWork: unitOfWork,
+    workspaceQuery,
+  });
   let counter = 0;
   const newId = () => `id_${String((counter += 1))}`;
   const generation = createMediaGenerationService({
     candidateCount: 4,
+    consistency,
     formatProfiles: { findAllByProject: () => Promise.resolve([formatProfile]) },
     hashPayload,
     mediaUnitOfWork: unitOfWork,
@@ -156,6 +228,7 @@ const fixture = (
   const kicked: string[] = [];
   const batch = createMediaBatchService({
     candidateCount: 4,
+    consistency,
     formatProfiles: { findAllByProject: () => Promise.resolve([formatProfile]) },
     generation,
     hashPayload,
@@ -168,6 +241,7 @@ const fixture = (
     parametersFingerprint,
     workspaceQuery,
   });
+  if (seedAssets) await seedConsistencyAssets(repository);
   return { batch, generation, kicked, repository, workspaceQuery };
 };
 
@@ -201,7 +275,7 @@ const seedSucceededCurrentGen = async (
 
 describe('MediaBatchService.createBatch', () => {
   it('READY 整集排队—批次行落库且 kick 触发；同 requestId 重放回原批，目标漂移稳定拒绝', async () => {
-    const { batch, kicked, repository } = fixture([shotN(1), shotN(2)]);
+    const { batch, kicked, repository } = await fixture([shotN(1), shotN(2)]);
     const result = await batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_1', 'shot_2'] },
       'trace_1',
@@ -233,8 +307,21 @@ describe('MediaBatchService.createBatch', () => {
     if (!drift.ok) expect(drift.error.code).toBe('REQUEST_ID_REUSED');
   });
 
+  it('缺项目画风锚点—整集批量被一致门禁阻断且不创建批次不触发 kick', async () => {
+    const { batch, kicked, repository } = await fixture([shotN(1), shotN(2)], 'READY', false);
+    const result = await batch.createBatch(
+      { projectId: 'project_1', requestId: 'breq_style', shotIds: ['shot_1', 'shot_2'] },
+      'trace_style',
+    );
+    expect(result).toMatchObject({ ok: false });
+    if (!result.ok) expect(result.error.code).toBe('MEDIA_CONSISTENCY_STYLE_REQUIRED');
+    expect(repository.batches).toHaveLength(0);
+    expect(repository.tasks).toHaveLength(0);
+    expect(kicked).toHaveLength(0);
+  });
+
   it('当前世代已有 SUCCEEDED 候选的镜头被跳过—旧世代成功不误伤，全跳过稳定拒绝且零写入', async () => {
-    const { batch, repository } = fixture([shotN(1), shotN(2)]);
+    const { batch, repository } = await fixture([shotN(1), shotN(2)]);
     await seedSucceededCurrentGen(repository, 1);
     // 旧世代（哈希不同）的成功候选不构成跳过依据。
     await repository.insertCandidates({
@@ -277,7 +364,7 @@ describe('MediaBatchService.createBatch', () => {
   });
 
   it('同项目已有 RUNNING 批次/镜头不在 READY 集合/分镜未 READY—各自稳定拒绝', async () => {
-    const running = fixture([shotN(1), shotN(2)]);
+    const running = await fixture([shotN(1), shotN(2)]);
     await running.batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_1'] },
       'trace_1',
@@ -289,7 +376,7 @@ describe('MediaBatchService.createBatch', () => {
     expect(second).toMatchObject({ ok: false });
     if (!second.ok) expect(second.error.code).toBe('MEDIA_BATCH_ALREADY_RUNNING');
 
-    const missing = fixture([shotN(1)]);
+    const missing = await fixture([shotN(1)]);
     const missingResult = await missing.batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_9'] },
       'trace_3',
@@ -300,7 +387,7 @@ describe('MediaBatchService.createBatch', () => {
     }
     expect(missing.repository.batches).toHaveLength(0);
 
-    const draft = fixture([shotN(1)], 'DRAFT');
+    const draft = await fixture([shotN(1)], 'DRAFT');
     const draftResult = await draft.batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_1'] },
       'trace_4',
@@ -312,7 +399,7 @@ describe('MediaBatchService.createBatch', () => {
 
 describe('MediaBatchService.progressBatch', () => {
   it('惰性逐镜头建档—前一成员终态前不建下一镜头，全部成功收尾派生 COMPLETED', async () => {
-    const { batch, repository } = fixture([shotN(1), shotN(2)]);
+    const { batch, repository } = await fixture([shotN(1), shotN(2)]);
     const created = await batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_1', 'shot_2'] },
       'trace_1',
@@ -349,7 +436,7 @@ describe('MediaBatchService.progressBatch', () => {
   });
 
   it('单镜头失败不阻断—后续镜头照常建档，收尾派生 PARTIAL_COMPLETED', async () => {
-    const { batch, repository } = fixture([shotN(1), shotN(2)]);
+    const { batch, repository } = await fixture([shotN(1), shotN(2)]);
     await batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_1', 'shot_2'] },
       'trace_1',
@@ -369,7 +456,7 @@ describe('MediaBatchService.progressBatch', () => {
   });
 
   it('候选级全败（任务 COMPLETED、同轮零成功）—按失败成员呈报：PARTIAL + 成员/徽标错误码', async () => {
-    const { batch, repository } = fixture([shotN(1), shotN(2)]);
+    const { batch, repository } = await fixture([shotN(1), shotN(2)]);
     const created = await batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_1', 'shot_2'] },
       'trace_1',
@@ -422,7 +509,7 @@ describe('MediaBatchService.progressBatch', () => {
   });
 
   it('成员建档失败（镜头被移出 READY 集合）—批次中止 PARTIAL + 批次级错误码，剩余队列保留', async () => {
-    const { batch, repository, workspaceQuery } = fixture([shotN(1), shotN(2)]);
+    const { batch, repository, workspaceQuery } = await fixture([shotN(1), shotN(2)]);
     await batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_1', 'shot_2'] },
       'trace_1',
@@ -443,7 +530,7 @@ describe('MediaBatchService.progressBatch', () => {
   });
 
   it('崩溃窗口（建档后未出队）—重启推进由幂等重放吸收，绝不重复提交', async () => {
-    const { batch, generation, repository } = fixture([shotN(1)]);
+    const { batch, generation, repository } = await fixture([shotN(1)]);
     const created = await batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_1'] },
       'trace_1',
@@ -478,7 +565,7 @@ describe('MediaBatchService.progressBatch', () => {
 
 describe('MediaBatchService.cancelBatch', () => {
   it('取消仅停止消费剩余队列—已建成员不动，队列保留可追溯，重复取消幂等', async () => {
-    const { batch, repository } = fixture([shotN(1), shotN(2)]);
+    const { batch, repository } = await fixture([shotN(1), shotN(2)]);
     const created = await batch.createBatch(
       { projectId: 'project_1', requestId: 'image-batch_u1', shotIds: ['shot_1', 'shot_2'] },
       'trace_1',
@@ -518,7 +605,7 @@ describe('MediaBatchService.cancelBatch', () => {
 
 describe('MediaBatchService.listStoryboardImageStates', () => {
   it('聚合视图—批次成员相位、排队/在飞/就绪/失败底座按原始字段派生', async () => {
-    const { batch, generation, repository } = fixture([shotN(1), shotN(2), shotN(3)]);
+    const { batch, generation, repository } = await fixture([shotN(1), shotN(2), shotN(3)]);
     // shot_3 当前世代已有 2 张成功候选（就绪徽标底座）。
     await seedSucceededCurrentGen(repository, 3, 2);
     // shot_2 独立单镜头任务已失败（失败徽标底座，最新一轮）。

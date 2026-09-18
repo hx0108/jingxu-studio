@@ -22,6 +22,7 @@ import {
   extractShotCreativeFields,
   resolveImageSize,
 } from './media-generation-prompt';
+import { parseStoryBibleDescriptions } from './story-bible-descriptions';
 
 /**
  * 调度器提交计划（shot-video-generation 任务 1.2 泛化）：请求载荷与证据快照
@@ -58,47 +59,6 @@ export interface MediaRequestBlueprintBuilderDependencies {
   readonly workspaceQuery: ScriptWorkspaceQueryPort;
 }
 
-/** STORY_BIBLE 文档中 Prompt 需要的描述子集；缺失/损坏时降级为空（不阻断）。 */
-interface BibleDescriptions {
-  readonly characters: Readonly<Record<string, Readonly<{ appearance: string; name: string }>>>;
-  readonly scenes: Readonly<Record<string, Readonly<{ description: string; name: string }>>>;
-}
-
-const EMPTY_BIBLE: BibleDescriptions = { characters: {}, scenes: {} };
-
-const sectionOf = (value: unknown): Readonly<Record<string, unknown>> | null =>
-  typeof value === 'object' && value !== null ? (value as Readonly<Record<string, unknown>>) : null;
-
-const parseBibleDescriptions = (document: string | null): BibleDescriptions => {
-  if (document === null) return EMPTY_BIBLE;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(document);
-  } catch {
-    return EMPTY_BIBLE;
-  }
-  const root = sectionOf(parsed);
-  const characters: Record<string, Readonly<{ appearance: string; name: string }>> = {};
-  for (const [id, entry] of Object.entries(sectionOf(root?.characters) ?? {})) {
-    const character = sectionOf(entry);
-    const name = character?.name;
-    const appearance = character?.appearance;
-    if (typeof name === 'string' && typeof appearance === 'string' && name.length > 0) {
-      characters[id] = { appearance, name };
-    }
-  }
-  const scenes: Record<string, Readonly<{ description: string; name: string }>> = {};
-  for (const [id, entry] of Object.entries(sectionOf(root?.scenes) ?? {})) {
-    const scene = sectionOf(entry);
-    const name = scene?.name;
-    const description = scene?.description;
-    if (typeof name === 'string' && typeof description === 'string' && name.length > 0) {
-      scenes[id] = { description, name };
-    }
-  }
-  return { characters, scenes };
-};
-
 export const createMediaRequestBlueprintBuilder = (
   dependencies: MediaRequestBlueprintBuilderDependencies,
 ): MediaRequestBlueprintBuilder => ({
@@ -123,9 +83,13 @@ export const createMediaRequestBlueprintBuilder = (
     const modelId = candidates.find((candidate) => candidate.roundNo === task.roundNo)?.modelId;
     if (modelId === undefined) throw new Error('MEDIA_BLUEPRINT_CANDIDATES_MISSING');
 
-    const bible = parseBibleDescriptions(
+    const bibleResult = parseStoryBibleDescriptions(
       workspace.stages.find((stage) => stage.stage === 'STORY_BIBLE')?.current?.document ?? null,
     );
+    if (bibleResult.kind === 'invalid') {
+      throw new Error('MEDIA_CONSISTENCY_STORY_BIBLE_INVALID');
+    }
+    const bible = bibleResult.descriptions;
     const boundCharacters = creative.characterIds
       .map((id) => bible.characters[id])
       .filter(
@@ -134,19 +98,55 @@ export const createMediaRequestBlueprintBuilder = (
     const scene = creative.sceneId === null ? null : (bible.scenes[creative.sceneId] ?? null);
 
     // 绑定解析与建档同源：缺失资产跳过不阻断；防御性上限 14（契约同限）。
-    const bindings: readonly { bibleRefId: string; type: 'CHARACTER' | 'SCENE' }[] = [
-      ...creative.characterIds.map((bibleRefId) => ({ bibleRefId, type: 'CHARACTER' as const })),
+    const characterIds = [...new Set(creative.characterIds)];
+    const bindings: readonly {
+      bibleRefId: string;
+      required: boolean;
+      type: 'CHARACTER' | 'SCENE' | 'STYLE';
+    }[] = [
+      { bibleRefId: 'project-style', required: true, type: 'STYLE' },
+      ...characterIds.map((bibleRefId) => ({
+        bibleRefId,
+        required: true,
+        type: 'CHARACTER' as const,
+      })),
       ...(creative.sceneId === null
         ? []
-        : [{ bibleRefId: creative.sceneId, type: 'SCENE' as const }]),
+        : [{ bibleRefId: creative.sceneId, required: false, type: 'SCENE' as const }]),
     ];
     const referenceImages: ImageReferencePayload[] = [];
     const referenceImageSha256s: string[] = [];
-    for (const binding of bindings.slice(0, 14)) {
+    const referenceDescriptors: {
+      assetVersionId: string;
+      bibleRefId: string;
+      kind: 'CHARACTER' | 'SCENE' | 'STYLE';
+      sha256: string;
+    }[] = [];
+    let style: { description: string; name: string } | null = null;
+    for (const binding of bindings) {
       const version = await dependencies.mediaUnitOfWork.run(({ media }) =>
         media.findCurrentAssetVersion(task.projectId, binding.type, binding.bibleRefId),
       );
-      if (version === null) continue;
+      if (version === null) {
+        if (binding.required) {
+          throw new Error(
+            binding.type === 'STYLE'
+              ? 'MEDIA_CONSISTENCY_STYLE_REQUIRED'
+              : 'MEDIA_CONSISTENCY_CHARACTER_REFERENCE_REQUIRED',
+          );
+        }
+        continue;
+      }
+      if (binding.type === 'STYLE') {
+        if (version.description === null || version.description.trim() === '') {
+          throw new Error('MEDIA_CONSISTENCY_STYLE_REQUIRED');
+        }
+        style = { description: version.description, name: '项目画风' };
+      }
+      if (referenceImages.length >= 14) {
+        if (binding.required) throw new Error('MEDIA_CONSISTENCY_REFERENCE_LIMIT_EXCEEDED');
+        continue;
+      }
       const bytes = await dependencies.referenceImages.readReference({
         fileSha256: version.fileSha256,
         mimeType: version.mimeType,
@@ -154,9 +154,16 @@ export const createMediaRequestBlueprintBuilder = (
       });
       referenceImages.push({ bytes, mimeType: version.mimeType });
       referenceImageSha256s.push(version.fileSha256);
+      referenceDescriptors.push({
+        assetVersionId: version.id,
+        bibleRefId: binding.bibleRefId,
+        kind: binding.type,
+        sha256: version.fileSha256,
+      });
     }
+    if (style === null) throw new Error('MEDIA_CONSISTENCY_STYLE_REQUIRED');
 
-    const prompt = buildFirstFramePrompt({ boundCharacters, creative, scene });
+    const prompt = buildFirstFramePrompt({ boundCharacters, creative, scene, style });
     return {
       buildRequest: (invocationId) => ({
         invocationId,
@@ -170,6 +177,7 @@ export const createMediaRequestBlueprintBuilder = (
       submitSnapshotJson: JSON.stringify({
         modelId,
         prompt,
+        referenceImages: referenceDescriptors,
         referenceImageSha256s,
         responseFormat: 'url',
         size,

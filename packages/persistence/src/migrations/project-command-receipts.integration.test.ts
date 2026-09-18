@@ -153,6 +153,7 @@ describe('0002 migration 资源集合', () => {
       { name: '0019_video_composition_export.sql', version: 19 },
       { name: '0020_voice_audio_timeline.sql', version: 20 },
       { name: '0021_voice_alignment_records.sql', version: 21 },
+      { name: '0022_media_style_assets.sql', version: 22 },
     ]);
     expect(migrations[0]?.sha256).toBe(FROZEN_0001_SHA256);
     expect(migrations[1]?.sha256).toMatch(/^[a-f0-9]{64}$/u);
@@ -184,7 +185,7 @@ describe('0002 migration 资源集合', () => {
     );
   });
 
-  it('空库—应用完整集合—终态版本 21 且 command_receipts 登记对象存在', async () => {
+  it('空库—应用完整集合—终态版本 22 且 command_receipts 登记对象存在', async () => {
     await withMigratedDatabase((database) => {
       expect(
         database.prepare('SELECT version FROM schema_migrations ORDER BY version').all(),
@@ -210,6 +211,7 @@ describe('0002 migration 资源集合', () => {
         { version: 19 },
         { version: 20 },
         { version: 21 },
+        { version: 22 },
       ]);
       const objects = database
         .prepare(
@@ -240,7 +242,7 @@ describe('0002 migration 资源集合', () => {
         .all();
       expect(after).toEqual(before);
       expect(database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get()).toEqual({
-        count: 21,
+        count: 22,
       });
       database.close();
     });
@@ -439,7 +441,7 @@ describe('0002 受管理升级、备份与回滚', () => {
         .prepare(
           'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
         )
-        .run(22, '0022_future.sql', 'b'.repeat(64), NOW);
+        .run(23, '0023_future.sql', 'b'.repeat(64), NOW);
 
       const before = database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get();
       expect(() => inspectMigrationPlan(database, migrations)).toThrow('DATABASE_VERSION_TOO_NEW');

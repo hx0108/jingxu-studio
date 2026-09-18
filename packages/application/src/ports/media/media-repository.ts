@@ -11,7 +11,7 @@ import type { VideoCompositionRepositories } from './video-composition-repositor
 import type { VoiceGenerationRepositoryPort } from '../voice/voice-generation-repository';
 import type { VoiceMappingRepositoryPort } from '../voice/voice-mapping-repository';
 
-export type MediaAssetType = 'CHARACTER' | 'SCENE';
+export type MediaAssetType = 'CHARACTER' | 'SCENE' | 'STYLE';
 
 export type MediaAssetProvenance = 'UPLOADED';
 

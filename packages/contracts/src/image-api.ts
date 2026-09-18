@@ -26,10 +26,15 @@ export const mediaTaskPhaseSchema = z.enum([
   'FAILED',
   'CANCELLED',
 ]);
-export const assetTypeSchema = z.enum(['CHARACTER', 'SCENE']);
+export const assetTypeSchema = z.enum(['CHARACTER', 'SCENE', 'STYLE']);
+export const PROJECT_STYLE_BIBLE_REF_ID = 'project-style';
 /** 资产参考图上传上限（design D6-4）：单图 ≤20MB，仅 PNG/JPEG/WebP。 */
 export const assetReferenceMimeSchema = z.enum(['image/png', 'image/jpeg', 'image/webp']);
 export const ASSET_REFERENCE_MAX_BYTES = 20 * 1024 * 1024;
+/** 与当前 Seedream 能力快照一致；Application 超限时必须阻断而非截断。 */
+export const MEDIA_REFERENCE_MAX_COUNT = 14;
+/** 批次硬界对齐分镜镜头硬界。 */
+export const MEDIA_BATCH_MAX_SHOTS = 20;
 
 /** 候选/资产版本的受限取图 URL；Renderer 不接触文件系统路径。 */
 export const candidateMediaUrl = (candidateId: string): string =>
@@ -212,13 +217,73 @@ export const uploadAssetReferenceInputSchema = z
         path: ['bytes'],
       });
     }
+    if (value.assetType === 'STYLE' && value.bibleRefId !== PROJECT_STYLE_BIBLE_REF_ID) {
+      context.addIssue({
+        code: 'custom',
+        message: 'STYLE 资产必须使用 project-style 保留键。',
+        path: ['bibleRefId'],
+      });
+    }
+    if (value.assetType !== 'STYLE' && value.bibleRefId === PROJECT_STYLE_BIBLE_REF_ID) {
+      context.addIssue({
+        code: 'custom',
+        message: 'project-style 保留键只能用于 STYLE 资产。',
+        path: ['bibleRefId'],
+      });
+    }
+    if (
+      value.assetType === 'STYLE' &&
+      (value.description === null || value.description.trim() === '')
+    ) {
+      context.addIssue({
+        code: 'custom',
+        message: 'STYLE 资产必须提供画风文字描述。',
+        path: ['description'],
+      });
+    }
+  });
+
+export const consistencyMissingItemSchema = z
+  .object({
+    bibleRefId: idSchema,
+    displayName: z.string().min(1).max(200),
+    kind: z.enum(['STYLE', 'CHARACTER']),
+  })
+  .strict();
+
+export const consistencyShotStatusSchema = z
+  .object({
+    characterIds: z.array(idSchema).max(14),
+    ready: z.boolean(),
+    shotId: shotIdSchema,
+  })
+  .strict();
+
+export const consistencyPreflightSchema = z
+  .object({
+    missingItems: z.array(consistencyMissingItemSchema).max(15),
+    ready: z.boolean(),
+    shots: z.array(consistencyShotStatusSchema).max(MEDIA_BATCH_MAX_SHOTS),
+    storyBibleValid: z.boolean(),
+    styleAssetVersionId: assetVersionIdSchema.nullable(),
+    warnings: z.array(z.string().min(1).max(200)).max(MEDIA_BATCH_MAX_SHOTS),
+  })
+  .strict();
+
+export const getConsistencyPreflightInputSchema = z
+  .object({
+    projectId: projectIdSchema,
+    shotIds: z.array(shotIdSchema).min(1).max(MEDIA_BATCH_MAX_SHOTS),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (new Set(value.shotIds).size !== value.shotIds.length) {
+      context.addIssue({ code: 'custom', message: 'shotIds 不得重复。', path: ['shotIds'] });
+    }
   });
 export const getMediaTaskInputSchema = z
   .object({ projectId: projectIdSchema, taskId: taskIdSchema })
   .strict();
-
-/** 批次硬界对齐分镜镜头硬界（1–20 镜头，AGENTS.md:57）。 */
-export const MEDIA_BATCH_MAX_SHOTS = 20;
 
 export const mediaBatchStatusSchema = z.enum([
   'RUNNING',
@@ -333,6 +398,8 @@ export type ListCandidatesInputDto = z.infer<typeof listCandidatesInputSchema>;
 export type SelectCandidateInputDto = z.infer<typeof selectCandidateInputSchema>;
 export type ListAssetsInputDto = z.infer<typeof listAssetsInputSchema>;
 export type UploadAssetReferenceInputDto = z.infer<typeof uploadAssetReferenceInputSchema>;
+export type ConsistencyPreflightDto = z.infer<typeof consistencyPreflightSchema>;
+export type GetConsistencyPreflightInputDto = z.infer<typeof getConsistencyPreflightInputSchema>;
 export type GetMediaTaskInputDto = z.infer<typeof getMediaTaskInputSchema>;
 export type MediaBatchMemberDto = z.infer<typeof mediaBatchMemberSchema>;
 export type MediaBatchViewDto = z.infer<typeof mediaBatchViewSchema>;
@@ -365,6 +432,10 @@ export interface ImageApi {
   uploadAssetReference(
     input: UploadAssetReferenceInputDto,
   ): Promise<AppResultDto<UploadAssetReferenceResultDto>>;
+  /** 服务端一致性预检；Renderer 只消费结果，不自行推断资产完整性。 */
+  getConsistencyPreflight(
+    input: GetConsistencyPreflightInputDto,
+  ): Promise<AppResultDto<ConsistencyPreflightDto>>;
   getMediaTask(input: GetMediaTaskInputDto): Promise<AppResultDto<MediaTaskViewDto>>;
   /** 批次取消（design D6-A）：仅停止消费剩余队列，在飞任务跑完自然终态。 */
   cancelBatch(input: CancelBatchInputDto): Promise<AppResultDto<MediaBatchViewDto>>;
@@ -379,6 +450,7 @@ export const IMAGE_IPC_CHANNELS = {
   generateCandidates: 'image.generateCandidates',
   generateCandidatesForShots: 'image.generateCandidatesForShots',
   getTask: 'image.getTask',
+  getConsistencyPreflight: 'image.getConsistencyPreflight',
   listAssets: 'image.listAssets',
   listCandidates: 'image.listCandidates',
   listStoryboardImageStates: 'image.listStoryboardImageStates',

@@ -93,7 +93,10 @@ export interface FirstFramePromptInput {
   }[];
   readonly creative: ShotCreativeFields;
   readonly scene: { readonly description: string; readonly name: string } | null;
+  readonly style: { readonly description: string; readonly name: string };
 }
+
+export const FIRST_FRAME_PROMPT_TEMPLATE_VERSION = 'first-frame-consistency-v1';
 
 /**
  * 组装首帧 Prompt（确定性、纯函数）。
@@ -103,16 +106,20 @@ export interface FirstFramePromptInput {
  * 机位」约束，配合场景资产参考图实现同资产新机位。避免项来自 negative_constraints。
  */
 export const buildFirstFramePrompt = (input: FirstFramePromptInput): string => {
-  const { boundCharacters, creative, scene } = input;
+  const { boundCharacters, creative, scene, style } = input;
   const fallback = [creative.action, creative.emotion]
     .filter((part): part is string => part !== null)
     .join('，');
   const primary = creative.imagePrompt ?? (fallback.length > 0 ? fallback : null);
-  const lines: string[] = [];
+  const lines: string[] = [
+    `画风锚点：${style.name}——${style.description}。全片保持相同的材质、线条、色彩、光影与渲染方式。`,
+  ];
   if (primary !== null) lines.push(primary);
   if (scene !== null) lines.push(`场景：${scene.name}——${scene.description}`);
   if (boundCharacters.length > 0) {
-    lines.push(`人物：${boundCharacters.map((c) => `${c.name}（${c.appearance}）`).join('；')}`);
+    lines.push(
+      `人物身份：${boundCharacters.map((c) => `${c.name}（${c.appearance}）`).join('；')}。严格保持角色身份、脸部特征、发型、服装与配饰一致，不新增或替换角色。`,
+    );
   }
   const framing = [creative.shotSize, creative.cameraAngle].filter((part) => part !== null);
   if (framing.length > 0 || creative.composition !== null || creative.focus !== null) {

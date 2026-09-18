@@ -4,6 +4,7 @@ import path from 'node:path';
 
 import {
   createImageApiService,
+  createMediaConsistencyService,
   createMediaBatchService,
   createMediaGenerationService,
   createMediaRequestBlueprintBuilder,
@@ -127,6 +128,8 @@ export const createImageFeatureRegistration = ({
       activeService?.generateCandidatesForShots(input, traceId) ?? Promise.resolve(blocked()),
     getMediaTask: (input, traceId) =>
       activeService?.getMediaTask(input, traceId) ?? Promise.resolve(blocked()),
+    getConsistencyPreflight: (input, traceId) =>
+      activeService?.getConsistencyPreflight(input, traceId) ?? Promise.resolve(blocked()),
     listAssets: (input, traceId) =>
       activeService?.listAssets(input, traceId) ?? Promise.resolve(blocked()),
     listCandidates: (input, traceId) =>
@@ -242,8 +245,10 @@ export const createImageFeatureRegistration = ({
             }),
           ),
       };
+      const consistency = createMediaConsistencyService({ mediaUnitOfWork, workspaceQuery });
       const generation: MediaGenerationService = createMediaGenerationService({
         candidateCount: IMAGE_CANDIDATE_COUNT,
+        consistency,
         formatProfiles,
         hashPayload,
         mediaUnitOfWork,
@@ -256,6 +261,7 @@ export const createImageFeatureRegistration = ({
       let kickScheduler: ((projectId: string) => void) | null = null;
       const batch = createMediaBatchService({
         candidateCount: IMAGE_CANDIDATE_COUNT,
+        consistency,
         formatProfiles,
         generation,
         hashPayload,
@@ -311,6 +317,7 @@ export const createImageFeatureRegistration = ({
             store.write({ bytes, mimeType, namespace: 'assets', projectId }),
         },
         batch,
+        consistency,
         generation,
         mediaUnitOfWork,
         newId: randomUUID,

@@ -33,6 +33,8 @@ import type {
 } from './media-generation-service';
 import { resolveGenerationInput } from './media-generation-service';
 import { mediaFailure, mediaPersistenceFailure } from './media-service-error';
+import type { MediaConsistencyService } from './media-consistency-service';
+import { consistencyPreflightFailure } from './media-consistency-service';
 
 /** 批次推进（内部钩子路径）的稳定 trace 标识。 */
 const MEDIA_BATCH_PROGRESS_TRACE = 'media_batch_progress';
@@ -73,6 +75,7 @@ export interface MediaBatchServiceDependencies extends Pick<
   | 'workspaceQuery'
 > {
   readonly generation: Pick<MediaGenerationService, 'generateCandidates'>;
+  readonly consistency: MediaConsistencyService;
   /** 建批后触发项目排空；组合根以晚绑定引用注入以解开与调度器的循环依赖。 */
   readonly kick: (projectId: string) => void;
 }
@@ -173,6 +176,12 @@ export const createMediaBatchService = (
             traceId,
           );
         }
+        const preflight = await dependencies.consistency.getPreflight(
+          { projectId: input.projectId, shotIds: input.shotIds },
+          traceId,
+        );
+        if (!preflight.ok) return preflight;
+        if (!preflight.data.ready) return consistencyPreflightFailure(preflight.data, traceId);
         // 幂等重放：同 requestId 批次直接回视图；目标集合漂移视为 requestId 复用。
         const replay = await mediaUnitOfWork.run(({ media }) =>
           media.findBatchByIdempotencyKey(input.projectId, input.requestId),
@@ -204,6 +213,7 @@ export const createMediaBatchService = (
               dependencies,
               input.projectId,
               shot,
+              false,
             );
             if (succeededKeys.has(`${shotId}:${resolved.generationInputHash}`)) {
               skipped.push(shotId);
@@ -302,6 +312,7 @@ export const createMediaBatchService = (
               dependencies,
               input.projectId,
               shot,
+              false,
             );
             const currentGenSucceededCount = succeeded
               .filter(
