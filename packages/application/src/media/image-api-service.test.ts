@@ -92,6 +92,9 @@ const buildFixture = (
       listStoryboardImageStates: () => Promise.reject(new Error('batch not under test')),
       progressBatch: () => Promise.reject(new Error('batch not under test')),
     },
+    consistency: {
+      getPreflight: () => Promise.reject(new Error('consistency not under test')),
+    },
     assetFileStore: {
       writeAsset: ({ bytes, projectId }) => {
         counter += 1;

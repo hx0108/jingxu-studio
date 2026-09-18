@@ -45,7 +45,20 @@ test('§5.4 一致性门禁—缺失项可见、生成禁用、批量去重汇�
     expect(seeded.shotCount).toBe(6);
     await openStoryboard(page, '一致性门禁');
 
-    // 单镜头面板：未就绪 + 缺失清单 + 按钮可见但禁用。
+    // 批量入口（分镜 tab）：按钮禁用 + 去重汇总（6 镜头重复引用也只各一条）。
+    const batchButton = page.getByRole('button', { name: '为整集生成首帧' });
+    await expect(batchButton).toBeDisabled();
+    const batchStatus = page.locator('.consistency-status', {
+      hasText: '整集一致性预检未通过',
+    });
+    await expect(batchStatus.getByText('整集一致性预检未通过，请先补齐：')).toBeVisible();
+    // 去重语义：画风至多一条，缺失清单整体无重复项。
+    const batchMissing = await batchStatus.locator('li').allTextContents();
+    expect(batchMissing.filter((text) => text.includes('画风锚点'))).toHaveLength(1);
+    expect(new Set(batchMissing).size).toBe(batchMissing.length);
+
+    // 切到画面生成 tab：单镜头面板未就绪 + 缺失清单 + 按钮可见但禁用。
+    await page.getByRole('button', { name: '画面生成', exact: true }).first().click();
     const panel = page.locator('#first-frame-panel');
     await expect(panel.getByText('一致性输入未就绪')).toBeVisible({ timeout: 15_000 });
     await expect(panel.getByText('缺少画风锚点：项目画风')).toBeVisible();
@@ -53,13 +66,6 @@ test('§5.4 一致性门禁—缺失项可见、生成禁用、批量去重汇�
     const generate = panel.getByRole('button', { name: '生成首帧候选' });
     await expect(generate).toBeVisible();
     await expect(generate).toBeDisabled();
-
-    // 批量入口：按钮禁用 + 去重汇总（6 镜头重复引用也只各一条）。
-    const batchButton = page.getByRole('button', { name: '为整集生成首帧' });
-    await expect(batchButton).toBeDisabled();
-    const batchStatus = page.locator('.consistency-status');
-    await expect(batchStatus.getByText('整集一致性预检未通过，请先补齐：')).toBeVisible();
-    await expect(batchStatus.locator('li')).toHaveCount(2);
 
     // 经真实 IPC 上传补齐画风与出场角色；预检轮询后按钮恢复可用。
     await page.evaluate(async (projectId: string) => {

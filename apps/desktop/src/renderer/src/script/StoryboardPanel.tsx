@@ -181,17 +181,27 @@ export const StoryboardPanel = ({
       return;
     }
     let active = true;
-    void getImageClient()
-      .getConsistencyPreflight({
-        projectId,
-        shotIds: storyboard.shots.map((shot) => shot.shotId),
-      })
-      .then((result) => {
-        if (active && result.ok) setConsistency(result.data);
-      })
-      .catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const refresh = (): void => {
+      void getImageClient()
+        .getConsistencyPreflight({
+          projectId,
+          shotIds: storyboard.shots.map((shot) => shot.shotId),
+        })
+        .then((result) => {
+          if (!active || !result.ok) return;
+          setConsistency(result.data);
+          // 未就绪时说明用户正被门禁拦住：资产上传后需自动复检恢复入口。
+          if (!result.data.ready) {
+            timer = setTimeout(refresh, 1_500);
+          }
+        })
+        .catch(() => undefined);
+    };
+    refresh();
     return () => {
       active = false;
+      if (timer !== null) clearTimeout(timer);
     };
   }, [batchReady, consistencyKey, projectId, storyboard.shots]);
   const runningVideoBatch =

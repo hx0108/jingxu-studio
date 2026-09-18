@@ -299,7 +299,41 @@ export const FirstFramePanel = ({
   // 挂载即加载候选；切换镜头由父级以 key 重挂载整面板，状态天然归零。
   useEffect(() => {
     void loadCandidates();
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    // 未就绪时低频复检：用户按提示上传资产后，禁用的生成入口自动恢复。
+    const pollConsistency = async (): Promise<void> => {
+      if (document.visibilityState === 'hidden') {
+        timer = setTimeout(() => {
+          void pollConsistency();
+        }, 1_500);
+        return;
+      }
+      await getImageClient()
+        .getConsistencyPreflight({ projectId, shotIds: [shot.shotId] })
+        .then((result) => {
+          if (!active) return;
+          if (result.ok) {
+            setConsistency(result.data);
+            if (!result.data.ready) {
+              timer = setTimeout(() => {
+                void pollConsistency();
+              }, 1_500);
+            }
+          } else setError(result.error);
+        })
+        .catch(() => {
+          timer = setTimeout(() => {
+            void pollConsistency();
+          }, 1_500);
+        });
+    };
     void loadConsistency();
+    void pollConsistency();
+    return () => {
+      active = false;
+      if (timer !== undefined) clearTimeout(timer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
