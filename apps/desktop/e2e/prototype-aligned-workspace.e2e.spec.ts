@@ -62,9 +62,8 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
         inspectorFontSize: fontSize('.workspace-inspector'),
         inspectorWidth: Math.round(rect('.workspace-inspector').width),
         navFontSize: fontSize('.global-nav-item'),
-        pillBorderRadius: getComputedStyle(
-          document.querySelector('.status-pill') ?? document.body,
-        ).borderRadius,
+        pillBorderRadius: getComputedStyle(document.querySelector('.status-pill') ?? document.body)
+          .borderRadius,
         sidebarWidth: Math.round(rect('.global-sidebar').width),
         topbarText: document.querySelector('.workspace-topbar')?.textContent ?? '',
       };

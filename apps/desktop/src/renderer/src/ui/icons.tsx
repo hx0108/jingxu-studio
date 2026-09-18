@@ -46,13 +46,7 @@ const ICON_PATHS = {
 
 export type IconName = keyof typeof ICON_PATHS;
 
-export const Icon = ({
-  name,
-  size = 16,
-}: {
-  readonly name: IconName;
-  readonly size?: number;
-}) => (
+export const Icon = ({ name, size = 16 }: { readonly name: IconName; readonly size?: number }) => (
   <svg
     aria-hidden="true"
     fill="none"

@@ -20,18 +20,8 @@
   --jx-radius: 6px;
   --jx-radius-lg: 8px;
   --jx-font-sans:
-    'IBM Plex Sans',
-    'Noto Sans SC',
-    'PingFang SC',
-    'Microsoft YaHei UI',
-    system-ui,
-    sans-serif;
-  --jx-font-mono:
-    'IBM Plex Mono',
-    ui-monospace,
-    SFMono-Regular,
-    Consolas,
-    monospace;
+    'IBM Plex Sans', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei UI', system-ui, sans-serif;
+  --jx-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
   color: var(--jx-text);
   background: var(--jx-bg);
   font-family: var(--jx-font-sans);
