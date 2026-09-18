@@ -207,11 +207,12 @@ describe('image-api contracts', () => {
     ).toBe(false);
   });
 
-  it('IPC 通道—image 前缀九方法与 API 接口一一对应', () => {
+  it('IPC 通道—image 前缀十方法与 API 接口一一对应', () => {
     expect(Object.keys(IMAGE_IPC_CHANNELS).sort()).toEqual([
       'cancelBatch',
       'generateCandidates',
       'generateCandidatesForShots',
+      'getConsistencyPreflight',
       'getTask',
       'listAssets',
       'listCandidates',
