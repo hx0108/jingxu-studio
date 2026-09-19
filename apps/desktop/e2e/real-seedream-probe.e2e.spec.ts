@@ -327,10 +327,12 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await page.getByRole('heading', { name: '分镜工作台' }).waitFor();
     await page.getByRole('button', { name: '设置', exact: true }).click();
-    const imageCard = page.locator('section[aria-labelledby="image-provider-title"]');
-    await imageCard
-      .getByRole('heading', { name: '图片模型服务（火山方舟 ARK）' })
-      .waitFor({ timeout: 30_000 });
+    // CINE 主题后图片服务卡为 <details> 折叠面板：容器由旧 section[aria-labelledby]
+    // 改为含 #image-provider-title 的 details，标题收敛为「火山方舟 ARK」。
+    const imageCard = page.locator('details:has(#image-provider-title)');
+    await imageCard.getByRole('heading', { name: '火山方舟 ARK' }).waitFor({ timeout: 30_000 });
+    await imageCard.locator('summary').click();
+    await imageCard.getByLabel('ARK API Key').waitFor({ timeout: 10_000 });
     // 生产档可能残留旧配置：先走 UI 删除，再完整复刻「保存→测试」闭环。
     if ((await imageCard.getByText(/已配置/).count()) > 0) {
       page.once('dialog', (dialog) => {
@@ -349,11 +351,22 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
 
     // 阶段二：真实 Seedream 两轮候选 + 选择 + 升版 STALE。
     const referenceV1 = encodeMockPng('seedream-probe-ref-v1', 256, 256);
+    const styleV1 = encodeMockPng('seedream-probe-style-v1', 256, 256);
+    const styleV2 = encodeMockPng('seedream-probe-style-v2', 256, 256);
+    const styleV3 = encodeMockPng('seedream-probe-style-v3', 256, 256);
     const referenceV2PerAsset = [0, 1, 2, 3, 4, 5, 6, 7].map((index) =>
       encodeMockPng(`seedream-probe-ref-v2-${String(index)}`, 256, 256),
     );
     const imageLoop = await page.evaluate(
-      async ({ projectId, referenceV1, referenceV2PerAsset, shotId }) => {
+      async ({
+        projectId,
+        referenceV1,
+        referenceV2PerAsset,
+        shotId,
+        styleV1,
+        styleV2,
+        styleV3,
+      }) => {
         const requestId = (prefix: string): string => `${prefix}_${crypto.randomUUID()}`;
         const generateAndDrain = async (label: string) => {
           const generated = await window.jingxu.image.generateCandidates({
@@ -381,28 +394,9 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
           return listed.data;
         };
 
-        // 轮1 文生图：未上传任何资产，生成输入不含 boundAssetVersionIds。
-        const round1All = await generateAndDrain('round1');
-        const round1 = round1All.filter((candidate) => candidate.roundNo === 1);
-        const succeeded1 = round1.filter((candidate) => candidate.status === 'SUCCEEDED');
-        if (succeeded1.length !== 4)
-          throw new Error(`round1-succeeded:${String(succeeded1.length)}`);
-        if (!succeeded1.every((candidate) => candidate.mediaUrl?.startsWith('jingxu://media/'))) {
-          throw new Error('round1-mediaUrl-prefix');
-        }
-        if (
-          !succeeded1.every(
-            (candidate) => (candidate.byteSize ?? 0) > 0 && (candidate.width ?? 0) >= 1000,
-          )
-        ) {
-          throw new Error('round1-bytes-or-dimensions');
-        }
-        const hash1 = succeeded1[0]?.generationInputHash ?? null;
-        if (hash1 === null || !succeeded1.every((c) => c.generationInputHash === hash1)) {
-          throw new Error('round1-hash-inconsistent');
-        }
-
-        // 上传资产：覆盖 STORY_BIBLE 全部 character/scene 引用（≤8），确保镜头绑定命中。
+        // 一致性门禁前置（enforce-character-style-consistency）：project-style（STYLE
+        // 保留键 + 非空画风描述）与镜头绑定参考须先就位，轮1 即带全套参考生成；
+        // 轮间与轮后靠资产升版改变生成输入哈希。
         const workspace = await window.jingxu.script.getWorkspace({ projectId });
         if (!workspace.ok) throw new Error(`workspace:${workspace.error.code}`);
         const bibleStage = workspace.data.stages.find((stage) => stage.stage === 'STORY_BIBLE');
@@ -426,6 +420,18 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
         ].filter((ref) => idPattern.test(ref.bibleRefId));
         const bounded = refs.slice(0, 8);
         if (bounded.length === 0) throw new Error('assets:no-bible-refs');
+        const styleUploaded = await window.jingxu.image.uploadAssetReference({
+          assetType: 'STYLE',
+          bibleRefId: 'project-style',
+          byteSize: styleV1.length,
+          bytes: Uint8Array.from(styleV1),
+          description: '二维漫剧：霓虹夜色，高对比黑色电影光影，赛璐璐描边',
+          displayName: '项目画风',
+          mimeType: 'image/png',
+          projectId,
+          requestId: requestId('asset-style-v1'),
+        });
+        if (!styleUploaded.ok) throw new Error(`asset-style-v1:${styleUploaded.error.code}`);
         for (const [index, ref] of bounded.entries()) {
           const uploaded = await window.jingxu.image.uploadAssetReference({
             assetType: ref.assetType,
@@ -441,7 +447,42 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
           if (!uploaded.ok) throw new Error(`asset-v1-${String(index)}:${uploaded.error.code}`);
         }
 
-        // 轮2 参考图生图：绑定资产进入生成输入 → generationInputHash 必须变化。
+        // 轮1：全套参考就位后的首代（生成输入含 style + 绑定资产）。
+        const round1All = await generateAndDrain('round1');
+        const round1 = round1All.filter((candidate) => candidate.roundNo === 1);
+        const succeeded1 = round1.filter((candidate) => candidate.status === 'SUCCEEDED');
+        if (succeeded1.length !== 4)
+          throw new Error(`round1-succeeded:${String(succeeded1.length)}`);
+        if (!succeeded1.every((candidate) => candidate.mediaUrl?.startsWith('jingxu://media/'))) {
+          throw new Error('round1-mediaUrl-prefix');
+        }
+        if (
+          !succeeded1.every(
+            (candidate) => (candidate.byteSize ?? 0) > 0 && (candidate.width ?? 0) >= 1000,
+          )
+        ) {
+          throw new Error('round1-bytes-or-dimensions');
+        }
+        const hash1 = succeeded1[0]?.generationInputHash ?? null;
+        if (hash1 === null || !succeeded1.every((c) => c.generationInputHash === hash1)) {
+          throw new Error('round1-hash-inconsistent');
+        }
+
+        // 轮2 前 project-style 升版 v2：生成输入哈希必须变化（轮1 候选随之 STALE）。
+        const styleBumped = await window.jingxu.image.uploadAssetReference({
+          assetType: 'STYLE',
+          bibleRefId: 'project-style',
+          byteSize: styleV2.length,
+          bytes: Uint8Array.from(styleV2),
+          description: '二维漫剧：霓虹夜色，高对比黑色电影光影，赛璐璐描边',
+          displayName: '项目画风',
+          mimeType: 'image/png',
+          projectId,
+          requestId: requestId('asset-style-v2'),
+        });
+        if (!styleBumped.ok) throw new Error(`asset-style-v2:${styleBumped.error.code}`);
+
+        // 轮2 参考图生图：style 已升版 → generationInputHash 必须变化。
         const round2All = await generateAndDrain('round2');
         const round2 = round2All.filter((candidate) => candidate.roundNo === 2);
         const succeeded2 = round2.filter((candidate) => candidate.status === 'SUCCEEDED');
@@ -471,6 +512,19 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
         // STALE_INPUT」（spec Requirement），轮2（绑定 v1）与轮1（未绑定，但当前输入
         // 世代已变）全部失效；选择指针保留在 STALE 候选上可读（selectedAt 不丢）。
         const affected = [];
+        const styleRebumped = await window.jingxu.image.uploadAssetReference({
+          assetType: 'STYLE',
+          bibleRefId: 'project-style',
+          byteSize: styleV3.length,
+          bytes: Uint8Array.from(styleV3),
+          description: '二维漫剧：霓虹夜色，高对比黑色电影光影，赛璐璐描边',
+          displayName: '项目画风',
+          mimeType: 'image/png',
+          projectId,
+          requestId: requestId('asset-style-v3'),
+        });
+        if (!styleRebumped.ok) throw new Error(`asset-style-v3:${styleRebumped.error.code}`);
+        affected.push(...styleRebumped.data.affectedShots);
         for (const [index, ref] of bounded.entries()) {
           const bytes = referenceV2PerAsset[index] ?? referenceV2PerAsset[0];
           if (bytes === undefined) throw new Error('asset-v2-bytes-missing');
@@ -530,7 +584,15 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
           totalCandidates: fresh.length,
         };
       },
-      { projectId: seedOk.projectId, referenceV1, referenceV2PerAsset, shotId: seedOk.shotId },
+      {
+        projectId: seedOk.projectId,
+        referenceV1,
+        referenceV2PerAsset,
+        shotId: seedOk.shotId,
+        styleV1,
+        styleV2,
+        styleV3,
+      },
     );
 
     // 阶段三：UI 经受限协议真实解码（真实图片字节 naturalWidth>0）。
@@ -539,7 +601,10 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await page.getByRole('heading', { name: '分镜工作台' }).waitFor();
     await page.getByRole('button', { name: '画面生成', exact: true }).click();
-    await page.locator('.shot-card', { hasText: '#1' }).click();
+    await page
+      .locator('.shot-card')
+      .filter({ hasText: /^#1(?!\d)/u })
+      .click();
     await page.getByRole('heading', { name: '首帧候选 · 镜头 #1' }).waitFor();
     await page.waitForFunction(
       () => {
