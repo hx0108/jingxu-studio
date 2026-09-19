@@ -1,10 +1,10 @@
 ## MODIFIED Requirements
 
-### Requirement: 首帧候选生成必须以冻结镜头版本与完整一致性资产快照为输入
+### Requirement: 首帧候选生成必须以冻结镜头版本与资产版本快照为输入
 
 系统 MUST 仅在项目存在 READY 的 ShotContract 版本、目标镜头属于该版本、且客户端 expected shot version 与服务端一致时接受首帧生成请求。生成输入 MUST 由镜头版本内容、项目当前 STYLE 资产版本、按 `character_ids` 解析出的全部 CHARACTER 资产版本、可选的 SCENE 资产版本、model_id 与归一化参数组成，并计算 `generation_input_hash`。STYLE 资产或任一出场 CHARACTER 资产缺失时 MUST 阻断建档并返回稳定错误码与缺失项；SCENE 资产缺失仍可用已解析的 StoryBible 场景描述继续。Prompt 组装 MUST 只消费镜头创意字段、正式 STORY_BIBLE 信封中的 `data` 描述与冻结的一致性资产描述，MUST NOT 依赖模型或 Renderer 提供的系统字段。
 
-#### Scenario: 一致性输入齐全时提交媒体任务
+#### Scenario: 冻结输入齐全时提交媒体任务
 
 - **GIVEN** 项目存在 READY ShotContract，expected shot version 匹配，项目有当前 STYLE 资产，且镜头全部出场角色均有当前 CHARACTER 资产
 - **WHEN** 用户请求为某镜头生成首帧候选
