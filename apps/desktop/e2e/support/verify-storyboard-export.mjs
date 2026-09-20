@@ -36,12 +36,14 @@ try {
   // B. 结构与哈希一致性。
   for (const row of rows) {
     if (row.actor !== 'USER') violations.push(`row${String(row.rowid)}:actor`);
-    if (row.object_type !== 'EPISODE_VERSION') violations.push(`row${String(row.rowid)}:object_type`);
+    if (row.object_type !== 'EPISODE_VERSION')
+      violations.push(`row${String(row.rowid)}:object_type`);
     if (row.before_sha256 !== null) violations.push(`row${String(row.rowid)}:before_sha256`);
     if (typeof row.after_sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(row.after_sha256)) {
       violations.push(`row${String(row.rowid)}:after_sha256`);
     }
-    if (row.trace_id === null || row.trace_id === '') violations.push(`row${String(row.rowid)}:trace_id`);
+    if (row.trace_id === null || row.trace_id === '')
+      violations.push(`row${String(row.rowid)}:trace_id`);
   }
 
   // C. metadata 语义（顺序 = rowid 插入顺序）。

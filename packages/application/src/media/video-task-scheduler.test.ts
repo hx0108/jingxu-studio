@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { MediaModelPort } from '../ports/media/media-model-port';
-import type { MediaUnitOfWorkPort } from '../ports/media/media-repository';
+import type { MediaUnitOfWorkPort, VideoProviderProvenance } from '../ports/media/media-repository';
 import type { NormalizedModelError } from '../ports/text-model/text-model-types';
 import type {
   ScriptWorkspaceSnapshot,
@@ -250,10 +250,11 @@ const buildSchedulerFixture = (
 const seedFirstFrame = async (
   unitOfWork: MediaUnitOfWorkPort,
   shotId: string,
+  candidateId = 'img_1',
 ): Promise<{ candidateId: string; fileSha256: string }> => {
   const inserted = await unitOfWork.run(({ media }) =>
     media.insertCandidates({
-      candidateIds: ['img_1'],
+      candidateIds: [candidateId],
       generationInputHash: hash64('igen'),
       modelId: IMAGE_MODEL_ID,
       projectId: 'project_1',
@@ -279,13 +280,18 @@ const seedFirstFrame = async (
   return { candidateId: candidate.id, fileSha256: IMG_SHA_1 };
 };
 
-/** 建视频任务 + 2 个 PENDING 候选（首帧锚点对 + 档位时长 8s 冻结）。 */
+/** 建视频任务 + 2 个 PENDING 候选（首帧锚点对 + 档位时长 8s 冻结；可带显式溯源）。 */
 const seedVideoTask = async (
   unitOfWork: MediaUnitOfWorkPort,
   shotId = 'shot_1',
   taskId = 'vtask_1',
+  provenance?: VideoProviderProvenance,
 ): Promise<string> => {
-  const anchor = await seedFirstFrame(unitOfWork, shotId);
+  const anchor = await seedFirstFrame(
+    unitOfWork,
+    shotId,
+    shotId === 'shot_1' ? 'img_1' : `img_${shotId}`,
+  );
   const task = await unitOfWork.run(({ video }) =>
     video.insertTask({
       batchId: null,
@@ -294,18 +300,23 @@ const seedVideoTask = async (
       id: taskId,
       idempotencyKey: `vreq_${taskId}`,
       projectId: 'project_1',
+      ...(provenance === undefined ? {} : { provenance }),
       shotId,
       shotVersionId: 'scv_1',
     }),
   );
+  // 候选 id 按任务派生避免跨任务撞行；默认任务保持历史 id（既有断言零变化）。
+  const candidateIds =
+    taskId === 'vtask_1' ? ['vc_1', 'vc_2'] : [`${taskId}_vc_1`, `${taskId}_vc_2`];
   await unitOfWork.run(({ video }) =>
     video.insertCandidates({
-      candidateIds: ['vc_1', 'vc_2'],
+      candidateIds,
       firstFrameCandidateId: anchor.candidateId,
       firstFrameFileSha256: anchor.fileSha256,
       generationInputHash: hash64('vgen'),
-      modelId: VIDEO_MODEL_ID,
+      modelId: provenance?.modelId ?? VIDEO_MODEL_ID,
       projectId: 'project_1',
+      ...(provenance === undefined ? {} : { provenance }),
       requestedDurationSec: 8,
       roundNo: task.roundNo,
       shotId,
@@ -314,6 +325,113 @@ const seedVideoTask = async (
   );
   return task.id;
 };
+
+describe('MediaTaskScheduler 按任务冻结溯源解析（low-cost D4/任务 4.2）', () => {
+  it('两个不同 Provider 冻结任务（Seedance/Agnes）—各路由到对应 Adapter—回退口零调用', async () => {
+    const repository = new InMemoryMediaRepository();
+    const videoRepository = new InMemoryVideoMediaRepository(repository.candidates);
+    const invocationRepository = new InMemoryMediaInvocationRepository();
+    const unitOfWork: MediaUnitOfWorkPort = {
+      run: (work) =>
+        work({ invocations: invocationRepository, media: repository, video: videoRepository }),
+    };
+    const seedancePort = new FakeVideoModel({ pollPlan: 'SUCCEEDED' });
+    const agnesPort = new FakeVideoModel({ pollPlan: 'SUCCEEDED' });
+    const fallbackPort = new FakeVideoModel({ pollPlan: 'SUCCEEDED' });
+    const writes: { byteSize: number; storageRelPath: string }[] = [];
+    const fileStore: MediaFileStorePort = {
+      writeMedia: ({ projectId }) => {
+        const sha256 = hash64(`route_${String(writes.length + 1)}`);
+        const record = {
+          byteSize: 4,
+          mimeType: 'video/mp4',
+          projectId,
+          sha256,
+          storageRelPath: `projects/${projectId}/videos/${sha256.slice(0, 2)}/${sha256}.mp4`,
+        };
+        writes.push(record);
+        return Promise.resolve(record);
+      },
+    };
+    let clock = 0;
+    const scheduler = createMediaTaskScheduler({
+      fileStore,
+      generation: (repos) => repos.video,
+      hashText: hash64,
+      // 回退口 = 当前模式首配（无溯源行才用；本用例两行均有溯源 → 零调用）。
+      model: fallbackPort,
+      resolveModel: (task) =>
+        task.provenance?.providerKind === 'AGNES_VIDEO' ? agnesPort : seedancePort,
+      mediaUnitOfWork: unitOfWork,
+      newId: (() => {
+        let counter = 0;
+        return () => `inv_${String((counter += 1))}`;
+      })(),
+      nowMs: () => {
+        clock += 50;
+        return clock;
+      },
+      pollDeadlineMs: 200,
+      pollIntervalMs: 0,
+      requestBuilder: {
+        build: () =>
+          Promise.resolve({
+            buildRequest: (invocationId: string) => ({
+              durationSec: 8,
+              firstFrame: { bytes: FIRST_FRAME_BYTES, mimeType: 'image/png' },
+              invocationId,
+              modelId: VIDEO_MODEL_ID,
+              prompt: VIDEO_PROMPT,
+              resolution: VIDEO_SIZE,
+            }),
+            modelId: VIDEO_MODEL_ID,
+            submitSnapshotJson: '{}',
+          }),
+      },
+      resultMetaOf: (result) => ({
+        actualDurationSec: (result as VideoResultRef).actualDurationSec,
+      }),
+      segmentTimeoutMs: 5_000,
+      sleep: () => Promise.resolve(undefined),
+    });
+    const agnesProvenance: VideoProviderProvenance = {
+      capabilitySnapshotId: 'agnes-video/v1',
+      isMock: false,
+      modelId: 'agnes-video-v2.0',
+      providerKind: 'AGNES_VIDEO',
+      providerProfileId: 'profile-video-agnes-primary',
+    };
+    await seedVideoTask(unitOfWork, 'shot_1', 'vtask_seed', {
+      capabilitySnapshotId: 'volcark-seedance-video/v3',
+      isMock: false,
+      modelId: 'doubao-seedance-2-0-260128',
+      providerKind: 'VOLCARK_SEEDANCE',
+      providerProfileId: 'profile-video-primary',
+    });
+    await seedVideoTask(unitOfWork, 'shot_2', 'vtask_agnes', agnesProvenance);
+
+    await scheduler.run('project_1');
+
+    // 每任务 2 候选：各自 Adapter 收到 2 次 submit/download 与 2×（PENDING+SUCCEEDED）
+    // 轮询（FakeVideoModel 窗口计划）；回退口零调用。
+    expect(seedancePort.submitCount()).toBe(2);
+    expect(agnesPort.submitCount()).toBe(2);
+    expect(seedancePort.pollCount()).toBe(4);
+    expect(agnesPort.pollCount()).toBe(4);
+    expect(fallbackPort.submitCount()).toBe(0);
+    expect(writes).toHaveLength(4);
+    for (const taskId of ['vtask_seed', 'vtask_agnes']) {
+      expect(videoRepository.tasks.find((task) => task.id === taskId)).toMatchObject({
+        errorCode: null,
+        phase: 'COMPLETED',
+      });
+    }
+    // 偏好切换不改写冻结行：驱动后两行溯源仍为建档值。
+    expect(videoRepository.tasks.find((task) => task.id === 'vtask_agnes')?.provenance).toEqual(
+      agnesProvenance,
+    );
+  });
+});
 
 describe('MediaTaskScheduler video 实例（任务 3.3）', () => {
   it('异步全链路—轮询窗口 PENDING→SUCCEEDED—actualDurationSec 入列—POLL 行数=轮询次数实录', async () => {
@@ -561,7 +679,10 @@ interface BlueprintFixture {
   readonly workspaceQuery: ScriptWorkspaceQueryPort & { snapshot: ScriptWorkspaceSnapshot | null };
 }
 
-const buildBlueprintFixture = (shot: StoryboardShotSnapshot | null): BlueprintFixture => {
+const buildBlueprintFixture = (
+  shot: StoryboardShotSnapshot | null,
+  capabilityOf?: Parameters<typeof createVideoRequestBlueprintBuilder>[0]['capabilityOf'],
+): BlueprintFixture => {
   const repository = new InMemoryMediaRepository();
   const videoRepository = new InMemoryVideoMediaRepository(repository.candidates);
   const unitOfWork: MediaUnitOfWorkPort = {
@@ -582,6 +703,7 @@ const buildBlueprintFixture = (shot: StoryboardShotSnapshot | null): BlueprintFi
   const readCalls: { fileSha256: string; mimeType: string; projectId: string }[] = [];
   return {
     builder: createVideoRequestBlueprintBuilder({
+      ...(capabilityOf === undefined ? {} : { capabilityOf }),
       firstFrameReader: {
         readReference: (input) => {
           readCalls.push(input);
@@ -642,13 +764,67 @@ describe('createVideoRequestBlueprintBuilder（任务 3.3）', () => {
       prompt: VIDEO_PROMPT,
       resolution: VIDEO_SIZE,
     });
-    // 快照冻结字段序（requestSha256 稳定性）：时长/首帧锚点对/模型/提示词/分辨率。
+    // 快照冻结字段序（requestSha256 稳定性）：溯源标识（low-cost D4，任务行缺省
+    // Seedance 档）+ 时长/首帧锚点对/模型/提示词/分辨率；不含首帧字节与凭据。
     expect(blueprint.submitSnapshotJson).toBe(
-      `{"durationSec":8,"firstFrameCandidateId":"img_1","firstFrameFileSha256":"${IMG_SHA_1}","modelId":"${VIDEO_MODEL_ID}","prompt":"少女撑伞走过雨巷，怅惘\\n叙事目的：建立雨巷氛围\\n运镜：推轨","resolution":{"height":1920,"width":1080}}`,
+      `{"capabilitySnapshotId":"volcark-seedance-video/v3","isMock":false,"providerKind":"VOLCARK_SEEDANCE","providerProfileId":"profile-video-primary","durationSec":8,"firstFrameCandidateId":"img_1","firstFrameFileSha256":"${IMG_SHA_1}","modelId":"${VIDEO_MODEL_ID}","prompt":"少女撑伞走过雨巷，怅惘\\n叙事目的：建立雨巷氛围\\n运镜：推轨","resolution":{"height":1920,"width":1080}}`,
     );
     expect(fixture.readCalls).toEqual([
       { fileSha256: IMG_SHA_1, mimeType: 'image/png', projectId: 'project_1' },
     ]);
+  });
+
+  it('low-cost 4.3—Agnes 冻结溯源—蓝图分辨率按 [720] 档重建（不产生 1080）', async () => {
+    const agnesCapability = {
+      durationRange: { maxSec: 5, minSec: 5 },
+      resolutionTiers: [720],
+    } as const;
+    const fixture = buildBlueprintFixture(
+      { sequence: 1, shotId: 'shot_1', version: shotVersionOf('scv_1') },
+      () => agnesCapability,
+    );
+    const anchor = await seedFirstFrame(fixture.unitOfWork, 'shot_1');
+    const agnesProvenance = {
+      capabilitySnapshotId: 'agnes-video/v1',
+      isMock: false,
+      modelId: 'agnes-video-v2.0',
+      providerKind: 'AGNES_VIDEO',
+      providerProfileId: 'profile-video-agnes-primary',
+    } as const;
+    const task = await fixture.unitOfWork.run(({ video }) =>
+      video.insertTask({
+        batchId: null,
+        candidateCount: VIDEO_CANDIDATE_COUNT,
+        generationInputHash: hash64('vgen_agnes'),
+        id: 'vtask_agnes',
+        idempotencyKey: 'vreq_agnes',
+        projectId: 'project_1',
+        provenance: agnesProvenance,
+        shotId: 'shot_1',
+        shotVersionId: 'scv_1',
+      }),
+    );
+    await fixture.unitOfWork.run(({ video }) =>
+      video.insertCandidates({
+        candidateIds: ['vc_agnes_1', 'vc_agnes_2'],
+        firstFrameCandidateId: anchor.candidateId,
+        firstFrameFileSha256: anchor.fileSha256,
+        generationInputHash: hash64('vgen_agnes'),
+        modelId: 'agnes-video-v2.0',
+        projectId: 'project_1',
+        provenance: agnesProvenance,
+        requestedDurationSec: 5,
+        roundNo: task.roundNo,
+        shotId: 'shot_1',
+        shotVersionId: 'scv_1',
+      }),
+    );
+    const blueprint = await fixture.builder.build(task);
+    // 1440x2560 首帧在 Agnes 固定 [720] 档下重建为 720x1280（与建档同源）。
+    expect(blueprint.buildRequest('inv_agnes')).toMatchObject({
+      durationSec: 5,
+      resolution: { height: 1280, width: 720 },
+    });
   });
 
   it('输入不完整—稳定 MEDIA_BLUEPRINT_* 标记交调度器归一', async () => {
@@ -780,5 +956,214 @@ describe('createVideoRequestBlueprintBuilder（任务 3.3）', () => {
       }),
     );
     await expect(broken.builder.build(brokenTask)).rejects.toThrow('MEDIA_BLUEPRINT_SHOT_INVALID');
+  });
+});
+
+describe('MediaTaskScheduler 重启/切换串线（low-cost D4/任务 4.4）', () => {
+  const PROVENANCE_BY_KIND = {
+    AGNES: {
+      capabilitySnapshotId: 'agnes-video/v1',
+      isMock: false,
+      modelId: 'agnes-video-v2.0',
+      providerKind: 'AGNES_VIDEO',
+      providerProfileId: 'profile-video-agnes-primary',
+    },
+    MOCK: {
+      capabilitySnapshotId: 'volcark-seedance-video/v3',
+      isMock: true,
+      modelId: 'doubao-seedance-2-0-260128',
+      providerKind: 'VOLCARK_SEEDANCE',
+      providerProfileId: 'profile-video-primary',
+    },
+    SEEDANCE: {
+      capabilitySnapshotId: 'volcark-seedance-video/v3',
+      isMock: false,
+      modelId: 'doubao-seedance-2-0-260128',
+      providerKind: 'VOLCARK_SEEDANCE',
+      providerProfileId: 'profile-video-primary',
+    },
+  } as const;
+
+  interface RoutingFixture {
+    readonly fallbackPort: FakeVideoModel;
+    readonly ports: Readonly<Record<'agnes' | 'mock' | 'seedance', FakeVideoModel>>;
+    readonly scheduler: MediaTaskScheduler;
+    readonly unitOfWork: MediaUnitOfWorkPort;
+    readonly videoRepository: InMemoryVideoMediaRepository;
+  }
+
+  const buildRoutingFixture = (pollErrorCode?: NormalizedModelError['code']): RoutingFixture => {
+    const repository = new InMemoryMediaRepository();
+    const videoRepository = new InMemoryVideoMediaRepository(repository.candidates);
+    const invocationRepository = new InMemoryMediaInvocationRepository();
+    const unitOfWork: MediaUnitOfWorkPort = {
+      run: (work) =>
+        work({ invocations: invocationRepository, media: repository, video: videoRepository }),
+    };
+    const ports = {
+      agnes: new FakeVideoModel(
+        pollErrorCode === undefined ? {} : { pollErrorCode, pollPlan: 'ERROR' as PollPlan },
+      ),
+      mock: new FakeVideoModel({}),
+      seedance: new FakeVideoModel({}),
+    };
+    // 「当前模式已切换」以回退口为代表（重启后组合根按新模式首配）；按任务冻结
+    // 溯源路由的 resolveModel 不看当前模式——Mock 标记优先于 Provider 枚举。
+    const fallbackPort = new FakeVideoModel({});
+    let clock = 0;
+    const writes: { byteSize: number; storageRelPath: string }[] = [];
+    const scheduler = createMediaTaskScheduler({
+      fileStore: {
+        writeMedia: ({ projectId }) => {
+          const sha256 = hash64(`restart_${String(writes.length + 1)}`);
+          const record = {
+            byteSize: 4,
+            mimeType: 'video/mp4',
+            projectId,
+            sha256,
+            storageRelPath: `projects/${projectId}/videos/${sha256.slice(0, 2)}/${sha256}.mp4`,
+          };
+          writes.push(record);
+          return Promise.resolve(record);
+        },
+      },
+      generation: (repos) => repos.video,
+      hashText: hash64,
+      model: fallbackPort,
+      resolveModel: (task) => {
+        const provenance = task.provenance;
+        if (provenance === undefined) return null;
+        if (provenance.isMock) return ports.mock;
+        if (provenance.providerKind === 'AGNES_VIDEO') return ports.agnes;
+        return ports.seedance;
+      },
+      mediaUnitOfWork: unitOfWork,
+      newId: (() => {
+        let counter = 0;
+        return () => `inv_${String((counter += 1))}`;
+      })(),
+      nowMs: () => {
+        clock += 50;
+        return clock;
+      },
+      pollDeadlineMs: 200,
+      pollIntervalMs: 0,
+      requestBuilder: {
+        build: () =>
+          Promise.resolve({
+            buildRequest: (invocationId: string) => ({
+              durationSec: 5,
+              firstFrame: { bytes: FIRST_FRAME_BYTES, mimeType: 'image/png' },
+              invocationId,
+              modelId: 'restart-model',
+              prompt: VIDEO_PROMPT,
+              resolution: VIDEO_SIZE,
+            }),
+            modelId: 'restart-model',
+            submitSnapshotJson: '{}',
+          }),
+      },
+      resultMetaOf: (result) => ({
+        actualDurationSec: (result as VideoResultRef).actualDurationSec,
+      }),
+      segmentTimeoutMs: 5_000,
+      sleep: () => Promise.resolve(undefined),
+    });
+    return { fallbackPort, ports, scheduler, unitOfWork, videoRepository };
+  };
+
+  /** 建一枚「已提交、已留证、POLLING 中」的在途任务（重启前的崩溃窗口后形态）。 */
+  const seedInFlightTask = async (
+    unitOfWork: MediaUnitOfWorkPort,
+    shotId: string,
+    taskId: string,
+    provenance: (typeof PROVENANCE_BY_KIND)[keyof typeof PROVENANCE_BY_KIND],
+  ): Promise<string> => {
+    const id = await seedVideoTask(unitOfWork, shotId, taskId, provenance);
+    await unitOfWork.run(({ video }) =>
+      video.assignCandidateProviderTask(`${taskId}_vc_1`, 'pt_1'),
+    );
+    await unitOfWork.run(({ video }) =>
+      video.assignCandidateProviderTask(`${taskId}_vc_2`, 'pt_2'),
+    );
+    await unitOfWork.run(({ video }) => video.markTaskPolling(id, 'pt_1'));
+    return id;
+  };
+
+  it('四类在途任务—当前模式改变后重启恢复—各由原 Adapter 续轮询/下载且全程零重发', async () => {
+    const fixture = buildRoutingFixture();
+    const tasks = [
+      {
+        port: fixture.ports.seedance,
+        provenance: PROVENANCE_BY_KIND.SEEDANCE,
+        shot: 'shot_s',
+        taskId: 'vtask_seed',
+      },
+      {
+        port: fixture.ports.agnes,
+        provenance: PROVENANCE_BY_KIND.AGNES,
+        shot: 'shot_a',
+        taskId: 'vtask_agn',
+      },
+      {
+        port: fixture.ports.mock,
+        provenance: PROVENANCE_BY_KIND.MOCK,
+        shot: 'shot_m',
+        taskId: 'vtask_mock',
+      },
+    ] as const;
+    for (const entry of tasks) {
+      await seedInFlightTask(fixture.unitOfWork, entry.shot, entry.taskId, entry.provenance);
+    }
+
+    const outcomes = await fixture.scheduler.recover('project_1');
+    expect(outcomes.filter((outcome) => outcome.action === 'RESUMED_POLLING')).toHaveLength(3);
+    await fixture.scheduler.run('project_1');
+
+    // 各原 Adapter 收到本任务的轮询与下载；当前模式回退口零调用；全程零新 submit。
+    for (const entry of tasks) {
+      expect(entry.port.submitCount(), `${entry.taskId} 零重发`).toBe(0);
+      expect(entry.port.pollCount(), `${entry.taskId} 续轮询`).toBeGreaterThanOrEqual(2);
+      expect(
+        entry.port.order.filter((line) => line.startsWith('download:')).length,
+        `${entry.taskId} 原 Adapter 下载`,
+      ).toBe(2);
+      expect(fixture.videoRepository.tasks.find((task) => task.id === entry.taskId)).toMatchObject({
+        errorCode: null,
+        phase: 'COMPLETED',
+      });
+      // 冻结溯源在驱动后不改写。
+      expect(
+        fixture.videoRepository.tasks.find((task) => task.id === entry.taskId)?.provenance,
+      ).toEqual(entry.provenance);
+    }
+    expect(fixture.fallbackPort.submitCount()).toBe(0);
+    expect(fixture.fallbackPort.pollCount()).toBe(0);
+  });
+
+  it('Agnes 轮询结果 UNKNOWN—归一 MODEL_RESULT_UNAVAILABLE—候选失败零重发、兄弟任务不受影响', async () => {
+    const fixture = buildRoutingFixture('MODEL_RESULT_UNAVAILABLE');
+    await seedInFlightTask(fixture.unitOfWork, 'shot_a', 'vtask_agn', PROVENANCE_BY_KIND.AGNES);
+    await seedInFlightTask(fixture.unitOfWork, 'shot_s', 'vtask_seed', PROVENANCE_BY_KIND.SEEDANCE);
+
+    const outcomes = await fixture.scheduler.recover('project_1');
+    expect(outcomes.filter((outcome) => outcome.action === 'RESUMED_POLLING')).toHaveLength(2);
+    await fixture.scheduler.run('project_1');
+
+    // UNKNOWN 归一为不可自动重发：两候选 FAILED，无任何新 submit（零重发）。
+    expect(fixture.ports.agnes.submitCount()).toBe(0);
+    const agnesCandidates = fixture.videoRepository.candidates.filter((candidate) =>
+      candidate.id.startsWith('vtask_agn'),
+    );
+    expect(agnesCandidates.map((candidate) => candidate.status)).toEqual(['FAILED', 'FAILED']);
+    expect(new Set(agnesCandidates.map((candidate) => candidate.errorCode))).toEqual(
+      new Set(['MODEL_RESULT_UNAVAILABLE']),
+    );
+    // 兄弟 Seedance 任务照常由原 Adapter 完成（非重试错误不切换 Provider、不拖累他任务）。
+    expect(fixture.ports.seedance.submitCount()).toBe(0);
+    expect(fixture.videoRepository.tasks.find((task) => task.id === 'vtask_seed')).toMatchObject({
+      errorCode: null,
+      phase: 'COMPLETED',
+    });
   });
 });

@@ -40,8 +40,12 @@ export const videoCandidateViewSchema = z
     height: z.number().int().positive().nullable(),
     id: candidateIdSchema,
     indexInRound: z.number().int().nonnegative(),
+    /** Mock 模拟标记（low-cost 6.4）：候选卡与导出前检查的醒目溯源依据。 */
+    isMock: z.boolean(),
     mediaUrl: z.string().startsWith('jingxu://media/video-candidate/').nullable(),
     mimeType: z.literal('video/mp4').nullable(),
+    /** 建档冻结的 Provider 来源（low-cost 6.4；枚举之外不暴露任何端点/模型细节）。 */
+    providerKind: z.enum(['VOLCARK_SEEDANCE', 'AGNES_VIDEO']),
     /** 按能力快照档位就近映射后的请求时长（秒）。 */
     requestedDurationSec: z.number().int().positive(),
     roundNo: z.number().int().positive(),
@@ -156,7 +160,11 @@ export const videoTimelineItemSchema = z
     enabled: z.boolean(),
     fileSha256: hashSchema,
     generationInputHash: hashSchema,
+    /** 读取时按候选溯源富化（low-cost 6.4）；持久化行缺省 null，回传原样接受。 */
+    isMock: z.boolean().nullable().default(null),
     position: z.number().int().nonnegative(),
+    /** 同上：导出前检查的模拟来源标识；null = 候选不可追溯（历史行如实）。 */
+    providerKind: z.enum(['VOLCARK_SEEDANCE', 'AGNES_VIDEO']).nullable().default(null),
     shotId: shotIdSchema,
     trimInMs: z.number().int().nonnegative(),
     trimOutMs: z.number().int().positive(),

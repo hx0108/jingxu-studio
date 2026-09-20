@@ -33,6 +33,7 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   PROVIDER_CREDENTIAL_MISSING: ['尚未保存 API Key', '先在设置中保存 API Key。'],
   PROVIDER_CREDENTIAL_UNAVAILABLE: ['凭据安全存储不可用', '确认系统密钥串可用后重试。'],
   PROVIDER_CALL_FAILED: ['模型服务调用失败', '稍后重试；若持续失败请检查网络与凭据。'],
+  PROVIDER_SELECTION_CONFLICT: ['视频 Provider 选择已被修改', '刷新设置页后重新选择当前视频档。'],
   MODEL_CREDENTIAL_INVALID: ['API Key 校验未通过', '重新粘贴 API Key 并保存后再次验证。'],
   MODEL_RATE_LIMITED: ['模型服务请求过多', '等待片刻后重试。'],
   MODEL_PROVIDER_ERROR: ['模型服务端错误', '稍后重试；若持续失败请查看服务状态页。'],

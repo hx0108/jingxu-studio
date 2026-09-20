@@ -93,7 +93,10 @@ export const mediaTaskViewSchema = z
     errorCode: z.string().min(1).max(64).nullable(),
     generationInputHash: hashSchema,
     id: taskIdSchema,
+    /** 视频任务溯源（low-cost 6.4）：图片任务恒 null；仅非敏感枚举与模拟标记。 */
+    isMock: z.boolean().nullable(),
     phase: mediaTaskPhaseSchema,
+    providerKind: z.enum(['VOLCARK_SEEDANCE', 'AGNES_VIDEO']).nullable(),
     shotId: shotIdSchema,
     shotVersionId: idSchema,
     updatedAt: isoDateTimeSchema,

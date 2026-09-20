@@ -43,4 +43,6 @@ export type {
   VideoCandidateRecord,
   VideoCandidateSucceededInput,
   VideoMediaRepository,
+  VideoProviderKind,
+  VideoProviderProvenance,
 } from './media-repository';

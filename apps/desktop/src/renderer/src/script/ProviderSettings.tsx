@@ -6,7 +6,7 @@ import { createScriptRequestId, getProviderClient, rendererTransportError } from
 import { isProviderReadyForGeneration } from './script-ui-policy';
 
 import { ImageProviderCard } from './ImageProviderCard';
-import { VideoProviderCard } from './VideoProviderCard';
+import { AgnesVideoProviderCard, MockVideoNotice, VideoProviderCard } from './VideoProviderCard';
 import { VoiceProviderCard } from './VoiceProviderCard';
 
 const PROFILE_ID = 'profile_qwen_primary';
@@ -271,7 +271,9 @@ export const ProviderSettings = ({
         </div>
       </details>
       <ImageProviderCard />
+      <MockVideoNotice />
       <VideoProviderCard />
+      <AgnesVideoProviderCard />
       <VoiceProviderCard />
     </div>
   );

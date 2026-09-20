@@ -15,7 +15,7 @@
 
 > 本文只承诺 V1。V2 的图片、视频、TTS、口型、时间线和成本对账，以及 V3 的自动质量评估与返工闭环，只保留扩展边界，不进入当前实现。
 
-> 实施注记（非 V1 发布范围）：经用户明确要求，视频实验路径的 Provider 设置可保存受限 Seedance 模型选择；API Key 仍由主进程安全存储，任务创建时冻结模型 ID。该路径不改变 V1 的发布验收、真实 Provider 认证或成本结论。
+> 实施注记（非 V1 发布范围）：视频实验路径默认使用零网络 Mock；真实调用只能显式开启，且人工显式选择 Seedance / Agnes 两家之一、禁止自动路由（详见 §6.7；万相档已于 2026-09-20 按用户决策整体移除）。Seedance 新建 Profile 默认 `Seedance-2.0-mini`；Agnes 固定 `apihub.agnes-ai.com` + `agnes-video-v2.0`（默认）/`agnes-video-2.5-flash`（固定 5 秒/720P，完成态取顶层 `url`，下载域按注册域后缀 allowlist）。两家 API Key 使用独立安全存储引用（`profile-video-primary` / `profile-video-agnes-primary`），Provider Adapter 仅在 Main 侧访问固定 HTTPS allowlist；Provider、Profile、模型、能力快照与 Mock 标记在建档事务冻结（migration 0023/0024，head 24），调度器按任务冻结事实解析 Adapter，当前偏好变化不影响在途任务。Agnes 事实冻结探针已于 2026-09-19 经授权运行（$0/秒促销档），但不构成画质或生产认证；万相档已整体移除，运行面无万相请求路径。该路径不改变 V1 发布验收、真实 Provider 认证或成本结论。
 >
 > 实施注记（V2 Change）：`v2-video-composition-export` 已增加单集不可变时间线、音频资产和导出 Job 的 SQLite 结构、Main 侧 Dialog/FFprobe/FFmpeg 边界及 `jingxu://media/video-export` 受限预览。固定 FFmpeg/FFprobe 制品、真实本地合成、V2 Electron E2E 与 Windows 打包已有历史门禁证据；任何后续 Renderer 改造仍须重新验证，且该能力不改变 V1 发布门槛。
 
@@ -606,6 +606,16 @@ Prompt 必须：
 **调度归因边界**（真实 TTS 探针 2026-08-27 实录）：Provider 合成成功后的本地登记故障（`VOICE_AUDIO_INVALID`/`VOICE_AUDIO_MIME_INVALID`，CAS 已落盘、ffprobe 校验阶段失败）在调度器 catch 中直取原码，不经 `normalizeError` 归一——后者对非本适配器错误一律收敛 `MODEL_UNKNOWN`，曾把"合成成功且已计费、仅登记侧 ffprobe 不可执行"误标为模型未知错误。同理，dev electron 直启时 `process.resourcesPath` 无打包 ffmpeg 目录，探测/合成 E2E 必须显式注入 `JINGXU_FFPROBE_PATH`/`JINGXU_FFMPEG_PATH`（Mock 全链配方同源）。
 
 ---
+
+### 6.7 V2 低价视频 Provider 快照（low-cost-video-provider-integration）
+
+- **Provider 受限枚举**：`MOCK | SEEDANCE | AGNES` 为 Main-only 模式（`JINGXU_VIDEO_PROVIDER` 或组合根注入；Renderer 只能经 `provider.get/saveVideoProviderSelection` 提交 `SEEDANCE|AGNES` 受限选择，MOCK 不可入库）。万相档已移除（2026-09-20）：选择枚举不再接受 `WAN`。开发/E2E 缺省 Mock（零凭据读取零网络）；正式缺凭据以 `MODEL_CREDENTIAL_INVALID` 稳定拒绝，绝不回退 Mock。
+- **能力快照驱动档位**：`VideoRequestCapability` 按 0024 播种快照冻结——Seedance `[5,10]×[720,1080]`、Agnes `[5,5]×[720]`（固定 5 秒/720P）；建档与请求蓝图同源按冻结溯源解析，超上限经 `requested_duration_sec` 如实标注，无静默降级。
+- **VideoModelResolver 依赖方向**：Application Port `(provenance) => VideoModelPort`；组合根实现固定映射（Mock 标记优先于 Provider 枚举）。媒体调度器可选注入 `resolveModel(task)`——视频实例按任务行 0024 溯源列解析 Adapter（submit/poll/download/错误归一同源），图片实例不注入、固定 Adapter 行为零变化。恢复/迟到处理只读任务冻结值，零重发。
+- **持久化（migration 0023/0024，head 24）**：0023 建 `video_provider_preferences` 单例（mode↔Profile 固定映射 CHECK）；0024 重建 `video_generation_tasks`/`video_candidates` 增 `provider_kind/provider_profile_id/model_id/capability_snapshot_id/is_mock` 五非空列（Provider↔Profile 映射 CHECK + 快照 FK），播种 `agnes-video/v1`、`volcark-seedance-video/v3`（2.x 家族）canonical 快照（`dashscope-wan-video/v1` 为移除前播种的不可改残留）；历史行只按受控 model_id 回填，未知模型/无候选证据以 NOT NULL 违例整体回滚阻断，不猜测 Provider。
+- **错误归一化**：沿用 §6.4 稳定码表——401/403→`MODEL_CREDENTIAL_INVALID`、429→`MODEL_RATE_LIMITED`（Agnes 免费档 1 RPM 预期常见，可重试）、5xx/网络→`MODEL_PROVIDER_ERROR`/`MODEL_NETWORK_ERROR`、非法 JSON→`MODEL_INVALID_RESPONSE`、非法参数/图片→`MODEL_INPUT_TOO_LARGE`、404→`MODEL_MODEL_UNAVAILABLE`、内容拒绝→`MODEL_CONTENT_REJECTED`；任务 UNKNOWN、文档外状态与过期结果 URL→`MODEL_RESULT_UNAVAILABLE`（不可自动重发，两 Adapter 一致）。Provider 错误不触发跨档回退。
+- **视图脱敏（6.4）**：候选视图与时间线条目只增 `providerKind` 枚举与 `isMock` 布尔（读取时富化）；模型 id、端点、Workspace 域名、结果 URL、原始响应与路径仍不进 Renderer。
+- **真实 Canary 边界**：自动化门禁全部 Mock/注入 fetch 零网络；万相探针已随档移除取消（2026-09-20）；Agnes Adapter 级 Canary 待授权后在 `JINGXU_REAL_AGNES_VIDEO_PROBE=1` 门控下单次运行并留存脱敏证据。
 
 ## 7. 校验架构
 
@@ -1298,11 +1308,13 @@ session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) 
 - 所有路径先 `resolve`/规范化并检查目标范围、扩展名、符号链接和文件类型；项目内部路径必须保持在该项目目录内。
 - 百炼兼容端点固定为公共 Host `dashscope.aliyuncs.com`（业务空间专属端点需账号单独开通，V1 不依赖），端口固定 443，协议固定 HTTPS，路径固定兼容接口；`workspace_id` 仅作配置元数据并校验 `^[A-Za-z0-9-]+$`，不参与 Host 派生；UI 不允许输入任意 Base URL。
 - Provider HTTP 客户端禁止自动跨 Host 重定向；DNS/连接失败按 Provider 网络错误处理，不回退访问 localhost、私网 IP 或用户提供 URL。
+- 视频 Agnes 档（low-cost §6.7）：端点为固定常量（无 Workspace 拼接），结果下载域按 `agnes-ai.cn`/`agnes-ai.space` 注册域后缀匹配；结果下载仅接受 HTTPS、无 userinfo、禁重定向，并做 MP4 `ftyp` 魔数校验。万相档已整体移除（2026-09-20），运行面无万相请求路径。
 
 ### 13.2 API Key
 
 - 使用 Electron `safeStorage` 异步 API 加密；Windows 由 DPAPI 保护加密密钥。
 - 密文单独保存到 `secrets/<credential_ref>.bin`；SQLite 只保存不透明引用和最后验证时间。
+- 视频两档密文互不触碰（low-cost §6.7）：`profile-video-primary`（ARK）/`profile-video-agnes-primary` 各自独立保存/轮换/删除与审计；切换当前视频档不读、不写、不删另一档密文，保存选择本身零网络零凭据读取。万相凭据引用（`profile-video-wan-primary`）随档移除不再被运行面引用。
 - 保存前验证 `safeStorage` 可用；不可用时阻断凭据保存，不降级为明文。
 - UI 只显示“已配置/未配置”和可选末 4 位，不能回显完整 Key。
 - 删除凭据同时删除密文文件并写审计事件；日志与导出不包含密文。

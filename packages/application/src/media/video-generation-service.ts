@@ -22,16 +22,19 @@ import type {
   MediaTaskRecord,
   MediaUnitOfWorkPort,
   VideoCandidateRecord,
+  VideoProviderProvenance,
 } from '../ports/media/media-repository';
+import { DEFAULT_VIDEO_PROVENANCE } from '../ports/media/media-repository';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
 import type { StoryboardShotSnapshot } from '../ports/script/script-types';
 import { mediaFailure, mediaPersistenceFailure } from './media-service-error';
 import {
   buildVideoParametersFingerprint,
   computeVideoGenerationInputHash,
+  DEFAULT_VIDEO_REQUEST_CAPABILITY,
   resolveVideoDurationTier,
   resolveVideoSize,
-  type VideoDurationRange,
+  type VideoRequestCapability,
 } from './video-generation-input';
 
 export interface VideoGenerationServiceDependencies {
@@ -39,17 +42,32 @@ export interface VideoGenerationServiceDependencies {
   readonly assertCredentialReady?: (() => Promise<void>) | undefined;
   /** 每轮候选数 N（拍板 D3：组合根注入常量 2）。 */
   readonly candidateCount: number;
-  /** 能力快照 request.duration_range（组合根读快照注入；Seedance 预期 [5,10]）。 */
-  readonly durationRange: VideoDurationRange;
+  /**
+   * 能力快照驱动的请求档位（low-cost 任务 4.3）：按建档溯源解析 duration_range 与
+   * 分辨率档集合（Seedance/Wan [720,1080]，Agnes 固定 [720]）。缺省 Seedance 档。
+   */
+  readonly capabilityOf?:
+    ((provenance: VideoProviderProvenance) => VideoRequestCapability) | undefined;
   readonly hashPayload: (value: Readonly<Record<string, unknown>>) => string;
   readonly mediaUnitOfWork: MediaUnitOfWorkPort;
-  /** 视频档 Seedance model id（组合根从视频 profile 读取，服务不自行猜测）。 */
+  /** 视频档 Seedance model id（缺省溯源用；组合根注入 resolveProvenance 时不消费）。 */
   readonly modelId: string;
-  /** 当前视频 Profile 的模型解析器；每次新建任务读取，任务创建后不再回读 Profile。 */
-  readonly resolveModel?: (() => Promise<Readonly<{ modelId: string }>>) | undefined;
+  /**
+   * 建档期溯源解析（low-cost D4）：每次新建任务读取当前模式事实，任务/候选行与
+   * generation_input_hash 在同一事务冻结；创建后偏好变化不改写历史。
+   */
+  readonly resolveProvenance?: (() => Promise<VideoProviderProvenance>) | undefined;
   readonly newId: () => string;
   readonly workspaceQuery: ScriptWorkspaceQueryPort;
 }
+
+/** 建档期溯源解析（generation/batch 共用）：组合根注入当前模式；缺省 Seedance 真实档。 */
+export const resolveProvenanceForCreation = async (
+  dependencies: Pick<VideoGenerationServiceDependencies, 'modelId' | 'resolveProvenance'>,
+): Promise<VideoProviderProvenance> =>
+  dependencies.resolveProvenance === undefined
+    ? { ...DEFAULT_VIDEO_PROVENANCE, modelId: dependencies.modelId }
+    : await dependencies.resolveProvenance();
 
 export interface VideoGenerationService {
   /** 单镜头建档（幂等）。batchId 仅由批次推进钩子携带（3.4）；IPC 单镜头路径不传。 */
@@ -90,25 +108,31 @@ export interface ResolvedVideoGenerationInput {
  */
 export const resolveVideoGenerationInput = async (
   media: MediaRepository,
-  dependencies: Pick<
-    VideoGenerationServiceDependencies,
-    'durationRange' | 'hashPayload' | 'modelId'
-  >,
+  dependencies: Pick<VideoGenerationServiceDependencies, 'capabilityOf' | 'hashPayload'> & {
+    readonly provenance: VideoProviderProvenance;
+  },
   shot: StoryboardShotSnapshot,
 ): Promise<ResolvedVideoGenerationInput> => {
   const imageCandidates = await media.listCandidates(shot.shotId);
   const selected = imageCandidates.find((candidate) => candidate.selectedAt !== null);
   if (selected === undefined) throw new Error('MEDIA_FIRST_FRAME_NOT_SELECTED');
-  const size = resolveVideoSize({ height: selected.height, width: selected.width });
+  // 能力快照驱动档位（任务 4.3）：按建档溯源解析——Agnes 固定 [720]，Seedance/Wan
+  // 双档 [720,1080]；不支持值在档位映射内不产生（无静默降级），超上限如实标注。
+  const capability =
+    dependencies.capabilityOf?.(dependencies.provenance) ?? DEFAULT_VIDEO_REQUEST_CAPABILITY;
+  const size = resolveVideoSize(
+    { height: selected.height, width: selected.width },
+    capability.resolutionTiers,
+  );
   // 选择指针只落在 SUCCEEDED 行（文件四元组齐备）；sha/尺寸缺失即行级数据异常。
   if (size === null || selected.fileSha256 === null) {
     throw new Error('MEDIA_FIRST_FRAME_ANCHOR_INVALID');
   }
-  const tier = resolveVideoDurationTier(shot.version.targetDurationSec, dependencies.durationRange);
+  const tier = resolveVideoDurationTier(shot.version.targetDurationSec, capability.durationRange);
   const parametersFingerprint = buildVideoParametersFingerprint({
     durationSec: tier.durationSec,
     firstFrameFileSha256: selected.fileSha256,
-    modelId: dependencies.modelId,
+    modelId: dependencies.provenance.modelId,
     size,
   });
   return {
@@ -117,9 +141,13 @@ export const resolveVideoGenerationInput = async (
     firstFrameFileSha256: selected.fileSha256,
     generationInputHash: computeVideoGenerationInputHash(
       {
+        capabilitySnapshotId: dependencies.provenance.capabilitySnapshotId,
         firstFrameFileSha256: selected.fileSha256,
-        modelId: dependencies.modelId,
+        isMock: dependencies.provenance.isMock,
+        modelId: dependencies.provenance.modelId,
         parametersFingerprint,
+        providerKind: dependencies.provenance.providerKind,
+        providerProfileId: dependencies.provenance.providerProfileId,
         shotContentHash: shot.version.documentSha256,
         shotVersionId: shot.version.id,
       },
@@ -177,13 +205,14 @@ export const createVideoGenerationService = (
           if (prior.shotId !== input.shotId) throw new Error('REQUEST_ID_REUSED');
           return prior;
         }
-        const model =
-          dependencies.resolveModel === undefined
-            ? { modelId: dependencies.modelId }
-            : await dependencies.resolveModel();
+        const provenance = await resolveProvenanceForCreation(dependencies);
         const resolved = await resolveVideoGenerationInput(
           media,
-          { ...dependencies, ...model },
+          {
+            capabilityOf: dependencies.capabilityOf,
+            hashPayload: dependencies.hashPayload,
+            provenance,
+          },
           shot,
         );
         const inserted = await video.insertTask({
@@ -193,6 +222,7 @@ export const createVideoGenerationService = (
           id: dependencies.newId(),
           idempotencyKey: input.requestId,
           projectId: input.projectId,
+          provenance,
           shotId: input.shotId,
           shotVersionId: shot.version.id,
         });
@@ -203,8 +233,9 @@ export const createVideoGenerationService = (
           firstFrameCandidateId: resolved.firstFrameCandidateId,
           firstFrameFileSha256: resolved.firstFrameFileSha256,
           generationInputHash: resolved.generationInputHash,
-          modelId: model.modelId,
+          modelId: provenance.modelId,
           projectId: input.projectId,
+          provenance,
           requestedDurationSec: resolved.durationSec,
           roundNo: inserted.roundNo,
           shotId: input.shotId,

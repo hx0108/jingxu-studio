@@ -248,7 +248,8 @@ describe('provider_profiles Repository 与 UnitOfWork（任务 6.4）', () => {
   it('坏 provider/region/base_url/enabled/config_json Row 归一化为 PersistenceRuntimeError', () => {
     const cases: { name: string; row: Record<string, SqliteOutputValue> }[] = [
       { name: 'provider', row: { ...validRow(), provider: 'OPENAI' } },
-      { name: 'region', row: { ...validRow(), region: 'us-east-1' } },
+      // region 已放宽为非空标签（low-cost：Agnes 固定端点用 'global'）；空串仍非法。
+      { name: 'region', row: { ...validRow(), region: '' } },
       { name: 'base_url', row: { ...validRow(), base_url: 'http://insecure' } },
       { name: 'enabled', row: { ...validRow(), enabled: 7 } },
       { name: 'config_json', row: { ...validRow(), config_json: '{not json' } },

@@ -32,7 +32,10 @@ import type {
   VideoGenerationService,
   VideoGenerationServiceDependencies,
 } from './video-generation-service';
-import { resolveVideoGenerationInput } from './video-generation-service';
+import {
+  resolveProvenanceForCreation,
+  resolveVideoGenerationInput,
+} from './video-generation-service';
 
 /** 批次推进（内部钩子路径）的稳定 trace 标识。 */
 const VIDEO_BATCH_PROGRESS_TRACE = 'video_batch_progress';
@@ -63,12 +66,12 @@ const failureErrorCodeOf = async (
 /** 依赖 = 单镜头建档同源解析底座（视频版）+ 建档入口 + 排空触发（组合根晚绑定调度器）。 */
 export interface VideoBatchServiceDependencies extends Pick<
   VideoGenerationServiceDependencies,
-  | 'durationRange'
+  | 'capabilityOf'
   | 'hashPayload'
   | 'mediaUnitOfWork'
   | 'modelId'
   | 'newId'
-  | 'resolveModel'
+  | 'resolveProvenance'
   | 'workspaceQuery'
 > {
   readonly generation: Pick<VideoGenerationService, 'generateVideoCandidates'>;
@@ -146,12 +149,18 @@ const currentGenerationHashOf = async (
   shot: Parameters<typeof resolveVideoGenerationInput>[2],
 ): Promise<string | null> => {
   try {
-    const model =
-      dependencies.resolveModel === undefined
-        ? { modelId: dependencies.modelId }
-        : await dependencies.resolveModel();
-    return (await resolveVideoGenerationInput(media, { ...dependencies, ...model }, shot))
-      .generationInputHash;
+    const provenance = await resolveProvenanceForCreation(dependencies);
+    return (
+      await resolveVideoGenerationInput(
+        media,
+        {
+          capabilityOf: dependencies.capabilityOf,
+          hashPayload: dependencies.hashPayload,
+          provenance,
+        },
+        shot,
+      )
+    ).generationInputHash;
   } catch {
     // MEDIA_FIRST_FRAME_NOT_SELECTED（批量跳过主因）或锚点异常：状态底座如实为 0。
     return null;

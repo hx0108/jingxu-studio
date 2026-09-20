@@ -789,4 +789,83 @@ describe('SqliteVideoMediaRepository（聚合 { media, invocations, video }）',
       }
     });
   });
+
+  it('溯源读写映射（low-cost 3.3/4.1）—建档冻结五列—任务/候选往返同值且旧调用缺省 Seedance 档', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = await setup(root, 'video_repo_provenance.sqlite');
+      try {
+        const unitOfWork = new SqliteMediaUnitOfWork(database, () => NOW);
+        const firstFrameSha = hash64('firstframe_prov');
+        await seedSelectedFirstFrame(unitOfWork, 'img_candidate_prov', firstFrameSha);
+        const provenance = {
+          capabilitySnapshotId: 'agnes-video/v1',
+          isMock: false,
+          modelId: 'agnes-video-v2.0',
+          providerKind: 'AGNES_VIDEO',
+          providerProfileId: 'profile-video-agnes-primary',
+        } as const;
+
+        const task = await unitOfWork.run(({ video }) =>
+          video.insertTask({
+            batchId: null,
+            candidateCount: 2,
+            generationInputHash: hash64('video_gen_prov'),
+            id: 'video_task_prov',
+            idempotencyKey: 'video-idem_prov',
+            projectId: 'project_media',
+            provenance,
+            shotId: 'shot_media',
+            shotVersionId: 'shotv_media',
+          }),
+        );
+        expect(task.provenance).toEqual(provenance);
+        const candidates = await unitOfWork.run(({ video }) =>
+          video.insertCandidates({
+            candidateIds: ['video_candidate_p1', 'video_candidate_p2'],
+            firstFrameCandidateId: 'img_candidate_prov',
+            firstFrameFileSha256: firstFrameSha,
+            generationInputHash: hash64('video_gen_prov'),
+            modelId: provenance.modelId,
+            projectId: 'project_media',
+            provenance,
+            requestedDurationSec: 5,
+            roundNo: task.roundNo,
+            shotId: 'shot_media',
+            shotVersionId: 'shotv_media',
+          }),
+        );
+        expect(candidates[0]?.provenance).toEqual(provenance);
+        // 重读路径同值（列→记录映射），跨镜头查询与逐 id 查询一致。
+        const rereadTask = await unitOfWork.run(({ video }) =>
+          video.findTaskById('project_media', 'video_task_prov'),
+        );
+        expect(rereadTask?.provenance).toEqual(provenance);
+        const listed = await unitOfWork.run(({ video }) => video.listCandidates('shot_media'));
+        expect(listed.filter((c) => c.roundNo === task.roundNo)).toHaveLength(2);
+        for (const candidate of listed.filter((c) => c.roundNo === task.roundNo)) {
+          expect(candidate.provenance).toEqual(provenance);
+        }
+        // 建档一致性守卫：公共 model_id 与溯源 model_id 不同值稳定拒绝。
+        await expect(
+          unitOfWork.run(({ video }) =>
+            video.insertCandidates({
+              candidateIds: ['video_candidate_bad'],
+              firstFrameCandidateId: 'img_candidate_prov',
+              firstFrameFileSha256: firstFrameSha,
+              generationInputHash: hash64('video_gen_prov'),
+              modelId: 'some-other-video-model',
+              projectId: 'project_media',
+              provenance,
+              requestedDurationSec: 5,
+              roundNo: task.roundNo,
+              shotId: 'shot_media',
+              shotVersionId: 'shotv_media',
+            }),
+          ),
+        ).rejects.toThrow('MEDIA_PROVENANCE_MODEL_MISMATCH');
+      } finally {
+        database.close();
+      }
+    });
+  });
 });

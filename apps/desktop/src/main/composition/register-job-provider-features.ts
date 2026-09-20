@@ -41,7 +41,8 @@ import {
   PRIMARY_QWEN_PROFILE_ID,
 } from './create-script-generation-runtime';
 import { IMAGE_CREDENTIAL_ID } from './register-image-features';
-import { VIDEO_CREDENTIAL_ID } from './register-video-features';
+import { AGNES_VIDEO_CREDENTIAL_ID, VIDEO_CREDENTIAL_ID } from './register-video-features';
+import { DEFAULT_AGNES_VIDEO_MODEL_ID } from '@jingxu/model-adapters';
 import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
 
 export interface RegisterJobProviderFeaturesOptions {
@@ -95,10 +96,30 @@ const VIDEO_PROFILE_ID = VIDEO_CREDENTIAL_ID;
 const VIDEO_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
   baseUrl: deriveSeedanceBaseUrl(),
   modelId: SEEDANCE_MODEL_ID,
-  // 默认档 Seedance-2.0：doubao-seedance-2-0-260128 → 2026-01-28。
-  modelSnapshotDate: '2026-01-28',
+  // 新建档默认 Seedance-2.0-mini：doubao-seedance-2-0-mini-260615 → 2026-06-15。
+  // ProviderService 对已有 profile 保留原 modelId，不进行静默迁移。
+  modelSnapshotDate: '2026-06-15',
   provider: 'VOLCARK_SEEDANCE',
   workspaceId: 'ark',
+};
+
+/**
+ * Agnes 视频档（low-cost D2/D7）：独立 Profile/密文/审计；固定端点无地域概念，
+ * region 以 'global' 占位、workspace_id 为 DB NOT NULL 惰性占位。模型注册表
+ * 来自 model-adapters 冻结清单（v2.0 默认 / 2.5 Flash 可选，快照 2026-09-19）。
+ */
+const AGNES_PROFILE_ID = AGNES_VIDEO_CREDENTIAL_ID;
+const AGNES_SELECTABLE_MODELS = [
+  { id: DEFAULT_AGNES_VIDEO_MODEL_ID, label: 'Agnes Video V2.0', snapshotDate: '2026-09-19' },
+  { id: 'agnes-video-2.5-flash', label: 'Agnes Video 2.5 Flash', snapshotDate: '2026-09-19' },
+] as const;
+const AGNES_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
+  baseUrl: 'https://apihub.agnes-ai.com',
+  modelId: DEFAULT_AGNES_VIDEO_MODEL_ID,
+  modelSnapshotDate: '2026-09-19',
+  provider: 'AGNES_VIDEO',
+  region: 'global',
+  workspaceId: 'agnes',
 };
 
 /**
@@ -260,6 +281,36 @@ export const createJobProviderFeatureRegistration = ({
         unitOfWork: providerUnitOfWork,
       });
       // 配音档凭据：与图片/视频档同构（固定 id + 覆写轮换；DashScope Key 与 QWEN 文本档同值）。
+      // Agnes 视频档凭据：固定独立 id + 覆写轮换；与 ARK/DashScope 密文互不触碰。
+      const agnesVideoCredentials = new CredentialAdapter({
+        clock,
+        createId: () => AGNES_PROFILE_ID,
+        overwriteExisting: true,
+        safeStorage,
+        secretsDirectory: path.join(managedRoot, 'secrets'),
+      });
+      const agnesVideoCredentialValidator = {
+        validateCredential: async (): Promise<CredentialCheck> => {
+          try {
+            await agnesVideoCredentials.loadCredential(AGNES_PROFILE_ID);
+            return { ok: true };
+          } catch {
+            return { detail: null, errorCode: 'MODEL_CREDENTIAL_INVALID', ok: false };
+          }
+        },
+      };
+      const agnesVideoProviderService = new ProviderService({
+        clock,
+        credentials: agnesVideoCredentials,
+        defaults: AGNES_PROVIDER_DEFAULTS,
+        profiles,
+        selectableModels: AGNES_SELECTABLE_MODELS.map((model) => ({
+          id: model.id,
+          snapshotDate: model.snapshotDate,
+        })),
+        textModelFactory: () => agnesVideoCredentialValidator,
+        unitOfWork: providerUnitOfWork,
+      });
       const voiceCredentials = new CredentialAdapter({
         clock,
         createId: () => VOICE_PROFILE_ID,
@@ -314,6 +365,9 @@ export const createJobProviderFeatureRegistration = ({
         newTraceId: traceId,
         provider: providerService,
         video: { profileId: VIDEO_PROFILE_ID, service: videoProviderService },
+        agnesVideo: { profileId: AGNES_PROFILE_ID, service: agnesVideoProviderService },
+        videoProviderPreferences: persistenceRuntime.getVideoProviderPreferences() ?? undefined,
+        selectionClock: clock,
         voice: { profileId: VOICE_PROFILE_ID, service: voiceProviderService },
       });
       registered = true;

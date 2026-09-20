@@ -1,4 +1,5 @@
 import type { MediaModelPort } from '../media/media-model-port';
+import type { VideoProviderProvenance } from '../media/media-repository';
 import type { VideoGenerationRequest } from './video-model-types';
 
 /**
@@ -11,3 +12,11 @@ import type { VideoGenerationRequest } from './video-model-types';
  * MockVideoModelAdapter；重试与状态码路由属确定性代码，不属模型。
  */
 export type VideoModelPort = MediaModelPort<VideoGenerationRequest>;
+
+/**
+ * 按任务冻结事实解析视频 Adapter（low-cost design D4 / 任务 4.2）：输入建档事务
+ * 冻结的溯源（Provider/Profile/model/快照/Mock），返回对应 VideoModelPort。
+ * 组合根实现固定映射；调度器对每个任务用其冻结值解析——当前偏好变化不影响
+ * 在途任务，恢复/迟到处理同源。
+ */
+export type VideoModelResolver = (provenance: VideoProviderProvenance) => VideoModelPort;

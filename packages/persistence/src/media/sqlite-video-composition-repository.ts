@@ -47,6 +47,8 @@ const parseItems = (rows: readonly Row[]): VideoTimelineItemDto[] =>
     enabled: requiredNumber(row, 'enabled') === 1,
     fileSha256: requiredString(row, 'file_sha256'),
     generationInputHash: requiredString(row, 'generation_input_hash'),
+    isMock: null,
+    providerKind: null,
     position: requiredNumber(row, 'position'),
     shotId: requiredString(row, 'shot_id'),
     trimInMs: requiredNumber(row, 'trim_in_ms'),

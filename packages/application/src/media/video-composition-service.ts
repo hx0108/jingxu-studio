@@ -177,6 +177,42 @@ const failure = <T>(
 
 const success = <T>(data: T): AppResultDto<T> => ({ data, ok: true });
 
+/**
+ * 时间线条目读取富化（low-cost 6.4）：按 candidateId 反查候选建档溯源，盖
+ * providerKind/isMock 供导出前检查显示模拟来源；候选不可追溯（历史行）如实 null。
+ * 持久化行不改写——富化是读侧投影，Renderer 回传原样值被契约 default 接受。
+ */
+const enrichTimelineItems = async (
+  mediaUnitOfWork: MediaUnitOfWorkPort,
+  dto: VideoTimelineSummaryDto,
+): Promise<VideoTimelineSummaryDto> => {
+  if (dto.items.length === 0) return dto;
+  const provenanceByCandidate = new Map<
+    string,
+    { readonly isMock: boolean | null; readonly providerKind: VideoTimelineItemDto['providerKind'] }
+  >();
+  for (const shotId of new Set(dto.items.map((item) => item.shotId))) {
+    const candidates = await mediaUnitOfWork.run(({ video }) => video.listCandidates(shotId));
+    for (const candidate of candidates) {
+      provenanceByCandidate.set(candidate.id, {
+        isMock: candidate.provenance?.isMock ?? null,
+        providerKind: candidate.provenance?.providerKind ?? null,
+      });
+    }
+  }
+  return {
+    ...dto,
+    items: dto.items.map((item) => {
+      const provenance = provenanceByCandidate.get(item.candidateId);
+      return {
+        ...item,
+        isMock: provenance?.isMock ?? null,
+        providerKind: provenance?.providerKind ?? null,
+      };
+    }),
+  };
+};
+
 const toTimelineDto = (record: VideoTimelineVersionRecord): VideoTimelineSummaryDto => ({
   alignmentItems: record.alignmentItems,
   audioAsset:
@@ -353,7 +389,9 @@ export const createVideoCompositionService = (
         enabled: true,
         fileSha256: candidate.fileSha256,
         generationInputHash: candidate.generationInputHash,
+        isMock: candidate.provenance?.isMock ?? null,
         position: shot.sequence - 1,
+        providerKind: candidate.provenance?.providerKind ?? null,
         shotId: shot.shotId,
         trimInMs: 0,
         trimOutMs: Math.max(1, Math.round(candidate.actualDurationSec * 1_000)),
@@ -415,7 +453,7 @@ export const createVideoCompositionService = (
       totalDurationMs: items.reduce((sum, item) => sum + item.trimOutMs - item.trimInMs, 0),
       voiceItems,
     });
-    return success(toTimelineDto(created));
+    return success(await enrichTimelineItems(dependencies.mediaUnitOfWork, toTimelineDto(created)));
   };
 
   const getTimeline = async (
@@ -433,7 +471,7 @@ export const createVideoCompositionService = (
           );
     return found === null
       ? failure('VIDEO_SOURCE_MISSING', traceId)
-      : success(toTimelineDto(found));
+      : success(await enrichTimelineItems(dependencies.mediaUnitOfWork, toTimelineDto(found)));
   };
 
   const updateTimeline = async (
@@ -530,22 +568,25 @@ export const createVideoCompositionService = (
       voiceItems: input.voiceItems,
     });
     return success(
-      toTimelineDto(
-        await composition.updateTimeline({
-          alignmentItems: alignment.rows,
-          audioAssetId: input.audioAssetId,
-          audioVolume: input.audioVolume,
-          expectedVersionId: input.expectedVersionId,
-          id: dependencies.newId(),
-          inputHash,
-          items: input.items,
-          projectId: input.projectId,
-          subtitleItems,
-          totalDurationMs: input.items
-            .filter((item) => item.enabled)
-            .reduce((sum, item) => sum + item.trimOutMs - item.trimInMs, 0),
-          voiceItems: input.voiceItems,
-        }),
+      await enrichTimelineItems(
+        dependencies.mediaUnitOfWork,
+        toTimelineDto(
+          await composition.updateTimeline({
+            alignmentItems: alignment.rows,
+            audioAssetId: input.audioAssetId,
+            audioVolume: input.audioVolume,
+            expectedVersionId: input.expectedVersionId,
+            id: dependencies.newId(),
+            inputHash,
+            items: input.items,
+            projectId: input.projectId,
+            subtitleItems,
+            totalDurationMs: input.items
+              .filter((item) => item.enabled)
+              .reduce((sum, item) => sum + item.trimOutMs - item.trimInMs, 0),
+            voiceItems: input.voiceItems,
+          }),
+        ),
       ),
     );
   };

@@ -188,6 +188,8 @@ const timelineItem = (trimOutMs = 5_000) => ({
   fileSha256: HASH,
   generationInputHash: HASH,
   position: 0,
+  isMock: null,
+  providerKind: null,
   shotId: 'shot_1',
   trimInMs: 0,
   trimOutMs,

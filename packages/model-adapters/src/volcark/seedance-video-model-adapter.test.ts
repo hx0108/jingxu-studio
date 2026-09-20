@@ -10,6 +10,7 @@ import {
   SEEDANCE_MODEL_IDS,
   SeedanceVideoModelAdapter,
 } from './seedance-video-model-adapter';
+import { DEFAULT_SEEDANCE_VIDEO_MODEL_ID } from './seedance-video-models';
 
 const ARK_KEY = 'ark-test-key-000000';
 const VIDEO_URL = 'https://ark-result.tos-cn-beijing.volces.com/clip.mp4';
@@ -56,6 +57,11 @@ const submitBodyOf = (fetchMock: FetchMock): Record<string, unknown> => {
 };
 
 describe('SeedanceVideoModelAdapter', () => {
+  it('新建 Seedance 配置—默认使用成本优先的 2.0-mini', () => {
+    expect(DEFAULT_SEEDANCE_VIDEO_MODEL_ID).toBe('doubao-seedance-2-0-mini-260615');
+    expect(SEEDANCE_MODEL_ID).toBe(DEFAULT_SEEDANCE_VIDEO_MODEL_ID);
+  });
+
   it('submit—真 ASYNC：仅返回 providerTaskId—请求体含 content(text+首帧 data URI)/duration/档位', async () => {
     const fetchMock: FetchMock = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(jsonResponse({ id: 'cgt-202608201200000000' })),
@@ -113,7 +119,10 @@ describe('SeedanceVideoModelAdapter', () => {
       fetch: fetchMock,
     });
     const tall = await adapter.submit(
-      request({ resolution: { height: 1920, width: 1080 } }),
+      request({
+        modelId: 'doubao-seedance-2-0-260128',
+        resolution: { height: 1920, width: 1080 },
+      }),
       new AbortController().signal,
     );
     const call = fetchMock.mock.calls[0];

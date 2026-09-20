@@ -16,6 +16,13 @@ const hashPayloadOf = (value: Readonly<Record<string, unknown>>): string =>
 const FIRST_FRAME_SHA256 = '0123456789abcdef'.repeat(4);
 const MODEL_ID = 'doubao-seedance-1-0-lite-i2v-250428';
 const FINGERPRINT = 'seedance-v1:doubao-seedance-1-0-lite-i2v-250428:1080x1920:10:0123456789ab';
+/** 金样溯源（与 0024 回填映射同口径：1.0-lite → v1 快照）。 */
+const PROVENANCE = {
+  capabilitySnapshotId: 'volcark-seedance-video/v1',
+  isMock: false,
+  providerKind: 'VOLCARK_SEEDANCE',
+  providerProfileId: 'profile-video-primary',
+} as const;
 
 describe('video-generation-input 纯函数（金样锁形）', () => {
   it('参数指纹—seedance-v1 形态：modelId:WxH:duration:首帧 sha 前 12 位', () => {
@@ -46,37 +53,48 @@ describe('video-generation-input 纯函数（金样锁形）', () => {
     ).not.toBe(FINGERPRINT);
   });
 
-  it('generationInputHash—canonical JSON 字母序键+不含资产绑定（金样锁形）', () => {
+  it('generationInputHash—canonical JSON 字母序键+溯源参与+不含资产绑定（金样锁形）', () => {
     const descriptor = {
+      ...PROVENANCE,
       firstFrameFileSha256: FIRST_FRAME_SHA256,
       modelId: MODEL_ID,
       parametersFingerprint: FINGERPRINT,
       shotContentHash: 'c'.repeat(64),
       shotVersionId: 'scv_0001',
     };
-    // 金样：字段集/键序/取值任一漂移都会偏离此串（真实 sha256 由组合根 createHash
-    // 承载；本形态的 sha256 参考摘要 c56fe5e0cfafbbb40aeb0173d540719066d48fab912f4566bf207d41fe77fdb7）。
-    expect(computeVideoGenerationInputHash(descriptor, hashPayloadOf)).toBe(
-      `sha256:${JSON.stringify({
-        firstFrameFileSha256: FIRST_FRAME_SHA256,
-        modelId: MODEL_ID,
-        parametersFingerprint: FINGERPRINT,
-        shotContentHash: 'c'.repeat(64),
-        shotVersionId: 'scv_0001',
-      })}`,
-    );
+    // 键序 = computeVideoGenerationInputHash 的建造序（字母序）；金样锁形须逐键显式。
+    const goldenJson = JSON.stringify({
+      capabilitySnapshotId: PROVENANCE.capabilitySnapshotId,
+      firstFrameFileSha256: FIRST_FRAME_SHA256,
+      isMock: PROVENANCE.isMock,
+      modelId: MODEL_ID,
+      parametersFingerprint: FINGERPRINT,
+      providerKind: PROVENANCE.providerKind,
+      providerProfileId: PROVENANCE.providerProfileId,
+      shotContentHash: 'c'.repeat(64),
+      shotVersionId: 'scv_0001',
+    });
+    // 金样：字段集/键序/取值任一漂移都会偏离此串（真实 sha256 由组合根 createHash 承载）。
+    expect(computeVideoGenerationInputHash(descriptor, hashPayloadOf)).toBe(`sha256:${goldenJson}`);
     // 镜头版本或内容哈希变化 → 新世代。
     expect(
       computeVideoGenerationInputHash({ ...descriptor, shotVersionId: 'scv_0002' }, hashPayloadOf),
-    ).not.toBe(
-      `sha256:${JSON.stringify({
-        firstFrameFileSha256: FIRST_FRAME_SHA256,
-        modelId: MODEL_ID,
-        parametersFingerprint: FINGERPRINT,
-        shotContentHash: 'c'.repeat(64),
-        shotVersionId: 'scv_0001',
-      })}`,
-    );
+    ).not.toBe(`sha256:${goldenJson}`);
+    // low-cost D4：同一输入换 Provider/快照/Mock 标记 → 不共享世代（不可互相顶替命中）。
+    expect(
+      computeVideoGenerationInputHash(
+        {
+          ...descriptor,
+          capabilitySnapshotId: 'agnes-video/v1',
+          providerKind: 'AGNES_VIDEO',
+          providerProfileId: 'profile-video-agnes-primary',
+        },
+        hashPayloadOf,
+      ),
+    ).not.toBe(`sha256:${goldenJson}`);
+    expect(
+      computeVideoGenerationInputHash({ ...descriptor, isMock: true }, hashPayloadOf),
+    ).not.toBe(`sha256:${goldenJson}`);
   });
 
   it('时长档位—最小档 ≥ target；超上限压最大档并如实标注；快照非法抛稳定错误', () => {
@@ -142,6 +160,31 @@ describe('video-generation-input 纯函数（金样锁形）', () => {
     expect(resolveVideoSize({ height: 2560, width: null })).toBeNull();
     expect(resolveVideoSize({ height: 2560.5, width: 1440 })).toBeNull();
     expect(resolveVideoSize({ height: 0, width: 1440 })).toBeNull();
+  });
+
+  it('分辨率档集合泛化（low-cost 4.3）—固定 [720] 档与非法档集合', () => {
+    // Agnes 固定 720P：1440x2560 首帧落 720x1280（不产生 1080 档）。
+    expect(resolveVideoSize({ height: 2560, width: 1440 }, [720])).toEqual({
+      height: 1280,
+      width: 720,
+    });
+    // 首帧短边低于全部档：按最小档放大、比例保持、长边偶数对齐（640x1136 → 720x1278）。
+    expect(resolveVideoSize({ height: 1136, width: 640 }, [720])).toEqual({
+      height: 1278,
+      width: 720,
+    });
+    // 横幅帧方向保持（短边落档到宽）。
+    expect(resolveVideoSize({ height: 720, width: 1280 }, [720])).toEqual({
+      height: 720,
+      width: 1280,
+    });
+    // 缺省双档行为不变（上文金样已锁）；空/非正档集合稳定拒绝。
+    expect(() => resolveVideoSize({ height: 2560, width: 1440 }, [])).toThrow(
+      'VIDEO_RESOLUTION_TIERS_INVALID',
+    );
+    expect(() => resolveVideoSize({ height: 2560, width: 1440 }, [0, -720])).toThrow(
+      'VIDEO_RESOLUTION_TIERS_INVALID',
+    );
   });
 
   it('视频提示词金样—action/emotion 复合 + 叙事目的 + 运镜文本；可缺项', () => {

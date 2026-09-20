@@ -15,6 +15,8 @@ const candidate = (overrides: {
   readonly indexInRound: number;
   readonly roundNo: number;
   readonly status: VideoCandidateViewDto['status'];
+  readonly isMock?: boolean;
+  readonly providerKind?: VideoCandidateViewDto['providerKind'];
   readonly selectedAt?: string | null;
 }): VideoCandidateViewDto => ({
   actualDurationSec: 5,
@@ -27,9 +29,11 @@ const candidate = (overrides: {
   height: 720,
   id: overrides.id,
   indexInRound: overrides.indexInRound,
+  isMock: overrides.isMock ?? false,
   mediaUrl:
     overrides.status === 'SUCCEEDED' ? `jingxu://media/video-candidate/${overrides.id}` : null,
   mimeType: overrides.status === 'SUCCEEDED' ? 'video/mp4' : null,
+  providerKind: overrides.providerKind ?? 'AGNES_VIDEO',
   requestedDurationSec: 5,
   roundNo: overrides.roundNo,
   selectedAt: overrides.selectedAt ?? null,
@@ -79,6 +83,34 @@ describe('VideoBoard 可观察基线（世代分组 + video 播放 + 选择 + ST
     expect(html).toContain('当前视频段');
     expect(html).toContain('设为当前视频段');
     expect(html).toContain('请求 5s · 实际 5s');
+  });
+
+  it('low-cost 6.4—候选卡显示 Provider 来源—Mock 候选带醒目模拟徽标且不出现模型 id', () => {
+    const html = board([
+      candidate({
+        generationInputHash: 'a'.repeat(64),
+        id: 'vcand_source_real',
+        indexInRound: 0,
+        providerKind: 'AGNES_VIDEO',
+        roundNo: 1,
+        status: 'SUCCEEDED',
+      }),
+      candidate({
+        generationInputHash: 'a'.repeat(64),
+        id: 'vcand_source_mock',
+        indexInRound: 1,
+        isMock: true,
+        providerKind: 'VOLCARK_SEEDANCE',
+        roundNo: 1,
+        status: 'SUCCEEDED',
+      }),
+    ]);
+    expect(html).toContain('来源 Agnes');
+    expect(html).toContain('来源 Seedance（模拟）');
+    expect(html).toContain('Mock 模拟 · 不计费');
+    // 脱敏红线：视图不出现模型 id / 端点 / Key 形态字符串。
+    expect(html).not.toContain('maas.aliyuncs.com');
+    expect(html).not.toContain('Bearer');
   });
 
   it('历史世代—仍可播放追溯但不提供选择入口，旧选择明确标记失效', () => {

@@ -8,12 +8,12 @@
 
 真实 Windows 构建的 Electron 界面（1728 × 1080，CINE 剪辑台视觉，E2E 自动捕获）：
 
-| 剧本工作区 | 分镜工作台 |
-| --- | --- |
+| 剧本工作区                                           | 分镜工作台                                     |
+| ---------------------------------------------------- | ---------------------------------------------- |
 | ![剧本工作区](docs/screenshots/script-workspace.png) | ![分镜工作台](docs/screenshots/storyboard.png) |
 
-| 画面生成 | 合成导出 | 模型服务 |
-| --- | --- | --- |
+| 画面生成                                           | 合成导出                                      | 模型服务                                   |
+| -------------------------------------------------- | --------------------------------------------- | ------------------------------------------ |
 | ![画面生成](docs/screenshots/image-generation.png) | ![合成导出](docs/screenshots/composition.png) | ![模型服务](docs/screenshots/settings.png) |
 
 ## 支持环境
@@ -114,7 +114,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - `image-credential-management` 已实现图片 Provider 凭据闭环与 SHOT_CONTRACT 超时稳健化：ProviderSettings 内 ImageProviderCard（保存即清空输入、末 4 位回显、model id 只读、测试仅验证密文可解密的如实文案、删除带确认）、图片档固定凭据 id `profile-image-primary` + UI 覆盖轮换（env 引导语义不变）、`generateCandidates` 未配置前置稳定失败 `MODEL_CREDENTIAL_INVALID`（userAction 指向配置入口，其余五个 image 方法不受影响）；分阶段调用超时（SHOT_CONTRACT 300s、其余 120s，application ports 双 barrel 同源）+ JobRunner MODEL_TIMEOUT 传输重试预算 1 次（重试前复核墙钟）+ 按阶段 `deadline_at` 落库（SHOT_CONTRACT 960s、其余 300s）。真实联调（UI 路径配 ARK Key）于 2026-08-19 全绿。
 - `batch-first-frame-generation` 已实现 V2 图片切片第二步——整集批量首帧：迁移 0010（`media_generation_batches` + 任务 `batch_id` 溯源列，head=10）、`MediaBatchService`（显式动作建批、当前世代 SUCCEEDED 服务端跳过并回告、空目标 `MEDIA_BATCH_NO_PENDING_SHOTS`、requestId 幂等重放）、惰性逐镜头建档（前一成员终态才提交下一镜头，任意时刻每批次至多一个在飞任务；成员复用既有单镜头粒度与派生 requestId `image-generate_<batch>_<shot>`）、失败隔离与统一失败口径（任务 FAILED 或 COMPLETED 而同轮零 SUCCEEDED 候选均计失败并携带候选错误码）、收尾 COMPLETED/PARTIAL_COMPLETED 派生、重试失败镜头=仅含失败镜头的新批次（不复活旧任务行）、取消仅作用未建档镜头（在飞自然终态、幂等）、重启恢复（pending 队列继续全新提交、在飞任务沿用既有零重发规则）；`image` 九方法 IPC 白名单（`generateCandidatesForShots`/`cancelBatch`/`listStoryboardImageStates`）+ 分镜工作台镜头首帧徽标、批次进度行与 1s 有界轮询（可见性守卫、无活跃批次即停）；E2E Mock 步骤脚本化（`JINGXU_E2E_IMAGE_STEPS`）支撑失败注入/取消/重启四场景。离线全量门禁于 2026-08-19 全绿。
 - `media-invocation-evidence` 已实现媒体域调用证据链：迁移 0011（`media_model_invocations`，head 10→11；SUBMIT/DOWNLOAD 两段、请求快照与响应原文 blob+sha256、usage 落列、64KiB 截断标记、双 FK 与终态 CHECK；图片字节恒不入库）、`MediaInvocationRepository` 端口 + SQLite/内存实现、`MediaUnitOfWorkPort` 回调聚合 `MediaRepositories`（全调用点机械重构）、`ImageModelPort` SYNC `raw` 原始响应通道 + `evidenceOf`（仅主进程证据链消费，MUST NOT 进归一错误/日志/Renderer）、Seedream 适配器错误先读体携证据 + 成功返回原文（Authorization 仍只在请求头）、Mock 确定性 raw/evidenceOf；调度器两段式接线（submit 前短事务插 SUBMIT STARTED、成功一笔事务三写「候选 SUCCEEDED + SUBMIT 收尾含 usage/raw + DOWNLOAD 收尾」、失败同事务两写、下载段失败三写「候选 FAILED + DOWNLOAD FAILED + SUBMIT 按成功收尾 raw/usage 不丢失」（2026-08-20 真实联调修订）、取消/停机不收尾 STARTED 残留如实、恢复不自动重发）；候选 `invocation_evidence_ref` 恒指 SUBMIT 证据行、DOWNLOAD 轻量行只记结果 URL 快照与落盘 sha256（blob 恒 NULL）；E2E Mock 档行数/JOIN/失败原文断言 + `print-real-probe-invocations.mjs` 媒体域联查 + `verify-real-media-evidence.mjs` SQL 断言（provider_request_id 以 Provider 实际返回为准，真实 Seedream 同步响应无顶层 id 记 null 属实）。真实联调于 2026-08-20 全绿。
-- `shot-video-generation` 仍维护为 V2 Mock-only 闭环：Seedance-2.0-mini、Seedance-2.0、Seedance-2.5 可受限选择，但不计入 V1 发布验收，也不等同于真实视频 Provider 认证。
+- `shot-video-generation` 是 V2 实验路径：开发和 E2E 默认零网络 Mock；Seedance 新建配置默认 Seedance-2.0-mini，另预置受限的万相 `wan2.6-i2v-flash` Adapter。两者都不计入 V1 发布验收，也不等同于真实视频 Provider 认证、真实费用或用户验收。
 - `v2-video-composition-export` 已实现单集时间线、Main Dialog 音乐导入、FFmpeg 合成 Job 与受限 MP4 预览；Windows x64 固定制品为 Gyan.Dev FFmpeg 9.0.1 Essentials Build，随包提供可执行文件、GPLv3 许可证、NOTICE 和 SHA-256 清单。该 Change 的既有自动化和 Windows 打包证据见 `docs/V2_VIDEO_COMPOSITION_ACCEPTANCE.md` 与门禁日志；本轮 UI 改造后仍须重新运行完整门禁，旧日志不能替代当前发布证据。
 - `guided-workspace-shell-localization` 与 `storyboard-media-workspace-redesign` 将全局入口、六阶段创作流程、五阶段剧本、镜头列表、媒体候选和合成时间线重组为固定导航与分栏工作区；Provider 凭据只在“设置 → 模型服务”编辑，创作区只展示脱敏就绪状态。底层 IPC、SQLite、版本、锁、Job、READY 和导出事务语义保持不变。
 - `shot-speaker-id-repair` 已修复 spoken 非旁白镜头 speaker_id 空值漂移致死（2026-08-20 Qwen 实录：WEAK_LIP_SYNC 有台词镜头 null speaker_id 整代失败）：多角色/异形镜头由 `validateModelShotSetCandidate` 增跨字段值校验（非空 string + ShotContract 1.1.0 同款 pattern，`CANDIDATE_DIALOGUE_SPEAKER_INVALID`）落在可修复候选层接入既有 STRUCTURE_REPAIR 修复轮；单角色镜头候选层豁免、`injectShotSystemFields` 确定性派生唯一角色为说话人（与 narrator/无台词推导同族）；修复后非 bible 键仍走 COLLECTION 如实终态（不扩 isRepairable）。零迁移、零 IPC/UI/组合根改动。
@@ -264,7 +264,7 @@ Explore -> Propose -> 人工审查 -> Apply -> Verify -> Sync -> Archive
 - 评测结果的云端协作、跨机交换和回归集管理；当前评测集只在本地 SQLite 中运行，JSON 导入为内部 staging 格式，不是公开评测交换协议。
 - V1 自动化 AC-V1-01～06 已有统一 Electron 入口和固定 Mock 证据；仍需以最终全量门禁日志确认，并组织三名目标用户独立试用，不能用自动化结果替代真人验收。
 - 真实用户使用和发布验收（真实 Qwen 六阶段与真实 Seedream 首帧生成连通性已分别于 2026-08-16、2026-08-17 通过开发者环境全流程联调）
-- TTS、口型、FFmpeg 成片合成、视频时间线和视频后续真实 Provider 认证（Mock-only 视频工作流已在 `shot-video-generation` 落地；真实 Seedance 认证另立 Change）
+- TTS、口型、FFmpeg 成片合成、视频时间线和视频真实 Provider 用户验收（视频支持 Seedance/Agnes 两家受限档与 Mock 联调；万相档已于 2026-09-20 按用户决策移除。Agnes 事实冻结探针 2026-09-19 经授权运行通过，Adapter 级 Canary 待授权后运行；两家真实画质与计费验收另行授权后进行）
 - AC-V1-04 已接入主进程固定 Mock 失败矩阵；AC-V1-02/03 已接入 Main Dialog、锁定改写与分镜结构编辑命令，最终发布状态仍以门禁日志和真实试用记录为准。
 
 这些能力将分别进入后续 OpenSpec Change。`0001_initial.sql` 中存在对应表结构不等于业务方法、页面、Schema 校验或验收链路已经实现。

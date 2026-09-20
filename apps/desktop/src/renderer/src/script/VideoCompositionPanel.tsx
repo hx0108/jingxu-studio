@@ -44,6 +44,17 @@ export const VideoExportJobStatus = ({ job }: { readonly job: VideoExportJobDto 
   );
 };
 
+/** 导出前检查的 Mock 模拟来源提示（low-cost 6.4）：启用项含模拟视频段时醒目标注。 */
+export const VideoExportMockNotice = ({ count }: { readonly count: number }) => {
+  if (count <= 0) return null;
+  return (
+    <p className="field-error" role="note">
+      导出前检查：时间线包含 {String(count)} 个模拟（Mock）视频段，导出成品为联调模拟内容，
+      不代表真实 Provider 画质。
+    </p>
+  );
+};
+
 /** 单集时间线编辑：只通过冻结 video IPC 访问，绝不接触本地路径。 */
 export const VideoCompositionPanel = ({
   episodeId,
@@ -61,6 +72,11 @@ export const VideoCompositionPanel = ({
   const [notice, setNotice] = useState<string | null>(null);
 
   const enabledCount = useMemo(() => items.filter((item) => item.enabled).length, [items]);
+  // 导出前检查（low-cost 6.4）：时间线启用项含 Mock 模拟视频段时醒目提示。
+  const mockEnabledCount = useMemo(
+    () => items.filter((item) => item.enabled && item.isMock === true).length,
+    [items],
+  );
 
   // 载入/新建/保存共用回填：两轨与 BGM 音量随版本数据往返，不再硬编码。
   const applyTimeline = (data: VideoTimelineSummaryDto) => {
@@ -237,6 +253,7 @@ export const VideoCompositionPanel = ({
       <p className="action-hint">
         先生成时间线，再调整排序、启停和入点/出点；所有保存均产生不可变时间线版本。
       </p>
+      <VideoExportMockNotice count={mockEnabledCount} />
       <div className="script-actions">
         <button
           disabled={busy}

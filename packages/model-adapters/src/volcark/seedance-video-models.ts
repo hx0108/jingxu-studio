@@ -40,7 +40,12 @@ export const SEEDANCE_VIDEO_MODELS = [
 
 export type SeedanceVideoModelId = (typeof SEEDANCE_VIDEO_MODELS)[number]['id'];
 
-export const DEFAULT_SEEDANCE_VIDEO_MODEL_ID: SeedanceVideoModelId = 'doubao-seedance-2-0-260128';
+/**
+ * 新建 Seedance 配置的成本优先默认值。已有 profile 保留其已冻结的 modelId，
+ * 不通过升级或启动逻辑静默改写为 mini。
+ */
+export const DEFAULT_SEEDANCE_VIDEO_MODEL_ID: SeedanceVideoModelId =
+  'doubao-seedance-2-0-mini-260615';
 
 export const isSeedanceVideoModelId = (value: string): value is SeedanceVideoModelId =>
   SEEDANCE_VIDEO_MODELS.some((model) => model.id === value);

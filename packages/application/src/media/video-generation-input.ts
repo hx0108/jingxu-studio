@@ -79,6 +79,21 @@ export interface VideoDurationRange {
   readonly minSec: number;
 }
 
+/**
+ * 能力快照驱动的请求档位（low-cost 任务 4.3）：duration_range + 分辨率短边档集合。
+ * Seedance/Wan 为 [720,1080]；Agnes 固定 [720]（服务端归一，不支持 1080P）。
+ */
+export interface VideoRequestCapability {
+  readonly durationRange: VideoDurationRange;
+  readonly resolutionTiers: readonly number[];
+}
+
+/** 缺省能力 = Seedance 真实档（与 DEFAULT_VIDEO_PROVENANCE 缺省语义同源）。 */
+export const DEFAULT_VIDEO_REQUEST_CAPABILITY: VideoRequestCapability = Object.freeze({
+  durationRange: { maxSec: 10, minSec: 5 },
+  resolutionTiers: [720, 1080],
+});
+
 /** 档位解析结果；exceededMax=true 即 target 超上限被压到最大档（如实标注，不续写不拆镜）。 */
 export interface VideoDurationTier {
   readonly durationSec: number;
@@ -127,27 +142,36 @@ export const buildVideoParametersFingerprint = (input: VideoParametersFingerprin
     input.firstFrameFileSha256.slice(0, 12),
   ].join(':');
 
-/** generation_input_hash 的输入集（design A4：不含资产绑定，i2v 输入=首帧+提示词）。 */
+/** generation_input_hash 的输入集（design A4；low-cost D4 增 Provider 溯源）。 */
 export interface VideoGenerationInputDescriptor {
+  readonly capabilitySnapshotId: string;
   readonly firstFrameFileSha256: string;
+  readonly isMock: boolean;
   readonly modelId: string;
   readonly parametersFingerprint: string;
+  readonly providerKind: string;
+  readonly providerProfileId: string;
   readonly shotContentHash: string;
   readonly shotVersionId: string;
 }
 
 /**
  * 计算 generation_input_hash = sha256(canonical JSON)；键序固定字母序（与契约 schema
- * 对齐），字段集与漂移由金样单测锁死。
+ * 对齐），字段集与漂移由金样单测锁死。low-cost D4：Provider/Profile/快照/Mock 标记
+ * 参与哈希——同一输入经不同 Provider 生成的候选不共享世代（不可互相顶替命中）。
  */
 export const computeVideoGenerationInputHash = (
   descriptor: VideoGenerationInputDescriptor,
   hashPayload: (value: Readonly<Record<string, unknown>>) => string,
 ): string =>
   hashPayload({
+    capabilitySnapshotId: descriptor.capabilitySnapshotId,
     firstFrameFileSha256: descriptor.firstFrameFileSha256,
+    isMock: descriptor.isMock,
     modelId: descriptor.modelId,
     parametersFingerprint: descriptor.parametersFingerprint,
+    providerKind: descriptor.providerKind,
+    providerProfileId: descriptor.providerProfileId,
     shotContentHash: descriptor.shotContentHash,
     shotVersionId: descriptor.shotVersionId,
   });
@@ -162,20 +186,30 @@ export interface VideoSize {
 }
 
 /**
- * 分辨率档位派生（快照 tier_rule「短边就近」）：min(width,height)≥1080 取 1080p
- * 否则 720p；长边按比例缩放并偶数对齐（1440x2560 → 1080x1920）。首帧口径缺失
- * （Provider 未回报尺寸）返回 null——由调用方按数据异常稳定拒绝，不臆造默认值。
- * max_edge_px 上限不在此钳制（保持比例如实）：超限由适配器前置校验拒绝（design A3）。
+ * 分辨率档位派生（快照 tier_rule「短边就近」泛化为档集合）：取 ≤ 短边的最大档
+ * （无则最小档——首帧小于全部档时按最小档放大，比例保持）；长边按比例缩放并
+ * 偶数对齐（1440x2560 × [720,1080] → 1080x1920；× [720] → 720x1280）。首帧口径
+ * 缺失（Provider 未回报尺寸）返回 null——由调用方按数据异常稳定拒绝，不臆造
+ * 默认值。max_edge_px 上限不在此钳制（保持比例如实）：超限由适配器前置校验拒绝。
  */
-export const resolveVideoSize = (firstFrame: VideoFirstFrameDimensions): VideoSize | null => {
+export const resolveVideoSize = (
+  firstFrame: VideoFirstFrameDimensions,
+  tiers: readonly number[] = [720, 1080],
+): VideoSize | null => {
   const { height, width } = firstFrame;
   if (height === null || width === null) return null;
   if (!Number.isInteger(width) || !Number.isInteger(height) || width <= 0 || height <= 0) {
     return null;
   }
+  const sorted = [...tiers]
+    .filter((tier) => Number.isInteger(tier) && tier > 0)
+    .sort((a, b) => a - b);
+  if (sorted.length === 0) throw new Error('VIDEO_RESOLUTION_TIERS_INVALID');
+  const lowest = sorted[0];
+  if (lowest === undefined) throw new Error('VIDEO_RESOLUTION_TIERS_INVALID');
   const shortEdge = Math.min(width, height);
   const longEdge = Math.max(width, height);
-  const tierShort = shortEdge >= 1080 ? 1080 : 720;
+  const tierShort = [...sorted].reverse().find((tier) => tier <= shortEdge) ?? lowest;
   const tierLong = Math.max(2, Math.round((longEdge * (tierShort / shortEdge)) / 2) * 2);
   return width <= height
     ? { height: tierLong, width: tierShort }

@@ -12,4 +12,5 @@
  */
 export * from './mock/index';
 export * from './qwen/index';
+export * from './agnes/index';
 export * from './volcark/index';

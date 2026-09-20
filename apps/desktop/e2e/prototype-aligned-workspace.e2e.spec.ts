@@ -87,7 +87,7 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
 
     await page.getByRole('button', { name: '设置', exact: true }).click({ force: true });
     await expect(page.getByRole('heading', { name: '模型服务', exact: true })).toBeVisible();
-    await expect(page.locator('.model-service-card')).toHaveCount(4);
+    await expect(page.locator('.model-service-card')).toHaveCount(5);
     const settingsMetrics = await page.evaluate(() => {
       const pageElement = document.querySelector('.model-services-page');
       const status = document.querySelector('.model-configuration-status');

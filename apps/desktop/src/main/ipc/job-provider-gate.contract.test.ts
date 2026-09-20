@@ -9,7 +9,7 @@ const trustedEvent = () => {
 const mutation = { expectedVersionId: 'version_12345678', requestId: 'request-123' };
 
 describe('Job Provider 启动门 Contract', () => {
-  it('非 READY—调用七个写命令—统一阻断且真实 Service 工厂零构造', async () => {
+  it('非 READY—调用八个写命令—统一阻断且真实 Service 工厂零构造', async () => {
     const handlers = new Map<
       string,
       (event: ReturnType<typeof trustedEvent>, input: unknown) => Promise<unknown>
@@ -46,6 +46,10 @@ describe('Job Provider 启动门 Contract', () => {
       ],
       [PROVIDER_IPC_CHANNELS.testCredential, { ...mutation, profileId: 'profile_12345678' }],
       [PROVIDER_IPC_CHANNELS.deleteCredential, { ...mutation, profileId: 'profile_12345678' }],
+      [
+        PROVIDER_IPC_CHANNELS.saveVideoProviderSelection,
+        { expectedUpdatedAt: null, mode: 'AGNES', requestId: 'request-123' },
+      ],
     ] as const;
     for (const [channel, input] of commands) {
       await expect(handlers.get(channel)?.(trustedEvent(), input)).resolves.toMatchObject({

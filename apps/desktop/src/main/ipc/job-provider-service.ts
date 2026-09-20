@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
-import type { ModelErrorCode, ProviderProfileView, ProviderService } from '@jingxu/application';
+import type {
+  ModelErrorCode,
+  ProviderProfileView,
+  ProviderService,
+  VideoProviderPreferencesPort,
+  VideoProviderSelection,
+} from '@jingxu/application';
+import { VIDEO_PROVIDER_PROFILE_BY_MODE } from '@jingxu/application';
 import {
   appResultSchema,
   EVENTS_IPC_CHANNELS,
@@ -9,6 +16,7 @@ import {
   PROVIDER_IPC_CHANNELS,
   providerProfileSchema,
   subscriptionResultSchema,
+  videoProviderSelectionSchema,
   type AppErrorDto,
   type AppResultDto,
   type JobCreateInputDto,
@@ -24,6 +32,8 @@ import {
   type ProviderProfileCommandDto,
   type ProviderProfileDto,
   type SubscriptionResultDto,
+  type VideoProviderSelectionGetInputDto,
+  type VideoProviderSelectionSaveInputDto,
 } from '@jingxu/contracts';
 import type { ZodType } from 'zod';
 
@@ -110,32 +120,20 @@ const requestIdReused = <T>(traceId: string): AppResultDto<T> =>
   err('REQUEST_ID_REUSED', traceId, '请求 ID 已用于其他操作。', false, '请刷新后重新提交。');
 
 /** 把 ProviderService 抛出的标记错误归一化为稳定 AppError；绝不回显原始 message/Key/Auth。 */
-const mapProviderError = (
+const mapProviderError = <T>(
   error: unknown,
   traceId: string,
   fallback: ProjectErrorCode,
-): AppResultDto<ProviderProfileDto> => {
+): AppResultDto<T> => {
   const marker = error instanceof Error ? error.message : '';
   if (marker === 'PROVIDER_PROFILE_NOT_FOUND') {
-    return err<ProviderProfileDto>(
-      'PROVIDER_PROFILE_NOT_FOUND',
-      traceId,
-      '未找到 Provider 配置。',
-      false,
-      null,
-    );
+    return err<T>('PROVIDER_PROFILE_NOT_FOUND', traceId, '未找到 Provider 配置。', false, null);
   }
   if (marker === 'PROVIDER_CREDENTIAL_MISSING') {
-    return err<ProviderProfileDto>(
-      'PROVIDER_CREDENTIAL_MISSING',
-      traceId,
-      '请先保存 API Key。',
-      false,
-      null,
-    );
+    return err<T>('PROVIDER_CREDENTIAL_MISSING', traceId, '请先保存 API Key。', false, null);
   }
   if (marker === 'PROVIDER_MODEL_NOT_ALLOWED') {
-    return err<ProviderProfileDto>(
+    return err<T>(
       'IPC_INVALID_REQUEST',
       traceId,
       '所选模型不在允许的选择范围内。',
@@ -143,7 +141,7 @@ const mapProviderError = (
       '请选择该 Provider 设置中列出的模型。',
     );
   }
-  return err<ProviderProfileDto>(fallback, traceId, 'Provider 操作失败，请重试。', true, null);
+  return err<T>(fallback, traceId, 'Provider 操作失败，请重试。', true, null);
 };
 
 /**
@@ -237,6 +235,16 @@ const VIDEO_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, Credential
     },
   });
 
+const AGNES_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFailureCopy>> =
+  Object.freeze({
+    ...CREDENTIAL_TEST_FAILURES,
+    MODEL_CREDENTIAL_INVALID: {
+      message: 'Agnes API Key 密文无法解密读取（未配置、系统密钥变更或目录迁移）。',
+      retryable: false,
+      userAction: '请在视频 Provider 设置中重新粘贴 Agnes API Key 并保存。',
+    },
+  });
+
 /** 配音档解密校验的失败文案覆盖（同 key 双档：DashScope Key 需在配音档再粘贴一次）。 */
 const VOICE_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFailureCopy>> =
   Object.freeze({
@@ -255,8 +263,13 @@ export interface JobProviderIpcDependencies {
   readonly provider: ProviderService;
   /** 视频档（shot-video-generation D2）：按 profileId 精确命中时分发到独立 ProviderService。 */
   readonly video?: Readonly<{ profileId: string; service: ProviderService }>;
+  /** Agnes 视频档（low-cost D2）：独立 Profile/密文/审计，切换不触碰其他档。 */
+  readonly agnesVideo?: Readonly<{ profileId: string; service: ProviderService }>;
   /** 配音档（v2-voice-audio-timeline D1）：按 profileId 精确命中时分发到独立 ProviderService。 */
   readonly voice?: Readonly<{ profileId: string; service: ProviderService }>;
+  /** 视频当前 Provider 偏好（low-cost D2/D7）；缺省时选择通道稳定报不可用。 */
+  readonly videoProviderPreferences?: VideoProviderPreferencesPort | undefined;
+  readonly selectionClock?: (() => string) | undefined;
   readonly newTraceId?: () => string;
   readonly newSubscriptionId?: () => string;
 }
@@ -264,6 +277,7 @@ export interface JobProviderIpcDependencies {
 const JOB_SUMMARY_RESULT = appResultSchema(jobSummarySchema);
 const JOB_LIST_RESULT = appResultSchema(jobSummarySchema.array());
 const PROVIDER_PROFILE_RESULT = appResultSchema(providerProfileSchema);
+const VIDEO_PROVIDER_SELECTION_RESULT = appResultSchema(videoProviderSelectionSchema);
 const SUBSCRIPTION_RESULT = appResultSchema(subscriptionResultSchema);
 
 /** 防御性输出校验：结果偏离 DTO 即归一化为稳定错误，不向 Renderer 透传畸形结构。 */
@@ -279,7 +293,7 @@ const validateOutput = <T>(
 };
 
 /**
- * 创建注入到 `registerJobProviderGate` 的边界服务：固定 11 频道路由、requestId
+ * 创建注入到 `registerJobProviderGate` 的边界服务：固定 13 频道路由、requestId
  * singleflight、`ProviderProfileView→DTO` 投影与脱敏错误归一化。Renderer 永不接收
  * Key、Authorization 或原始 Provider 错误。
  */
@@ -292,6 +306,7 @@ export const createJobProviderIpcService = (
   const providerFor = (profileId: string): ProviderService => {
     if (dependencies.image?.profileId === profileId) return dependencies.image.service;
     if (dependencies.video?.profileId === profileId) return dependencies.video.service;
+    if (dependencies.agnesVideo?.profileId === profileId) return dependencies.agnesVideo.service;
     if (dependencies.voice?.profileId === profileId) return dependencies.voice.service;
     return dependencies.provider;
   };
@@ -300,6 +315,7 @@ export const createJobProviderIpcService = (
   ): Readonly<Record<ModelErrorCode, CredentialTestFailureCopy>> => {
     if (dependencies.image?.profileId === profileId) return IMAGE_CREDENTIAL_TEST_FAILURES;
     if (dependencies.video?.profileId === profileId) return VIDEO_CREDENTIAL_TEST_FAILURES;
+    if (dependencies.agnesVideo?.profileId === profileId) return AGNES_CREDENTIAL_TEST_FAILURES;
     if (dependencies.voice?.profileId === profileId) return VOICE_CREDENTIAL_TEST_FAILURES;
     return CREDENTIAL_TEST_FAILURES;
   };
@@ -360,7 +376,7 @@ export const createJobProviderIpcService = (
       const view = await providerFor(input.profileId).getProfile(input.profileId);
       return validateOutput(PROVIDER_PROFILE_RESULT, ok(toProviderDto(view)), traceId);
     } catch {
-      return mapProviderError(undefined, traceId, 'PROVIDER_CALL_FAILED');
+      return mapProviderError<ProviderProfileDto>(undefined, traceId, 'PROVIDER_CALL_FAILED');
     }
   };
   const providerSaveProfile = async (
@@ -385,7 +401,7 @@ export const createJobProviderIpcService = (
                 );
           return ok(toProviderDto(view));
         } catch (error) {
-          return mapProviderError(error, traceId, 'PROVIDER_CALL_FAILED');
+          return mapProviderError<ProviderProfileDto>(error, traceId, 'PROVIDER_CALL_FAILED');
         }
       },
     );
@@ -407,7 +423,11 @@ export const createJobProviderIpcService = (
           );
           return ok(toProviderDto(view));
         } catch (error) {
-          return mapProviderError(error, traceId, 'PROVIDER_CREDENTIAL_UNAVAILABLE');
+          return mapProviderError<ProviderProfileDto>(
+            error,
+            traceId,
+            'PROVIDER_CREDENTIAL_UNAVAILABLE',
+          );
         }
       },
     );
@@ -440,7 +460,7 @@ export const createJobProviderIpcService = (
           const view = await providerFor(input.profileId).getProfile(input.profileId);
           return ok(toProviderDto(view));
         } catch (error) {
-          return mapProviderError(error, traceId, 'PROVIDER_CALL_FAILED');
+          return mapProviderError<ProviderProfileDto>(error, traceId, 'PROVIDER_CALL_FAILED');
         }
       },
     );
@@ -459,12 +479,81 @@ export const createJobProviderIpcService = (
           const view = await providerFor(input.profileId).deleteCredential(input.profileId);
           return ok(toProviderDto(view));
         } catch (error) {
-          return mapProviderError(error, traceId, 'PROVIDER_CREDENTIAL_UNAVAILABLE');
+          return mapProviderError<ProviderProfileDto>(
+            error,
+            traceId,
+            'PROVIDER_CREDENTIAL_UNAVAILABLE',
+          );
         }
       },
     );
     return validateOutput(PROVIDER_PROFILE_RESULT, result, traceId);
   };
+  const DEFAULT_VIDEO_SELECTION: VideoProviderSelection = {
+    mode: 'SEEDANCE',
+    providerProfileId: VIDEO_PROVIDER_PROFILE_BY_MODE.SEEDANCE,
+    updatedAt: '1970-01-01T00:00:00.000Z',
+  };
+  const providerGetVideoSelection = async (
+    _input: VideoProviderSelectionGetInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<VideoProviderSelection>> => {
+    const preferences = dependencies.videoProviderPreferences;
+    if (preferences === undefined) {
+      return err('PROVIDER_CALL_FAILED', traceId, '视频 Provider 偏好存储不可用。', true, null);
+    }
+    try {
+      const selection = await preferences.get();
+      return validateOutput(
+        VIDEO_PROVIDER_SELECTION_RESULT,
+        ok(selection ?? DEFAULT_VIDEO_SELECTION),
+        traceId,
+      );
+    } catch {
+      return mapProviderError<VideoProviderSelection>(undefined, traceId, 'PROVIDER_CALL_FAILED');
+    }
+  };
+  const providerSaveVideoSelection = async (
+    input: VideoProviderSelectionSaveInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<VideoProviderSelection>> => {
+    const preferences = dependencies.videoProviderPreferences;
+    if (preferences === undefined) {
+      return err('PROVIDER_CALL_FAILED', traceId, '视频 Provider 偏好存储不可用。', true, null);
+    }
+    const result = await mutate(
+      input,
+      `${PROVIDER_IPC_CHANNELS.saveVideoProviderSelection}:${input.mode}`,
+      traceId,
+      async () => {
+        try {
+          const savedAt = (dependencies.selectionClock ?? (() => new Date().toISOString()))();
+          const selection = await preferences.save(
+            input.expectedUpdatedAt === DEFAULT_VIDEO_SELECTION.updatedAt
+              ? null
+              : input.expectedUpdatedAt,
+            input.mode,
+            savedAt,
+          );
+          return ok(selection);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : '';
+          if (reason.includes('VIDEO_PROVIDER_SELECTION_CONFLICT')) {
+            return err<VideoProviderSelection>(
+              'PROVIDER_SELECTION_CONFLICT',
+              traceId,
+              '视频 Provider 选择已被其他窗口修改，请刷新后重试。',
+              false,
+              null,
+            );
+          }
+          return mapProviderError<VideoProviderSelection>(error, traceId, 'PROVIDER_CALL_FAILED');
+        }
+      },
+    );
+    return validateOutput(VIDEO_PROVIDER_SELECTION_RESULT, result, traceId);
+  };
+
   const eventsSubscribe = (
     input: JobUpdatesSubscriptionDto,
     traceId: string,
@@ -499,6 +588,10 @@ export const createJobProviderIpcService = (
           return providerTestCredential(input as ProviderMutationInputDto, traceId);
         case PROVIDER_IPC_CHANNELS.deleteCredential:
           return providerDeleteCredential(input as ProviderMutationInputDto, traceId);
+        case PROVIDER_IPC_CHANNELS.getVideoProviderSelection:
+          return providerGetVideoSelection(input as VideoProviderSelectionGetInputDto, traceId);
+        case PROVIDER_IPC_CHANNELS.saveVideoProviderSelection:
+          return providerSaveVideoSelection(input as VideoProviderSelectionSaveInputDto, traceId);
         case EVENTS_IPC_CHANNELS.subscribeJobUpdates:
           return eventsSubscribe(input as JobUpdatesSubscriptionDto, traceId);
         default:

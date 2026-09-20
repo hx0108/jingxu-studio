@@ -12,14 +12,20 @@
  * MEDIA_REQUEST_BUILD_FAILED——不在本层决定任务命运（沿图片蓝图口径）。
  */
 
-import type { MediaTaskRecord, MediaUnitOfWorkPort } from '../ports/media/media-repository';
+import type {
+  MediaTaskRecord,
+  MediaUnitOfWorkPort,
+  VideoProviderProvenance,
+} from '../ports/media/media-repository';
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
 import type { VideoGenerationRequest } from '../ports/video-model/video-model-types';
 import type { MediaReferenceImageReader, MediaRequestBlueprint } from './media-request-blueprint';
 import {
   buildVideoPrompt,
   extractVideoShotFields,
+  DEFAULT_VIDEO_REQUEST_CAPABILITY,
   resolveVideoSize,
+  type VideoRequestCapability,
 } from './video-generation-input';
 
 export interface VideoRequestBlueprintBuilder {
@@ -27,6 +33,8 @@ export interface VideoRequestBlueprintBuilder {
 }
 
 export interface VideoRequestBlueprintBuilderDependencies {
+  /** 能力档位解析（low-cost 任务 4.3）：按任务冻结溯源取分辨率档（缺省 Seedance 双档）。 */
+  readonly capabilityOf?: (provenance: VideoProviderProvenance) => VideoRequestCapability;
   readonly firstFrameReader: MediaReferenceImageReader;
   readonly mediaUnitOfWork: MediaUnitOfWorkPort;
   readonly workspaceQuery: ScriptWorkspaceQueryPort;
@@ -57,10 +65,17 @@ export const createVideoRequestBlueprintBuilder = (
       (candidate) => candidate.id === anchor.firstFrameCandidateId,
     );
     const firstFrameMimeType = firstFrame?.mimeType ?? null;
+    // 分辨率档位按任务冻结溯源解析（任务 4.3）：Agnes 固定 [720]，与建档同源。
+    const capability =
+      (task.provenance === undefined ? undefined : dependencies.capabilityOf?.(task.provenance)) ??
+      DEFAULT_VIDEO_REQUEST_CAPABILITY;
     const size =
       firstFrame === undefined
         ? null
-        : resolveVideoSize({ height: firstFrame.height, width: firstFrame.width });
+        : resolveVideoSize(
+            { height: firstFrame.height, width: firstFrame.width },
+            capability.resolutionTiers,
+          );
     if (size === null || firstFrameMimeType === null) {
       throw new Error('MEDIA_BLUEPRINT_FIRST_FRAME_INVALID');
     }
@@ -82,9 +97,18 @@ export const createVideoRequestBlueprintBuilder = (
         resolution: size,
       }),
       modelId: anchor.modelId,
-      // 字段序冻结（requestSha256 稳定性）：时长/首帧锚点对/模型/提示词/分辨率，
-      // 不含首帧字节与凭据。
+      // 字段序冻结（requestSha256 稳定性）：时长/首帧锚点对/模型/提示词/分辨率 +
+      // 溯源标识（low-cost D4：Provider/Profile/快照/Mock，均非敏感 id），不含首帧
+      // 字节与凭据。无溯源的旧任务行保持原字段集。
       submitSnapshotJson: JSON.stringify({
+        ...(task.provenance === undefined
+          ? {}
+          : {
+              capabilitySnapshotId: task.provenance.capabilitySnapshotId,
+              isMock: task.provenance.isMock,
+              providerKind: task.provenance.providerKind,
+              providerProfileId: task.provenance.providerProfileId,
+            }),
         durationSec: anchor.requestedDurationSec,
         firstFrameCandidateId: anchor.firstFrameCandidateId,
         firstFrameFileSha256: anchor.firstFrameFileSha256,

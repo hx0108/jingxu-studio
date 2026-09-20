@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 
-import { VideoCompositionPanel, VideoExportJobStatus } from './VideoCompositionPanel';
+import {
+  VideoCompositionPanel,
+  VideoExportJobStatus,
+  VideoExportMockNotice,
+} from './VideoCompositionPanel';
 
 const job = (overrides: Record<string, unknown> = {}) => ({
   byteSize: null,
@@ -65,5 +69,14 @@ describe('VideoCompositionPanel', () => {
     expect(succeeded).toContain('jingxu://media/video-export/export_0001');
     expect(`${running}${failed}${cancelled}${succeeded}`).not.toContain('C:');
     expect(`${running}${failed}${cancelled}${succeeded}`).not.toContain('--');
+  });
+});
+
+describe('VideoExportMockNotice（low-cost 6.4 导出前检查）', () => {
+  it('含模拟视频段—醒目提示数量与模拟口径；零模拟不渲染', () => {
+    const withMock = renderToStaticMarkup(<VideoExportMockNotice count={2} />);
+    expect(withMock).toContain('导出前检查：时间线包含 2 个模拟（Mock）视频段');
+    expect(withMock).toContain('不代表真实 Provider 画质');
+    expect(renderToStaticMarkup(<VideoExportMockNotice count={0} />)).toBe('');
   });
 });

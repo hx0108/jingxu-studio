@@ -30,6 +30,7 @@ export const projectErrorCodeSchema = z.enum([
   'PROVIDER_CREDENTIAL_MISSING',
   'PROVIDER_CREDENTIAL_UNAVAILABLE',
   'PROVIDER_CALL_FAILED',
+  'PROVIDER_SELECTION_CONFLICT',
   // 模型端口 NormalizedModelError.code 的 1:1 透传（凭据测试等 IPC 直查场景）。
   // 与 application ports 的 ModelErrorCode 联合保持一致，避免第二套命名。
   'MODEL_CREDENTIAL_INVALID',

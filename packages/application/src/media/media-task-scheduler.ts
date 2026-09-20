@@ -87,6 +87,12 @@ export interface MediaTaskSchedulerDependencies<R = ImageGenerationRequest> {
   /** 媒体模型 Port（shot-video-generation 任务 1.2 泛化：图片/视频实例同构注入）。 */
   readonly model: MediaModelPort<R>;
   /**
+   * 按任务冻结事实解析 Model Port（low-cost D4/任务 4.2）：视频实例注入——按任务行
+   * 0024 溯源列返回对应 Adapter，当前偏好变化不影响在途任务；返回 null 回落 `model`。
+   * 图片实例缺省不注入——固定 `model`，行为零变化。
+   */
+  readonly resolveModel?: ((task: MediaTaskRecord) => MediaModelPort<R> | null) | undefined;
+  /**
    * 项目队列排空后的批次推进钩子（batch-first-frame-generation 任务 3.2）：
    * 返回 true = 已为批次下一镜头建档（新任务已入列），排空循环继续。
    */
@@ -265,6 +271,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
     submitRowId: string,
     segmentRowId: string | null,
     caught: unknown,
+    model: MediaModelPort<R>,
     submitOutcome?: SubmitOutcomeEvidence,
   ): Promise<boolean> => {
     if (persistenceMarkerOf(caught) !== null || isCancelled(caught)) {
@@ -272,14 +279,14 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
       await stopForAbort(projectId, taskId);
       return true;
     }
-    const normalized = dependencies.model.normalizeError(caught);
+    const normalized = model.normalizeError(caught);
     if (normalized.code === 'MODEL_CANCELLED') {
       await stopForAbort(projectId, taskId);
       return true;
     }
     // Provider 归一化错误：候选级失败，同轮其余候选继续（spec 不变式）；
     // 失败段证据行与候选终态同一事务收尾（design D4，原文入 blob）。
-    const evidence = dependencies.model.evidenceOf(caught);
+    const evidence = model.evidenceOf(caught);
     await writeCandidateOutcome(projectId, taskId, async (repos) => {
       await generationOf(repos).completeCandidateFailed(candidateId, {
         errorCode: normalized.code,
@@ -325,6 +332,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
     result: ImageResultRef,
     signal: AbortSignal,
     submitOutcome: SubmitOutcomeEvidence,
+    model: MediaModelPort<R>,
   ): Promise<boolean> => {
     // D4 第一段：DOWNLOAD 证据行与相位推进同一短事务插入（快照=D2 口径）。
     const downloadInvocationId = dependencies.newId();
@@ -352,9 +360,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
     }
     let stored: Awaited<ReturnType<MediaFileStorePort['writeMedia']>>;
     try {
-      const download = await runSegment(signal, (segment) =>
-        dependencies.model.download(result, segment),
-      );
+      const download = await runSegment(signal, (segment) => model.download(result, segment));
       stored = await dependencies.fileStore.writeMedia({
         bytes: download.bytes,
         mimeType: download.mimeType,
@@ -371,6 +377,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
         await submitRowIdOf(task.id, candidate.id, submitRef),
         downloadInvocationId,
         caught,
+        model,
         submitOutcome,
       );
       return !stop;
@@ -410,6 +417,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
     candidate: MediaCandidateRecord,
     providerTaskId: string,
     signal: AbortSignal,
+    model: MediaModelPort<R>,
   ): Promise<boolean> => {
     // D2：候选 ref 恒指 SUBMIT 证据行（查无行时回退 providerTaskId，保持既有形态）。
     const submitRef = await submitRowIdOf(task.id, candidate.id, providerTaskId);
@@ -445,9 +453,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
       }
       let status: ImageTaskStatus;
       try {
-        status = await runSegment(signal, (segment) =>
-          dependencies.model.poll(providerTaskId, segment),
-        );
+        status = await runSegment(signal, (segment) => model.poll(providerTaskId, segment));
       } catch (caught) {
         const stop = await onSegmentFailure(
           task.projectId,
@@ -456,6 +462,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
           submitRef,
           pollRowId,
           caught,
+          model,
         );
         return !stop;
       }
@@ -474,11 +481,19 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
         }
       }
       if (status.state === 'SUCCEEDED') {
-        return settleDownload(task, candidate, submitRef, status.result, signal, {
-          providerRequestId: providerTaskId,
-          raw: null,
-          usage: status.usage,
-        });
+        return settleDownload(
+          task,
+          candidate,
+          submitRef,
+          status.result,
+          signal,
+          {
+            providerRequestId: providerTaskId,
+            raw: null,
+            usage: status.usage,
+          },
+          model,
+        );
       }
       if (status.state === 'FAILED') {
         return writeCandidateOutcome(task.projectId, task.id, (repos) =>
@@ -501,7 +516,11 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
   };
 
   /** 证据驱动循环：逐个推进 PENDING 且已留证候选；证据缺失即按中断停机。 */
-  const driveFromEvidence = async (task: MediaTaskRecord, signal: AbortSignal): Promise<void> => {
+  const driveFromEvidence = async (
+    task: MediaTaskRecord,
+    signal: AbortSignal,
+    model: MediaModelPort<R>,
+  ): Promise<void> => {
     for (;;) {
       const candidates = await runGeneration((generation) =>
         generation.listCandidates(task.shotId),
@@ -516,7 +535,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
         await stopForAbort(task.projectId, task.id);
         return;
       }
-      const proceed = await drivePolledCandidate(task, next, providerTaskId, signal);
+      const proceed = await drivePolledCandidate(task, next, providerTaskId, signal, model);
       if (!proceed) return;
     }
     await finishDriving(task.id);
@@ -527,6 +546,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
     task: MediaTaskRecord,
     pending: readonly MediaCandidateRecord[],
     signal: AbortSignal,
+    model: MediaModelPort<R>,
   ): Promise<void> => {
     let blueprint: MediaRequestBlueprint<R>;
     try {
@@ -561,9 +581,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
       }
       let submission: ImageTaskSubmission;
       try {
-        submission = await runSegment(signal, (segment) =>
-          dependencies.model.submit(request, segment),
-        );
+        submission = await runSegment(signal, (segment) => model.submit(request, segment));
       } catch (caught) {
         const stop = await onSegmentFailure(
           task.projectId,
@@ -572,6 +590,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
           invocationId,
           invocationId,
           caught,
+          model,
         );
         if (stop) return;
         continue;
@@ -593,6 +612,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
             raw: submission.raw,
             usage: submission.usage,
           },
+          model,
         );
         if (!proceed) return;
         continue;
@@ -622,7 +642,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
           // 已转移/终态竞态：证据已落，继续由证据驱动接管。
         }
       }
-      await driveFromEvidence(task, signal);
+      await driveFromEvidence(task, signal, model);
       return;
     }
     await finishDriving(task.id);
@@ -631,6 +651,9 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
   const advance = async (projectId: string, taskId: string, signal: AbortSignal): Promise<void> => {
     const task = await readTask(projectId, taskId);
     if (task === null || isTerminal(task.phase)) return;
+    // 按任务冻结事实解析 Adapter（low-cost D4）：视频实例经 0024 溯源列路由，当前偏好
+    // 变化不影响在途任务；图片实例未注入 → 固定 model 行为零变化。
+    const model = dependencies.resolveModel?.(task) ?? dependencies.model;
     const candidates = await runGeneration((generation) => generation.listCandidates(task.shotId));
     const pending = candidates.filter(
       (entry) => entry.roundNo === task.roundNo && entry.status === 'PENDING',
@@ -651,7 +674,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
             // 已转移/终态竞态：证据驱动自行接管。
           }
         }
-        await driveFromEvidence(task, signal);
+        await driveFromEvidence(task, signal, model);
         return;
       }
       if (evidenced.length > 0) {
@@ -659,14 +682,14 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
         await attemptFailTask(taskId, 'MEDIA_TASK_INTERRUPTED');
         return;
       }
-      await driveFreshSubmits(task, pending, signal);
+      await driveFreshSubmits(task, pending, signal, model);
       return;
     }
     if (pending.some((entry) => entry.providerTaskId === null)) {
       await attemptFailTask(taskId, 'MEDIA_TASK_INTERRUPTED');
       return;
     }
-    await driveFromEvidence(task, signal);
+    await driveFromEvidence(task, signal, model);
   };
 
   const driveTask = async (projectId: string, taskId: string): Promise<void> => {

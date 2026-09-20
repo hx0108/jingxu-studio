@@ -21,6 +21,8 @@ const item = (overrides: Record<string, unknown> = {}) => ({
   fileSha256: HASH,
   generationInputHash: HASH,
   position: 0,
+  isMock: null,
+  providerKind: null,
   shotId: 'shot_0001',
   trimInMs: 0,
   trimOutMs: 1_000,
@@ -261,6 +263,36 @@ describe('VideoCompositionService', () => {
     );
     expect(result).toMatchObject({ error: { code: 'VIDEO_COMPOSITION_NOT_READY' }, ok: false });
     expect(composition.createTimeline).not.toHaveBeenCalled();
+  });
+
+  it('low-cost 6.4—时间线读取富化—条目携带候选建档溯源与 Mock 模拟标识', async () => {
+    const mockProvenance = {
+      capabilitySnapshotId: 'volcark-seedance-video/v3',
+      isMock: true,
+      modelId: 'doubao-seedance-2-0-260128',
+      providerKind: 'VOLCARK_SEEDANCE',
+      providerProfileId: 'profile-video-primary',
+    } as const;
+    const { service } = buildService({
+      candidate: candidate({ provenance: mockProvenance }),
+    });
+    const result = await service.createTimeline(
+      {
+        episodeId: 'episode_0001',
+        expectedEpisodeVersionId: 'episode_version_0001',
+        projectId: 'project_0001',
+        requestId: 'request_enrich_1',
+      },
+      'trace_enrich',
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.items).toHaveLength(1);
+    expect(result.data.items[0]).toMatchObject({
+      candidateId: 'candidate_0001',
+      isMock: true,
+      providerKind: 'VOLCARK_SEEDANCE',
+    });
   });
 
   it('READY 单集创建时间线—按镜头 sequence 固化选中候选哈希并派生两轨', async () => {

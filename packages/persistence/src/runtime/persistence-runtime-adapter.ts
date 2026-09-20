@@ -11,6 +11,7 @@ import type {
   PersistenceRuntimePort,
   ProjectUnitOfWorkPort,
   ProviderProfileRepositoryPort,
+  VideoProviderPreferencesPort,
   ProviderUnitOfWorkPort,
   SchemaManifestUnitOfWorkPort,
   ScriptUnitOfWorkPort,
@@ -36,6 +37,7 @@ import { SqliteJobUnitOfWork } from '../job/sqlite-job-unit-of-work';
 import { SqliteFormatProfileRepository } from '../project/sqlite-format-profile-repository';
 import { SqliteProjectUnitOfWork } from '../project/sqlite-project-unit-of-work';
 import { SqliteProviderProfileRepository } from '../provider/sqlite-provider-profile-repository';
+import { SqliteVideoProviderPreferences } from '../provider/sqlite-video-provider-preferences';
 import { SqliteProviderUnitOfWork } from '../provider/sqlite-provider-unit-of-work';
 import { SqliteSchemaManifestUnitOfWork } from '../schema-manifest/sqlite-schema-manifest-unit-of-work';
 import { SqliteScriptUnitOfWork } from '../script/sqlite-script-unit-of-work';
@@ -173,6 +175,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   #jobRepository: JobRepositoryPort | null = null;
   #providerUnitOfWork: ProviderUnitOfWorkPort | null = null;
   #providerProfileRepository: ProviderProfileRepositoryPort | null = null;
+  #videoProviderPreferences: VideoProviderPreferencesPort | null = null;
   #scriptUnitOfWork: ScriptUnitOfWorkPort | null = null;
   #scriptWorkspaceQuery: ScriptWorkspaceQueryPort | null = null;
   #transferUnitOfWork: TransferUnitOfWorkPort | null = null;
@@ -202,6 +205,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
     this.#jobRepository = null;
     this.#providerUnitOfWork = null;
     this.#providerProfileRepository = null;
+    this.#videoProviderPreferences = null;
     this.#scriptUnitOfWork = null;
     this.#scriptWorkspaceQuery = null;
     this.#transferUnitOfWork = null;
@@ -244,6 +248,11 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
   /** Returns a standalone Provider profile read Repository over the same audited write connection. */
   public getProviderProfileRepository(): ProviderProfileRepositoryPort | null {
     return this.#providerProfileRepository;
+  }
+
+  /** 视频当前 Provider 偏好（0023 单例表；独立 CAS 写，不经 UnitOfWork）。 */
+  public getVideoProviderPreferences(): VideoProviderPreferencesPort | null {
+    return this.#videoProviderPreferences;
   }
 
   public getScriptUnitOfWork(): ScriptUnitOfWorkPort | null {
@@ -348,6 +357,7 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
       this.#jobRepository ??= new SqliteJobRepository(database);
       this.#providerUnitOfWork ??= new SqliteProviderUnitOfWork(database, {}, coordinator);
       this.#providerProfileRepository ??= new SqliteProviderProfileRepository(database);
+      this.#videoProviderPreferences ??= new SqliteVideoProviderPreferences(database);
       this.#scriptUnitOfWork ??= new SqliteScriptUnitOfWork(database, coordinator);
       this.#scriptWorkspaceQuery ??= new SqliteScriptWorkspaceQuery(database);
       // Transfer 导入必须与其余写入共用同一 FIFO 队列（同 SqliteTransferUnitOfWork 注释）。

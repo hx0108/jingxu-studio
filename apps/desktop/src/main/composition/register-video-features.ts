@@ -11,13 +11,26 @@ import {
   createVideoCompositionService,
   createVideoRequestBlueprintBuilder,
 } from '@jingxu/application';
-import type { ModelErrorCode, VideoModelPort, VideoResultRef } from '@jingxu/application';
+import type {
+  ModelErrorCode,
+  VideoModelPort,
+  VideoModelResolver,
+  VideoProviderProvenance,
+  VideoRequestCapability,
+  VideoResultRef,
+} from '@jingxu/application';
 import type { AppResultDto, VideoAudioAssetSummaryDto } from '@jingxu/contracts';
 import { MEDIA_BATCH_MAX_SHOTS } from '@jingxu/contracts';
 import {
   MockVideoModelAdapter,
+  AgnesVideoModelAdapter,
+  AGNES_VIDEO_DURATION_SEC,
+  AGNES_VIDEO_PROFILE_ID,
+  DEFAULT_AGNES_VIDEO_MODEL_ID,
+  type AgnesVideoModelId,
   DEFAULT_SEEDANCE_VIDEO_MODEL_ID,
   getSeedanceVideoModel,
+  isAgnesVideoModelId,
   NARRATOR_DEFAULT_VOICE_ID,
   SEEDANCE_DURATION_RANGE,
   SEEDANCE_MODEL_ID,
@@ -38,15 +51,52 @@ import type { VideoApiService } from '@jingxu/application';
 
 /** ARK Key 的 safeStorage 凭据引用（视频独立档，与图片档分存；design D2）。 */
 export const VIDEO_CREDENTIAL_ID = 'profile-video-primary';
+export const AGNES_VIDEO_CREDENTIAL_ID = AGNES_VIDEO_PROFILE_ID;
+export type VideoProviderMode = 'MOCK' | 'SEEDANCE' | 'AGNES';
 /** 每轮候选数 N（拍板 D3）。 */
 export const VIDEO_CANDIDATE_COUNT = 2;
 /** ASYNC Provider 单候选轮询截止：视频段生成远慢于图片，分钟级预算。 */
 export const VIDEO_POLL_DEADLINE_MS = 15 * 60_000;
 export const VIDEO_POLL_INTERVAL_MS = 3_000;
+/**
+ * Agnes 档轮询间隔（low-cost D5b 实测修正）：状态查询另有独立频控（429 "too many
+ * video status queries"），4 秒间隔实测会触发、5 秒不触发；取 7 秒留安全余量。
+ * 调度器对轮询期可重试错误同样判候选失败（无退避），故须在组合根配置间隔。
+ */
+export const AGNES_VIDEO_POLL_INTERVAL_MS = 7_000;
 /** Seedance 能力快照时长档位（[minSec, maxSec]；迁移 0012 快照同源）。 */
 const VIDEO_DURATION_RANGE = {
   maxSec: SEEDANCE_DURATION_RANGE[1],
   minSec: SEEDANCE_DURATION_RANGE[0],
+};
+/** 模式→能力快照 id（low-cost D3；0024 播种快照同源冻结；万相档已移除）。 */
+const CAPABILITY_SNAPSHOT_BY_MODE = {
+  AGNES: 'agnes-video/v1',
+  SEEDANCE: 'volcark-seedance-video/v3',
+} as const;
+
+/** 开发与 E2E 的成本护栏：除显式真实开关外，视频路径绝不碰凭据或网络。 */
+export const shouldUseMockVideoModel = (
+  forceMock: boolean,
+  environment: Readonly<{ nodeEnv: string | undefined; realProvider: string | undefined }> = {
+    nodeEnv: process.env.NODE_ENV,
+    realProvider: process.env.JINGXU_VIDEO_REAL_PROVIDER,
+  },
+): boolean =>
+  forceMock || (environment.nodeEnv !== 'production' && environment.realProvider !== '1');
+
+export const resolveVideoProviderMode = (value: string | undefined): VideoProviderMode => {
+  if (value === undefined || value === '')
+    return shouldUseMockVideoModel(false) ? 'MOCK' : 'SEEDANCE';
+  if (value === 'MOCK' || value === 'SEEDANCE' || value === 'AGNES') return value;
+  throw new Error('VIDEO_PROVIDER_MODE_INVALID');
+};
+
+/** Agnes 档冻结模型解析：环境变量只接受注册表内的 ID，缺省 V2.0，非法启动期即抛。 */
+export const resolveAgnesVideoModelId = (value: string | undefined): AgnesVideoModelId => {
+  const modelId = value === undefined || value === '' ? DEFAULT_AGNES_VIDEO_MODEL_ID : value;
+  if (!isAgnesVideoModelId(modelId)) throw new Error('AGNES_VIDEO_MODEL_INVALID');
+  return modelId;
 };
 
 /**
@@ -100,10 +150,12 @@ export interface RegisterVideoFeaturesOptions {
   readonly trustedUrl: string;
   /** Deterministic E2E audio path; production uses the Main Open Dialog. */
   readonly audioImportFile?: string | undefined;
-  /** Enables the deterministic network-free video model only for the Electron E2E harness. */
+  /** Forces the deterministic network-free video model for the Electron E2E harness. */
   readonly useE2eMock?: boolean;
   /** 轮询间隔测试注入（缺省 VIDEO_POLL_INTERVAL_MS；生产不传）。 */
   readonly pollIntervalMs?: number;
+  /** Main-only 受限模式，不能由 Renderer 传入。 */
+  readonly videoProviderMode?: VideoProviderMode | undefined;
 }
 
 export interface VideoFeatureRegistration {
@@ -133,9 +185,33 @@ export const createVideoFeatureRegistration = ({
   safeStorage,
   trustedUrl,
   audioImportFile,
-  useE2eMock = false,
-  pollIntervalMs = VIDEO_POLL_INTERVAL_MS,
+  useE2eMock = shouldUseMockVideoModel(false),
+  videoProviderMode,
+  pollIntervalMs,
 }: RegisterVideoFeaturesOptions): VideoFeatureRegistration => {
+  const providerMode = useE2eMock
+    ? 'MOCK'
+    : resolveVideoProviderMode(process.env.JINGXU_VIDEO_PROVIDER ?? videoProviderMode);
+  const effectivePollIntervalMs =
+    pollIntervalMs ??
+    (providerMode === 'AGNES' ? AGNES_VIDEO_POLL_INTERVAL_MS : VIDEO_POLL_INTERVAL_MS);
+  /** Agnes 档模型在启动期冻结（非法值即抛，不带病运行）；仅 AGNES 模式消费。 */
+  const agnesModelId = resolveAgnesVideoModelId(process.env.JINGXU_AGNES_VIDEO_MODEL);
+  /**
+   * 能力快照驱动的请求档位（low-cost 任务 4.3，与 0024 三快照同源冻结）：
+   * Seedance [5,10]×[720,1080]；Wan [2,15]×[720,1080]；Agnes 固定 [5,5]×[720]。
+   * 按建档/任务冻结溯源解析——当前偏好变化不影响在途任务的重放档位。
+   */
+  const resolveRequestCapability = (provenance: VideoProviderProvenance): VideoRequestCapability =>
+    provenance.providerKind === 'AGNES_VIDEO'
+      ? {
+          durationRange: { maxSec: AGNES_VIDEO_DURATION_SEC, minSec: AGNES_VIDEO_DURATION_SEC },
+          resolutionTiers: [720],
+        }
+      : {
+          durationRange: VIDEO_DURATION_RANGE,
+          resolutionTiers: [720, 1080],
+        };
   let registered = false;
   let activeService: VideoApiService | null = null;
   let activeCompositionService: ReturnType<typeof createVideoCompositionService> | null = null;
@@ -252,9 +328,14 @@ export const createVideoFeatureRegistration = ({
    * 已存在不覆盖——不吞并 UI 已保存的 Key）。Key 只经此路径入密文，不进环境快照、
    * 日志与数据库；任何失败只报原因码不回显内容。正式配置走 provider 通道的视频档
    * （ProviderSettings 视频卡片；与图片档分存互不影响）。
+   * Agnes 档同构：JINGXU_AGNES_CREDENTIAL_FILE → profile-video-agnes-primary
+   * （快速联调通道；Provider 设置 UI 卡落地前的 key 入仓路径）。
    */
-  const bootstrapVideoCredential = (): void => {
-    const keyFile = process.env.JINGXU_VIDEO_CREDENTIAL_FILE;
+  const bootstrapCredentialFromFile = (
+    keyFile: string | undefined,
+    credentialId: string,
+    label: string,
+  ): void => {
     if (keyFile === undefined || keyFile === '' || useE2eMock) return;
     try {
       if (!safeStorage.isEncryptionAvailable()) throw new Error('ENCRYPTION_UNAVAILABLE');
@@ -263,7 +344,7 @@ export const createVideoFeatureRegistration = ({
       const secretsDirectory = path.join(managedRoot, 'secrets');
       mkdirSync(secretsDirectory, { recursive: true });
       writeFileSync(
-        path.join(secretsDirectory, `${VIDEO_CREDENTIAL_ID}.bin`),
+        path.join(secretsDirectory, `${credentialId}.bin`),
         safeStorage.encryptString(plaintext),
         { flag: 'wx', mode: 0o600 },
       );
@@ -276,9 +357,23 @@ export const createVideoFeatureRegistration = ({
             ? failure.message
             : 'UNKNOWN';
       if (reason !== 'EEXIST') {
-        process.stderr.write(`镜序 Studio 视频凭据联调接线失败：${reason}\n`);
+        process.stderr.write(`镜序 Studio ${label}凭据联调接线失败：${reason}\n`);
       }
     }
+  };
+  const bootstrapVideoCredential = (): void => {
+    bootstrapCredentialFromFile(
+      process.env.JINGXU_VIDEO_CREDENTIAL_FILE,
+      VIDEO_CREDENTIAL_ID,
+      '视频',
+    );
+  };
+  const bootstrapAgnesVideoCredential = (): void => {
+    bootstrapCredentialFromFile(
+      process.env.JINGXU_AGNES_CREDENTIAL_FILE,
+      AGNES_VIDEO_CREDENTIAL_ID,
+      'Agnes 视频',
+    );
   };
 
   return {
@@ -297,6 +392,7 @@ export const createVideoFeatureRegistration = ({
         return false;
       }
       bootstrapVideoCredential();
+      bootstrapAgnesVideoCredential();
 
       const store = createContentAddressedStore(managedRoot);
       const credentials = new CredentialAdapter({
@@ -304,22 +400,64 @@ export const createVideoFeatureRegistration = ({
         safeStorage,
         secretsDirectory: path.join(managedRoot, 'secrets'),
       });
-      const videoModel: VideoModelPort = useE2eMock
-        ? new MockVideoModelAdapter({
-            // Mock 适配器逐次消耗声明式步骤且实例应用级共享（预算外提交按
-            // MODEL_UNKNOWN 候选级失败，兼作失控循环的天然熔断）。
-            steps: parseE2eVideoSteps(),
-          })
-        : new SeedanceVideoModelAdapter({
-            credentialId: VIDEO_CREDENTIAL_ID,
-            credentialPort: credentials,
-          });
-      const resolveCurrentModel = async (): Promise<Readonly<{ modelId: string }>> => {
-        if (useE2eMock) return { modelId: SEEDANCE_MODEL_ID };
+      // 四 Adapter 全量构建（low-cost D4/任务 4.2）：调度器按任务 0024 冻结溯源解析，
+      // 当前偏好变化不影响在途任务；Mock 标记优先于 Provider 枚举（模拟 Seedance 形态）。
+      const mockVideoModel: VideoModelPort = new MockVideoModelAdapter({
+        // Mock 适配器逐次消耗声明式步骤且实例应用级共享（预算外提交按
+        // MODEL_UNKNOWN 候选级失败，兼作失控循环的天然熔断）。
+        steps: parseE2eVideoSteps(),
+      });
+      const seedanceVideoModel: VideoModelPort = new SeedanceVideoModelAdapter({
+        credentialId: VIDEO_CREDENTIAL_ID,
+        credentialPort: credentials,
+      });
+      const agnesVideoModel: VideoModelPort = new AgnesVideoModelAdapter({
+        credentialId: AGNES_VIDEO_CREDENTIAL_ID,
+        credentialPort: credentials,
+        modelId: agnesModelId,
+      });
+      /** 当前模式的首选 Adapter（调度器 resolveModel 缺溯源时的回退）。 */
+      const activeVideoModel: VideoModelPort =
+        providerMode === 'MOCK'
+          ? mockVideoModel
+          : providerMode === 'SEEDANCE'
+            ? seedanceVideoModel
+            : agnesVideoModel;
+      const resolveVideoModel: VideoModelResolver = (provenance) => {
+        if (provenance.isMock) return mockVideoModel;
+        if (provenance.providerKind === 'AGNES_VIDEO') return agnesVideoModel;
+        return seedanceVideoModel;
+      };
+      /** 建档期溯源（low-cost D4/任务 4.1）：建档事务读取当前模式事实并冻结。 */
+      const resolveCurrentProvenance = async (): Promise<VideoProviderProvenance> => {
+        if (providerMode === 'MOCK') {
+          return {
+            capabilitySnapshotId: CAPABILITY_SNAPSHOT_BY_MODE.SEEDANCE,
+            isMock: true,
+            modelId: SEEDANCE_MODEL_ID,
+            providerKind: 'VOLCARK_SEEDANCE',
+            providerProfileId: 'profile-video-primary',
+          };
+        }
+        if (providerMode === 'AGNES') {
+          return {
+            capabilitySnapshotId: CAPABILITY_SNAPSHOT_BY_MODE.AGNES,
+            isMock: false,
+            modelId: agnesModelId,
+            providerKind: 'AGNES_VIDEO',
+            providerProfileId: 'profile-video-agnes-primary',
+          };
+        }
         const profile = await providerProfiles.findById(VIDEO_CREDENTIAL_ID);
         const resolved = getSeedanceVideoModel(profile?.modelId ?? DEFAULT_SEEDANCE_VIDEO_MODEL_ID);
         if (resolved === null) throw new Error('VIDEO_MODEL_CONFIGURATION_INVALID');
-        return { modelId: resolved.id };
+        return {
+          capabilitySnapshotId: CAPABILITY_SNAPSHOT_BY_MODE.SEEDANCE,
+          isMock: false,
+          modelId: resolved.id,
+          providerKind: 'VOLCARK_SEEDANCE',
+          providerProfileId: 'profile-video-primary',
+        };
       };
       // 首帧字节读取（images 命名空间，内容寻址）：与图片调度器写入路径同一落盘口径。
       const referenceImages = {
@@ -343,27 +481,29 @@ export const createVideoFeatureRegistration = ({
       };
       const generation = createVideoGenerationService({
         candidateCount: VIDEO_CANDIDATE_COUNT,
-        durationRange: VIDEO_DURATION_RANGE,
+        capabilityOf: resolveRequestCapability,
         hashPayload,
         mediaUnitOfWork,
         modelId: SEEDANCE_MODEL_ID,
         newId: randomUUID,
         workspaceQuery,
-        resolveModel: resolveCurrentModel,
+        resolveProvenance: resolveCurrentProvenance,
         // Mock 档不设闸（无凭据依赖）；真实档在生成前解密探一次，
         // 未配置/不可解密以稳定 MODEL_CREDENTIAL_INVALID 拒绝（A5）。
-        ...(useE2eMock
+        ...(providerMode === 'MOCK'
           ? {}
           : {
               assertCredentialReady: async () => {
-                await credentials.loadCredential(VIDEO_CREDENTIAL_ID);
+                await credentials.loadCredential(
+                  providerMode === 'AGNES' ? AGNES_VIDEO_CREDENTIAL_ID : VIDEO_CREDENTIAL_ID,
+                );
               },
             }),
       });
       // 批次与调度器循环依赖以晚绑定解开：批次建批后 kick，调度器排空后推进批次。
       let kickScheduler: ((projectId: string) => void) | null = null;
       const batch = createVideoBatchService({
-        durationRange: VIDEO_DURATION_RANGE,
+        capabilityOf: resolveRequestCapability,
         generation,
         hashPayload,
         kick: (projectId) => {
@@ -373,7 +513,7 @@ export const createVideoFeatureRegistration = ({
         modelId: SEEDANCE_MODEL_ID,
         newId: randomUUID,
         workspaceQuery,
-        resolveModel: resolveCurrentModel,
+        resolveProvenance: resolveCurrentProvenance,
       });
       const scheduler = createMediaTaskScheduler({
         fileStore: {
@@ -382,15 +522,19 @@ export const createVideoFeatureRegistration = ({
         },
         generation: (repos) => repos.video,
         hashText,
-        model: videoModel,
+        model: activeVideoModel,
+        // 按任务冻结溯源解析 Adapter（low-cost D4）：无溯源行回退当前模式首配。
+        resolveModel: (task) =>
+          task.provenance === undefined ? null : resolveVideoModel(task.provenance),
         mediaUnitOfWork,
         newId: randomUUID,
         nowMs: Date.now,
         onProjectIdle: (projectId) => batch.progressBatch(projectId),
         pollDeadlineMs: VIDEO_POLL_DEADLINE_MS,
-        pollIntervalMs,
+        pollIntervalMs: effectivePollIntervalMs,
         recordPollEvidence: true,
         requestBuilder: createVideoRequestBlueprintBuilder({
+          capabilityOf: resolveRequestCapability,
           firstFrameReader: referenceImages,
           mediaUnitOfWork,
           workspaceQuery,
@@ -410,11 +554,13 @@ export const createVideoFeatureRegistration = ({
 
       activeService = createVideoApiService({
         // 批量建批前置闸与单镜头闸同源（单镜头闸已注入生成服务，API 层闸只护建批）。
-        ...(useE2eMock
+        ...(providerMode === 'MOCK'
           ? {}
           : {
               assertCredentialReady: async () => {
-                await credentials.loadCredential(VIDEO_CREDENTIAL_ID);
+                await credentials.loadCredential(
+                  providerMode === 'AGNES' ? AGNES_VIDEO_CREDENTIAL_ID : VIDEO_CREDENTIAL_ID,
+                );
               },
             }),
         batch,

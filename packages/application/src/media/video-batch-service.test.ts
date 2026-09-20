@@ -16,6 +16,7 @@ import {
   buildVideoParametersFingerprint,
   computeVideoGenerationInputHash,
 } from './video-generation-input';
+import { DEFAULT_VIDEO_PROVENANCE } from '../ports/media/media-repository';
 import { createVideoGenerationService } from './video-generation-service';
 import type { VideoGenerationService } from './video-generation-service';
 
@@ -24,7 +25,6 @@ const VIDEO_MODEL_ID = 'doubao-seedance-1-0-lite-i2v-250428';
 const IMAGE_MODEL_ID = 'doubao-seedream-5-0-lite-260128';
 const hash64 = (seed: string): string => `${seed}_${'.'.repeat(64)}`.slice(0, 64);
 const VIDEO_SIZE = { height: 1920, width: 1080 };
-const DURATION_RANGE = { maxSec: 10, minSec: 5 };
 
 const shotDocument = (): string =>
   JSON.stringify({
@@ -92,6 +92,7 @@ const firstFrameSha = (index: number): string => hash64(`file_${String(index)}`)
 const currentGenHash = (index: number): string =>
   computeVideoGenerationInputHash(
     {
+      ...DEFAULT_VIDEO_PROVENANCE,
       firstFrameFileSha256: firstFrameSha(index),
       modelId: VIDEO_MODEL_ID,
       parametersFingerprint: buildVideoParametersFingerprint({
@@ -141,7 +142,6 @@ const fixture = (
   const newId = () => `id_${String((counter += 1))}`;
   const generation = createVideoGenerationService({
     candidateCount: 2,
-    durationRange: DURATION_RANGE,
     hashPayload,
     mediaUnitOfWork: unitOfWork,
     modelId: VIDEO_MODEL_ID,
@@ -150,7 +150,6 @@ const fixture = (
   });
   const kicked: string[] = [];
   const batch = createVideoBatchService({
-    durationRange: DURATION_RANGE,
     generation,
     hashPayload,
     kick: (projectId) => {

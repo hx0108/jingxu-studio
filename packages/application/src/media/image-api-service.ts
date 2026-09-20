@@ -118,7 +118,10 @@ const toTaskView = (task: MediaTaskRecord): MediaTaskViewDto => ({
   errorCode: task.errorCode,
   generationInputHash: task.generationInputHash,
   id: task.id,
+  // 视频任务溯源（low-cost 6.4）：图片任务无 provenance 恒 null；仅枚举与布尔。
+  isMock: task.provenance?.isMock ?? null,
   phase: task.phase,
+  providerKind: task.provenance?.providerKind ?? null,
   shotId: task.shotId,
   shotVersionId: task.shotVersionId,
   updatedAt: task.updatedAt,

@@ -168,7 +168,7 @@ export class ProviderService {
       modelId: defaults.modelId,
       modelSnapshotDate: defaults.modelSnapshotDate,
       provider: defaults.provider,
-      region: 'cn-beijing',
+      region: defaults.region ?? 'cn-beijing',
       workspaceId: defaults.workspaceId,
     };
   }

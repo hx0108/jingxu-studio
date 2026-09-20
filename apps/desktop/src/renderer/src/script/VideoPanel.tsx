@@ -27,6 +27,12 @@ import {
 } from './script-api';
 import { shotVideoGenerationBusy } from './storyboard-video-state-policy';
 
+/** Provider 来源显示名（low-cost 6.4）：枚举之外的端点/模型事实不进 Renderer。 */
+const VIDEO_PROVIDER_LABELS: Record<'AGNES_VIDEO' | 'VOLCARK_SEEDANCE', string> = {
+  AGNES_VIDEO: 'Agnes',
+  VOLCARK_SEEDANCE: 'Seedance',
+};
+
 /** 视频候选比较板：当前输入世代可选择，STALE 世代仅供播放追溯。 */
 export interface VideoBoardProps {
   readonly busy: boolean;
@@ -80,12 +86,18 @@ export const VideoBoard = ({ busy, candidates, onSelect, pendingCandidateId }: V
                       ? ' · 生成失败'
                       : ''}
                   </span>
+                  {candidate.isMock && (
+                    <span className="mock-source-badge">Mock 模拟 · 不计费</span>
+                  )}
                   <small>
                     第 {String(candidate.roundNo)} 轮 · 候选 {String(candidate.indexInRound + 1)} ·
                     请求 {String(candidate.requestedDurationSec)}s · 实际{' '}
                     {candidate.actualDurationSec === null
                       ? '未回报'
                       : `${String(candidate.actualDurationSec)}s`}
+                    {' · 来源 '}
+                    {VIDEO_PROVIDER_LABELS[candidate.providerKind]}
+                    {candidate.isMock ? '（模拟）' : ''}
                   </small>
                   {candidate.selectedAt !== null && (
                     <span className="selection-badge">
@@ -261,10 +273,22 @@ export const VideoPanel = ({ projectId, shot, storyboardStatus, videoState }: Vi
               ? '视频任务运行中，完成后可再次生成新一轮。'
               : null;
   const errorView = error === null ? null : describeProjectError(error);
+  // 任务高级信息（low-cost 6.4）：运行中任务显示冻结来源与模拟标识。
+  const taskSourceLine =
+    task?.providerKind == null
+      ? null
+      : `视频任务运行中 · 来源 ${VIDEO_PROVIDER_LABELS[task.providerKind]}${
+          task.isMock === true ? ' · Mock 模拟（不计费）' : ''
+        }`;
 
   return (
     <section aria-labelledby="video-panel-title" className="video-panel" id="video-panel">
       <h3 id="video-panel-title">视频候选 · 镜头 #{String(shot.sequence)}</h3>
+      {taskSourceLine !== null && taskActive && (
+        <p aria-live="polite" className="action-hint">
+          {taskSourceLine}
+        </p>
+      )}
       {errorView !== null && (
         <p className="field-error" role="alert">
           {errorView.summary}。{errorView.nextAction}

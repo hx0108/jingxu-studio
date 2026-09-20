@@ -9,9 +9,11 @@ export interface ProviderProfileConfig {
 
 /**
  * Provider 档位：文本=QWEN，图片=火山方舟 Seedream，视频=火山方舟 Seedance，
- * 配音=DashScope Qwen3-TTS（与 QWEN 文本档共用同一把 DashScope Key）。
+ * 配音=DashScope Qwen3-TTS（与 QWEN 文本档共用同一把 DashScope Key），
+ * 低价视频=Agnes AI（low-cost-video-provider-integration；固定端点无地域/Workspace）。
  */
-export type ProviderProfileKind = 'QWEN' | 'QWEN_TTS' | 'VOLCARK_SEEDREAM' | 'VOLCARK_SEEDANCE';
+export type ProviderProfileKind =
+  'QWEN' | 'QWEN_TTS' | 'VOLCARK_SEEDREAM' | 'VOLCARK_SEEDANCE' | 'AGNES_VIDEO';
 
 export interface ProviderProfile {
   readonly baseUrl: string;
@@ -27,8 +29,34 @@ export interface ProviderProfile {
   readonly modelId: string;
   readonly modelSnapshotDate: string;
   readonly provider: ProviderProfileKind;
-  readonly region: 'cn-beijing';
+  /** 地域标签：既有档恒 'cn-beijing'；Agnes 固定端点无地域概念，用 'global' 占位。 */
+  readonly region: string;
   readonly workspaceId: string;
+}
+
+/** 视频当前 Provider 偏好（low-cost D2/D7）：受限 mode 与固定 Profile 映射。 */
+export type VideoProviderSelectionMode = 'SEEDANCE' | 'AGNES';
+
+export interface VideoProviderSelection {
+  readonly mode: VideoProviderSelectionMode;
+  readonly providerProfileId: string;
+  readonly updatedAt: string;
+}
+
+export const VIDEO_PROVIDER_PROFILE_BY_MODE: Readonly<Record<VideoProviderSelectionMode, string>> =
+  {
+    AGNES: 'profile-video-agnes-primary',
+    SEEDANCE: 'profile-video-primary',
+  } as const;
+
+export interface VideoProviderPreferencesPort {
+  get(): Promise<VideoProviderSelection | null>;
+  /** 乐观并发：expectedUpdatedAt 与库中不匹配时抛 'VIDEO_PROVIDER_SELECTION_CONFLICT'。 */
+  save(
+    expectedUpdatedAt: string | null,
+    mode: VideoProviderSelectionMode,
+    savedAt: string,
+  ): Promise<VideoProviderSelection>;
 }
 
 export interface ProviderProfileView {
@@ -39,7 +67,7 @@ export interface ProviderProfileView {
   readonly modelId: string;
   readonly modelSnapshotDate: string;
   readonly provider: ProviderProfileKind;
-  readonly region: 'cn-beijing';
+  readonly region: string;
   /** 乐观并发令牌；当前等价于 profile id（行存在即配置即凭据三者同生命周期）。 */
   readonly versionId: string;
   readonly workspaceId: string;
@@ -54,6 +82,8 @@ export interface ProviderProfileDefaults {
   readonly modelId: string;
   readonly modelSnapshotDate: string;
   readonly provider: ProviderProfileKind;
+  /** 地域标签；缺省 'cn-beijing'（Agnes 固定端点用 'global'）。 */
+  readonly region?: string | undefined;
   readonly workspaceId: string;
 }
 

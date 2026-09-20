@@ -76,7 +76,7 @@ export const mapProviderProfileRow = (row: ProviderProfileRow): ProviderProfile 
     provider === 'VOLCARK_SEEDANCE'
       ? provider
       : invalidRow();
-  if (region !== 'cn-beijing') invalidRow();
+  if (region.length === 0) invalidRow();
   if (!HTTPS_BASE_URL.test(baseUrl)) invalidRow();
   if (enabled !== 0 && enabled !== 1) invalidRow();
 

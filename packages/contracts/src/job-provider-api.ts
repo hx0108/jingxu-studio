@@ -66,8 +66,8 @@ export const providerProfileSchema = z
     enabled: z.boolean(),
     last4: z.string().length(4).nullable(),
     modelId: z.string().min(1).max(128),
-    provider: z.enum(['QWEN', 'QWEN_TTS', 'VOLCARK_SEEDREAM', 'VOLCARK_SEEDANCE']),
-    region: z.literal('cn-beijing'),
+    provider: z.enum(['QWEN', 'QWEN_TTS', 'VOLCARK_SEEDREAM', 'VOLCARK_SEEDANCE', 'AGNES_VIDEO']),
+    region: z.string().min(2),
     validated: z.boolean(),
     versionId: idSchema,
     workspaceId: z.string().regex(/^[A-Za-z0-9-]+$/u),
@@ -91,6 +91,25 @@ export const providerCredentialCommandSchema = mutationSchema
 export const providerMutationInputSchema = mutationSchema.extend({ profileId: idSchema }).strict();
 export const jobUpdatesSubscriptionSchema = z.object({ projectId: projectIdSchema }).strict();
 export const subscriptionResultSchema = z.object({ subscriptionId: idSchema }).strict();
+/** 视频当前 Provider 偏好（low-cost D2/D7）：受限 mode 与固定 Profile 映射，无 URL/密钥。 */
+export const videoProviderSelectionModeSchema = z.enum(['SEEDANCE', 'AGNES']);
+export const videoProviderSelectionSchema = z
+  .object({
+    mode: videoProviderSelectionModeSchema,
+    providerProfileId: idSchema,
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+export const videoProviderSelectionGetInputSchema = z
+  .object({ requestId: requestIdSchema })
+  .strict();
+export const videoProviderSelectionSaveInputSchema = z
+  .object({
+    expectedUpdatedAt: z.string().min(1).nullable(),
+    mode: videoProviderSelectionModeSchema,
+    requestId: requestIdSchema,
+  })
+  .strict();
 
 export type JobSummaryDto = z.infer<typeof jobSummarySchema>;
 export type JobCreateInputDto = z.infer<typeof jobCreateInputSchema>;
@@ -104,6 +123,13 @@ export type ProviderCredentialCommandDto = z.infer<typeof providerCredentialComm
 export type ProviderMutationInputDto = z.infer<typeof providerMutationInputSchema>;
 export type JobUpdatesSubscriptionDto = z.infer<typeof jobUpdatesSubscriptionSchema>;
 export type SubscriptionResultDto = z.infer<typeof subscriptionResultSchema>;
+export type VideoProviderSelectionDto = z.infer<typeof videoProviderSelectionSchema>;
+export type VideoProviderSelectionGetInputDto = z.infer<
+  typeof videoProviderSelectionGetInputSchema
+>;
+export type VideoProviderSelectionSaveInputDto = z.infer<
+  typeof videoProviderSelectionSaveInputSchema
+>;
 
 export interface JobApi {
   create(input: JobCreateInputDto): Promise<AppResultDto<JobSummaryDto>>;
@@ -118,6 +144,12 @@ export interface ProviderApi {
   saveCredential(input: ProviderCredentialCommandDto): Promise<AppResultDto<ProviderProfileDto>>;
   testCredential(input: ProviderMutationInputDto): Promise<AppResultDto<ProviderProfileDto>>;
   deleteCredential(input: ProviderMutationInputDto): Promise<AppResultDto<ProviderProfileDto>>;
+  getVideoProviderSelection(
+    input: VideoProviderSelectionGetInputDto,
+  ): Promise<AppResultDto<VideoProviderSelectionDto>>;
+  saveVideoProviderSelection(
+    input: VideoProviderSelectionSaveInputDto,
+  ): Promise<AppResultDto<VideoProviderSelectionDto>>;
 }
 export interface EventsApi {
   subscribeJobUpdates(
@@ -135,8 +167,10 @@ export const JOB_IPC_CHANNELS = {
 export const PROVIDER_IPC_CHANNELS = {
   deleteCredential: 'provider.deleteCredential',
   getProfile: 'provider.getProfile',
+  getVideoProviderSelection: 'provider.getVideoProviderSelection',
   saveCredential: 'provider.saveCredential',
   saveProfile: 'provider.saveProfile',
+  saveVideoProviderSelection: 'provider.saveVideoProviderSelection',
   testCredential: 'provider.testCredential',
 } as const;
 export const EVENTS_IPC_CHANNELS = { subscribeJobUpdates: 'events.subscribeJobUpdates' } as const;

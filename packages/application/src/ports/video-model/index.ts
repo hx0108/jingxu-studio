@@ -1,4 +1,4 @@
-export type { VideoModelPort } from './video-model-port';
+export type { VideoModelPort, VideoModelResolver } from './video-model-port';
 export type {
   VideoDownload,
   VideoGenerationRequest,

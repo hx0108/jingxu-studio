@@ -25,8 +25,10 @@ describe('Job Provider Events Preload Contract', () => {
     expect(Object.keys(api.provider).sort()).toEqual([
       'deleteCredential',
       'getProfile',
+      'getVideoProviderSelection',
       'saveCredential',
       'saveProfile',
+      'saveVideoProviderSelection',
       'testCredential',
     ]);
     expect(Object.keys(api.events)).toEqual(['subscribeJobUpdates']);
@@ -114,6 +116,53 @@ describe('Job Provider Events Preload Contract', () => {
         profileId: 'profile_12345678',
         requestId: 'request-123',
         sql: 'SELECT',
+      } as never),
+    ).rejects.toThrow();
+    expect(invoke).not.toHaveBeenCalled();
+  });
+
+  it('视频 Provider 选择—合法输入—只调用固定 selection 频道', async () => {
+    const selection = {
+      mode: 'AGNES',
+      providerProfileId: 'profile-video-agnes-primary',
+      updatedAt: '2026-09-19T00:00:00Z',
+    };
+    const invoke = vi.fn((_channel: string) => Promise.resolve({ data: selection, ok: true }));
+    const api = createJingxuApi(invoke);
+    await api.provider.getVideoProviderSelection({ requestId: 'request-123' });
+    await api.provider.saveVideoProviderSelection({
+      expectedUpdatedAt: null,
+      mode: 'AGNES',
+      requestId: 'request-124',
+    });
+    expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
+      PROVIDER_IPC_CHANNELS.getVideoProviderSelection,
+      PROVIDER_IPC_CHANNELS.saveVideoProviderSelection,
+    ]);
+  });
+
+  it('视频 Provider 选择—MOCK 或任意 URL/密钥字段—Preload strict 校验拒绝且 invoke 零调用', async () => {
+    const invoke = vi.fn();
+    const api = createJingxuApi(invoke);
+    await expect(
+      api.provider.saveVideoProviderSelection({
+        expectedUpdatedAt: null,
+        mode: 'MOCK',
+        requestId: 'request-123',
+      } as never),
+    ).rejects.toThrow();
+    await expect(
+      api.provider.saveVideoProviderSelection({
+        baseUrl: 'https://evil.example',
+        expectedUpdatedAt: null,
+        mode: 'AGNES',
+        requestId: 'request-124',
+      } as never),
+    ).rejects.toThrow();
+    await expect(
+      api.provider.getVideoProviderSelection({
+        apiKey: 'secret',
+        requestId: 'request-125',
       } as never),
     ).rejects.toThrow();
     expect(invoke).not.toHaveBeenCalled();

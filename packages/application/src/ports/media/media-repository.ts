@@ -48,6 +48,32 @@ export interface MediaAssetWithVersions {
 
 export type MediaCandidateStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED' | 'STALE_INPUT';
 
+/**
+ * 视频 Provider 溯源（low-cost-video design D3/D4；0024 冻结列同形）：建档事务内
+ * 一次冻结，后续 submit/poll/download 与重启恢复只读任务冻结值，不回读当前偏好。
+ */
+export type VideoProviderKind = 'VOLCARK_SEEDANCE' | 'AGNES_VIDEO';
+
+export interface VideoProviderProvenance {
+  readonly capabilitySnapshotId: string;
+  readonly isMock: boolean;
+  readonly modelId: string;
+  readonly providerKind: VideoProviderKind;
+  readonly providerProfileId: string;
+}
+
+/**
+ * 视频建档缺省溯源（与 0024 列 DEFAULT 同源）：Seedance 真实档。组合根应始终
+ * 注入当前模式的 resolveProvenance——缺省只兜底直连仓储的旧调用形状。
+ */
+export const DEFAULT_VIDEO_PROVENANCE: VideoProviderProvenance = Object.freeze({
+  capabilitySnapshotId: 'volcark-seedance-video/v3',
+  isMock: false,
+  modelId: 'doubao-seedance-2-0-260128',
+  providerKind: 'VOLCARK_SEEDANCE',
+  providerProfileId: 'profile-video-primary',
+});
+
 export interface MediaCandidateRecord {
   readonly byteSize: number | null;
   readonly createdAt: string;
@@ -100,6 +126,8 @@ export interface MediaTaskRecord {
   readonly idempotencyKey: string;
   readonly phase: MediaTaskPhase;
   readonly projectId: string;
+  /** 视频行建档冻结溯源（0024 列恒非空，仓储读必携带）；图片行恒 undefined。 */
+  readonly provenance?: VideoProviderProvenance;
   readonly providerTaskId: string | null;
   readonly roundNo: number;
   readonly shotId: string;
@@ -249,6 +277,8 @@ export interface MediaGenerationRepository<
     readonly id: string;
     readonly idempotencyKey: string;
     readonly projectId: string;
+    /** 视频域溯源（low-cost D3）：建档冻结；图片域忽略，视频仓储缺省 Seedance 档。 */
+    readonly provenance?: VideoProviderProvenance;
     readonly shotId: string;
     readonly shotVersionId: string;
   }): Promise<MediaTaskRecord>;
@@ -402,14 +432,18 @@ export interface VideoCandidateRecord extends MediaCandidateRecord {
   readonly firstFrameCandidateId: string;
   /** 生成时首帧文件 sha256——首帧改选 STALE 判定依据（确定性 join）。 */
   readonly firstFrameFileSha256: string;
+  /** 建候选时冻结的溯源（0024 列恒非空，与任务行同事务同值）。 */
+  readonly provenance?: VideoProviderProvenance;
   /** 建候选时落列的请求时长档位（Seedance [5,10]，应用层就近映射）。 */
   readonly requestedDurationSec: number;
 }
 
-/** 视频域建档输入：公共形态 + 首帧锚点对 + 请求时长档位（三列 NOT NULL）。 */
+/** 视频域建档输入：公共形态 + 首帧锚点对 + 请求时长档位 + 溯源冻结。 */
 export interface VideoCandidateInsertInput extends MediaCandidateInsertInput {
   readonly firstFrameCandidateId: string;
   readonly firstFrameFileSha256: string;
+  /** 建档冻结溯源；缺省 Seedance 档（与任务行同事务同值）。 */
+  readonly provenance?: VideoProviderProvenance;
   readonly requestedDurationSec: number;
 }
 

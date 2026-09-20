@@ -47,11 +47,13 @@ export type {
   MediaTaskScheduler,
   MediaTaskSchedulerDependencies,
 } from './media-task-scheduler';
+export { DEFAULT_VIDEO_PROVENANCE } from '../ports/media/media-repository';
 export { mediaFailure, mediaPersistenceFailure } from './media-service-error';
 export {
   buildVideoParametersFingerprint,
   buildVideoPrompt,
   computeVideoGenerationInputHash,
+  DEFAULT_VIDEO_REQUEST_CAPABILITY,
   extractVideoShotFields,
   resolveVideoDurationTier,
   resolveVideoSize,
@@ -62,6 +64,7 @@ export type {
   VideoFirstFrameDimensions,
   VideoGenerationInputDescriptor,
   VideoParametersFingerprintInput,
+  VideoRequestCapability,
   VideoShotMotionFields,
   VideoSize,
 } from './video-generation-input';

@@ -47,6 +47,9 @@ import {
   providerMutationInputSchema,
   providerProfileCommandSchema,
   providerProfileSchema,
+  videoProviderSelectionGetInputSchema,
+  videoProviderSelectionSaveInputSchema,
+  videoProviderSelectionSchema,
   producibilityGetReportInputSchema,
   producibilityOverrideFindingInputSchema,
   producibilityReportSchema,
@@ -175,6 +178,8 @@ import {
   type ProviderCredentialCommandDto,
   type ProviderGetInputDto,
   type ProviderMutationInputDto,
+  type VideoProviderSelectionGetInputDto,
+  type VideoProviderSelectionSaveInputDto,
   type ProviderProfileCommandDto,
   type ProducibilityGetReportInputDto,
   type ProducibilityOverrideFindingInputDto,
@@ -464,6 +469,20 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
           await invoke(
             PROVIDER_IPC_CHANNELS.deleteCredential,
             providerMutationInputSchema.parse(input),
+          ),
+        ),
+      getVideoProviderSelection: async (input: VideoProviderSelectionGetInputDto) =>
+        appResultSchema(videoProviderSelectionSchema).parse(
+          await invoke(
+            PROVIDER_IPC_CHANNELS.getVideoProviderSelection,
+            videoProviderSelectionGetInputSchema.parse(input),
+          ),
+        ),
+      saveVideoProviderSelection: async (input: VideoProviderSelectionSaveInputDto) =>
+        appResultSchema(videoProviderSelectionSchema).parse(
+          await invoke(
+            PROVIDER_IPC_CHANNELS.saveVideoProviderSelection,
+            videoProviderSelectionSaveInputSchema.parse(input),
           ),
         ),
     }),

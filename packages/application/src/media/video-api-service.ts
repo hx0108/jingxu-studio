@@ -83,7 +83,10 @@ const toTaskView = (task: MediaTaskRecord): MediaTaskViewDto => ({
   errorCode: task.errorCode,
   generationInputHash: task.generationInputHash,
   id: task.id,
+  // 视频任务溯源（low-cost 6.4）：与图片域共享视图形状，视频行必携带。
+  isMock: task.provenance?.isMock ?? null,
   phase: task.phase,
+  providerKind: task.provenance?.providerKind ?? null,
   shotId: task.shotId,
   shotVersionId: task.shotVersionId,
   updatedAt: task.updatedAt,
@@ -95,6 +98,8 @@ const toVideoCandidateView = (candidate: VideoCandidateRecord): VideoCandidateVi
   if (candidate.mimeType !== null && candidate.mimeType !== 'video/mp4') {
     throw new Error('MEDIA_ROW_CORRUPT');
   }
+  // 溯源缺失即行损坏（0024 起列恒非空、仓储读必携带）——按稳定标记失败，不静默。
+  if (candidate.provenance === undefined) throw new Error('MEDIA_ROW_CORRUPT');
   return {
     actualDurationSec: candidate.actualDurationSec,
     byteSize: candidate.byteSize,
@@ -106,8 +111,10 @@ const toVideoCandidateView = (candidate: VideoCandidateRecord): VideoCandidateVi
     height: candidate.height,
     id: candidate.id,
     indexInRound: candidate.indexInRound,
+    isMock: candidate.provenance.isMock,
     mediaUrl: candidate.status === 'SUCCEEDED' ? videoCandidateMediaUrl(candidate.id) : null,
     mimeType: candidate.mimeType,
+    providerKind: candidate.provenance.providerKind,
     requestedDurationSec: candidate.requestedDurationSec,
     roundNo: candidate.roundNo,
     selectedAt: candidate.selectedAt,

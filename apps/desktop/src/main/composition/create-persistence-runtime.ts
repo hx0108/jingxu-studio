@@ -18,6 +18,7 @@ import type {
   MediaUnitOfWorkPort,
   ProjectUnitOfWorkPort,
   ProviderProfileRepositoryPort,
+  VideoProviderPreferencesPort,
   ProviderUnitOfWorkPort,
   SchemaManifestRepositoryPort,
   SchemaManifestUnitOfWorkPort,
@@ -36,6 +37,7 @@ export interface DesktopPersistenceRuntime {
   readonly getProjectUnitOfWork: () => ProjectUnitOfWorkPort | null;
   readonly getProviderUnitOfWork: () => ProviderUnitOfWorkPort | null;
   readonly getProviderProfileRepository: () => ProviderProfileRepositoryPort | null;
+  readonly getVideoProviderPreferences: () => VideoProviderPreferencesPort | null;
   readonly getSchemaRegistry: () => CompiledSchemaRegistry | null;
   readonly getScriptUnitOfWork: () => ScriptUnitOfWorkPort | null;
   readonly getScriptWorkspaceQuery: () => ScriptWorkspaceQueryPort | null;
@@ -99,6 +101,7 @@ export const createDesktopPersistenceRuntime = async ({
     getProjectUnitOfWork: () => adapter.getProjectUnitOfWork(),
     getProviderUnitOfWork: () => adapter.getProviderUnitOfWork(),
     getProviderProfileRepository: () => adapter.getProviderProfileRepository(),
+    getVideoProviderPreferences: () => adapter.getVideoProviderPreferences(),
     getSchemaRegistry: () => registry.getPublished(),
     getScriptUnitOfWork: () => adapter.getScriptUnitOfWork(),
     getScriptWorkspaceQuery: () => adapter.getScriptWorkspaceQuery(),

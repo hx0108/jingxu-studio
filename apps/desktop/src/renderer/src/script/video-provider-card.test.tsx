@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AppErrorDto, ProviderProfileDto } from '@jingxu/contracts';
 
-import { VideoProviderCardView } from './VideoProviderCard';
+import {
+  AGNES_VIDEO_CARD_VARIANT,
+  MockVideoNotice,
+  SEEDANCE_VIDEO_CARD_VARIANT,
+  VideoProviderCardView,
+} from './VideoProviderCard';
 
 const profile = (overrides: Partial<ProviderProfileDto> = {}): ProviderProfileDto => ({
   configured: true,
@@ -24,15 +29,18 @@ const render = (overrides: Partial<Parameters<typeof VideoProviderCardView>[0]> 
       apiKey=""
       error={null}
       feedback=""
+      isCurrentProvider={false}
       modelId="doubao-seedance-2-0-260128"
       onApiKeyChange={vi.fn()}
       onDelete={vi.fn()}
       onModelChange={vi.fn()}
       onModelSave={vi.fn()}
       onSave={vi.fn()}
+      onSetCurrent={null}
       onTest={vi.fn()}
       pending={false}
       profile={profile()}
+      variant={SEEDANCE_VIDEO_CARD_VARIANT}
       {...overrides}
     />,
   );
@@ -90,5 +98,43 @@ describe('VideoProviderCardView（shot-video-generation 4.4）', () => {
   it('pending—模型与凭据操作均禁用—避免重复提交覆盖 expectedVersionId', () => {
     const html = render({ apiKey: 'ark-secret', pending: true });
     expect(html.match(/disabled=""/gu)).toHaveLength(5);
+  });
+});
+
+describe('VideoProviderCardView—Agnes 低价档（low-cost 6.3）', () => {
+  it('两档受限模型可见—徽标仅当前档显示—免费/限流提示在卡内', () => {
+    const html = render({ variant: AGNES_VIDEO_CARD_VARIANT, modelId: 'agnes-video-v2.0' });
+    expect(html).toContain('Agnes Video V2.0');
+    expect(html).toContain('Agnes Video 2.5 Flash');
+    expect(html).toContain('Agnes AI');
+    expect(html).toContain('$0/秒');
+    expect(html).toContain('每分钟限 1 个任务');
+    expect(html).not.toContain('model-current-provider-badge');
+  });
+
+  it('isCurrentProvider—显示当前视频档徽标且设为按钮进入禁用态', () => {
+    const html = render({
+      isCurrentProvider: true,
+      onSetCurrent: vi.fn(),
+      variant: AGNES_VIDEO_CARD_VARIANT,
+    });
+    expect(html).toContain('当前视频档');
+    expect(html).toContain('已是当前视频档');
+  });
+
+  it('onSetCurrent 为 null—不渲染设为按钮（偏好未载入时）', () => {
+    const html = render({ variant: SEEDANCE_VIDEO_CARD_VARIANT });
+    expect(html).not.toContain('设为当前视频档');
+  });
+});
+
+describe('Mock 标记（low-cost 6.3）', () => {
+  it('Mock 醒目标记—声明零网络/不计费/不读密钥且不可在页面选择', () => {
+    const html = renderToStaticMarkup(<MockVideoNotice />);
+    expect(html).toContain('联调模拟（Mock）');
+    expect(html).toContain('零网络 Mock');
+    expect(html).toContain('不计费');
+    expect(html).toContain('不能在此页面选择或关闭');
+    expect(html).toContain('JINGXU_VIDEO_PROVIDER=MOCK');
   });
 });

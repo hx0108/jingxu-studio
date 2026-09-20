@@ -11,6 +11,7 @@ import type {
   ProviderUnitOfWorkPort,
   ScriptUnitOfWorkPort,
 } from '@jingxu/application';
+import { InMemoryVideoProviderPreferences } from '@jingxu/application';
 import { PROVIDER_IPC_CHANNELS } from '@jingxu/contracts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -99,6 +100,7 @@ const createHarness = (
     getJobUnitOfWork: () => units?.jobUnitOfWork ?? null,
     getProviderProfileRepository: () => units?.providerProfileRepository ?? null,
     getProviderUnitOfWork: () => units?.providerUnitOfWork ?? null,
+    getVideoProviderPreferences: () => new InMemoryVideoProviderPreferences(),
     getSchemaRegistry: () => units?.registry ?? null,
     getScriptUnitOfWork: () => units?.scriptUnitOfWork ?? null,
     startupService: { getStatus: () => ({ writeEnabled: ready }) },
@@ -488,5 +490,181 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     });
     expect(tested.ok).toBe(true);
     expect(tested.data?.configured).toBe(true);
+  });
+
+  it('两视频档（Seedance/Agnes）凭据闭环—保存/轮换/删除/末四位/验证时间隔离/切换零触碰', async () => {
+    const decryptString = vi.fn((encrypted: Uint8Array) =>
+      new TextDecoder().decode(encrypted).replace(/^enc:/u, ''),
+    );
+    const encryptString = vi.fn((plaintext: string) =>
+      new TextEncoder().encode(`enc:${plaintext}`),
+    );
+    const reversibleStorage: SafeStorageFacade = {
+      decryptString,
+      encryptString,
+      isEncryptionAvailable: () => true,
+    };
+    const profiles = new Map<string, ProviderProfile>();
+    const auditEvents: string[] = [];
+    const units = configuredUnits();
+    units.providerProfileRepository = {
+      delete: (id: string) => {
+        profiles.delete(id);
+        return Promise.resolve();
+      },
+      findById: (id: string) => Promise.resolve(profiles.get(id) ?? null),
+      save: (profile: ProviderProfile) => {
+        profiles.set(profile.id, profile);
+        return Promise.resolve();
+      },
+    };
+    units.providerUnitOfWork = {
+      run: (work: (repositories: never) => Promise<unknown>) =>
+        work({
+          audit: {
+            recordCredentialDeleted: (id: string) => {
+              auditEvents.push(id);
+              return Promise.resolve();
+            },
+          },
+          profiles: units.providerProfileRepository,
+        } as never),
+    } as unknown as ProviderUnitOfWorkPort;
+
+    const h = createHarness({ managedRoot: await createRoot(), safeStorage: reversibleStorage });
+    h.setReady(true);
+    h.setUnits(units);
+    h.registration.ensureRegistered();
+    const invoke = (channel: string, input: unknown) =>
+      h.handlers.get(channel)?.(trustedEvent(), input) as Promise<{
+        data?:
+          | {
+              configured: boolean;
+              last4: string | null;
+              modelId: string;
+              provider: string;
+              validated: boolean;
+            }
+          | { mode: string; providerProfileId: string; updatedAt: string };
+        error?: { code: string };
+        ok: boolean;
+      }>;
+    const secretsDirectory = path.join(h.root, 'secrets');
+
+    // 保存三家 Key：行惰性建档、provider 各归其位、密文按固定 id 三分存。
+    const seedanceSaved = await invoke(PROVIDER_IPC_CHANNELS.saveCredential, {
+      apiKey: 'ark-key-video7777',
+      expectedVersionId: 'profile-video-primary',
+      profileId: 'profile-video-primary',
+      requestId: 'request-video-seedance-save',
+    });
+    expect(seedanceSaved.data).toMatchObject({
+      configured: true,
+      last4: '7777',
+      provider: 'VOLCARK_SEEDANCE',
+    });
+    const agnesSaved = await invoke(PROVIDER_IPC_CHANNELS.saveCredential, {
+      apiKey: 'agnes-key-abcd5678',
+      expectedVersionId: 'profile-video-agnes-primary',
+      profileId: 'profile-video-agnes-primary',
+      requestId: 'request-video-agnes-save',
+    });
+    expect(agnesSaved.data).toMatchObject({
+      configured: true,
+      last4: '5678',
+      modelId: 'agnes-video-v2.0',
+      provider: 'AGNES_VIDEO',
+    });
+    expect(await readdir(secretsDirectory)).toEqual([
+      'profile-video-agnes-primary.bin',
+      'profile-video-primary.bin',
+    ]);
+
+    // 验证时间隔离：Agnes 校验落 validated；轮换 Wan Key 只归零 Wan 的校验时间。
+    const agnesTested = await invoke(PROVIDER_IPC_CHANNELS.testCredential, {
+      expectedVersionId: 'profile-video-agnes-primary',
+      profileId: 'profile-video-agnes-primary',
+      requestId: 'request-video-agnes-test',
+    });
+    expect(agnesTested.data).toMatchObject({ configured: true, validated: true });
+    // 轮换隔离（Seedance）：新 Key 归零校验时间，Agnes 的已验证态不受影响。
+    const seedanceRotated = await invoke(PROVIDER_IPC_CHANNELS.saveCredential, {
+      apiKey: 'ark-key-video3333',
+      expectedVersionId: 'profile-video-primary',
+      profileId: 'profile-video-primary',
+      requestId: 'request-video-seedance-rotate',
+    });
+    expect(seedanceRotated.data).toMatchObject({ last4: '3333', validated: false });
+    const agnesView = await invoke(PROVIDER_IPC_CHANNELS.getProfile, {
+      profileId: 'profile-video-agnes-primary',
+    });
+    expect(agnesView.data).toMatchObject({ configured: true, last4: '5678', validated: true });
+    const seedanceView = await invoke(PROVIDER_IPC_CHANNELS.getProfile, {
+      profileId: 'profile-video-primary',
+    });
+    expect(seedanceView.data).toMatchObject({ configured: true, last4: '3333', validated: false });
+
+    // 删除 Agnes：只清 Agnes 行/密文/审计，另两档行与密文原样。
+    const agnesDeleted = await invoke(PROVIDER_IPC_CHANNELS.deleteCredential, {
+      expectedVersionId: 'profile-video-agnes-primary',
+      profileId: 'profile-video-agnes-primary',
+      requestId: 'request-video-agnes-delete',
+    });
+    expect(agnesDeleted.data).toMatchObject({ configured: false, provider: 'AGNES_VIDEO' });
+    expect(auditEvents).toEqual(['profile-video-agnes-primary']);
+    expect(await readdir(secretsDirectory)).toEqual(['profile-video-primary.bin']);
+    expect(profiles.has('profile-video-agnes-primary')).toBe(false);
+
+    // Provider 切换零触碰（low-cost 6.2：保存选择本身零网络零凭据读取——密文唯一
+    // 入口 CredentialAdapter 经 safeStorage 代理计数，偏好轮转期间计数零增长）。
+    const decryptCallsBeforeSelection = decryptString.mock.calls.length;
+    const encryptCallsBeforeSelection = encryptString.mock.calls.length;
+    // 偏好轮转三家 mode，Profile 行与密文零读取零修改。
+    const rowsSnapshot = JSON.stringify(
+      [...profiles.values()].sort((a, b) => a.id.localeCompare(b.id)),
+    );
+    const filesSnapshot = await readdir(secretsDirectory);
+    const initial = await invoke(PROVIDER_IPC_CHANNELS.getVideoProviderSelection, {
+      requestId: 'request-video-selection-get-0',
+    });
+    expect(initial.data).toMatchObject({
+      mode: 'SEEDANCE',
+      providerProfileId: 'profile-video-primary',
+    });
+    const updatedAtOf = (result: Awaited<ReturnType<typeof invoke>>): string | null =>
+      result.data !== undefined && 'updatedAt' in result.data ? result.data.updatedAt : null;
+    const first = await invoke(PROVIDER_IPC_CHANNELS.saveVideoProviderSelection, {
+      expectedUpdatedAt: null,
+      mode: 'AGNES',
+      requestId: 'request-video-selection-save-1',
+    });
+    expect(first.data).toMatchObject({
+      mode: 'AGNES',
+      providerProfileId: 'profile-video-agnes-primary',
+    });
+    const second = await invoke(PROVIDER_IPC_CHANNELS.saveVideoProviderSelection, {
+      expectedUpdatedAt: updatedAtOf(first),
+      mode: 'AGNES',
+      requestId: 'request-video-selection-save-2',
+    });
+    expect(second.data).toMatchObject({
+      mode: 'AGNES',
+      providerProfileId: 'profile-video-agnes-primary',
+    });
+    const third = await invoke(PROVIDER_IPC_CHANNELS.saveVideoProviderSelection, {
+      expectedUpdatedAt: updatedAtOf(second),
+      mode: 'SEEDANCE',
+      requestId: 'request-video-selection-save-3',
+    });
+    expect(third.data).toMatchObject({
+      mode: 'SEEDANCE',
+      providerProfileId: 'profile-video-primary',
+    });
+    expect(JSON.stringify([...profiles.values()].sort((a, b) => a.id.localeCompare(b.id)))).toBe(
+      rowsSnapshot,
+    );
+    expect(await readdir(secretsDirectory)).toEqual(filesSnapshot);
+    expect(decryptString.mock.calls.length).toBe(decryptCallsBeforeSelection);
+    expect(encryptString.mock.calls.length).toBe(encryptCallsBeforeSelection);
   });
 });

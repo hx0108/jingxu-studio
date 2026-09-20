@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { MediaUnitOfWorkPort } from '../ports/media/media-repository';
+import type { MediaUnitOfWorkPort, VideoProviderProvenance } from '../ports/media/media-repository';
 import type {
   EpisodeVersion,
   ScriptWorkspaceSnapshot,
@@ -14,7 +14,9 @@ import { InMemoryVideoMediaRepository } from './in-memory-video-media-repository
 import {
   buildVideoParametersFingerprint,
   computeVideoGenerationInputHash,
+  type VideoRequestCapability,
 } from './video-generation-input';
+import { DEFAULT_VIDEO_PROVENANCE } from '../ports/media/media-repository';
 import { createVideoGenerationService } from './video-generation-service';
 import type { VideoGenerationService } from './video-generation-service';
 
@@ -95,6 +97,7 @@ const hashPayload = (value: Readonly<Record<string, unknown>>): string =>
 const expectedGenerationHash = (firstFrameSha: string, shotVersionId: string): string =>
   computeVideoGenerationInputHash(
     {
+      ...DEFAULT_VIDEO_PROVENANCE,
       firstFrameFileSha256: firstFrameSha,
       modelId: MODEL_ID,
       parametersFingerprint: buildVideoParametersFingerprint({
@@ -120,6 +123,8 @@ const fixture = (
   shots: readonly StoryboardShotSnapshot[],
   status: EpisodeVersion['status'] = 'READY',
   assertCredentialReady?: () => Promise<void>,
+  resolveProvenance?: () => Promise<VideoProviderProvenance>,
+  capabilityOf?: (provenance: VideoProviderProvenance) => VideoRequestCapability,
 ): Fixture => {
   const repository = new InMemoryMediaRepository();
   // 视频仓以 image 候选数组为 lens（同事务可见）：首帧改选 STALE 判定读取最新选择指针。
@@ -143,10 +148,11 @@ const fixture = (
     // 未注入即 Mock 档形态（无凭据闸）；注入后未通过/通过两态在用例内分别验证。
     ...(assertCredentialReady === undefined ? {} : { assertCredentialReady }),
     candidateCount: 2,
-    durationRange: { maxSec: 10, minSec: 5 },
     hashPayload,
     mediaUnitOfWork: unitOfWork,
     modelId: MODEL_ID,
+    ...(resolveProvenance === undefined ? {} : { resolveProvenance }),
+    ...(capabilityOf === undefined ? {} : { capabilityOf }),
     newId: (() => {
       let counter = 0;
       return () => `id_${String((counter += 1))}`;
@@ -509,5 +515,177 @@ describe('VideoGenerationService.selectCandidate', () => {
     if (!second.ok) return;
     expect(second.data.find((candidate) => candidate.id === 'id_2')?.selectedAt).not.toBeNull();
     expect(second.data.find((candidate) => candidate.id === 'id_3')?.selectedAt).toBeNull();
+  });
+
+  it('low-cost D4/4.1—建档事务冻结溯源—偏好切换不改写历史、幂等重放同溯源', async () => {
+    const seedance: VideoProviderProvenance = {
+      capabilitySnapshotId: 'volcark-seedance-video/v3',
+      isMock: false,
+      modelId: 'doubao-seedance-2-0-260128',
+      providerKind: 'VOLCARK_SEEDANCE',
+      providerProfileId: 'profile-video-primary',
+    };
+    const agnes: VideoProviderProvenance = {
+      capabilitySnapshotId: 'agnes-video/v1',
+      isMock: false,
+      modelId: 'agnes-video-v2.0',
+      providerKind: 'AGNES_VIDEO',
+      providerProfileId: 'profile-video-agnes-primary',
+    };
+    // 可变「当前偏好」：SEEDANCE 建档 → 切 WAN 再建档（模拟保存选择后的新任务）。
+    let current = seedance;
+    const { repository, service, videoRepository } = fixture(
+      [shotOf('shot_1', 'scv_1'), shotOf('shot_2', 'scv_2')],
+      'READY',
+      undefined,
+      () => Promise.resolve(current),
+    );
+    await seedFirstFrame(repository, 'shot_1', 'scv_1', 'img_1', IMG_SHA_1, true);
+    await seedFirstFrame(repository, 'shot_2', 'scv_2', 'img_2', IMG_SHA_2, true);
+
+    const first = await service.generateVideoCandidates(
+      { projectId: 'project_1', requestId: 'req_a', shotId: 'shot_1' },
+      'trace_a',
+    );
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    expect(first.data.provenance).toEqual(seedance);
+
+    current = agnes;
+    const second = await service.generateVideoCandidates(
+      { projectId: 'project_1', requestId: 'req_b', shotId: 'shot_2' },
+      'trace_b',
+    );
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    expect(second.data.provenance).toEqual(agnes);
+    expect(second.data.generationInputHash).not.toBe(first.data.generationInputHash);
+
+    // 偏好变化不改写历史：旧任务/候选行仍冻结 Seedance 溯源；同轮候选同值。
+    const priorTask = await videoRepository.findTaskByIdempotencyKey('project_1', 'req_a');
+    expect(priorTask?.provenance).toEqual(seedance);
+    const shot1Candidates = await videoRepository.listCandidates('shot_1');
+    expect(shot1Candidates.filter((c) => c.roundNo === first.data.roundNo)).toHaveLength(2);
+    for (const candidate of shot1Candidates.filter((c) => c.roundNo === first.data.roundNo)) {
+      expect(candidate.provenance).toEqual(seedance);
+    }
+    // 幂等重放返回建档冻结值，不按当前偏好改写。
+    const replay = await service.generateVideoCandidates(
+      { projectId: 'project_1', requestId: 'req_a', shotId: 'shot_1' },
+      'trace_c',
+    );
+    expect(replay.ok).toBe(true);
+    if (!replay.ok) return;
+    expect(replay.data.provenance).toEqual(seedance);
+  });
+
+  it('low-cost 4.3—能力快照驱动档位—Agnes 固定 5s/720P、Wan 2~15 整数、不支持的参数不静默降级', async () => {
+    // 能力表（组合根同款）：Agnes [5,5]×[720]；Wan [2,15]×[720,1080]；Seedance 缺省。
+    const agnesCapability: VideoRequestCapability = {
+      durationRange: { maxSec: 5, minSec: 5 },
+      resolutionTiers: [720],
+    };
+    const seedanceCapability: VideoRequestCapability = {
+      durationRange: { maxSec: 10, minSec: 5 },
+      resolutionTiers: [720, 1080],
+    };
+    const capabilityOf = (provenance: VideoProviderProvenance): VideoRequestCapability =>
+      provenance.providerKind === 'AGNES_VIDEO' ? agnesCapability : seedanceCapability;
+    const agnesProvenance: VideoProviderProvenance = {
+      capabilitySnapshotId: 'agnes-video/v1',
+      isMock: false,
+      modelId: 'agnes-video-v2.0',
+      providerKind: 'AGNES_VIDEO',
+      providerProfileId: 'profile-video-agnes-primary',
+    };
+    // 镜头目标 8s、首帧 1440x2560（Seedance 双档下为 10s/1080x1920 世代）。
+    const shots = [
+      shotOf('shot_1', 'scv_1', 8),
+      shotOf('shot_2', 'scv_2', 7),
+      shotOf('shot_3', 'scv_3', 20),
+    ];
+    const f = fixture(
+      shots,
+      'READY',
+      undefined,
+      () => Promise.resolve(agnesProvenance),
+      capabilityOf,
+    );
+    await seedFirstFrame(f.repository, 'shot_1', 'scv_1', 'img_1', IMG_SHA_1, true);
+    const agnes = await f.service.generateVideoCandidates(
+      { projectId: 'project_1', requestId: 'req_agnes', shotId: 'shot_1' },
+      'trace_agnes',
+    );
+    expect(agnes.ok).toBe(true);
+    if (!agnes.ok) return;
+    // Agnes 固定档：目标 8s 落 5s（exceededMax 如实标注由 requested_duration_sec 承载），
+    // 分辨率固定 720 档（1440x2560 → 720x1280，指纹含 720x1280）。
+    const agnesCandidates = await f.videoRepository.listCandidates('shot_1');
+    expect(
+      agnesCandidates
+        .filter((c) => c.roundNo === agnes.data.roundNo)
+        .map((c) => c.requestedDurationSec),
+    ).toEqual([5, 5]);
+    expect(agnes.data.generationInputHash).toBe(
+      computeVideoGenerationInputHash(
+        {
+          capabilitySnapshotId: 'agnes-video/v1',
+          firstFrameFileSha256: IMG_SHA_1,
+          isMock: false,
+          modelId: 'agnes-video-v2.0',
+          parametersFingerprint: buildVideoParametersFingerprint({
+            durationSec: 5,
+            firstFrameFileSha256: IMG_SHA_1,
+            modelId: 'agnes-video-v2.0',
+            size: { height: 1280, width: 720 },
+          }),
+          providerKind: 'AGNES_VIDEO',
+          providerProfileId: 'profile-video-agnes-primary',
+          shotContentHash: hash64('doc_scv_1'),
+          shotVersionId: 'scv_1',
+        },
+        hashPayload,
+      ),
+    );
+
+    // Seedance：目标 7s 保持整数 7；超上限 20s 压 10s（如实标注不静默）。
+    const shotSeven = shots[1];
+    const shotTwenty = shots[2];
+    if (shotSeven === undefined || shotTwenty === undefined) {
+      throw new Error('测试镜头构造失败');
+    }
+    const seedanceFixture = fixture(
+      [shotSeven, shotTwenty],
+      'READY',
+      undefined,
+      undefined,
+      capabilityOf,
+    );
+    await seedFirstFrame(seedanceFixture.repository, 'shot_2', 'scv_2', 'img_2', IMG_SHA_2, true);
+    await seedFirstFrame(seedanceFixture.repository, 'shot_3', 'scv_3', 'img_3', IMG_SHA_1, true);
+    const seven = await seedanceFixture.service.generateVideoCandidates(
+      { projectId: 'project_1', requestId: 'req_sd7', shotId: 'shot_2' },
+      'trace_sd7',
+    );
+    expect(seven.ok).toBe(true);
+    if (!seven.ok) return;
+    const sevenCandidates = await seedanceFixture.videoRepository.listCandidates('shot_2');
+    expect(
+      sevenCandidates
+        .filter((c) => c.roundNo === seven.data.roundNo)
+        .map((c) => c.requestedDurationSec),
+    ).toEqual([7, 7]);
+    const twenty = await seedanceFixture.service.generateVideoCandidates(
+      { projectId: 'project_1', requestId: 'req_sd20', shotId: 'shot_3' },
+      'trace_sd20',
+    );
+    expect(twenty.ok).toBe(true);
+    if (!twenty.ok) return;
+    const twentyCandidates = await seedanceFixture.videoRepository.listCandidates('shot_3');
+    expect(
+      twentyCandidates
+        .filter((c) => c.roundNo === twenty.data.roundNo)
+        .map((c) => c.requestedDurationSec),
+    ).toEqual([10, 10]);
   });
 });

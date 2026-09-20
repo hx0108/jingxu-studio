@@ -793,7 +793,7 @@ ShotContract 的“时长”是控制层目标值，不是生成层承诺值。�
 - Probe 不证明生成质量好。
 - 只对当前启用 Provider 在版本变化、连续异常、能力过期或正式发布前执行。
 - Probe 有真实调用成本：设单次 Probe 预算上限，能力状态设默认有效期（如 14 天），仅在过期或触发条件命中时重新探测，不做高频轮询。
-- 个人项目 V2 仅接入一家图片、一家视频和一家 TTS Provider。
+- 个人项目 V2 仅接入一家图片、一家 TTS Provider；视频联调可受限接入 Seedance、万相与 Agnes 三家（2026-09-19 增补 Agnes：`agnes-video-v2.0` 与 `agnes-video-2.5-flash` 两档当前 $0/秒促销、免费档约 1 RPM），且每个任务必须由用户显式选择并冻结其 Provider/Profile/模型/能力快照。不得按价格、质量或失败自动路由、自动切换或回退。
 
 ### 10.5 资产与关键帧
 
@@ -868,6 +868,8 @@ TTS 输出时长由文本长度、音色和语速决定，与镜头实际时长�
 | currency_or_credit | CNY、USD、credit 等 |
 | unit_price/price_version | 单价和价格表版本 |
 | cost_source | provider_reported、rate_card_estimate、invoice、manual |
+
+视频联调的 Mock 估算与真实 Provider 消耗必须分开标记；Mock 结果不得作为真实费用、Provider 能力或成功率证据。
 
 当 Provider 不返回单次费用时，按本地价格表估算，并显示“估算非实扣”。
 

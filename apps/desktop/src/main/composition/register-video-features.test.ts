@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -17,6 +17,9 @@ import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
 import {
   createVideoFeatureRegistration,
   parseE2eVideoSteps,
+  resolveAgnesVideoModelId,
+  resolveVideoProviderMode,
+  shouldUseMockVideoModel,
   VIDEO_CANDIDATE_COUNT,
 } from './register-video-features';
 
@@ -64,6 +67,63 @@ describe('parseE2eVideoSteps', () => {
     for (const invalid of ['S', 'A:X3', 'A:P', 'E:lower_case', 'T', 'A::P1', 'X:1']) {
       setSteps(invalid);
       expect(() => parseE2eVideoSteps()).toThrow('JINGXU_E2E_VIDEO_STEPS_INVALID_TOKEN');
+    }
+  });
+});
+
+describe('shouldUseMockVideoModel', () => {
+  it('开发默认 Mock—只有显式开关才允许真实 Provider，生产缺凭据不会回退 Mock', () => {
+    expect(
+      shouldUseMockVideoModel(false, { nodeEnv: 'development', realProvider: undefined }),
+    ).toBe(true);
+    expect(shouldUseMockVideoModel(false, { nodeEnv: 'development', realProvider: '1' })).toBe(
+      false,
+    );
+    expect(shouldUseMockVideoModel(false, { nodeEnv: 'production', realProvider: undefined })).toBe(
+      false,
+    );
+    expect(shouldUseMockVideoModel(true, { nodeEnv: 'production', realProvider: '1' })).toBe(true);
+  });
+});
+
+describe('resolveVideoProviderMode', () => {
+  it('仅接受 MOCK、SEEDANCE、AGNES 三种 Main-only 受限模式（万相已移除）', () => {
+    expect(resolveVideoProviderMode('MOCK')).toBe('MOCK');
+    expect(resolveVideoProviderMode('SEEDANCE')).toBe('SEEDANCE');
+    expect(resolveVideoProviderMode('AGNES')).toBe('AGNES');
+    expect(() => resolveVideoProviderMode('WAN')).toThrow('VIDEO_PROVIDER_MODE_INVALID');
+    expect(() => resolveVideoProviderMode('arbitrary-provider')).toThrow(
+      'VIDEO_PROVIDER_MODE_INVALID',
+    );
+  });
+
+  it('resolveAgnesVideoModelId—缺省 V2.0，注册表外模型启动期即抛', () => {
+    expect(resolveAgnesVideoModelId(undefined)).toBe('agnes-video-v2.0');
+    expect(resolveAgnesVideoModelId('')).toBe('agnes-video-v2.0');
+    expect(resolveAgnesVideoModelId('agnes-video-2.5-flash')).toBe('agnes-video-2.5-flash');
+    expect(() => resolveAgnesVideoModelId('agnes-video-9.9')).toThrow('AGNES_VIDEO_MODEL_INVALID');
+  });
+});
+
+describe('Agnes 凭据自举（快速联调通道；tasks 6.1 前的 key 入仓路径）', () => {
+  it('设 JINGXU_AGNES_CREDENTIAL_FILE 且非 Mock 时启动期写入独立密文，不触碰 ARK 档', async () => {
+    const keyFile = path.join(root, 'agnes-key.txt');
+    await writeFile(keyFile, 'sk-agnes-fastlane\n', 'utf8');
+    vi.stubEnv('JINGXU_VIDEO_PROVIDER', 'AGNES');
+    vi.stubEnv('JINGXU_VIDEO_REAL_PROVIDER', '1');
+    vi.stubEnv('JINGXU_AGNES_CREDENTIAL_FILE', keyFile);
+    try {
+      const harness = buildHarness(true, 1, false);
+      expect(harness.registration.ensureRegistered()).toBe(true);
+      const agnesBin = path.join(root, 'secrets', 'profile-video-agnes-primary.bin');
+      const encrypted = Uint8Array.from(await readFile(agnesBin));
+      expect(safeStorageFacade.decryptString(encrypted)).toBe('sk-agnes-fastlane');
+      // ARK 档文件 env 未设，不得被创建或触碰。
+      await expect(
+        readFile(path.join(root, 'secrets', 'profile-video-primary.bin')),
+      ).rejects.toThrow();
+    } finally {
+      vi.unstubAllEnvs();
     }
   });
 });
@@ -155,7 +215,7 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-const buildHarness = (writeEnabled = true, shotCount = 1): Harness => {
+const buildHarness = (writeEnabled = true, shotCount = 1, useMock = true): Harness => {
   const handlers = new Map<
     string,
     (event: IpcEvent, ...arguments_: readonly unknown[]) => Promise<unknown>
@@ -200,7 +260,7 @@ const buildHarness = (writeEnabled = true, shotCount = 1): Harness => {
     pollIntervalMs: 10,
     safeStorage: safeStorageFacade,
     trustedUrl: 'jingxu://app/index.html',
-    useE2eMock: true,
+    useE2eMock: useMock,
   });
   return {
     handlers,

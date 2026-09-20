@@ -10,7 +10,10 @@ import type {
   VideoCandidateRecord,
   VideoCandidateSucceededInput,
   VideoMediaRepository,
+  VideoProviderKind,
+  VideoProviderProvenance,
 } from '@jingxu/application';
+import { DEFAULT_VIDEO_PROVENANCE } from '@jingxu/application';
 
 import type { SqliteDatabase, SqliteOutputValue } from '../runtime/sqlite-database';
 import { PersistenceRuntimeError } from '../runtime/persistence-error';
@@ -50,7 +53,23 @@ const CANDIDATE_COLUMNS = `id, shot_id, shot_version_id, round_no, index_in_roun
         status, file_sha256, byte_size, mime_type, width, height, storage_rel_path, model_id,
         provider_task_id, invocation_evidence_ref, requested_duration_sec, actual_duration_sec,
         first_frame_candidate_id, first_frame_file_sha256, error_code, selected_at, created_at,
-        updated_at`;
+        updated_at, provider_kind, provider_profile_id, capability_snapshot_id, is_mock`;
+
+/** 0024 溯源四列（候选侧 model_id 即公共列）；坏枚举/坏 is_mock 归一化为行损坏。 */
+const PROVIDER_KINDS: ReadonlySet<string> = new Set(['VOLCARK_SEEDANCE', 'AGNES_VIDEO']);
+
+const provenanceOf = (row: Row): VideoProviderProvenance => {
+  const kind = requiredString(row, 'provider_kind');
+  const isMock = row.is_mock;
+  if (!PROVIDER_KINDS.has(kind) || (isMock !== 0 && isMock !== 1)) corrupt();
+  return {
+    capabilitySnapshotId: requiredString(row, 'capability_snapshot_id'),
+    isMock: isMock === 1,
+    modelId: requiredString(row, 'model_id'),
+    providerKind: kind as VideoProviderKind,
+    providerProfileId: requiredString(row, 'provider_profile_id'),
+  };
+};
 
 const mapVideoCandidateRow = (row: Row): VideoCandidateRecord => ({
   actualDurationSec: nullableNumber(row, 'actual_duration_sec'),
@@ -67,6 +86,7 @@ const mapVideoCandidateRow = (row: Row): VideoCandidateRecord => ({
   invocationEvidenceRef: nullableString(row, 'invocation_evidence_ref'),
   mimeType: nullableString(row, 'mime_type'),
   modelId: requiredString(row, 'model_id'),
+  provenance: provenanceOf(row),
   providerTaskId: nullableString(row, 'provider_task_id'),
   requestedDurationSec: requiredNumber(row, 'requested_duration_sec'),
   roundNo: requiredNumber(row, 'round_no'),
@@ -86,7 +106,8 @@ const STALEABLE_STATUSES = "('PENDING', 'SUCCEEDED', 'FAILED')";
 const ACTIVE_TASK_PHASES = "('SUBMITTED', 'POLLING', 'DOWNLOADING')";
 
 const TASK_COLUMNS = `id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
-        phase, generation_input_hash, candidate_count, round_no, error_code, created_at, updated_at`;
+        phase, generation_input_hash, candidate_count, round_no, error_code, created_at, updated_at,
+        model_id, provider_kind, provider_profile_id, capability_snapshot_id, is_mock`;
 
 const mapTaskRow = (row: Row): MediaTaskRecord => ({
   candidateCount: requiredNumber(row, 'candidate_count'),
@@ -97,6 +118,7 @@ const mapTaskRow = (row: Row): MediaTaskRecord => ({
   idempotencyKey: requiredString(row, 'idempotency_key'),
   phase: requiredString(row, 'phase') as MediaTaskPhase,
   projectId: requiredString(row, 'project_id'),
+  provenance: provenanceOf(row),
   providerTaskId: nullableString(row, 'provider_task_id'),
   roundNo: requiredNumber(row, 'round_no'),
   shotId: requiredString(row, 'shot_id'),
@@ -151,12 +173,21 @@ export class SqliteVideoMediaRepository implements VideoMediaRepository {
   ): Promise<readonly VideoCandidateRecord[]> {
     return syncToPromise(() => {
       const now = this.clock();
+      // 缺省溯源以行的 modelId 派生（Seedance 档骨架）；显式传入时 model_id 必须同值。
+      const provenance: VideoProviderProvenance = input.provenance ?? {
+        ...DEFAULT_VIDEO_PROVENANCE,
+        modelId: input.modelId,
+      };
+      if (provenance.modelId !== input.modelId) {
+        throw new PersistenceRuntimeError('MEDIA_PROVENANCE_MODEL_MISMATCH');
+      }
       const insert = this.database.prepare(
         `INSERT INTO video_candidates
          (id, project_id, shot_id, shot_version_id, round_no, index_in_round,
           generation_input_hash, status, model_id, requested_duration_sec,
-          first_frame_candidate_id, first_frame_file_sha256, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?)`,
+          first_frame_candidate_id, first_frame_file_sha256, created_at, updated_at,
+          provider_kind, provider_profile_id, capability_snapshot_id, is_mock)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const records: VideoCandidateRecord[] = input.candidateIds.map((id, index) => {
         insert.run(
@@ -173,6 +204,10 @@ export class SqliteVideoMediaRepository implements VideoMediaRepository {
           input.firstFrameFileSha256,
           now,
           now,
+          provenance.providerKind,
+          provenance.providerProfileId,
+          provenance.capabilitySnapshotId,
+          provenance.isMock ? 1 : 0,
         );
         return {
           actualDurationSec: null,
@@ -189,6 +224,7 @@ export class SqliteVideoMediaRepository implements VideoMediaRepository {
           invocationEvidenceRef: null,
           mimeType: null,
           modelId: input.modelId,
+          provenance,
           providerTaskId: null,
           requestedDurationSec: input.requestedDurationSec,
           roundNo: input.roundNo,
@@ -453,11 +489,13 @@ export class SqliteVideoMediaRepository implements VideoMediaRepository {
     id: string;
     idempotencyKey: string;
     projectId: string;
+    provenance?: VideoProviderProvenance;
     shotId: string;
     shotVersionId: string;
   }): Promise<MediaTaskRecord> {
     return syncToPromise(() => {
       const now = this.clock();
+      const provenance = input.provenance ?? DEFAULT_VIDEO_PROVENANCE;
       // round_no 与视频候选轮同源派生：同事务内随后以同值 insertCandidates。
       const roundRow = this.database
         .prepare(
@@ -471,8 +509,9 @@ export class SqliteVideoMediaRepository implements VideoMediaRepository {
             `INSERT INTO video_generation_tasks
              (id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
               phase, generation_input_hash, candidate_count, round_no, error_code,
-              batch_id, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, NULL, 'SUBMITTED', ?, ?, ?, NULL, ?, ?, ?)`,
+              batch_id, created_at, updated_at,
+              provider_kind, provider_profile_id, model_id, capability_snapshot_id, is_mock)
+             VALUES (?, ?, ?, ?, ?, NULL, 'SUBMITTED', ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .run(
             input.id,
@@ -486,6 +525,11 @@ export class SqliteVideoMediaRepository implements VideoMediaRepository {
             input.batchId ?? null,
             now,
             now,
+            provenance.providerKind,
+            provenance.providerProfileId,
+            provenance.modelId,
+            provenance.capabilitySnapshotId,
+            provenance.isMock ? 1 : 0,
           );
       } catch {
         // UNIQUE(project_id, idempotency_key) 兜底并发重放（service 先查再插）；
@@ -768,7 +812,9 @@ export class SqliteVideoMediaRepository implements VideoMediaRepository {
         .prepare(
           `SELECT t.id, t.project_id, t.shot_id, t.shot_version_id, t.idempotency_key,
                   t.provider_task_id, t.phase, t.generation_input_hash, t.candidate_count,
-                  t.round_no, t.error_code, t.created_at, t.updated_at
+                  t.round_no, t.error_code, t.created_at, t.updated_at,
+                  t.model_id, t.provider_kind, t.provider_profile_id, t.capability_snapshot_id,
+                  t.is_mock
            FROM video_generation_tasks t
            JOIN (SELECT shot_id, MAX(round_no) AS max_round FROM video_generation_tasks
                  WHERE project_id = ? GROUP BY shot_id) m

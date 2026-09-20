@@ -9,6 +9,8 @@ import {
   jobUpdatesSubscriptionSchema,
   providerCredentialCommandSchema,
   providerGetInputSchema,
+  videoProviderSelectionGetInputSchema,
+  videoProviderSelectionSaveInputSchema,
   providerMutationInputSchema,
   providerProfileCommandSchema,
 } from '@jingxu/contracts';
@@ -37,6 +39,7 @@ const writeChannels = new Set<string>([
   PROVIDER_IPC_CHANNELS.saveCredential,
   PROVIDER_IPC_CHANNELS.testCredential,
   PROVIDER_IPC_CHANNELS.deleteCredential,
+  PROVIDER_IPC_CHANNELS.saveVideoProviderSelection,
 ]);
 const schemas: Readonly<Record<string, ZodType>> = {
   [JOB_IPC_CHANNELS.create]: jobCreateInputSchema,
@@ -45,6 +48,8 @@ const schemas: Readonly<Record<string, ZodType>> = {
   [JOB_IPC_CHANNELS.cancel]: jobMutationInputSchema,
   [JOB_IPC_CHANNELS.retry]: jobMutationInputSchema,
   [PROVIDER_IPC_CHANNELS.getProfile]: providerGetInputSchema,
+  [PROVIDER_IPC_CHANNELS.getVideoProviderSelection]: videoProviderSelectionGetInputSchema,
+  [PROVIDER_IPC_CHANNELS.saveVideoProviderSelection]: videoProviderSelectionSaveInputSchema,
   [PROVIDER_IPC_CHANNELS.saveProfile]: providerProfileCommandSchema,
   [PROVIDER_IPC_CHANNELS.saveCredential]: providerCredentialCommandSchema,
   [PROVIDER_IPC_CHANNELS.testCredential]: providerMutationInputSchema,

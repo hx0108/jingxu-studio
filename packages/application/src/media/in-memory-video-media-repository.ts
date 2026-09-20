@@ -9,7 +9,9 @@ import type {
   VideoCandidateRecord,
   VideoCandidateSucceededInput,
   VideoMediaRepository,
+  VideoProviderProvenance,
 } from '../ports/media/media-repository';
+import { DEFAULT_VIDEO_PROVENANCE } from '../ports/media/media-repository';
 
 const NOW = '2026-08-16T00:00:00.000Z';
 
@@ -45,6 +47,15 @@ export class InMemoryVideoMediaRepository implements VideoMediaRepository {
   public insertCandidates(
     input: VideoCandidateInsertInput,
   ): Promise<readonly VideoCandidateRecord[]> {
+    // 缺省溯源以行的 modelId 派生（Seedance 档骨架）；显式传入时 model_id 必须同值。
+    const provenance: VideoProviderProvenance = input.provenance ?? {
+      ...DEFAULT_VIDEO_PROVENANCE,
+      modelId: input.modelId,
+    };
+    // 建档一致性守卫：与 SQL 实现同口径（公共 model_id 与溯源 model_id 同值）。
+    if (provenance.modelId !== input.modelId) {
+      throw new Error('MEDIA_PROVENANCE_MODEL_MISMATCH');
+    }
     const records = input.candidateIds.map((id, index): VideoCandidateRecord => {
       const record: VideoCandidateRecord = {
         actualDurationSec: null,
@@ -61,6 +72,7 @@ export class InMemoryVideoMediaRepository implements VideoMediaRepository {
         invocationEvidenceRef: null,
         mimeType: null,
         modelId: input.modelId,
+        provenance,
         providerTaskId: null,
         requestedDurationSec: input.requestedDurationSec,
         roundNo: input.roundNo,
@@ -236,6 +248,7 @@ export class InMemoryVideoMediaRepository implements VideoMediaRepository {
     id: string;
     idempotencyKey: string;
     projectId: string;
+    provenance?: VideoProviderProvenance;
     shotId: string;
     shotVersionId: string;
   }): Promise<MediaTaskRecord> {
@@ -252,6 +265,7 @@ export class InMemoryVideoMediaRepository implements VideoMediaRepository {
       createdAt: NOW,
       errorCode: null,
       phase: 'SUBMITTED',
+      provenance: input.provenance ?? DEFAULT_VIDEO_PROVENANCE,
       providerTaskId: null,
       roundNo,
       updatedAt: NOW,

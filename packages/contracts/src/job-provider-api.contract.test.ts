@@ -8,13 +8,16 @@ import {
   jobMutationInputSchema,
   providerCredentialCommandSchema,
   providerProfileSchema,
+  videoProviderSelectionGetInputSchema,
+  videoProviderSelectionSaveInputSchema,
+  videoProviderSelectionSchema,
   type EventsApi,
   type JobApi,
   type ProviderApi,
 } from './job-provider-api';
 
 describe('Job Provider Events IPC Contract', () => {
-  it('频道白名单—枚举—恰有五个 Job、五个 Provider 与一个 Events 方法', () => {
+  it('频道白名单—枚举—恰有五个 Job、七个 Provider 与一个 Events 方法', () => {
     expect(Object.values(JOB_IPC_CHANNELS).sort()).toEqual([
       'job.cancel',
       'job.create',
@@ -25,8 +28,10 @@ describe('Job Provider Events IPC Contract', () => {
     expect(Object.values(PROVIDER_IPC_CHANNELS).sort()).toEqual([
       'provider.deleteCredential',
       'provider.getProfile',
+      'provider.getVideoProviderSelection',
       'provider.saveCredential',
       'provider.saveProfile',
+      'provider.saveVideoProviderSelection',
       'provider.testCredential',
     ]);
     expect(Object.values(EVENTS_IPC_CHANNELS)).toEqual(['events.subscribeJobUpdates']);
@@ -175,5 +180,113 @@ describe('Job Provider Events IPC Contract', () => {
     expect(providerProfileSchema.parse(view).provider).toBe('QWEN_TTS');
     expect(providerProfileSchema.safeParse({ ...view, apiKey: 'secret' }).success).toBe(false);
     expect(providerProfileSchema.safeParse({ ...view, provider: 'ARK_TTS' }).success).toBe(false);
+  });
+
+  it('Provider 输出—低价视频档（AGNES_VIDEO）round-trip 与已移除万相枚举拒绝', () => {
+    // design D2/D7：万相档已移除（2026-09-20），低价档仅 Agnes；输出面不含密钥/端点字段。
+    const agnes = {
+      configured: true,
+      enabled: true,
+      last4: '5678',
+      modelId: 'agnes-video-v2.0',
+      provider: 'AGNES_VIDEO',
+      region: 'global',
+      validated: true,
+      versionId: 'version_12345678',
+      workspaceId: 'agnes',
+    };
+    expect(providerProfileSchema.safeParse(agnes).success).toBe(true);
+    expect(providerProfileSchema.parse(agnes).provider).toBe('AGNES_VIDEO');
+    expect(
+      providerProfileSchema.safeParse({ ...agnes, authorization: 'Bearer secret' }).success,
+    ).toBe(false);
+    expect(providerProfileSchema.safeParse({ ...agnes, apiKey: 'secret' }).success).toBe(false);
+    // 已移除的万相枚举不再被输出契约接受。
+    expect(
+      providerProfileSchema.safeParse({
+        ...agnes,
+        modelId: 'wan2.6-i2v-flash',
+        provider: 'DASHSCOPE_WAN_VIDEO',
+      }).success,
+    ).toBe(false);
+  });
+
+  it('视频 Provider 选择 DTO—只接受 SEEDANCE/AGNES—MOCK、WAN 与任意 URL/地域/域名/音频/密钥字段拒绝', () => {
+    // MOCK 是 Main-only 联调模式，Renderer 不能提交（design D1）；选择面也不承载
+    // 任何端点/地域/Workspace/参数/密钥事实——这些都冻结在能力快照与 Adapter。
+    const selection = {
+      mode: 'AGNES',
+      providerProfileId: 'profile-video-agnes-primary',
+      updatedAt: '2026-09-19T00:00:00Z',
+    };
+    expect(videoProviderSelectionSchema.safeParse(selection).success).toBe(true);
+    expect(videoProviderSelectionSchema.safeParse({ ...selection, mode: 'SEEDANCE' }).success).toBe(
+      true,
+    );
+    expect(videoProviderSelectionSchema.safeParse({ ...selection, mode: 'MOCK' }).success).toBe(
+      false,
+    );
+    // 万相档已移除：选择枚举不再接受 WAN。
+    expect(videoProviderSelectionSchema.safeParse({ ...selection, mode: 'WAN' }).success).toBe(
+      false,
+    );
+    expect(
+      videoProviderSelectionSchema.safeParse({ ...selection, baseUrl: 'https://evil.example' })
+        .success,
+    ).toBe(false);
+    expect(
+      videoProviderSelectionSchema.safeParse({ ...selection, region: 'cn-hangzhou' }).success,
+    ).toBe(false);
+    expect(
+      videoProviderSelectionSchema.safeParse({ ...selection, workspaceId: 'evil-workspace' })
+        .success,
+    ).toBe(false);
+    expect(videoProviderSelectionSchema.safeParse({ ...selection, audio: true }).success).toBe(
+      false,
+    );
+    expect(videoProviderSelectionSchema.safeParse({ ...selection, apiKey: 'secret' }).success).toBe(
+      false,
+    );
+  });
+
+  it('视频 Provider 选择命令—受限 mode 与 expectedUpdatedAt—strict 拒绝多余字段或缺字段', () => {
+    const input = { expectedUpdatedAt: null, mode: 'AGNES', requestId: 'request-123' };
+    expect(videoProviderSelectionSaveInputSchema.safeParse(input).success).toBe(true);
+    expect(
+      videoProviderSelectionSaveInputSchema.safeParse({
+        ...input,
+        expectedUpdatedAt: '2026-09-19T00:00:00Z',
+      }).success,
+    ).toBe(true);
+    expect(
+      videoProviderSelectionSaveInputSchema.safeParse({ ...input, mode: 'MOCK' }).success,
+    ).toBe(false);
+    expect(
+      videoProviderSelectionSaveInputSchema.safeParse({
+        ...input,
+        baseUrl: 'https://evil.example',
+      }).success,
+    ).toBe(false);
+    expect(
+      videoProviderSelectionSaveInputSchema.safeParse({ ...input, workspaceId: 'evil-workspace' })
+        .success,
+    ).toBe(false);
+    expect(
+      videoProviderSelectionSaveInputSchema.safeParse({ ...input, audio: false }).success,
+    ).toBe(false);
+    expect(
+      videoProviderSelectionSaveInputSchema.safeParse({ ...input, apiKey: 'secret' }).success,
+    ).toBe(false);
+    expect(
+      videoProviderSelectionSaveInputSchema.safeParse({ mode: 'WAN', requestId: 'request-123' })
+        .success,
+    ).toBe(false);
+    expect(
+      videoProviderSelectionGetInputSchema.safeParse({ requestId: 'request-123' }).success,
+    ).toBe(true);
+    expect(
+      videoProviderSelectionGetInputSchema.safeParse({ requestId: 'request-123', mode: 'WAN' })
+        .success,
+    ).toBe(false);
   });
 });
