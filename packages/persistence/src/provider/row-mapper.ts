@@ -73,7 +73,8 @@ export const mapProviderProfileRow = (row: ProviderProfileRow): ProviderProfile 
     provider === 'QWEN' ||
     provider === 'QWEN_TTS' ||
     provider === 'VOLCARK_SEEDREAM' ||
-    provider === 'VOLCARK_SEEDANCE'
+    provider === 'VOLCARK_SEEDANCE' ||
+    provider === 'AGNES_VIDEO'
       ? provider
       : invalidRow();
   if (region.length === 0) invalidRow();
@@ -96,7 +97,7 @@ export const mapProviderProfileRow = (row: ProviderProfileRow): ProviderProfile 
     modelId,
     modelSnapshotDate,
     provider: providerKind,
-    region: 'cn-beijing',
+    region,
     workspaceId,
   };
 };

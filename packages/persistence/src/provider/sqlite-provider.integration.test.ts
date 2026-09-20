@@ -133,6 +133,21 @@ describe('provider_profiles Repository 与 UnitOfWork（任务 6.4）', () => {
     });
   });
 
+  it('AGNES_VIDEO 低价视频 Profile—按合法 Provider 枚举读取，不误判为损坏行', () => {
+    const row = validRow();
+    row.provider = 'AGNES_VIDEO';
+    row.model_id = 'agnes-video-v2.0';
+    row.model_snapshot_date = '2026-09-19';
+    row.region = 'global';
+    row.workspace_id = 'agnes';
+
+    expect(mapProviderProfileRow(row)).toMatchObject({
+      modelId: 'agnes-video-v2.0',
+      provider: 'AGNES_VIDEO',
+      region: 'global',
+    });
+  });
+
   it('QWEN_TTS 配音 Profile—按合法 Provider 枚举读取，不误判为损坏行', () => {
     const row = validRow();
     row.provider = 'QWEN_TTS';

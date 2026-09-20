@@ -16,6 +16,16 @@ const taskIdSchema = idSchema;
 const candidateIdSchema = idSchema;
 const assetVersionIdSchema = idSchema;
 const batchIdSchema = idSchema;
+/**
+ * Bible 引用 id（V1 契约口径对齐）：STYLE 保留键 `project-style` + 角色/场景
+ * `char_*`/`scene_*` 前缀（V1 schema 无长度下限）。不得复用系统 idSchema——
+ * 真 LLM 产出的 `char_01`（7 字符）合法，过严校验会让一致性预检/参考上传死锁。
+ */
+const bibleRefIdSchema = z
+  .string()
+  .regex(
+    /^(?:[A-Za-z0-9_-]{8,128}|project-style|char_[A-Za-z0-9_-]+|scene_[A-Za-z0-9_-]+)$/u,
+  );
 
 export const imageCandidateStatusSchema = z.enum(['PENDING', 'SUCCEEDED', 'FAILED', 'STALE_INPUT']);
 export const mediaTaskPhaseSchema = z.enum([
@@ -122,7 +132,7 @@ export const assetVersionViewSchema = z
 export const assetViewSchema = z
   .object({
     assetType: assetTypeSchema,
-    bibleRefId: idSchema,
+    bibleRefId: bibleRefIdSchema,
     createdAt: isoDateTimeSchema,
     currentVersion: assetVersionViewSchema.nullable(),
     displayName: z.string().min(1).max(200),
@@ -202,7 +212,7 @@ export const listAssetsInputSchema = z.object({ projectId: projectIdSchema }).st
 export const uploadAssetReferenceInputSchema = z
   .object({
     assetType: assetTypeSchema,
-    bibleRefId: idSchema,
+    bibleRefId: bibleRefIdSchema,
     byteSize: z.number().int().positive().max(ASSET_REFERENCE_MAX_BYTES),
     bytes: z.instanceof(Uint8Array),
     description: z.string().min(1).max(500).nullable(),
@@ -248,7 +258,7 @@ export const uploadAssetReferenceInputSchema = z
 
 export const consistencyMissingItemSchema = z
   .object({
-    bibleRefId: idSchema,
+    bibleRefId: bibleRefIdSchema,
     displayName: z.string().min(1).max(200),
     kind: z.enum(['STYLE', 'CHARACTER']),
   })
@@ -256,7 +266,7 @@ export const consistencyMissingItemSchema = z
 
 export const consistencyShotStatusSchema = z
   .object({
-    characterIds: z.array(idSchema).max(14),
+    characterIds: z.array(bibleRefIdSchema).max(14),
     ready: z.boolean(),
     shotId: shotIdSchema,
   })
