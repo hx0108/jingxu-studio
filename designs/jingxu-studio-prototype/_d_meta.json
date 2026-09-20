@@ -16,8 +16,22 @@
           }
         }
       ]
+    },
+    "镜序 Studio Figma 静态导入版": {
+      "versions": [
+        {
+          "path": "jingxu-studio-figma-import.html",
+          "createdAt": "2026-08-28T01:29:32.944Z",
+          "status": "needs-review",
+          "subtitle": "html.to.design 单文件兼容导出；静态分镜设计屏",
+          "viewport": {
+            "width": 1728,
+            "height": 1080
+          }
+        }
+      ]
     }
   },
   "createdAt": "2026-08-25T08:16:06.155Z",
-  "updatedAt": "2026-08-25T15:55:29.209Z"
+  "updatedAt": "2026-08-28T01:31:37.246Z"
 }
