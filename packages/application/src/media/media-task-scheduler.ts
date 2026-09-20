@@ -124,6 +124,9 @@ export interface MediaTaskSchedulerDependencies<R = ImageGenerationRequest> {
 
 const TERMINAL_PHASES: ReadonlySet<MediaTaskPhase> = new Set(['COMPLETED', 'FAILED', 'CANCELLED']);
 
+/** 单候选轮询期可重试错误的连续容忍上限（low-cost D5b：网络抖动/限流不判死）。 */
+const POLL_RETRYABLE_TOLERANCE = 5;
+
 const isTerminal = (phase: MediaTaskPhase): boolean => TERMINAL_PHASES.has(phase);
 
 /** 持久化/完整性标记（PersistenceRuntimeError 与内存实现共用 message 前缀约定）。 */
@@ -422,6 +425,9 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
     // D2：候选 ref 恒指 SUBMIT 证据行（查无行时回退 providerTaskId，保持既有形态）。
     const submitRef = await submitRowIdOf(task.id, candidate.id, providerTaskId);
     const deadline = dependencies.nowMs() + dependencies.pollDeadlineMs;
+    // 可重试轮询错误连续容忍上限（low-cost D5b：真实路由偶发 SSL EOF/限流，
+    // 单次即判失败会让 in-flight 的真实任务死于抖动）。
+    let consecutiveRetryablePolls = 0;
     for (;;) {
       if (signal.aborted) {
         await stopForAbort(task.projectId, task.id);
@@ -455,6 +461,25 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
       try {
         status = await runSegment(signal, (segment) => model.poll(providerTaskId, segment));
       } catch (caught) {
+        // 可重试错误（网络抖动/限流）有限容忍：in-flight 的真实任务不该死于
+        // 单次瞬时抖动（Agnes 路由实测偶发 SSL EOF）；连续超限才候选失败。
+        const normalized = model.normalizeError(caught);
+        if (normalized.retryable && consecutiveRetryablePolls < POLL_RETRYABLE_TOLERANCE) {
+          consecutiveRetryablePolls += 1;
+          if (pollRowId !== null) {
+            await mediaUnitOfWork
+              .run(({ invocations }) =>
+                invocations.finishTerminal(pollRowId, {
+                  status: 'FAILED',
+                  errorCode: normalized.code,
+                  finishedAt: new Date(dependencies.nowMs()).toISOString(),
+                }),
+              )
+              .catch(() => undefined);
+          }
+          await dependencies.sleep(dependencies.pollIntervalMs);
+          continue;
+        }
         const stop = await onSegmentFailure(
           task.projectId,
           task.id,
@@ -466,6 +491,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
         );
         return !stop;
       }
+      consecutiveRetryablePolls = 0;
       if (pollRowId !== null) {
         // 轮询 HTTP 调用成功即收尾（PENDING 也是成功的轮询）；生成结局由候选行承载。
         try {

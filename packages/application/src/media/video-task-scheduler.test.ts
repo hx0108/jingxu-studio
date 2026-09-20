@@ -33,7 +33,7 @@ const FIRST_FRAME_BYTES = Uint8Array.from([1, 1, 1, 1]);
 const VIDEO_CANDIDATE_COUNT = 2;
 
 /** poll 脚本：窗口（首次 PENDING 次 SUCCEEDED 带 actualDurationSec）/ 恒 PENDING / 抛错。 */
-type PollPlan = 'SUCCEEDED' | 'ALWAYS_PENDING' | 'ERROR';
+type PollPlan = 'SUCCEEDED' | 'ALWAYS_PENDING' | 'ERROR' | 'FLAKY';
 
 interface FakePortOptions {
   readonly downloadGate?: Promise<void>;
@@ -79,6 +79,11 @@ class FakeVideoModel implements MediaModelPort<VideoGenerationRequest> {
     this.pollCounts.set(providerTaskId, count);
     this.order.push(`poll:${providerTaskId}`);
     const plan = this.options.pollPlan ?? 'SUCCEEDED';
+    if (plan === 'FLAKY' && count <= 2) {
+      const error = new Error('瞬时网络抖动');
+      error.name = 'FlakyBoom';
+      return Promise.reject(error);
+    }
     if (plan === 'ALWAYS_PENDING') return Promise.resolve({ state: 'PENDING' });
     if (plan === 'ERROR') {
       const error = new Error('轮询段失败');
@@ -116,6 +121,15 @@ class FakeVideoModel implements MediaModelPort<VideoGenerationRequest> {
         detail: null,
         providerRequestId: null,
         retryable: false,
+        userAction: null,
+      };
+    }
+    if (name === 'FlakyBoom') {
+      return {
+        code: 'MODEL_NETWORK_ERROR',
+        detail: null,
+        providerRequestId: null,
+        retryable: true,
         userAction: null,
       };
     }
@@ -551,6 +565,25 @@ describe('MediaTaskScheduler video 实例（任务 3.3）', () => {
       expect(row).toMatchObject({ errorCode: 'MODEL_RATE_LIMITED', status: 'FAILED' });
     }
     expect(fixture.port.submitCount()).toBe(2);
+  });
+
+  it('low-cost D5b—轮询瞬时网络错误有限容忍—两次抖动后恢复—候选不判死且抖动轮如实 FAILED', async () => {
+    const fixture = buildSchedulerFixture({ pollPlan: 'FLAKY' });
+    await seedVideoTask(fixture.unitOfWork);
+    await fixture.scheduler.run('project_1');
+    expect(fixture.videoRepository.tasks[0]).toMatchObject({
+      errorCode: null,
+      phase: 'COMPLETED',
+    });
+    expect(fixture.videoRepository.candidates.map((candidate) => candidate.status)).toEqual([
+      'SUCCEEDED',
+      'SUCCEEDED',
+    ]);
+    // 抖动轮：POLL 证据行如实 FAILED（MODEL_NETWORK_ERROR）；任务结局不受影响。
+    const pollRows = fixture.invocations.invocations.filter((row) => row.segmentKind === 'POLL');
+    const flakyRows = pollRows.filter((row) => row.errorCode === 'MODEL_NETWORK_ERROR');
+    expect(flakyRows.length).toBeGreaterThanOrEqual(2);
+    expect(flakyRows.every((row) => row.status === 'FAILED')).toBe(true);
   });
 
   it('取消—先落 CANCELLED 再中止—迟到下载不落库—在飞三段行如实保留', async () => {
