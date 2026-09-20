@@ -195,8 +195,6 @@ export const createVideoFeatureRegistration = ({
   const effectivePollIntervalMs =
     pollIntervalMs ??
     (providerMode === 'AGNES' ? AGNES_VIDEO_POLL_INTERVAL_MS : VIDEO_POLL_INTERVAL_MS);
-  /** Agnes 档模型在启动期冻结（非法值即抛，不带病运行）；仅 AGNES 模式消费。 */
-  const agnesModelId = resolveAgnesVideoModelId(process.env.JINGXU_AGNES_VIDEO_MODEL);
   /**
    * 能力快照驱动的请求档位（low-cost 任务 4.3，与 0024 三快照同源冻结）：
    * Seedance [5,10]×[720,1080]；Wan [2,15]×[720,1080]；Agnes 固定 [5,5]×[720]。
@@ -411,21 +409,36 @@ export const createVideoFeatureRegistration = ({
         credentialId: VIDEO_CREDENTIAL_ID,
         credentialPort: credentials,
       });
-      const agnesVideoModel: VideoModelPort = new AgnesVideoModelAdapter({
-        credentialId: AGNES_VIDEO_CREDENTIAL_ID,
-        credentialPort: credentials,
-        modelId: agnesModelId,
-      });
-      /** 当前模式的首选 Adapter（调度器 resolveModel 缺溯源时的回退）。 */
+      // Agnes 双模型（V2.0/2.5 Flash）各惰性建一个 Adapter 实例：Adapter 的轮询
+      // model_name 绑定实例冻结模型，必须按任务冻结的 modelId 取对应实例。
+      // 冻结注册表外的历史值防御性回落默认 V2.0（0024 起溯源列只写冻结枚举）。
+      const agnesVideoModels = new Map<AgnesVideoModelId, VideoModelPort>();
+      const resolveAgnesVideoModel = (modelId: string): VideoModelPort => {
+        const valid: AgnesVideoModelId = isAgnesVideoModelId(modelId)
+          ? modelId
+          : DEFAULT_AGNES_VIDEO_MODEL_ID;
+        let model = agnesVideoModels.get(valid);
+        if (model === undefined) {
+          model = new AgnesVideoModelAdapter({
+            credentialId: AGNES_VIDEO_CREDENTIAL_ID,
+            credentialPort: credentials,
+            modelId: valid,
+          });
+          agnesVideoModels.set(valid, model);
+        }
+        return model;
+      };
+      /** 当前模式的首选 Adapter（调度器 resolveModel 缺溯源时的回退；Agnes 回退默认 V2.0）。 */
       const activeVideoModel: VideoModelPort =
         providerMode === 'MOCK'
           ? mockVideoModel
           : providerMode === 'SEEDANCE'
             ? seedanceVideoModel
-            : agnesVideoModel;
+            : resolveAgnesVideoModel(DEFAULT_AGNES_VIDEO_MODEL_ID);
       const resolveVideoModel: VideoModelResolver = (provenance) => {
         if (provenance.isMock) return mockVideoModel;
-        if (provenance.providerKind === 'AGNES_VIDEO') return agnesVideoModel;
+        if (provenance.providerKind === 'AGNES_VIDEO')
+          return resolveAgnesVideoModel(provenance.modelId);
         return seedanceVideoModel;
       };
       /** 建档期溯源（low-cost D4/任务 4.1）：建档事务读取当前模式事实并冻结。 */
@@ -440,10 +453,13 @@ export const createVideoFeatureRegistration = ({
           };
         }
         if (providerMode === 'AGNES') {
+          // 与 Seedance 分支同构：读 Agnes Profile 已保存模型（设置卡「保存模型
+          // 选择」落行值），无行/未保存回落默认 V2.0；注册表外即抛不带病运行。
+          const profile = await providerProfiles.findById(AGNES_VIDEO_CREDENTIAL_ID);
           return {
             capabilitySnapshotId: CAPABILITY_SNAPSHOT_BY_MODE.AGNES,
             isMock: false,
-            modelId: agnesModelId,
+            modelId: resolveAgnesVideoModelId(profile?.modelId),
             providerKind: 'AGNES_VIDEO',
             providerProfileId: 'profile-video-agnes-primary',
           };
