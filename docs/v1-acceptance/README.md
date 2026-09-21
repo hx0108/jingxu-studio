@@ -45,7 +45,7 @@ SQLite Integration 与 Electron E2E 不并行运行。
 
 见 [`trial-runbook.md`](./trial-runbook.md)、[`trial-record-template.md`](./trial-record-template.md) 和 [`trial-roster-template.md`](./trial-roster-template.md)。每位用户独立完成一次；记录开始/结束时间、是否代操作、错误、修改次数和导出结果。
 
-当前试用轮次为 2026-08-27：固定构建（exe SHA-256 `e44d9c6b…`，2026-09-20 于 `17aa85a` 重建；迭代链见 session-plan）、参与者画像、时间槽和三份独立记录见 [`trials/2026-08-27/session-plan.md`](./trials/2026-08-27/session-plan.md)；2026-08-24 组织单钉的旧构建已被本日新构建取代，不得再用作试用固定包。参与者与时间未确认前，不得勾选真实试用门槛。
+当前试用轮次为 2026-08-27：固定构建（exe SHA-256 `6270c3d9…`，2026-09-21 于 `0573401` 重建——含实地全链四修复与图片档切换 Agnes Image（2.5 Flash 默认）；迭代链见 session-plan）、参与者画像、时间槽和三份独立记录见 [`trials/2026-08-27/session-plan.md`](./trials/2026-08-27/session-plan.md)；2026-08-24 组织单钉的旧构建已被本日新构建取代，不得再用作试用固定包。参与者与时间未确认前，不得勾选真实试用门槛。
 
 ## Bad Case 与 V2 决策
 

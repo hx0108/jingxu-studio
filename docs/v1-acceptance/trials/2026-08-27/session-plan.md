@@ -4,8 +4,9 @@
 
 - 应用：`apps/desktop/out/镜序 Studio-win32-x64/jingxu-studio.exe`
 - 字节数：`225441792`
-- SHA-256：`E44D9C6B62F4BD7EB64DEBECC2D47D21EB10314C00A9556EDE44C16AAAB5ECB7`
-- 构建状态：2026-09-20 于 `17aa85a`（low-cost-video-provider-integration 归档树：Seedance+Agnes 双档视频（Agnes V2.0/2.5 Flash 界面可选）、万相档移除、视频任务溯源冻结、Provider 设置两档卡 + Mock 醒目标记；Agnes Profile 模型驱动修复 `17aa85a`）打包，packaged-smoke 通过（fresh DB 自动迁移到 head 24）；当日回归 unit 1118+2 skipped / contract 191 / integration 277 全绿，视频与 Provider E2E 全过。哈希迭代链 `E60F9075…`（8-27）→ `20E6B020…` → `88D0B13F…` → `8C1D7EAA…`（9-10）→ `BD64B6F3…`（9-18 @9946106 一致性门禁树）→ 本哈希，均未开始试用，以本哈希为准；回滚按对应提交重建。`2247C514` 为 9-19/20 联调脏树构建，未入链、不得试用。
+- SHA-256：`6270C3D9CD773B5EF2234345BDC382FAF8BFB6B5BF3FF3DB49F5D856DDAD8F65`
+- 构建状态：2026-09-21 于 `0573401`（在 17aa85a 视频双档树之上叠加：实地全链四修复——Agnes 行回读/引用 id 对齐 V1/调度器轮询可重试错误有限容忍/收官探针，实地端到端 50s 1080×1920 MP4 已验证；**图片档切换 Agnes Image**（2.5 Flash 默认/2.1 Flash 可选，界面下拉），Seedream 停用）打包，packaged-smoke 通过（fresh DB 自动迁移到 head 25）；当日回归 application 640 / persistence 集成 257 / desktop 264 / model-adapters+contracts 127 全绿，图片凭据 UI E2E 与双模型真实 Canary 通过。哈希迭代链 `E60F9075…`（8-27）→ `20E6B020…` → `88D0B13F…` → `8C1D7EAA…`（9-10）→ `BD64B6F3…`（9-18 @9946106）→ `E44D9C6B…`（9-20 @17aa85a）→ 本哈希，均未开始试用，以本哈希为准；回滚按对应提交重建。`2247C514` 为 9-19/20 联调脏树构建，未入链、不得试用。
+- 上一代构建（2026-09-20 于 `17aa85a`）为 low-cost-video-provider-integration 归档树：Seedance+Agnes 双档视频（Agnes V2.0/2.5 Flash 界面可选）、万相档移除、视频任务溯源冻结、Provider 设置两档卡 + Mock 醒目标记；packaged-smoke 通过（head 24）；同树回归 unit 1118+2 skipped / contract 191 / integration 277 全绿。
 - 上一代构建状态（2026-09-18 于 `9946106`）（`enforce-character-style-consistency` 角色一致性门禁全链 + 恢复轮询；父链 `c8627fc` 主体 → … → `f4fd3f2` CINE 逐页收尾 → `4330dfa` 2026-08-27 全量门禁树）打包，在既有能力上新增：项目画风锚点（STYLE 资产）、出场角色参考图强制预检、StoryBible 信封正确注入生成 Prompt——即角色/画风一致性控制前置。打包后 packaged-smoke 通过；同树全量回归 unit 1091 / contract 180 / integration 265 / renderer 114 全绿，一致性门禁 E2E 与批量/首帧/视频链 E2E 全过。哈希迭代链 `E60F9075…`（8-27）→ `20E6B020…` → `88D0B13F…` → `8C1D7EAA…`（9-10 四代）→ 本哈希，均未开始试用，以本哈希为准；回滚按对应提交重建。
 - 自动化基线：AC-V1-01～06 于 `f4fd3f2` 树全过；一致性门禁为 `enforce-character-style-consistency` 新增能力（详见其 change 目录），其首个生成前必须有画风锚点与出场角色参考图，试用组织者应知悉此前置步骤。自动化不代替本轮真实试用。
 
