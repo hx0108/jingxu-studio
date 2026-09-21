@@ -16,7 +16,7 @@
 ## 3. 五分钟体验模式
 
 - [ ] 3.1 先编写演示初始化的 Application/Integration 测试，覆盖无凭据离线成功、requestId 幂等恢复、半程失败整体回滚、真实 CredentialPort 零读取和演示/真实候选隔离。
-- [ ] 3.2 核实是否已有可靠项目级演示标志；若没有，新增最小顺序 migration、Project/Transfer DTO 与 Repository 映射，并完成空库、上一版本库和 100+ 历史版本库升级测试。
+- [x] 3.2 核实是否已有可靠项目级演示标志；若没有，新增最小顺序 migration、Project/Transfer DTO 与 Repository 映射，并完成空库、上一版本库和 100+ 历史版本库升级测试。
 - [ ] 3.3 实现 `startDemo` 原子 Seed、Fixture/CAS staging 和演示恢复逻辑，所有演示任务固定 Mock 并持续保存可查询的演示标识。
 - [ ] 3.4 注册 `creatorGuide.startDemo` IPC 与 Renderer 起始入口，所有演示页面和候选持续展示“演示结果/不会产生真实费用”，真实制作不继承演示凭据或 Mock 成功事实。
 - [ ] 3.5 增加全新用户、无网络、无凭据 Electron E2E，在约 5 分钟体验目标路径内完成示例浏览与演示导出，并验证初始化失败可重试且无半项目。
