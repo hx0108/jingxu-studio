@@ -203,6 +203,8 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
             workspace = refreshed.data;
             draft = workspace.stages.find((candidate) => candidate.stage === stage)?.current;
             if (finalStatus === 'SUCCEEDED' && draft?.status === 'DRAFT') break;
+            if (stageAttempt < 3)
+              await new Promise((resolve) => setTimeout(resolve, 15_000));
           }
           if (finalStatus !== 'SUCCEEDED' || draft?.status !== 'DRAFT')
             return { step: `stage:${stage}`, finalStatus, errorCode, projectId };
@@ -258,6 +260,7 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
           if (!polled.ok) return { step: 'workspace:shot', errorCode: polled.error.code, projectId };
           workspace = polled.data;
           if (shotStatus === 'SUCCEEDED' && workspace.storyboard.current?.status === 'DRAFT') break;
+          if (shotAttempt < 3) await new Promise((resolve) => setTimeout(resolve, 15_000));
         }
         const storyboard = workspace.storyboard;
         if (shotStatus !== 'SUCCEEDED' || storyboard.current?.status !== 'DRAFT')
@@ -416,7 +419,8 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
             });
             if (!priorList.ok)
               return { step: `video.prior:${shotId}`, errorCode: priorList.error.code };
-            const priorRounds = new Set(priorList.data.map((candidate) => candidate.roundNo));
+            // 以"生成前已存在的候选 id 集合"识别本轮新候选（roundNo 不在任务视图暴露）。
+            const priorCandidateIds = new Set(priorList.data.map((candidate) => candidate.id));
             let finalPhase = 'TIMEOUT_POLL';
             let videoErrorCode: string | null = null; // candidateErrors 由 lastDiag 承载
             for (let attempt = 0; attempt < 600; attempt += 1) {
@@ -431,7 +435,7 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
             if (!listed.ok) return { step: `video.list:${shotId}`, errorCode: listed.error.code };
             const succeeded = listed.data.find(
               (candidate) =>
-                !priorRounds.has(candidate.roundNo) && candidate.status === 'SUCCEEDED',
+                !priorCandidateIds.has(candidate.id) && candidate.status === 'SUCCEEDED',
             );
             if (succeeded !== undefined) {
               picked = { id: succeeded.id };
@@ -442,7 +446,7 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
               videoErrorCode,
               generatedTaskId: generated.data.id,
               candidateErrors: listed.data
-                .filter((candidate) => !priorRounds.has(candidate.roundNo))
+                .filter((candidate) => !priorCandidateIds.has(candidate.id))
                 .map((candidate) => ({ status: candidate.status, errorCode: candidate.errorCode })),
             };
           }

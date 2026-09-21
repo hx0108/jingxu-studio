@@ -34,8 +34,10 @@ test('Agnes 腿调试', async () => {
     const debugShotIds = (process.env.JINGXU_DEBUG_SHOT_IDS ?? '')
       .split(',')
       .filter(Boolean);
+    const dbgProject = process.env.JINGXU_DEBUG_PROJECT_ID ?? '';
+    const dbgShot = (process.env.JINGXU_DEBUG_SHOT_IDS ?? '').split(',')[0] ?? '';
     const result = await page.evaluate(
-      async ({ key, preflightProject, preflightShotIds }) => {
+      async ({ key, preflightProject, preflightShotIds, dbgProject, dbgShot }) => {
       const requestId = (prefix: string): string => `${prefix}_${crypto.randomUUID()}`;
       const profile = await window.jingxu.provider.getProfile({
         profileId: 'profile-video-agnes-primary',
@@ -73,9 +75,35 @@ test('Agnes 腿调试', async () => {
         });
         preflightResult = pf.ok ? pf.data : pf.error;
       }
-        return { legA, preflightResult };
+        let listProbe: unknown = 'skipped';
+      if (dbgProject !== '' && dbgShot !== '') {
+        const listed = await window.jingxu.video.listVideoCandidates({
+          projectId: dbgProject,
+          shotId: dbgShot,
+        });
+        listProbe = listed.ok
+          ? {
+              ok: true,
+              count: listed.data.length,
+              rows: listed.data.map((candidate) => ({
+                id: candidate.id.slice(0, 8),
+                status: candidate.status,
+                providerKind: candidate.providerKind,
+                isMock: candidate.isMock,
+                errorCode: candidate.errorCode,
+              })),
+            }
+          : { ok: false, errorCode: listed.error.code };
+      }
+      return { legA, preflightResult, listProbe };
       },
-      { key: apiKey, preflightProject: debugProjectId, preflightShotIds: debugShotIds },
+      {
+        key: apiKey,
+        preflightProject: debugProjectId,
+        preflightShotIds: debugShotIds,
+        dbgProject,
+        dbgShot,
+      },
     );
     console.log(`AGNES_DBG_RESULT ${JSON.stringify(result)}`);
   } finally {
