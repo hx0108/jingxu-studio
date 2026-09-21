@@ -15,6 +15,10 @@ const shotId = process.env.JINGXU_DEBUG_SHOT_IDS?.split(',')[0] ?? '';
 const candidateId = process.env.JINGXU_DEBUG_CANDIDATE_ID ?? '';
 const ffmpegDirectory = path.join(desktopRoot, 'resources', 'ffmpeg');
 
+/** 512×512 纯色 PNG（参考图资产占位；真实生成为 Seedream 输出）。 */
+const REFERENCE_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAHIElEQVR4nO3VMQ0AMAzAsKEbnGEq1MHoEUsGkC/nvgEg6KwXALDCAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAGCaPqfBT7EgPK29AAAAAElFTkSuQmCC';
+
 test('真实收官——选择视频→时间线→FFmpeg 导出 MP4', async () => {
   test.setTimeout(2_400_000);
   test.skip(
@@ -40,7 +44,7 @@ test('真实收官——选择视频→时间线→FFmpeg 导出 MP4', async () 
   try {
     const page = await application.firstWindow();
     const result = await page.evaluate(
-      async ({ candidateId, projectId }) => {
+      async ({ candidateId, projectId, referencePngBase64 }) => {
         const requestId = (prefix: string): string => `${prefix}_${crypto.randomUUID()}`;
         const workspace = await window.jingxu.script.getWorkspace({ projectId });
         if (!workspace.ok) return { step: 'workspace', errorCode: workspace.error.code };
@@ -53,6 +57,51 @@ test('真实收官——选择视频→时间线→FFmpeg 导出 MP4', async () 
           requestId: requestId('select'),
         });
         if (!picked.ok) return { step: 'select', errorCode: picked.error.code };
+
+        // 一致性前置：预检驱动——missingItems 精确给出缺的 STYLE/CHARACTER，
+        // 循环上传参考图至 ready=true（最多 3 轮）。Renderer 无 Node Buffer：atob 解码。
+        const allShotIds = workspace.data.storyboard.shots.map((shot) => shot.shotId);
+        const referenceBytes = Uint8Array.from(atob(referencePngBase64), (character) =>
+          character.charCodeAt(0),
+        );
+        for (let round = 1; round <= 3; round += 1) {
+          const preflight = await window.jingxu.image.getConsistencyPreflight({
+            projectId,
+            shotIds: allShotIds,
+          });
+          if (!preflight.ok)
+            return { step: `preflight:${String(round)}`, errorCode: preflight.error.code };
+          if (preflight.data.ready) break;
+          const missing = preflight.data.missingItems;
+          if (missing.length === 0) break;
+          for (const [index, item] of missing.entries()) {
+            const uploaded = await window.jingxu.image.uploadAssetReference({
+              assetType: item.kind,
+              bibleRefId: item.bibleRefId,
+              byteSize: referenceBytes.length,
+              bytes: Uint8Array.from(referenceBytes),
+              description:
+                item.kind === 'STYLE' ? '午夜列车悬疑：冷蓝光与车厢暖光对比，电影感构图' : null,
+              displayName: item.displayName,
+              mimeType: 'image/png',
+              projectId,
+              requestId: requestId(`asset-r${String(round)}-${String(index)}`),
+            });
+            if (!uploaded.ok)
+              return {
+                step: `asset-r${String(round)}-${String(index)}`,
+                errorCode: uploaded.error.code,
+              };
+          }
+        }
+        const preflightFinal = await window.jingxu.image.getConsistencyPreflight({
+          projectId,
+          shotIds: allShotIds,
+        });
+        if (!preflightFinal.ok)
+          return { step: 'preflight-final', errorCode: preflightFinal.error.code };
+        if (!preflightFinal.data.ready)
+          return { step: 'preflight-not-ready', warnings: preflightFinal.data.warnings };
 
         // 全部镜头幂等补齐（首帧→视频）；已有选择则跳过（断点续跑安全）。
         for (const shot of workspace.data.storyboard.shots) {
@@ -200,7 +249,7 @@ test('真实收官——选择视频→时间线→FFmpeg 导出 MP4', async () 
           totalDurationMs: job.totalDurationMs,
         };
       },
-      { candidateId, projectId },
+      { candidateId, projectId, referencePngBase64: REFERENCE_PNG_BASE64 },
     );
     console.log(`REAL_EXPORT_RESULT ${JSON.stringify(result)}`);
     const ok = result as { mediaUrl?: string | null; fileSha256?: string };
