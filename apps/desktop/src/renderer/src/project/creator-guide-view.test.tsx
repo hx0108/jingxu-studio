@@ -18,13 +18,35 @@ const action = {
 } as const satisfies CreatorNextActionResultDto;
 
 describe('creator home', () => {
+  it('起始选择—演示入口可见且标注免配置零费用—不出现工程概念', () => {
+    const html = renderToStaticMarkup(
+      <CreatorHome
+        action={null}
+        demoPending={false}
+        error={null}
+        onContinue={vi.fn()}
+        onCreate={vi.fn()}
+        onDemo={vi.fn()}
+        onRetry={vi.fn()}
+        pending={false}
+        showStartChoice
+      />,
+    );
+    expect(html).toContain('5 分钟体验（免配置·零费用）');
+    for (const forbidden of ['JSON', 'Provider', 'requestId']) {
+      expect(html).not.toContain(forbidden);
+    }
+  });
+
   it('已有作品—首页展示当前一步—只有一个主操作且不暴露工程概念', () => {
     const html = renderToStaticMarkup(
       <CreatorHome
         action={action}
+        demoPending={false}
         error={null}
         onContinue={vi.fn()}
         onCreate={vi.fn()}
+        onDemo={vi.fn()}
         onRetry={vi.fn()}
         pending={false}
         showStartChoice={false}

@@ -56,6 +56,8 @@ export interface VoiceGenerationSchedulerDependencies {
   readonly synthesize: (
     request: TtsSynthesisRequest,
     signal: AbortSignal,
+    /** 调用点任务所属项目：组合根据此为演示项目路由 Mock 适配器（3.3）。 */
+    projectId: string,
   ) => Promise<TtsSynthesisResult>;
   readonly normalizeError: (error: unknown) => NormalizedModelError;
   readonly workspaceQuery: ScriptWorkspaceQueryPort;
@@ -190,6 +192,7 @@ export const createVoiceGenerationScheduler = (
       const result = await dependencies.synthesize(
         { invocationId: candidateId, modelId, spokenText: fields.spokenText, voiceId },
         controller.signal,
+        job.projectId,
       );
       const registration = await dependencies.registerAudio(result.audio, job.projectId);
       await repositories.finalizeCandidateSucceeded(

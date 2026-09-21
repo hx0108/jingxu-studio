@@ -1,7 +1,9 @@
 import type {
   AppResultDto,
+  CreatorDemoResultDto,
   CreatorNextActionResultDto,
   GetCreatorNextActionInputDto,
+  StartCreatorDemoInputDto,
   ScriptStage,
 } from '@jingxu/contracts';
 
@@ -9,6 +11,7 @@ import type {
   CreatorGuideProjectSnapshot,
   CreatorGuideQueryPort,
   CreatorStageStatus,
+  CreatorDemoSeederPort,
 } from '../ports/creator-guide';
 
 const STAGE_ORDER = [
@@ -24,6 +27,10 @@ export interface CreatorGuideService {
     input: GetCreatorNextActionInputDto,
     traceId: string,
   ): Promise<AppResultDto<CreatorNextActionResultDto>>;
+  startDemo(
+    input: StartCreatorDemoInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<CreatorDemoResultDto>>;
 }
 
 const chooseProject = (
@@ -187,7 +194,10 @@ export const resolveCreatorNextAction = (
   };
 };
 
-export const createCreatorGuideService = (query: CreatorGuideQueryPort): CreatorGuideService => ({
+export const createCreatorGuideService = (
+  query: CreatorGuideQueryPort,
+  demoSeeder?: CreatorDemoSeederPort,
+): CreatorGuideService => ({
   async getNextAction(input, traceId) {
     const projects = await query.listActiveProjects();
     const projectId = input.projectId ?? chooseProject(projects);
@@ -234,5 +244,21 @@ export const createCreatorGuideService = (query: CreatorGuideQueryPort): Creator
       };
     }
     return { ok: true, data: resolveCreatorNextAction(snapshot) };
+  },
+  async startDemo(input, traceId) {
+    if (demoSeeder === undefined) {
+      return {
+        ok: false,
+        error: {
+          code: 'DEMO_INITIALIZATION_FAILED',
+          fieldErrors: null,
+          message: '示例创建暂不可用',
+          retryable: true,
+          traceId,
+          userAction: '请稍后重试',
+        },
+      };
+    }
+    return demoSeeder.seed(input.requestId);
   },
 });

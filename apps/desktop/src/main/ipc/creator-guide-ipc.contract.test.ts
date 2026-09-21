@@ -1,4 +1,8 @@
-import type { AppResultDto, CreatorNextActionResultDto } from '@jingxu/contracts';
+import type {
+  AppResultDto,
+  CreatorDemoResultDto,
+  CreatorNextActionResultDto,
+} from '@jingxu/contracts';
 import { CREATOR_GUIDE_IPC_CHANNELS } from '@jingxu/contracts';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -26,6 +30,16 @@ const okResult = {
   },
 } as const satisfies AppResultDto<CreatorNextActionResultDto>;
 
+const demoResult = {
+  ok: true,
+  data: {
+    isDemo: true,
+    projectId: PROJECT_ID,
+    resumed: false,
+    summary: '示例剧本与分镜已就绪，接下来生成画面。',
+  },
+} as const satisfies AppResultDto<CreatorDemoResultDto>;
+
 const trustedEvent = (): CreatorGuideIpcEvent => {
   const frame = { url: TRUSTED_URL };
   return { sender: { mainFrame: frame }, senderFrame: frame };
@@ -38,6 +52,7 @@ const createHarness = () => {
   >();
   const service = {
     getNextAction: vi.fn(() => Promise.resolve(okResult)),
+    startDemo: vi.fn(() => Promise.resolve(demoResult)),
   } satisfies CreatorGuideIpcService;
   registerCreatorGuideIpc(
     { handle: (channel, listener) => handlers.set(channel, listener) },
@@ -58,6 +73,13 @@ describe('creator guide IPC Contract', () => {
       }),
     ).resolves.toEqual(okResult);
     expect(service.getNextAction).toHaveBeenCalledWith({ projectId: PROJECT_ID }, TRACE_ID);
+
+    await expect(
+      handlers.get(CREATOR_GUIDE_IPC_CHANNELS.startDemo)?.(trustedEvent(), {
+        requestId: 'request_demo0001',
+      }),
+    ).resolves.toEqual(demoResult);
+    expect(service.startDemo).toHaveBeenCalledWith({ requestId: 'request_demo0001' }, TRACE_ID);
   });
 
   it('未知字段、多参数或越界标识—严格校验—返回稳定错误且服务零调用', async () => {
@@ -75,6 +97,12 @@ describe('creator guide IPC Contract', () => {
       ).resolves.toMatchObject({ ok: false, error: { code: 'IPC_INVALID_REQUEST' } });
     }
     expect(service.getNextAction).not.toHaveBeenCalled();
+    await expect(
+      handlers.get(CREATOR_GUIDE_IPC_CHANNELS.startDemo)?.(trustedEvent(), {
+        requestId: 'short',
+      }),
+    ).resolves.toMatchObject({ ok: false, error: { code: 'IPC_INVALID_REQUEST' } });
+    expect(service.startDemo).not.toHaveBeenCalled();
   });
 
   it('外部 URL 调用—sender 边界阻断—服务零调用', async () => {

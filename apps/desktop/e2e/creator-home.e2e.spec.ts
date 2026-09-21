@@ -38,10 +38,12 @@ test('全新安装默认首页—唯一主操作且不要求先配置服务—�
       expect(homeText).not.toContain(forbidden);
     }
 
-    // 无项目时点击主操作 → 起始选择面板（演示入口占位 + 创建入口）。
+    // 无项目时点击主操作 → 起始选择面板（演示入口已随 3.3 启用 + 创建入口）。
     await page.getByRole('button', { name: '继续制作本集' }).click();
     await expect(page.getByRole('button', { name: '创建我的作品' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /5 分钟体验/u })).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: '5 分钟体验（免配置·零费用）' }),
+    ).toBeEnabled();
 
     await page.getByRole('button', { name: '创建我的作品' }).click();
     await page.getByLabel('项目名称').fill('首页创建的作品');

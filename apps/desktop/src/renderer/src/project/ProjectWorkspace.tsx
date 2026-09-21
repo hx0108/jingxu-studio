@@ -73,6 +73,7 @@ export const ProjectWorkspace = () => {
   const [screen, setScreen] = useState<Screen>('home');
   const [creatorAction, setCreatorAction] = useState<CreatorNextActionResultDto | null>(null);
   const [creatorGuidePending, setCreatorGuidePending] = useState(false);
+  const [demoPending, setDemoPending] = useState(false);
   const [creatorGuideError, setCreatorGuideError] = useState<string | null>(null);
   const [showStartChoice, setShowStartChoice] = useState(false);
   const [creatorRoute, setCreatorRoute] = useState<CreatorWorkspaceRoute | null>(null);
@@ -217,6 +218,33 @@ export const ProjectWorkspace = () => {
     moveTo(route.screen);
   };
 
+  const startDemo = async (): Promise<void> => {
+    if (demoPending) return;
+    setDemoPending(true);
+    try {
+      const result = await getCreatorGuideClient().startDemo({
+        requestId: `demo_${crypto.randomUUID()}`,
+      });
+      if (!result.ok) {
+        setCreatorGuideError(result.error.userAction ?? '示例暂时无法创建，请稍后重试。');
+        return;
+      }
+      select(result.data.projectId);
+      const latest = await refreshCreatorAction();
+      const route = latest === null ? null : routeForCreatorAction(latest);
+      if (latest === null || latest.projectId === null || route === null) {
+        moveTo('detail');
+        return;
+      }
+      setCreatorRoute(route);
+      moveTo(route.screen);
+    } catch {
+      setCreatorGuideError('示例暂时无法创建，请稍后重试。');
+    } finally {
+      setDemoPending(false);
+    }
+  };
+
   const createProject = async (values: ProjectFormValues) => {
     setCommandError(null);
     return commands.create.mutateAsync({
@@ -343,6 +371,7 @@ export const ProjectWorkspace = () => {
         {screen === 'home' && (
           <CreatorHome
             action={creatorAction}
+            demoPending={demoPending}
             error={creatorGuideError}
             onContinue={() => {
               void continueEpisode();
@@ -350,6 +379,9 @@ export const ProjectWorkspace = () => {
             onCreate={() => {
               setShowStartChoice(false);
               moveTo('create');
+            }}
+            onDemo={() => {
+              void startDemo();
             }}
             onRetry={() => {
               void refreshCreatorAction();

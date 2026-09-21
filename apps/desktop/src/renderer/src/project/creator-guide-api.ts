@@ -1,13 +1,18 @@
 import type {
   AppResultDto,
+  CreatorDemoResultDto,
   CreatorNextActionResultDto,
   GetCreatorNextActionInputDto,
+  StartCreatorDemoInputDto,
 } from '@jingxu/contracts';
 
 export interface CreatorGuideClient {
   getNextAction(
     input: GetCreatorNextActionInputDto,
   ): Promise<AppResultDto<CreatorNextActionResultDto>>;
+  startDemo(
+    input: StartCreatorDemoInputDto,
+  ): Promise<AppResultDto<CreatorDemoResultDto>>;
 }
 
 export const getCreatorGuideClient = (): CreatorGuideClient => window.jingxu.creatorGuide;

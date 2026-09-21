@@ -2,14 +2,18 @@ import { randomUUID } from 'node:crypto';
 
 import type {
   AppResultDto,
+  CreatorDemoResultDto,
   CreatorNextActionResultDto,
   GetCreatorNextActionInputDto,
+  StartCreatorDemoInputDto,
 } from '@jingxu/contracts';
 import {
   appResultSchema,
   CREATOR_GUIDE_IPC_CHANNELS,
+  creatorDemoResultSchema,
   creatorNextActionResultSchema,
   getCreatorNextActionInputSchema,
+  startCreatorDemoInputSchema,
 } from '@jingxu/contracts';
 
 import { assertTrustedIpcSender, parseSingleIpcArgument, type IpcEvent } from './ipc-boundary';
@@ -30,6 +34,10 @@ export interface CreatorGuideIpcService {
     input: GetCreatorNextActionInputDto,
     traceId: string,
   ): Promise<AppResultDto<CreatorNextActionResultDto>>;
+  startDemo(
+    input: StartCreatorDemoInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<CreatorDemoResultDto>>;
 }
 
 export interface CreatorGuideIpcTraceIds {
@@ -76,6 +84,22 @@ export const registerCreatorGuideIpc = (
     try {
       const parsed = appResultSchema(creatorNextActionResultSchema).safeParse(
         await service.getNextAction(input, traceId),
+      );
+      return parsed.success ? parsed.data : unavailable(traceId);
+    } catch {
+      return unavailable(traceId);
+    }
+  });
+
+  registrar.handle(CREATOR_GUIDE_IPC_CHANNELS.startDemo, async (event, ...arguments_) => {
+    assertTrustedIpcSender(event, trustedUrl);
+    const traceId = traceIds.newTraceId();
+    const input = parseSingleIpcArgument(startCreatorDemoInputSchema, arguments_);
+    if (input === null) return invalidRequest(traceId);
+
+    try {
+      const parsed = appResultSchema(creatorDemoResultSchema).safeParse(
+        await service.startDemo(input, traceId),
       );
       return parsed.success ? parsed.data : unavailable(traceId);
     } catch {

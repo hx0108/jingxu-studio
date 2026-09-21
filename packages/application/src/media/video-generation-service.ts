@@ -39,7 +39,8 @@ import {
 
 export interface VideoGenerationServiceDependencies {
   /** 生成前置凭据闸（design A5）：抛错即以稳定 MODEL_CREDENTIAL_INVALID 拒绝（Mock 档不注入）。 */
-  readonly assertCredentialReady?: (() => Promise<void>) | undefined;
+  /** 入参 projectId：演示项目（experience_mode=DEMO）由组合根放行，走 Mock 通路。 */
+  readonly assertCredentialReady?: ((projectId: string) => Promise<void>) | undefined;
   /** 每轮候选数 N（拍板 D3：组合根注入常量 2）。 */
   readonly candidateCount: number;
   /**
@@ -164,7 +165,7 @@ export const createVideoGenerationService = (
       // 凭据前置闸（design A5）：未配置/不可解密先于建档稳定失败，指向视频配置入口。
       if (dependencies.assertCredentialReady !== undefined) {
         try {
-          await dependencies.assertCredentialReady();
+          await dependencies.assertCredentialReady(input.projectId);
         } catch {
           return mediaFailure(
             'MODEL_CREDENTIAL_INVALID',

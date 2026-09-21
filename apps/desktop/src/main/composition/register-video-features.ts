@@ -38,6 +38,7 @@ import {
   SeedanceVideoModelAdapter,
   createMockModelError,
 } from '@jingxu/model-adapters';
+import { demoProjectRegistry } from './demo-project-registry';
 import type { MockVideoSubmitStep } from '@jingxu/model-adapters';
 import { createContentAddressedStore, deriveMediaStorageRelPath } from '@jingxu/persistence';
 import { createFfmpegVideoComposer } from '../adapters/ffmpeg-video-composer';
@@ -509,7 +510,8 @@ export const createVideoFeatureRegistration = ({
         ...(providerMode === 'MOCK'
           ? {}
           : {
-              assertCredentialReady: async () => {
+              assertCredentialReady: async (projectId) => {
+                if (demoProjectRegistry.current() === projectId) return;
                 await credentials.loadCredential(
                   providerMode === 'AGNES' ? AGNES_VIDEO_CREDENTIAL_ID : VIDEO_CREDENTIAL_ID,
                 );
@@ -540,8 +542,13 @@ export const createVideoFeatureRegistration = ({
         hashText,
         model: activeVideoModel,
         // 按任务冻结溯源解析 Adapter（low-cost D4）：无溯源行回退当前模式首配。
+        // 演示项目优先路由 Mock（simplify-first-run 3.3），真实项目仍按溯源。
         resolveModel: (task) =>
-          task.provenance === undefined ? null : resolveVideoModel(task.provenance),
+          demoProjectRegistry.current() === task.projectId
+            ? mockVideoModel
+            : task.provenance === undefined
+              ? null
+              : resolveVideoModel(task.provenance),
         mediaUnitOfWork,
         newId: randomUUID,
         nowMs: Date.now,
@@ -573,7 +580,8 @@ export const createVideoFeatureRegistration = ({
         ...(providerMode === 'MOCK'
           ? {}
           : {
-              assertCredentialReady: async () => {
+              assertCredentialReady: async (projectId) => {
+                if (demoProjectRegistry.current() === projectId) return;
                 await credentials.loadCredential(
                   providerMode === 'AGNES' ? AGNES_VIDEO_CREDENTIAL_ID : VIDEO_CREDENTIAL_ID,
                 );

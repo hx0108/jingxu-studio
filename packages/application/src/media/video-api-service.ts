@@ -65,7 +65,8 @@ export interface VideoApiService {
 
 export interface VideoApiServiceDependencies {
   /** 建批前置凭据闸（批量服务自身无闸；单镜头闸由生成服务内置，组合根同源注入）。 */
-  readonly assertCredentialReady?: (() => Promise<void>) | undefined;
+  /** 入参 projectId：演示项目（experience_mode=DEMO）由组合根放行，走 Mock 通路。 */
+  readonly assertCredentialReady?: ((projectId: string) => Promise<void>) | undefined;
   /** 视频批量编排（progressBatch 由调度器钩子驱动）。 */
   readonly batch: Pick<
     VideoBatchService,
@@ -192,7 +193,7 @@ export const createVideoApiService = (
       // 与单镜头同源凭据闸（A5）：未配置/不可解密先于建批稳定失败，指向视频配置入口。
       if (dependencies.assertCredentialReady !== undefined) {
         try {
-          await dependencies.assertCredentialReady();
+          await dependencies.assertCredentialReady(input.projectId);
         } catch {
           return mediaFailure(
             'MODEL_CREDENTIAL_INVALID',

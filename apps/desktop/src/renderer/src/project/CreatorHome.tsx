@@ -2,9 +2,11 @@ import type { CreatorNextActionResultDto } from '@jingxu/contracts';
 
 export interface CreatorHomeProps {
   readonly action: CreatorNextActionResultDto | null;
+  readonly demoPending: boolean;
   readonly error: string | null;
   readonly onContinue: () => void;
   readonly onCreate: () => void;
+  readonly onDemo: () => void;
   readonly onRetry: () => void;
   readonly pending: boolean;
   readonly showStartChoice: boolean;
@@ -12,9 +14,11 @@ export interface CreatorHomeProps {
 
 export const CreatorHome = ({
   action,
+  demoPending,
   error,
   onContinue,
   onCreate,
+  onDemo,
   onRetry,
   pending,
   showStartChoice,
@@ -50,8 +54,12 @@ export const CreatorHome = ({
           <button data-primary-action onClick={onCreate} type="button">
             创建我的作品
           </button>
-          <button disabled title="演示项目正在接入" type="button">
-            5 分钟体验（即将可用）
+          <button
+            disabled={demoPending || pending}
+            onClick={onDemo}
+            type="button"
+          >
+            {demoPending ? '正在准备示例…' : '5 分钟体验（免配置·零费用）'}
           </button>
         </div>
       </section>

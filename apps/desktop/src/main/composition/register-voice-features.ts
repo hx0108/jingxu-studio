@@ -23,6 +23,7 @@ import {
   QWEN_TTS_VOICES,
   QwenTtsModelAdapter,
 } from '@jingxu/model-adapters';
+import { demoProjectRegistry } from './demo-project-registry';
 import { createContentAddressedStore } from '@jingxu/persistence';
 
 import { CredentialAdapter, type SafeStorageFacade } from '../adapters/credential';
@@ -226,6 +227,14 @@ export const createVoiceFeatureRegistration = ({
             credentialId: VOICE_CREDENTIAL_ID,
             credentialPort: credentials,
           });
+      // 演示项目 Mock 通路（simplify-first-run 3.3）：128 步预算，真实项目零影响。
+      const demoTtsModel = new MockTtsModelAdapter({
+        steps: Array.from({ length: 128 }, () => ({ kind: 'SYNC' }) as const),
+      });
+      const synthesizeFor = (projectId: string | undefined): TtsModelPort =>
+        projectId !== undefined && demoProjectRegistry.current() === projectId
+          ? demoTtsModel
+          : ttsModel;
       const resolveCurrentModel = async (): Promise<Readonly<{ modelId: string }>> => {
         if (useE2eMock) return { modelId: DEFAULT_QWEN_TTS_MODEL_ID };
         const profile = await providerProfiles.findById(VOICE_CREDENTIAL_ID);
@@ -255,7 +264,7 @@ export const createVoiceFeatureRegistration = ({
         newId: randomUUID,
         registerAudio: (payload, projectId) => registrar.register(payload, projectId),
         repositories,
-        synthesize: (request, signal) => ttsModel.synthesize(request, signal),
+        synthesize: (request, signal, projectId) => synthesizeFor(projectId).synthesize(request, signal),
         normalizeError: (error) => ttsModel.normalizeError(error),
         workspaceQuery,
       });
@@ -267,7 +276,8 @@ export const createVoiceFeatureRegistration = ({
         ...(useE2eMock
           ? {}
           : {
-              assertCredentialReady: async () => {
+              assertCredentialReady: async (projectId) => {
+                if (demoProjectRegistry.current() === projectId) return;
                 await credentials.loadCredential(VOICE_CREDENTIAL_ID);
               },
             }),

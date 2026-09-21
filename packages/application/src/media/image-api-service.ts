@@ -100,7 +100,8 @@ export interface ImageApiService {
 
 export interface ImageApiServiceDependencies {
   /** 生成前置凭据闸：抛错即以稳定 MODEL_CREDENTIAL_INVALID 拒绝（Mock 档不注入；design D2）。 */
-  readonly assertCredentialReady?: (() => Promise<void>) | undefined;
+  /** 入参 projectId：演示项目（experience_mode=DEMO）由组合根放行，走 Mock 通路。 */
+  readonly assertCredentialReady?: ((projectId: string) => Promise<void>) | undefined;
   readonly assetFileStore: MediaAssetFileStorePort;
   /** 批量首帧编排（batch-first-frame-generation；progressBatch 由调度器钩子驱动）。 */
   readonly batch: MediaBatchService;
@@ -194,7 +195,7 @@ export const createImageApiService = (
       // 凭据前置闸（D2）：未配置/不可解密先于建档稳定失败，其余五个 image 方法不受影响。
       if (dependencies.assertCredentialReady !== undefined) {
         try {
-          await dependencies.assertCredentialReady();
+          await dependencies.assertCredentialReady(input.projectId);
         } catch {
           return mediaFailure(
             'MODEL_CREDENTIAL_INVALID',
@@ -335,7 +336,7 @@ export const createImageApiService = (
       // 批量与单镜头同源凭据闸（D2）：未配置/不可解密先于建批稳定失败。
       if (dependencies.assertCredentialReady !== undefined) {
         try {
-          await dependencies.assertCredentialReady();
+          await dependencies.assertCredentialReady(input.projectId);
         } catch {
           return mediaFailure(
             'MODEL_CREDENTIAL_INVALID',

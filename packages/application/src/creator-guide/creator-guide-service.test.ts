@@ -146,3 +146,108 @@ describe('CreatorGuideService.getNextAction 决策表', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'CREATOR_GUIDE_SCOPE_STALE' } });
   });
 });
+
+describe('startDemo（3.1 演示初始化·应用层语义）', () => {
+  const noopQuery: CreatorGuideQueryPort = {
+    getProjectSnapshot: () => Promise.resolve(null),
+    listActiveProjects: () => Promise.resolve([]),
+  };
+
+  it('种子成功—原样透传结果且 resued/项目 id 保持种子事实', async () => {
+    const seeds: readonly string[] = [];
+    const seeder = {
+      seed: (requestId: string) => {
+        (seeds as string[]).push(requestId);
+        return Promise.resolve({
+          ok: true,
+          data: {
+            isDemo: true,
+            projectId: 'project_demo0001',
+            resumed: false,
+            summary: '示例已就绪',
+          },
+        } as const);
+      },
+    };
+    const result = await createCreatorGuideService(noopQuery, seeder).startDemo(
+      { requestId: 'request_demo0001' },
+      'trace_demo01',
+    );
+    expect(result).toMatchObject({
+      ok: true,
+      data: { isDemo: true, projectId: 'project_demo0001', resumed: false },
+    });
+    expect(seeds).toEqual(['request_demo0001']);
+  });
+
+  it('同 requestId 再次进入—幂等归种子执行口—服务层透传 resumed 事实', async () => {
+    // 幂等由 SeederPort 以回执保证（组合根实现）；服务层契约是原样透传，不复制项目。
+    const seeder = {
+      seed: (requestId: string) =>
+        Promise.resolve({
+          ok: true,
+          data: {
+            isDemo: true,
+            projectId: 'project_demo0001',
+            resumed: requestId === 'request_demo0001' && seedsSeen.size > 0,
+            summary: '示例已就绪',
+          },
+        } as const),
+    };
+    const seedsSeen = new Set<string>();
+    const trackingSeeder = {
+      seed: (requestId: string) => {
+        const resumed = seedsSeen.has(requestId);
+        seedsSeen.add(requestId);
+        return seeder.seed(requestId).then((result) => ({
+          ...result,
+          data: { ...result.data, resumed },
+        }));
+      },
+    };
+    const service = createCreatorGuideService(noopQuery, trackingSeeder);
+    const first = await service.startDemo({ requestId: 'request_demo0001' }, 'trace_demo02');
+    const second = await service.startDemo({ requestId: 'request_demo0001' }, 'trace_demo03');
+    expect(first).toMatchObject({ ok: true, data: { resumed: false } });
+    expect(second).toMatchObject({
+      ok: true,
+      data: { resumed: true, projectId: 'project_demo0001' },
+    });
+  });
+
+  it('种子失败—映射 DEMO_INITIALIZATION_FAILED 并保留种子的可重试语义', async () => {
+    const seeder = {
+      seed: () =>
+        Promise.resolve({
+          ok: false,
+          error: {
+            code: 'DEMO_INITIALIZATION_FAILED',
+            fieldErrors: null,
+            message: '示例创建未完成',
+            retryable: true,
+            traceId: 'trace_seed_inner',
+            userAction: '重试即可；不会留下半成品。',
+          },
+        } as const),
+    };
+    const result = await createCreatorGuideService(noopQuery, seeder).startDemo(
+      { requestId: 'request_demo0002' },
+      'trace_demo04',
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'DEMO_INITIALIZATION_FAILED', retryable: true },
+    });
+  });
+
+  it('未注入种子执行口—稳定失败不抛异常—体验入口可安全降级', async () => {
+    const result = await createCreatorGuideService(noopQuery).startDemo(
+      { requestId: 'request_demo0003' },
+      'trace_demo05',
+    );
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'DEMO_INITIALIZATION_FAILED', retryable: true },
+    });
+  });
+});

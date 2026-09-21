@@ -33,6 +33,7 @@ import { createContentAddressedStore, deriveMediaStorageRelPath } from '@jingxu/
 import { CredentialAdapter, type SafeStorageFacade } from '../adapters/credential';
 import { registerImageIpc, type ImageIpcRegistrar, type ImageIpcService } from '../ipc/image-ipc';
 import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
+import { demoProjectRegistry } from './demo-project-registry';
 
 /** Agnes Key 的 safeStorage 凭据引用（2026-09-21 起图片档切换 Agnes Image；UI 配置走 provider 通道，见 image-credential-management）。 */
 export const IMAGE_CREDENTIAL_ID = AGNES_IMAGE_PROFILE_ID;
@@ -293,6 +294,11 @@ export const createImageFeatureRegistration = ({
           `agnes-image-v1:${String(size.width)}x${String(size.height)}`,
         workspaceQuery,
       });
+      // 演示项目 Mock 通路（simplify-first-run 3.3）：仅当任务属于演示项目时
+      // 由演示 Mock 适配器产出候选；真实项目恒走原 model，行为零变化。
+      const demoImageModel = new MockImageModelAdapter({
+        steps: Array.from({ length: 128 }, () => ({ kind: 'SYNC' }) as const),
+      });
       const scheduler = createMediaTaskScheduler({
         fileStore: {
           writeMedia: ({ bytes, mimeType, projectId }) =>
@@ -300,6 +306,8 @@ export const createImageFeatureRegistration = ({
         },
         hashText: (value) => createHash('sha256').update(value, 'utf8').digest('hex'),
         model: imageModel,
+        resolveModel: (task) =>
+          demoProjectRegistry.current() === task.projectId ? demoImageModel : null,
         mediaUnitOfWork,
         newId: randomUUID,
         nowMs: Date.now,
@@ -328,7 +336,8 @@ export const createImageFeatureRegistration = ({
           // 未配置/不可解密以稳定 MODEL_CREDENTIAL_INVALID 拒绝（D2，替代 MODEL_UNKNOWN 兜底）。
           useE2eMock
             ? undefined
-            : async () => {
+            : async (projectId) => {
+                if (demoProjectRegistry.current() === projectId) return;
                 await credentials.loadCredential(IMAGE_CREDENTIAL_ID);
               },
         assetFileStore: {

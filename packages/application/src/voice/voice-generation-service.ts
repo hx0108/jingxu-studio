@@ -49,7 +49,8 @@ const persistenceFailure = <T>(traceId: string): AppResultDto<T> =>
 
 export interface VoiceGenerationServiceDependencies {
   /** 建批前置凭据闸：未配置/不可解密先于建批稳定失败（组合根同源注入）。 */
-  readonly assertCredentialReady?: (() => Promise<void>) | undefined;
+  /** 入参 projectId：演示项目（experience_mode=DEMO）由组合根放行，走 Mock 通路。 */
+  readonly assertCredentialReady?: ((projectId: string) => Promise<void>) | undefined;
   readonly clock: () => string;
   readonly hashPayload: (value: Readonly<Record<string, unknown>>) => string;
   readonly hashText: (text: string) => string;
@@ -114,7 +115,7 @@ export const createVoiceGenerationService = (
         // 前置凭据闸：未配置/不可解密先于一切建档稳定失败（spec R1 指向配音设置）。
         if (dependencies.assertCredentialReady !== undefined) {
           try {
-            await dependencies.assertCredentialReady();
+            await dependencies.assertCredentialReady(input.projectId);
           } catch {
             return failure(
               'VOICE_PROVIDER_NOT_CONFIGURED',
