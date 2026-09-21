@@ -15,6 +15,7 @@ const project = {
   creationMode: 'AI_ORIGINAL',
   dialogueRenderMode: 'NARRATION_FIRST',
   deploymentMode: 'LOCAL_DEMO',
+  experienceMode: 'STANDARD',
   dataRootRel: 'projects/project_12345678',
   createdAt: '2026-09-20T01:00:00.000Z',
   updatedAt: '2026-09-20T01:00:00.000Z',

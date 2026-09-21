@@ -202,7 +202,7 @@ describe('0023_video_provider_preferences 迁移矩阵（low-cost-video 3.1 切�
       try {
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 25 });
+        ).toEqual({ version: 26 });
         expect(preferenceRow(database)).toEqual({
           id: 1,
           mode: 'SEEDANCE',
@@ -280,7 +280,7 @@ describe('0023_video_provider_preferences 迁移矩阵（low-cost-video 3.1 切�
 
         expect(
           database.prepare('SELECT MAX(version) AS version FROM schema_migrations').get(),
-        ).toEqual({ version: 25 });
+        ).toEqual({ version: 26 });
         // 既有 Profile（含 2.0/2.5 两种 model_id）逐列不变。
         expect(database.prepare('SELECT * FROM provider_profiles ORDER BY id').all()).toEqual(
           profilesBefore,

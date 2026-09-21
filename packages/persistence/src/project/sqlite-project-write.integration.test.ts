@@ -28,6 +28,7 @@ const project = (id: string, name = `项目-${id}`): Project => ({
   creationMode: 'AI_ORIGINAL',
   dialogueRenderMode: 'NARRATION_FIRST',
   deploymentMode: 'LOCAL_DEMO',
+  experienceMode: 'STANDARD',
   createdAt: FIXED_TEST_TIME,
   updatedAt: FIXED_TEST_TIME,
   deletedAt: null,

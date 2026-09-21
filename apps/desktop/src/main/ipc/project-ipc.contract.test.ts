@@ -31,6 +31,7 @@ const detail: ProjectDetailDto = {
   creationMode: 'AI_ORIGINAL',
   dialogueRenderMode: 'NARRATION_FIRST',
   deploymentMode: 'LOCAL_DEMO',
+  experienceMode: 'STANDARD',
   createdAt: '2026-08-10T01:00:00.000Z',
   updatedAt: '2026-08-10T01:00:00.000Z',
   deletedAt: null,

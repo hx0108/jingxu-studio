@@ -127,6 +127,8 @@ export const projectErrorCodeSchema = z.enum([
   'TRANSFER_IMPORT_NOT_ALLOWED',
   'TRANSFER_IDEMPOTENCY_CONFLICT',
   'TRANSFER_PERSISTENCE_FAILED',
+  // 五分钟体验模式：DEMO 项目不含可导入的真实凭据语义，禁止导出为项目快照。
+  'TRANSFER_DEMO_EXPORT_BLOCKED',
   // V1 结构化分镜评测集（storyboard-evaluation-set）。
   'EVALUATION_SAMPLE_INVALID',
   'EVALUATION_DEDUP_CONFLICT',

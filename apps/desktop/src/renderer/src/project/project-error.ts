@@ -148,6 +148,7 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   TRANSFER_IMPORT_NOT_ALLOWED: ['当前项目状态不允许导入', '完成启动检查或补充原始输入后重试。'],
   TRANSFER_IDEMPOTENCY_CONFLICT: ['导入导出请求标识已被复用', '重新发起操作。'],
   TRANSFER_PERSISTENCE_FAILED: ['项目快照保存失败', '原项目未修改，请稍后重试。'],
+  TRANSFER_DEMO_EXPORT_BLOCKED: ['演示项目不支持导出', '演示内容仅用于体验，不会导出文件。'],
   EVALUATION_SAMPLE_INVALID: ['评测样本不符合要求', '检查样本 JSON、期望结论和授权状态后重试。'],
   EVALUATION_DEDUP_CONFLICT: ['评测样本已存在', '修改去重键，或查看已有样本。'],
   EVALUATION_NOT_FOUND: ['找不到评测样本', '刷新样本列表后重试。'],

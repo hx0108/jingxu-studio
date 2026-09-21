@@ -50,6 +50,7 @@ const detailFixture = () => ({
   currentFormatProfile: formatProfileFixture(),
   deletedAt: null,
   deploymentMode: 'LOCAL_DEMO' as const,
+  experienceMode: 'STANDARD' as const,
   dialogueRenderMode: 'NARRATION_FIRST' as const,
   formatProfileHistory: [],
   genre: null,

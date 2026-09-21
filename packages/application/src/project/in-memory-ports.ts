@@ -44,6 +44,7 @@ export const makeProject = (overrides: Partial<Project>): Project => ({
   creationMode: 'AI_ORIGINAL',
   dialogueRenderMode: 'NARRATION_FIRST',
   deploymentMode: 'LOCAL_DEMO',
+  experienceMode: 'STANDARD',
   createdAt: '2026-08-09T00:00:00.000Z',
   updatedAt: '2026-08-09T00:00:00.000Z',
   deletedAt: null,

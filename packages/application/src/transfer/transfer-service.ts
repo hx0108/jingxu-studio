@@ -141,6 +141,11 @@ export const createTransferService = (
       if (project === null) {
         return deny('PROJECT_NOT_FOUND', '项目不存在或已删除');
       }
+      // 五分钟体验项目不导出：演示语义无法在 1.0.0 Bundle 公开契约中保留，
+      // 导出再导入会被当作真实项目——与「不得丢失演示标识」红线冲突。
+      if (project.experienceMode === 'DEMO') {
+        return deny('TRANSFER_DEMO_EXPORT_BLOCKED', '演示项目不支持导出');
+      }
       const formatProfile = await repositories.formatProfiles.findCurrent(input.projectId);
       if (formatProfile === null) {
         return deny('EXPORT_NOT_READY', '项目尚未形成可导出的完整快照');

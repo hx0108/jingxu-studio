@@ -21,9 +21,18 @@ export type DialogueRenderMode = (typeof DIALOGUE_RENDER_MODES)[number];
 export const DEPLOYMENT_MODES = ['LOCAL_DEMO', 'CONTROLLED_EXTERNAL_TEST'] as const;
 export type DeploymentMode = (typeof DEPLOYMENT_MODES)[number];
 
+/**
+ * 项目级体验标记：STANDARD 为常规创作；DEMO 为「五分钟体验」内置示例种子创建，
+ * 媒体任务固定 Mock 且不得被真实生成解析器选择。对齐 `0026_project_experience_mode.sql`。
+ */
+export const EXPERIENCE_MODES = ['STANDARD', 'DEMO'] as const;
+export type ExperienceMode = (typeof EXPERIENCE_MODES)[number];
+
 /** V1 默认创作模式与对白模式（UI 未覆盖时使用）。 */
 export const DEFAULT_CREATION_MODE: CreationMode = 'AI_ORIGINAL';
 export const DEFAULT_DIALOGUE_RENDER_MODE: DialogueRenderMode = 'NARRATION_FIRST';
+/** 常规创建路径一律 STANDARD；仅演示种子命令写入 DEMO。 */
+export const DEFAULT_EXPERIENCE_MODE: ExperienceMode = 'STANDARD';
 
 export interface Project {
   readonly id: string;
@@ -33,6 +42,7 @@ export interface Project {
   readonly creationMode: CreationMode;
   readonly dialogueRenderMode: DialogueRenderMode;
   readonly deploymentMode: DeploymentMode;
+  readonly experienceMode: ExperienceMode;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly deletedAt: string | null;

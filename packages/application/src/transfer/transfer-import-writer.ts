@@ -191,6 +191,8 @@ export const writeNewProjectFromBundle = async (
     dialogueRenderMode: String(snapshot.dialogue_render_mode) as DialogueRenderMode,
     deletedAt: null,
     deploymentMode: 'LOCAL_DEMO',
+    // 演示项目被阻止导出（TRANSFER_DEMO_EXPORT_BLOCKED），因此导入产物恒为常规项目。
+    experienceMode: 'STANDARD',
     genre: null,
     id: newProjectId,
     name: String(snapshot.name),

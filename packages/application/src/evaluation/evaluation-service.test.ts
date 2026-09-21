@@ -70,6 +70,7 @@ const createHarness = (
     creationMode: 'AI_ORIGINAL',
     dialogueRenderMode: 'NARRATION_FIRST',
     deploymentMode: 'LOCAL_DEMO',
+    experienceMode: 'STANDARD',
     createdAt: NOW,
     updatedAt: NOW,
     deletedAt: null,

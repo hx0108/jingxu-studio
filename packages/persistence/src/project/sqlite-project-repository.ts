@@ -15,11 +15,11 @@ import { mapProjectListItemRow, mapProjectRow, type Row } from './row-mapper';
 
 /** projects 表的稳定列投影；不含 data_root_rel（不映射进领域聚合），不用 SELECT *。 */
 const PROJECT_COLUMNS =
-  'id, name, genre, style, creation_mode, dialogue_render_mode, deployment_mode, created_at, updated_at, deleted_at';
+  'id, name, genre, style, creation_mode, dialogue_render_mode, deployment_mode, experience_mode, created_at, updated_at, deleted_at';
 
 /** list/scan 查询带表别名的前缀列投影（JOIN 后 id 等列名歧义，必须显式 p.）。 */
 const PROJECT_LIST_COLUMNS =
-  'p.id, p.name, p.genre, p.style, p.creation_mode, p.dialogue_render_mode, p.deployment_mode, p.created_at, p.updated_at, p.deleted_at';
+  'p.id, p.name, p.genre, p.style, p.creation_mode, p.dialogue_render_mode, p.deployment_mode, p.experience_mode, p.created_at, p.updated_at, p.deleted_at';
 
 /** keyset 定位点之后的筛选子句（同 updated_at 用 id DESC 做 tie-break，不用 OFFSET）。 */
 const KEYSET_AFTER_CLAUSE = ' AND (p.updated_at < ? OR (p.updated_at = ? AND p.id < ?))';
@@ -126,8 +126,8 @@ export class SqliteProjectRepository implements ProjectRepository {
         .prepare(
           `INSERT INTO projects (
             id, name, genre, style, creation_mode, dialogue_render_mode, deployment_mode,
-            data_root_rel, created_at, updated_at, deleted_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            experience_mode, data_root_rel, created_at, updated_at, deleted_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           project.id,
@@ -137,6 +137,7 @@ export class SqliteProjectRepository implements ProjectRepository {
           project.creationMode,
           project.dialogueRenderMode,
           project.deploymentMode,
+          project.experienceMode,
           `projects/${project.id}`,
           project.createdAt,
           project.updatedAt,
@@ -151,7 +152,7 @@ export class SqliteProjectRepository implements ProjectRepository {
         .prepare(
           `UPDATE projects
            SET name = ?, genre = ?, style = ?, creation_mode = ?, dialogue_render_mode = ?,
-               deployment_mode = ?, updated_at = ?, deleted_at = ?
+               deployment_mode = ?, experience_mode = ?, updated_at = ?, deleted_at = ?
            WHERE id = ? AND updated_at = ?`,
         )
         .run(
@@ -161,6 +162,7 @@ export class SqliteProjectRepository implements ProjectRepository {
           project.creationMode,
           project.dialogueRenderMode,
           project.deploymentMode,
+          project.experienceMode,
           project.updatedAt,
           project.deletedAt,
           project.id,

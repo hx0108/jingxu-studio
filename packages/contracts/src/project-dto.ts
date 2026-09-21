@@ -83,6 +83,7 @@ export const projectDetailSchema = z
     creationMode: creationModeSchema,
     dialogueRenderMode: dialogueRenderModeSchema,
     deploymentMode: z.literal('LOCAL_DEMO'),
+    experienceMode: z.enum(['STANDARD', 'DEMO']),
     createdAt: isoDateTime,
     updatedAt: isoDateTime,
     deletedAt: isoDateTime.nullable(),

@@ -15,6 +15,7 @@ import type {
 import type { FormatProfile, Project, ProjectNameValidationError } from '@jingxu/domain';
 import {
   createFormatProfileSpec,
+  DEFAULT_EXPERIENCE_MODE,
   formatProfileSpecsEqual,
   normalizeNameKey,
   validateProjectName,
@@ -152,6 +153,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
     dialogueRenderMode: project.dialogueRenderMode,
     // V1 固定 LOCAL_DEMO（Design §1）；domain 枚举对齐 0001 CHECK 较宽，读路径按 invariant 收窄
     deploymentMode: project.deploymentMode as 'LOCAL_DEMO',
+    experienceMode: project.experienceMode,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
     deletedAt: project.deletedAt,
@@ -336,6 +338,7 @@ export const createProjectService = (deps: ProjectServiceDeps): ProjectService =
           creationMode: input.creationMode,
           dialogueRenderMode: input.dialogueRenderMode,
           deploymentMode: 'LOCAL_DEMO',
+          experienceMode: DEFAULT_EXPERIENCE_MODE,
           createdAt: nowIso,
           updatedAt: nowIso,
           deletedAt: null,
