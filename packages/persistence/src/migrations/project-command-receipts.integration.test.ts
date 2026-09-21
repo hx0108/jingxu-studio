@@ -156,6 +156,7 @@ describe('0002 migration 资源集合', () => {
       { name: '0022_media_style_assets.sql', version: 22 },
       { name: '0023_video_provider_preferences.sql', version: 23 },
       { name: '0024_low_cost_video_provider_provenance.sql', version: 24 },
+      { name: '0025_agnes_image_provider.sql', version: 25 },
     ]);
     expect(migrations[0]?.sha256).toBe(FROZEN_0001_SHA256);
     expect(migrations[1]?.sha256).toMatch(/^[a-f0-9]{64}$/u);
@@ -216,6 +217,7 @@ describe('0002 migration 资源集合', () => {
         { version: 22 },
         { version: 23 },
         { version: 24 },
+        { version: 25 },
       ]);
       const objects = database
         .prepare(
@@ -246,7 +248,7 @@ describe('0002 migration 资源集合', () => {
         .all();
       expect(after).toEqual(before);
       expect(database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get()).toEqual({
-        count: 24,
+        count: 25,
       });
       database.close();
     });
@@ -445,7 +447,7 @@ describe('0002 受管理升级、备份与回滚', () => {
         .prepare(
           'INSERT INTO schema_migrations (version, name, checksum, applied_at) VALUES (?, ?, ?, ?)',
         )
-        .run(25, '0025_future.sql', 'b'.repeat(64), NOW);
+        .run(26, '0026_future.sql', 'b'.repeat(64), NOW);
 
       const before = database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get();
       expect(() => inspectMigrationPlan(database, migrations)).toThrow('DATABASE_VERSION_TOO_NEW');

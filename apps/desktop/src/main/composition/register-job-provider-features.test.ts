@@ -258,26 +258,26 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
         ok: boolean;
         data?: { configured: boolean; last4: string | null; provider: string; validated: boolean };
       }>;
-    const IMAGE_INPUT = { profileId: 'profile-image-primary' };
+    const IMAGE_INPUT = { profileId: 'profile-image-agnes-primary' };
 
-    // 保存：图片档行惰性建档，末 4 位回读，provider=VOLCARK_SEEDREAM。
+    // 保存：图片档行惰性建档，末 4 位回读，provider=AGNES_IMAGE（2026-09-21 起）。
     const saved = await invoke(PROVIDER_IPC_CHANNELS.saveCredential, {
-      apiKey: 'ark-key-abcd9999',
-      expectedVersionId: 'profile-image-primary',
-      profileId: 'profile-image-primary',
+      apiKey: 'agnes-key-abcd9999',
+      expectedVersionId: 'profile-image-agnes-primary',
+      profileId: 'profile-image-agnes-primary',
       requestId: 'request-image-save-0001',
     });
     expect(saved.ok).toBe(true);
     expect(saved.data).toMatchObject({
       configured: true,
       last4: '9999',
-      provider: 'VOLCARK_SEEDREAM',
+      provider: 'AGNES_IMAGE',
     });
 
     // 测试：解密校验成功并落 lastValidatedAt（零网络）。
     const tested = await invoke(PROVIDER_IPC_CHANNELS.testCredential, {
       ...IMAGE_INPUT,
-      expectedVersionId: 'profile-image-primary',
+      expectedVersionId: 'profile-image-agnes-primary',
       requestId: 'request-image-test-0001',
     });
     expect(tested.ok).toBe(true);
@@ -286,12 +286,12 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     // 删除：行清理 + 审计事件 + 密文文件清理。
     const deleted = await invoke(PROVIDER_IPC_CHANNELS.deleteCredential, {
       ...IMAGE_INPUT,
-      expectedVersionId: 'profile-image-primary',
+      expectedVersionId: 'profile-image-agnes-primary',
       requestId: 'request-image-delete-0001',
     });
     expect(deleted.ok).toBe(true);
     expect(deleted.data?.configured).toBe(false);
-    expect(auditEvents).toEqual(['profile-image-primary']);
+    expect(auditEvents).toEqual(['profile-image-agnes-primary']);
     expect(await readdir(path.join(h.root, 'secrets'))).toEqual([]);
 
     // 两档互不干扰：文本档保存产生独立 UUID 密文，图片档保持未配置。

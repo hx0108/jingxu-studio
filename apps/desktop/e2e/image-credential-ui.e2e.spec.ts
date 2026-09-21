@@ -46,20 +46,20 @@ test('§3.2 图片凭据 UI 闭环—保存→解密测试→删除：密文固�
     const card = page.locator('details.model-service-card', {
       has: page.locator('#image-provider-title'),
     });
-    await expect(card.getByRole('heading', { name: '火山方舟 ARK' })).toBeVisible();
+    await expect(card.getByRole('heading', { name: 'Agnes AI' })).toBeVisible();
     await card.locator('summary').click();
-    // 惰性默认档：模型只读展示、未配置、验证范围如实文案。
-    await expect(card.locator('input[readonly]')).toHaveValue('doubao-seedream-5-0-lite-260128');
+    // 惰性默认档：模型下拉默认 2.5 Flash、未配置、验证范围如实文案。
+    await expect(card.locator('select')).toHaveValue('agnes-image-2.5-flash');
     await expect(card.locator('.model-configuration-status')).toHaveText('未配置');
     await expect(card.getByText('测试仅验证密文可解密读取，不发起计费请求')).toBeVisible();
 
     // 保存：密文按固定 id 真实落盘，输入即清空，状态行只露末 4 位。
     const key = 'e2e-image-key-abcd9999';
-    await card.getByLabel('ARK API Key').fill(key);
+    await card.getByLabel('Agnes API Key').fill(key);
     await card.getByRole('button', { name: '保存凭据' }).click();
     await expect(card.getByText('已配置（末四位 9999）')).toBeVisible({ timeout: 15_000 });
-    await expect(card.getByLabel('ARK API Key')).toHaveValue('');
-    const secretPath = path.join(managed, 'secrets', 'profile-image-primary.bin');
+    await expect(card.getByLabel('Agnes API Key')).toHaveValue('');
+    const secretPath = path.join(managed, 'secrets', 'profile-image-agnes-primary.bin');
     const ciphertext = await readFile(secretPath);
     expect(ciphertext.byteLength).toBeGreaterThan(0);
     expect(ciphertext.includes(Buffer.from(key))).toBe(false);
@@ -77,7 +77,7 @@ test('§3.2 图片凭据 UI 闭环—保存→解密测试→删除：密文固�
     await expect(card.getByText(/已配置/)).toHaveCount(0);
     await expect
       .poll(async () =>
-        (await readdir(path.dirname(secretPath))).includes('profile-image-primary.bin'),
+        (await readdir(path.dirname(secretPath))).includes('profile-image-agnes-primary.bin'),
       )
       .toBe(false);
 

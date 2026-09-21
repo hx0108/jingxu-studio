@@ -19,11 +19,13 @@ import type {
 import type { AppResultDto } from '@jingxu/contracts';
 import { MEDIA_BATCH_MAX_SHOTS } from '@jingxu/contracts';
 import {
+  AGNES_IMAGE_INVOCATION_TIMEOUT_MS,
+  AGNES_IMAGE_PROFILE_ID,
+  AgnesImageModelAdapter,
+  DEFAULT_AGNES_IMAGE_MODEL_ID,
   MockImageModelAdapter,
-  SEEDREAM_INVOCATION_TIMEOUT_MS,
-  SEEDREAM_MODEL_ID,
-  SeedreamImageModelAdapter,
   createMockModelError,
+  isAgnesImageModelId,
 } from '@jingxu/model-adapters';
 import type { MockImageSubmitStep } from '@jingxu/model-adapters';
 import { createContentAddressedStore, deriveMediaStorageRelPath } from '@jingxu/persistence';
@@ -32,11 +34,11 @@ import { CredentialAdapter, type SafeStorageFacade } from '../adapters/credentia
 import { registerImageIpc, type ImageIpcRegistrar, type ImageIpcService } from '../ipc/image-ipc';
 import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
 
-/** ARK Key 的 safeStorage 凭据引用（与 DashScope 主 Key 分存；UI 配置走 provider 五通道，见 image-credential-management）。 */
-export const IMAGE_CREDENTIAL_ID = 'profile-image-primary';
+/** Agnes Key 的 safeStorage 凭据引用（2026-09-21 起图片档切换 Agnes Image；UI 配置走 provider 通道，见 image-credential-management）。 */
+export const IMAGE_CREDENTIAL_ID = AGNES_IMAGE_PROFILE_ID;
 /** 每轮候选数 N（design D6-1：方舟无 n 参数，N 次独立请求聚合为一个任务行）。 */
 const IMAGE_CANDIDATE_COUNT = 4;
-/** 异步 Provider 单候选轮询截止（Seedream 为同步形态，此值仅护栏）。 */
+/** 异步 Provider 单候选轮询截止（Agnes Image 为同步形态，此值仅护栏）。 */
 const MEDIA_POLL_DEADLINE_MS = 10 * 60_000;
 const MEDIA_POLL_INTERVAL_MS = 2_000;
 
@@ -152,7 +154,7 @@ export const createImageFeatureRegistration = ({
   );
 
   /**
-   * 门控联调接线（保留路径）：设 JINGXU_IMAGE_CREDENTIAL_FILE（指向 ARK Key 明文文件）
+   * 门控联调接线（保留路径）：设 JINGXU_IMAGE_CREDENTIAL_FILE（指向 Agnes Key 明文文件）
    * 且非 E2E Mock 时，启动期一次性写入图片固定凭据（safeStorage 密文；wx 独占创建，
    * 已存在不覆盖——不吞并 UI 已保存的 Key）。Key 只经此路径入密文，不进环境快照、
    * 日志与数据库；任何失败只报原因码不回显内容。正式配置走 provider 五通道的图片档
@@ -209,16 +211,30 @@ export const createImageFeatureRegistration = ({
         safeStorage,
         secretsDirectory: path.join(managedRoot, 'secrets'),
       });
+      // 建档期模型解析：读 Agnes 图片 Profile 已保存模型（设置卡「保存模型选择」
+      // 落行值），无行/未保存回落默认 2.5 Flash；注册表外即抛不带病运行。
+      // 直连连接读 Profile（与画幅解析同因：不进媒体事务队列，避免自锁）。
+      const resolveCurrentImageModelId = async (): Promise<string> => {
+        if (useE2eMock) return DEFAULT_AGNES_IMAGE_MODEL_ID;
+        const providerProfiles = persistenceRuntime.getProviderProfileRepository();
+        if (providerProfiles === null) return DEFAULT_AGNES_IMAGE_MODEL_ID;
+        const profile = await providerProfiles.findById(AGNES_IMAGE_PROFILE_ID);
+        const modelId = profile?.modelId;
+        if (modelId === undefined || modelId === '') return DEFAULT_AGNES_IMAGE_MODEL_ID;
+        if (!isAgnesImageModelId(modelId)) throw new Error('IMAGE_MODEL_CONFIGURATION_INVALID');
+        return modelId;
+      };
       const imageModel: ImageModelPort = useE2eMock
         ? new MockImageModelAdapter({
             // Mock 适配器逐次消耗声明式步骤且实例应用级共享（预算外提交按
             // MODEL_UNKNOWN 候选级失败，兼作失控循环的天然熔断）。
             steps: parseE2eImageSteps(),
           })
-        : new SeedreamImageModelAdapter({
+        : new AgnesImageModelAdapter({
+            // 双模型（2.5 Flash 默认/2.1 Flash）单实例按请求 modelId（候选行
+            // 冻结值）分发，无需构造期 modelId。
             credentialId: IMAGE_CREDENTIAL_ID,
             credentialPort: credentials,
-            modelId: SEEDREAM_MODEL_ID,
           });
 
       // 画幅解析是只读查询且会在媒体事务内发生：必须直连连接，若经
@@ -252,9 +268,10 @@ export const createImageFeatureRegistration = ({
         formatProfiles,
         hashPayload,
         mediaUnitOfWork,
-        modelId: SEEDREAM_MODEL_ID,
+        modelId: () => resolveCurrentImageModelId(),
         newId: randomUUID,
-        parametersFingerprint: (size) => `seedream-v1:${String(size.width)}x${String(size.height)}`,
+        // 换牌即换指纹（跨版本不去重）；modelId 已是哈希单独输入，不重复入指纹。
+        parametersFingerprint: (size) => `agnes-image-v1:${String(size.width)}x${String(size.height)}`,
         workspaceQuery,
       });
       // 批次与调度器循环依赖以晚绑定解开：批次建批后 kick，调度器排空后推进批次。
@@ -269,9 +286,9 @@ export const createImageFeatureRegistration = ({
           kickScheduler?.(projectId);
         },
         mediaUnitOfWork,
-        modelId: SEEDREAM_MODEL_ID,
+        modelId: () => resolveCurrentImageModelId(),
         newId: randomUUID,
-        parametersFingerprint: (size) => `seedream-v1:${String(size.width)}x${String(size.height)}`,
+        parametersFingerprint: (size) => `agnes-image-v1:${String(size.width)}x${String(size.height)}`,
         workspaceQuery,
       });
       const scheduler = createMediaTaskScheduler({
@@ -293,7 +310,7 @@ export const createImageFeatureRegistration = ({
           referenceImages,
           workspaceQuery,
         }),
-        segmentTimeoutMs: SEEDREAM_INVOCATION_TIMEOUT_MS,
+        segmentTimeoutMs: AGNES_IMAGE_INVOCATION_TIMEOUT_MS,
         sleep: (milliseconds) =>
           new Promise<void>((resolve) => {
             setTimeout(resolve, milliseconds);

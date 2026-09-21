@@ -220,7 +220,7 @@ const fixture = async (
     formatProfiles: { findAllByProject: () => Promise.resolve([formatProfile]) },
     hashPayload,
     mediaUnitOfWork: unitOfWork,
-    modelId: MODEL_ID,
+    modelId: () => MODEL_ID,
     newId,
     parametersFingerprint,
     workspaceQuery,
@@ -236,7 +236,7 @@ const fixture = async (
       kicked.push(projectId);
     },
     mediaUnitOfWork: unitOfWork,
-    modelId: MODEL_ID,
+    modelId: () => MODEL_ID,
     newId,
     parametersFingerprint,
     workspaceQuery,

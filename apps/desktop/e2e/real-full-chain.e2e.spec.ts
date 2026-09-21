@@ -15,7 +15,6 @@ import { _electron as electron, test, type ElectronApplication } from '@playwrig
 const desktopRoot = path.resolve(__dirname, '..');
 const gated = process.env.JINGXU_REAL_FULL_CHAIN === '1';
 const qwenKeyFile = process.env.JINGXU_QWEN_KEY_FILE ?? '';
-const arkKeyFile = process.env.JINGXU_ARK_KEY_FILE ?? '';
 const agnesKeyFile = process.env.JINGXU_AGNES_KEY_FILE ?? '';
 const workspaceId = process.env.JINGXU_REAL_WORKSPACE_ID ?? 'jingxu';
 const ffmpegDirectory = path.join(desktopRoot, 'resources', 'ffmpeg');
@@ -31,7 +30,6 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
   test.setTimeout(1_800_000);
   test.skip(!gated, '需要 JINGXU_REAL_FULL_CHAIN=1；未配置的 Provider 将在剧本前置失败');
   const qwenKey = await readKey(qwenKeyFile);
-  const arkKey = await readKey(arkKeyFile);
   const agnesKey = await readKey(agnesKeyFile);
   const isolatedData = await mkdtemp(path.join(os.tmpdir(), 'jingxu-full-chain-'));
 
@@ -55,7 +53,7 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
     });
     const page = await application.firstWindow();
     const result = await page.evaluate(
-      async ({ agnesKey, arkKey, qwenKey, referencePngBase64, workspaceId }) => {
+      async ({ agnesKey, qwenKey, referencePngBase64, workspaceId }) => {
         const requestId = (prefix: string): string => `${prefix}_${crypto.randomUUID()}`;
         const steps: unknown[] = [];
 
@@ -96,8 +94,9 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
         };
         const qwenError = await configureProvider('profile_qwen_primary', qwenKey, true);
         if (qwenError !== null) return { step: 'qwen-provider', errorCode: qwenError };
-        const arkError = await configureProvider('profile-image-primary', arkKey, false);
-        if (arkError !== null) return { step: 'ark-provider', errorCode: arkError };
+        // 2026-09-21 起图片档=Agnes Image（2.5 Flash 默认），用 Agnes Key。
+        const imageError = await configureProvider('profile-image-agnes-primary', agnesKey, false);
+        if (imageError !== null) return { step: 'image-provider', errorCode: imageError };
         const agnesError = await configureProvider(
           'profile-video-agnes-primary',
           agnesKey,
@@ -516,7 +515,7 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
           ),
         };
       },
-      { agnesKey, arkKey, qwenKey, referencePngBase64: REFERENCE_PNG_BASE64, workspaceId },
+      { agnesKey, qwenKey, referencePngBase64: REFERENCE_PNG_BASE64, workspaceId },
     );
     console.log(`REAL_FULL_CHAIN_RESULT ${JSON.stringify(result)}`);
     const ok = result as { exportFileSha256?: string; mediaUrl?: string | null };

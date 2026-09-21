@@ -1,3 +1,5 @@
+// 【已退役 2026-09-21】图片档已切换 Agnes Image（agnes-image-2.5/2.1-flash）；本探针
+// 针对 Seedream/ARK 实测路径保留为历史证据，默认门控零网络，不再随图片档演进。
 import { readFile } from 'node:fs/promises';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';

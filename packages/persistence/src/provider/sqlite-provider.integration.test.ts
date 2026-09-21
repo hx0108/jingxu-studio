@@ -148,6 +148,20 @@ describe('provider_profiles Repository 与 UnitOfWork（任务 6.4）', () => {
     });
   });
 
+  it('AGNES_IMAGE 图片 Profile—按合法 Provider 枚举读取，不误判为损坏行', () => {
+    const row = validRow();
+    row.provider = 'AGNES_IMAGE';
+    row.model_id = 'agnes-image-2.5-flash';
+    row.model_snapshot_date = '2026-09-21';
+    row.region = 'global';
+
+    expect(mapProviderProfileRow(row)).toMatchObject({
+      modelId: 'agnes-image-2.5-flash',
+      provider: 'AGNES_IMAGE',
+      region: 'global',
+    });
+  });
+
   it('QWEN_TTS 配音 Profile—按合法 Provider 枚举读取，不误判为损坏行', () => {
     const row = validRow();
     row.provider = 'QWEN_TTS';

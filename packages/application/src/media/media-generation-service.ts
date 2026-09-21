@@ -35,8 +35,11 @@ export interface MediaGenerationServiceDependencies {
   readonly formatProfiles: Pick<FormatProfileRepository, 'findAllByProject'>;
   readonly hashPayload: (value: Readonly<Record<string, unknown>>) => string;
   readonly mediaUnitOfWork: MediaUnitOfWorkPort;
-  /** 0.2 锁定的 Seedream model id（组合根从 profile 读取，服务不自行猜测）。 */
-  readonly modelId: string;
+  /**
+   * 当前图片 model id 解析器（组合根从 profile 行异步读取，服务不自行猜测）。
+   * 按建档时点求值冻结到候选行：切换模型不漂移在飞候选（蓝图回读候选值分发）。
+   */
+  readonly modelId: () => string | Promise<string>;
   readonly newId: () => string;
   /** 归一化参数指纹（快照 client_defaults + 画幅派生尺寸），随尺寸变化。 */
   readonly parametersFingerprint: (size: Readonly<{ height: number; width: number }>) => string;
@@ -124,7 +127,7 @@ export const resolveGenerationInput = async (
     generationInputHash: computeGenerationInputHash(
       {
         boundAssetVersionIds: sorted,
-        modelId: dependencies.modelId,
+        modelId: await dependencies.modelId(),
         parametersFingerprint: dependencies.parametersFingerprint(size),
         shotContentHash: shot.version.documentSha256,
         shotVersionId: shot.version.id,
@@ -205,7 +208,7 @@ export const createMediaGenerationService = (
             dependencies.newId(),
           ),
           generationInputHash: resolved.generationInputHash,
-          modelId: dependencies.modelId,
+          modelId: await dependencies.modelId(),
           projectId: input.projectId,
           roundNo: inserted.roundNo,
           shotId: input.shotId,

@@ -225,7 +225,7 @@ const fixture = async (
     formatProfiles: { findAllByProject: () => Promise.resolve([formatProfile]) },
     hashPayload,
     mediaUnitOfWork: unitOfWork,
-    modelId: MODEL_ID,
+    modelId: () => MODEL_ID,
     newId: (() => {
       let counter = 0;
       return () => `id_${String((counter += 1))}`;

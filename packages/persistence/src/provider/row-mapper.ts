@@ -74,7 +74,8 @@ export const mapProviderProfileRow = (row: ProviderProfileRow): ProviderProfile 
     provider === 'QWEN_TTS' ||
     provider === 'VOLCARK_SEEDREAM' ||
     provider === 'VOLCARK_SEEDANCE' ||
-    provider === 'AGNES_VIDEO'
+    provider === 'AGNES_VIDEO' ||
+    provider === 'AGNES_IMAGE'
       ? provider
       : invalidRow();
   if (region.length === 0) invalidRow();

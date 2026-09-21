@@ -8,12 +8,13 @@ export interface ProviderProfileConfig {
 }
 
 /**
- * Provider 档位：文本=QWEN，图片=火山方舟 Seedream，视频=火山方舟 Seedance，
- * 配音=DashScope Qwen3-TTS（与 QWEN 文本档共用同一把 DashScope Key），
- * 低价视频=Agnes AI（low-cost-video-provider-integration；固定端点无地域/Workspace）。
+ * Provider 档位：文本=QWEN，图片=Agnes Image（2.1/2.5 Flash，2026-09-21 起
+ * 取代火山方舟 Seedream），视频=火山方舟 Seedance，配音=DashScope Qwen3-TTS
+ * （与 QWEN 文本档共用同一把 DashScope Key），低价视频=Agnes AI
+ * （low-cost-video-provider-integration；固定端点无地域/Workspace）。
  */
 export type ProviderProfileKind =
-  'QWEN' | 'QWEN_TTS' | 'VOLCARK_SEEDREAM' | 'VOLCARK_SEEDANCE' | 'AGNES_VIDEO';
+  'QWEN' | 'QWEN_TTS' | 'VOLCARK_SEEDREAM' | 'VOLCARK_SEEDANCE' | 'AGNES_VIDEO' | 'AGNES_IMAGE';
 
 export interface ProviderProfile {
   readonly baseUrl: string;

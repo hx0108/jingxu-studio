@@ -11,15 +11,14 @@ import type {
 import type { AppResultDto } from '@jingxu/contracts';
 import {
   QWEN_MODEL_ID,
+  DEFAULT_AGNES_IMAGE_MODEL_ID,
   QWEN_TTS_MODEL_ID,
   QWEN_TTS_MODELS,
   QwenTextModelAdapter,
   SELECTABLE_SEEDANCE_VIDEO_MODELS,
   SEEDANCE_MODEL_ID,
-  SEEDREAM_MODEL_ID,
   deriveQwenBaseUrl,
   deriveSeedanceBaseUrl,
-  deriveSeedreamBaseUrl,
 } from '@jingxu/model-adapters';
 
 import { CredentialAdapter, type SafeStorageFacade } from '../adapters/credential';
@@ -73,18 +72,24 @@ const PROVIDER_DEFAULTS: ProviderProfileDefaults = {
 };
 
 /**
- * 图片档（D1=A）：profileId 与固定凭据引用同名；Seedream 生成路径不读该行
- * （按 IMAGE_CREDENTIAL_ID 直读密文），行只承载配置状态/末 4 位/审计。
- * ARK 无工作区概念——workspace_id 为 DB NOT NULL 惰性占位，UI 不展示、不参与请求。
+ * 图片档（2026-09-21 起切换 Agnes Image）：profileId 与固定凭据引用同名；
+ * 生成路径建档时读该行 modelId（2.5 Flash 默认 / 2.1 Flash 可选，注册表来自
+ * model-adapters 冻结清单，快照 2026-09-21）。旧 profile-image-primary 行与
+ * volcark-seedream-image/v1 快照保留为历史不迁移（旧 Ark Key 对 Agnes 无效）。
+ * 固定端点无地域概念：region 'global'、workspace_id 为 DB NOT NULL 惰性占位。
  */
 const IMAGE_PROFILE_ID = IMAGE_CREDENTIAL_ID;
+const IMAGE_SELECTABLE_MODELS = [
+  { id: DEFAULT_AGNES_IMAGE_MODEL_ID, label: 'Agnes Image 2.5 Flash', snapshotDate: '2026-09-21' },
+  { id: 'agnes-image-2.1-flash', label: 'Agnes Image 2.1 Flash', snapshotDate: '2026-09-21' },
+] as const;
 const IMAGE_PROVIDER_DEFAULTS: ProviderProfileDefaults = {
-  baseUrl: deriveSeedreamBaseUrl(),
-  modelId: SEEDREAM_MODEL_ID,
-  // 取自锁定 model id 的 yymmdd 版本段：doubao-seedream-5-0-lite-260128 → 2026-01-28。
-  modelSnapshotDate: '2026-01-28',
-  provider: 'VOLCARK_SEEDREAM',
-  workspaceId: 'ark',
+  baseUrl: 'https://apihub.agnes-ai.com',
+  modelId: DEFAULT_AGNES_IMAGE_MODEL_ID,
+  modelSnapshotDate: '2026-09-21',
+  provider: 'AGNES_IMAGE',
+  region: 'global',
+  workspaceId: 'agnes',
 };
 
 /**
@@ -230,7 +235,7 @@ export const createJobProviderFeatureRegistration = ({
         safeStorage,
         secretsDirectory: path.join(managedRoot, 'secrets'),
       });
-      // 图片档 testCredential = 解密加载校验（D2=A：零计费请求；ARK 无免费探测端点）。
+      // 图片档 testCredential = 解密加载校验（D2=A：零计费请求；Agnes 无免费探测端点）。
       const imageCredentialValidator = {
         validateCredential: async (): Promise<CredentialCheck> => {
           try {
@@ -246,6 +251,7 @@ export const createJobProviderFeatureRegistration = ({
         credentials: imageCredentials,
         defaults: IMAGE_PROVIDER_DEFAULTS,
         profiles,
+        selectableModels: IMAGE_SELECTABLE_MODELS,
         textModelFactory: () => imageCredentialValidator,
         unitOfWork: providerUnitOfWork,
       });

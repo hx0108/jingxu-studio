@@ -5,14 +5,23 @@ import type { AppErrorDto, ProviderProfileDto } from '@jingxu/contracts';
 import { createScriptRequestId, getProviderClient, rendererTransportError } from './script-api';
 
 // 与 Main 侧 IMAGE_CREDENTIAL_ID（register-image-features）同值镜像：图片密文按此固定 id 读写。
-const IMAGE_PROFILE_ID = 'profile-image-primary';
+const IMAGE_PROFILE_ID = 'profile-image-agnes-primary';
+// 与 Main 侧 IMAGE_SELECTABLE_MODELS（register-job-provider-features）同源镜像。
+const IMAGE_MODELS = [
+  { id: 'agnes-image-2.5-flash', label: 'Agnes Image 2.5 Flash' },
+  { id: 'agnes-image-2.1-flash', label: 'Agnes Image 2.1 Flash' },
+] as const;
+const DEFAULT_IMAGE_MODEL_ID = 'agnes-image-2.5-flash';
 
 interface ImageProviderCardViewProps {
   readonly apiKey: string;
   readonly error: AppErrorDto | null;
   readonly feedback: string;
+  readonly modelId: string;
   readonly onApiKeyChange: (value: string) => void;
   readonly onDelete: () => void;
+  readonly onModelChange: (value: string) => void;
+  readonly onModelSave: () => void;
   readonly onSave: () => void;
   readonly onTest: () => void;
   readonly pending: boolean;
@@ -23,8 +32,11 @@ export const ImageProviderCardView = ({
   apiKey,
   error,
   feedback,
+  modelId,
   onApiKeyChange,
   onDelete,
+  onModelChange,
+  onModelSave,
   onSave,
   onTest,
   pending,
@@ -37,7 +49,7 @@ export const ImageProviderCardView = ({
       </span>
       <div>
         <p className="eyebrow">图片模型</p>
-        <h2 id="image-provider-title">火山方舟 ARK</h2>
+        <h2 id="image-provider-title">Agnes AI</h2>
       </div>
       <span
         className={`model-configuration-status${profile?.configured === true ? ' configured' : ''}`}
@@ -46,7 +58,7 @@ export const ImageProviderCardView = ({
       </span>
       <span className="model-current-summary">
         <small>当前模型</small>
-        <strong>{profile?.modelId ?? 'Seedream'}</strong>
+        <strong>{profile?.modelId ?? 'Agnes Image 2.5 Flash'}</strong>
       </span>
       <span className="model-credential-summary">
         <small>凭据</small>
@@ -60,8 +72,8 @@ export const ImageProviderCardView = ({
     </summary>
     <div className="model-service-body" aria-labelledby="image-provider-title">
       <p>
-        用于首帧图片生成。模型与端点固定，仅需保存 ARK API Key；完整 Key
-        不回显、不进入页面长期状态。
+        用于首帧图片生成（2026-09-21 起由火山方舟 Seedream 切换至 Agnes Image）。
+        保存 Agnes API Key 并选择模型；完整 Key 不回显、不进入页面长期状态。
       </p>
       {error !== null && (
         <p className="field-error" role="alert">
@@ -70,10 +82,22 @@ export const ImageProviderCardView = ({
       )}
       <label>
         模型
-        <input readOnly value={profile?.modelId ?? ''} />
+        <select
+          disabled={pending}
+          onChange={(event) => {
+            onModelChange(event.target.value);
+          }}
+          value={modelId}
+        >
+          {IMAGE_MODELS.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.label}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
-        ARK API Key
+        Agnes API Key
         <input
           autoComplete="new-password"
           onChange={(event) => {
@@ -84,6 +108,13 @@ export const ImageProviderCardView = ({
         />
       </label>
       <div className="script-actions">
+        <button
+          disabled={pending || profile === null || modelId === profile.modelId}
+          onClick={onModelSave}
+          type="button"
+        >
+          保存模型选择
+        </button>
         <button
           disabled={pending || profile === null || apiKey === ''}
           onClick={onSave}
@@ -109,6 +140,7 @@ export const ImageProviderCardView = ({
       </p>
       <p className="action-hint">
         测试仅验证密文可解密读取，不发起计费请求；未配置时生成首帧会前置失败并提示。
+        切换模型只影响新任务，在飞候选沿用建档时冻结的模型。
       </p>
     </div>
   </details>
@@ -117,6 +149,7 @@ export const ImageProviderCardView = ({
 export const ImageProviderCard = () => {
   const [profile, setProfile] = useState<ProviderProfileDto | null>(null);
   const [apiKey, setApiKey] = useState('');
+  const [modelId, setModelId] = useState<string>(DEFAULT_IMAGE_MODEL_ID);
   const [error, setError] = useState<AppErrorDto | null>(null);
   const [feedback, setFeedback] = useState('');
   const [pending, setPending] = useState(false);
@@ -128,7 +161,12 @@ export const ImageProviderCard = () => {
       .then((result) => {
         if (!active) return;
         if (!result.ok) setError(result.error);
-        else setProfile(result.data);
+        else {
+          setProfile(result.data);
+          if (result.data.modelId !== '') {
+            setModelId(result.data.modelId);
+          }
+        }
       })
       .catch(() => {
         if (active) setError(rendererTransportError());
@@ -168,9 +206,10 @@ export const ImageProviderCard = () => {
       apiKey={apiKey}
       error={error}
       feedback={feedback}
+      modelId={modelId}
       onApiKeyChange={setApiKey}
       onDelete={() => {
-        if (profile === null || !globalThis.confirm('删除已保存的 ARK 凭据？')) return;
+        if (profile === null || !globalThis.confirm('删除已保存的 Agnes 凭据？')) return;
         void apply(
           () =>
             getProviderClient().deleteCredential({
@@ -179,6 +218,22 @@ export const ImageProviderCard = () => {
               requestId: createScriptRequestId('image-provider-delete'),
             }),
           '凭据已删除',
+        );
+      }}
+      onModelChange={setModelId}
+      onModelSave={() => {
+        if (profile === null) return;
+        void apply(
+          () =>
+            getProviderClient().saveProfile({
+              enabled: profile.enabled,
+              expectedVersionId: profile.versionId,
+              modelId,
+              profileId: IMAGE_PROFILE_ID,
+              requestId: createScriptRequestId('image-provider-model'),
+              workspaceId: profile.workspaceId,
+            }),
+          '图片模型已保存；新任务将使用该模型',
         );
       }}
       onSave={() => {
