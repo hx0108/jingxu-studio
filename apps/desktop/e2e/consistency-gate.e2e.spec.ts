@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { _electron as electron, expect, test, type Page } from '@playwright/test';
+
+import { openProjectsList } from './support/app-navigation';
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
 const desktopRoot = path.resolve(__dirname, '..');
@@ -19,6 +21,7 @@ const environment = (): Record<string, string> =>
 
 const openStoryboard = async (page: Page, projectName: string): Promise<void> => {
   await page.reload();
+  await openProjectsList(page);
   await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
   await page.locator('.project-card-main', { hasText: projectName }).click();
   await page.getByRole('button', { name: '进入剧本工作区' }).click();

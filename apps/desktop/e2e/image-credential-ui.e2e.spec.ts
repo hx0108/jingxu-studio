@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
 const desktopRoot = path.resolve(__dirname, '..');
@@ -37,6 +39,7 @@ test('§3.2 图片凭据 UI 闭环—保存→解密测试→删除：密文固�
     // 播种已初始化的剧本工作区，使 ProviderSettings（含图片卡片）可达。
     await seedStoryboardReady(page, '图片凭据闭环');
     await page.reload();
+    await openProjectsList(page);
     await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await page.locator('.project-card-main', { hasText: '图片凭据闭环' }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();

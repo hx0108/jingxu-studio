@@ -13,6 +13,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
 const execFileAsync = promisify(execFile);
@@ -96,6 +98,7 @@ test('整集分镜导出—READY 门禁/1.1.0 JSON 落盘/Σ 偏离确认重发/
 
     // ---- UI 通路（顺利导出）：READY 才有入口，点击后通知只含 exportId/哈希尾/字节，无路径。 ----
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '整集导出闭环');
     await page.locator('button[name="export-episode"]').click();
     const notice = page.locator('.script-workspace p[role="status"]');
@@ -268,6 +271,7 @@ test('整集分镜导出—READY 门禁/1.1.0 JSON 落盘/Σ 偏离确认重发/
 
     // ---- UI 通路（偏离确认重发，D5）：弹层显示实际 Σ → 填原因 → 确认导出成功。 ----
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '整集导出闭环');
     await page.locator('button[name="export-episode"]').click();
     await expect(page.getByRole('dialog')).toContainText('整集时长偏离目标区间');

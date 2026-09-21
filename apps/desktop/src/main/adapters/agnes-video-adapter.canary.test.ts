@@ -62,8 +62,10 @@ const runRealGeneration = async (modelId: string, invocationId: string): Promise
     } catch (caught) {
       const code = adapter.normalizeError(caught).code;
       if (
-        (code === 'MODEL_PROVIDER_ERROR' || code === 'MODEL_NETWORK_ERROR' ||
-          code === 'MODEL_RATE_LIMITED' || code === 'MODEL_TIMEOUT') &&
+        (code === 'MODEL_PROVIDER_ERROR' ||
+          code === 'MODEL_NETWORK_ERROR' ||
+          code === 'MODEL_RATE_LIMITED' ||
+          code === 'MODEL_TIMEOUT') &&
         submitAttempt < 12
       ) {
         console.info(
@@ -98,12 +100,16 @@ const runRealGeneration = async (modelId: string, invocationId: string): Promise
     } catch (caught) {
       const code = adapter.normalizeError(caught).code;
       if (
-        (code === 'MODEL_NETWORK_ERROR' || code === 'MODEL_RATE_LIMITED' ||
-          code === 'MODEL_PROVIDER_ERROR' || code === 'MODEL_TIMEOUT') &&
+        (code === 'MODEL_NETWORK_ERROR' ||
+          code === 'MODEL_RATE_LIMITED' ||
+          code === 'MODEL_PROVIDER_ERROR' ||
+          code === 'MODEL_TIMEOUT') &&
         consecutiveRetryable < 5
       ) {
         consecutiveRetryable += 1;
-        console.info(`[agnes-canary] ${modelId} poll retryable ${code} · streak=${String(consecutiveRetryable)}`);
+        console.info(
+          `[agnes-canary] ${modelId} poll retryable ${code} · streak=${String(consecutiveRetryable)}`,
+        );
         continue;
       }
       throw caught;

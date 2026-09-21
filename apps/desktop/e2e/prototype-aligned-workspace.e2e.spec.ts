@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 const desktopRoot = path.resolve(__dirname, '..');
 
 const environment = (): Record<string, string> =>
@@ -30,6 +32,7 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
   const application = await launch(path.join(root, 'managed'));
   try {
     const page = await application.firstWindow();
+    await openProjectsList(page);
     await expect(page.getByRole('button', { name: '创建第一个项目' })).toBeVisible();
     await page.getByRole('button', { name: '创建第一个项目' }).click();
     await page.getByLabel('项目名称').fill('大富翁的每一天');

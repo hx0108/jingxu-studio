@@ -153,6 +153,11 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   EVALUATION_NOT_FOUND: ['找不到评测样本', '刷新样本列表后重试。'],
   EVALUATION_DERIVE_NOT_READY: ['当前分镜尚未确认', '在剧本工作区确认整集分镜后再派生。'],
   EVALUATION_IMPORT_INVALID: ['评测集导入文件无效', '选择符合内部评测样本格式的 JSON 文件。'],
+  CREATOR_GUIDE_PROJECT_NOT_FOUND: ['找不到这部作品', '返回首页重新确认当前进度。'],
+  CREATOR_GUIDE_SCOPE_STALE: ['作品状态刚刚发生变化', '已为你重新检查，请重试。'],
+  DEMO_FIXTURE_INVALID: ['示例内容损坏', '重新安装应用，或联系支持后重试。'],
+  DEMO_INITIALIZATION_FAILED: ['示例创建未完成', '重试即可；不会留下半成品。'],
+  PREPARATION_BLOCKED: ['还有未完成的准备项', '按向导提示逐项完成后重试。'],
 };
 
 /** 只按稳定 code 映射文案，绝不展示来自基础设施的 message。 */

@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 const desktopRoot = path.resolve(__dirname, '..');
 const stages = ['CONCEPT', 'STORY_BIBLE', 'EPISODE_OUTLINE', 'BEAT_SHEET', 'SCENE_SCRIPT'] as const;
 
@@ -343,6 +345,7 @@ test('分镜逐镜头编辑与锁定—编辑往返/锁阻断/解锁/非法路�
 
     // ---- UI 通路：项目导航、编辑入口、锁徽标、锁阻断错误、七根级入口 ----
     await page.reload();
+    await openProjectsList(page);
     await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await page.locator('.project-card-main', { hasText: '编辑锁定闭环' }).first().click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();

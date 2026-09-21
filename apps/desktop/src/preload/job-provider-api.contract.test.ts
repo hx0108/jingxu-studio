@@ -7,6 +7,7 @@ describe('Job Provider Events Preload Contract', () => {
   it('创建 API—冻结三个逐方法 namespace—无通用 invoke/send/on', () => {
     const api = createJingxuApi(vi.fn());
     expect(Object.keys(api).sort()).toEqual([
+      'creatorGuide',
       'evaluation',
       'events',
       'image',

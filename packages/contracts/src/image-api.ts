@@ -23,9 +23,7 @@ const batchIdSchema = idSchema;
  */
 const bibleRefIdSchema = z
   .string()
-  .regex(
-    /^(?:[A-Za-z0-9_-]{8,128}|project-style|char_[A-Za-z0-9_-]+|scene_[A-Za-z0-9_-]+)$/u,
-  );
+  .regex(/^(?:[A-Za-z0-9_-]{8,128}|project-style|char_[A-Za-z0-9_-]+|scene_[A-Za-z0-9_-]+)$/u);
 
 export const imageCandidateStatusSchema = z.enum(['PENDING', 'SUCCEEDED', 'FAILED', 'STALE_INPUT']);
 export const mediaTaskPhaseSchema = z.enum([

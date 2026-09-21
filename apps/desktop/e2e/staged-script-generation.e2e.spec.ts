@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 const desktopRoot = path.resolve(__dirname, '..');
 const stages = ['CONCEPT', 'STORY_BIBLE', 'EPISODE_OUTLINE', 'BEAT_SHEET', 'SCENE_SCRIPT'] as const;
 
@@ -425,6 +427,7 @@ test('dirty 离开取消与 Script 白名单—不丢输入且不暴露通用 IP
   const application = await launch(path.join(root, 'managed'));
   try {
     const page = await application.firstWindow();
+    await openProjectsList(page);
     await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await page.getByRole('button', { name: '创建第一个项目' }).click();
     await page.getByLabel('项目名称').fill('剧本安全路径');

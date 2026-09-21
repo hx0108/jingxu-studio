@@ -1,0 +1,126 @@
+{
+  "fixtureVersion": "jingxu-demo/1",
+  "title": "灯塔最后一封信",
+  "projectDefaults": {
+    "aspectRatio": "9:16",
+    "dialogueRenderMode": "NARRATION_FIRST",
+    "targetDurationSec": 60
+  },
+  "stages": [
+    {
+      "schema_version": "1.0.0",
+      "project_id": "project_demo0001",
+      "episode_id": null,
+      "source_invocation_id": "inv_demo_concept",
+      "stage": "CONCEPT",
+      "data": {
+        "title": "灯塔最后一封信",
+        "genre": "温情奇幻",
+        "target_audience": "喜欢治愈系竖屏漫剧的年轻观众",
+        "core_conflict": "守塔少女必须在风暴来临前，把一封迟到十年的信交给已经决定离岛的邮差。",
+        "theme": "告别不是遗忘，而是带着记忆继续出发。",
+        "synopsis": "海岛停电前夜，守塔少女阿澄在旧灯室发现一封未寄出的信。她穿过暴雨追上最后一班渡船，将信交给邮差周野，也终于理解父亲当年的选择。"
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "project_demo0001",
+      "episode_id": null,
+      "source_invocation_id": "inv_demo_bible",
+      "stage": "STORY_BIBLE",
+      "data": {
+        "characters": {
+          "char_acheng": {
+            "name": "阿澄",
+            "appearance": "二十岁，短黑发，黄色旧雨衣，手持铜制提灯。",
+            "personality": "安静坚韧，面对离别时习惯把情绪藏起来。",
+            "motivation": "在灯塔熄灭前完成父亲留下的最后托付。"
+          },
+          "char_zhouye": {
+            "name": "周野",
+            "appearance": "三十岁，深蓝邮差外套，肩背旧帆布邮包。",
+            "personality": "外冷内热，对未能送达的信始终心怀愧疚。",
+            "motivation": "赶上最后一班船离岛，同时与过去和解。"
+          }
+        },
+        "world_rules": ["灯塔停电后，海岛将永久关闭。", "提灯只在持有者坦诚面对告别时发光。"],
+        "scenes": {
+          "scene_lighthouse": {
+            "name": "旧灯塔",
+            "description": "风暴中的白色石塔，旋转灯室布满盐霜和旧信件。"
+          },
+          "scene_pier": {
+            "name": "离岛码头",
+            "description": "雨水打亮木栈桥，最后一班渡船即将鸣笛。"
+          }
+        },
+        "props": {
+          "prop_letter": { "name": "旧信", "description": "泛黄信封上写着周野的名字。" },
+          "prop_lantern": { "name": "铜提灯", "description": "灯塔守护人代代相传的旧提灯。" }
+        }
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "project_demo0001",
+      "episode_id": "episode_demo0001",
+      "source_invocation_id": "inv_demo_outline",
+      "stage": "EPISODE_OUTLINE",
+      "data": {
+        "episode_goal": "阿澄在灯塔关闭前把旧信交给周野，并完成自己的告别。",
+        "opening": "风暴将至，灯塔广播宣布午夜永久停机。阿澄在灯室地板下发现旧信。",
+        "midpoint": "阿澄追到码头，却发现铜提灯熄灭，渡船已经开始收起跳板。",
+        "climax": "她终于喊出父亲没能说出口的道歉，提灯重新亮起，周野转身接住旧信。",
+        "ending_hook": "渡船驶离时，熄灭的灯塔顶部出现一束短暂的暖光。",
+        "target_duration_sec": 60
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "project_demo0001",
+      "episode_id": "episode_demo0001",
+      "source_invocation_id": "inv_demo_beats",
+      "stage": "BEAT_SHEET",
+      "data": {
+        "beats": [
+          { "beat_id": "beat_demo_01", "sequence": 1, "purpose": "建立倒计时", "description": "灯塔广播响起，阿澄找到旧信。", "estimated_duration_sec": 15 },
+          { "beat_id": "beat_demo_02", "sequence": 2, "purpose": "制造追赶阻力", "description": "阿澄冒雨下山，提灯在码头熄灭。", "estimated_duration_sec": 15 },
+          { "beat_id": "beat_demo_03", "sequence": 3, "purpose": "完成情绪突破", "description": "阿澄喊出迟来的道歉，周野回头。", "estimated_duration_sec": 18 },
+          { "beat_id": "beat_demo_04", "sequence": 4, "purpose": "留下余韵", "description": "信被交付，渡船离岛，灯塔最后亮起。", "estimated_duration_sec": 12 }
+        ]
+      }
+    },
+    {
+      "schema_version": "1.0.0",
+      "project_id": "project_demo0001",
+      "episode_id": "episode_demo0001",
+      "source_invocation_id": "inv_demo_script",
+      "stage": "SCENE_SCRIPT",
+      "data": {
+        "scenes": [
+          {
+            "script_scene_id": "script_scene_demo_01",
+            "sequence": 1,
+            "scene_id": "scene_lighthouse",
+            "character_ids": ["char_acheng"],
+            "action": "阿澄掀开松动的木板，取出旧信。窗外闪电照亮停机通知。",
+            "spoken_lines": [{ "speaker_id": "char_acheng", "line_type": "DIALOGUE", "text": "原来你一直在等他。" }],
+            "estimated_duration_sec": 24
+          },
+          {
+            "script_scene_id": "script_scene_demo_02",
+            "sequence": 2,
+            "scene_id": "scene_pier",
+            "character_ids": ["char_acheng", "char_zhouye"],
+            "action": "阿澄冲上湿滑栈桥，高举重新亮起的提灯。周野在跳板尽头回身。",
+            "spoken_lines": [
+              { "speaker_id": "char_acheng", "line_type": "DIALOGUE", "text": "这封信晚了十年，但我不想让它再错过今晚。" },
+              { "speaker_id": "char_zhouye", "line_type": "DIALOGUE", "text": "有些信，只要抵达就不算太晚。" }
+            ],
+            "estimated_duration_sec": 36
+          }
+        ]
+      }
+    }
+  ]
+}

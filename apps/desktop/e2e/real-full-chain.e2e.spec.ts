@@ -97,11 +97,7 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
         // 2026-09-21 起图片档=Agnes Image（2.5 Flash 默认），用 Agnes Key。
         const imageError = await configureProvider('profile-image-agnes-primary', agnesKey, false);
         if (imageError !== null) return { step: 'image-provider', errorCode: imageError };
-        const agnesError = await configureProvider(
-          'profile-video-agnes-primary',
-          agnesKey,
-          false,
-        );
+        const agnesError = await configureProvider('profile-video-agnes-primary', agnesKey, false);
         if (agnesError !== null) return { step: 'agnes-provider', errorCode: agnesError };
         steps.push({ step: 'providers-configured' });
 
@@ -202,8 +198,7 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
             workspace = refreshed.data;
             draft = workspace.stages.find((candidate) => candidate.stage === stage)?.current;
             if (finalStatus === 'SUCCEEDED' && draft?.status === 'DRAFT') break;
-            if (stageAttempt < 3)
-              await new Promise((resolve) => setTimeout(resolve, 15_000));
+            if (stageAttempt < 3) await new Promise((resolve) => setTimeout(resolve, 15_000));
           }
           if (finalStatus !== 'SUCCEEDED' || draft?.status !== 'DRAFT')
             return { step: `stage:${stage}`, finalStatus, errorCode, projectId };
@@ -237,7 +232,11 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
             stage: 'SHOT_CONTRACT',
           });
           if (!queuedShot.ok)
-            return { step: 'job.create:SHOT_CONTRACT', errorCode: queuedShot.error.code, projectId };
+            return {
+              step: 'job.create:SHOT_CONTRACT',
+              errorCode: queuedShot.error.code,
+              projectId,
+            };
           shotStatus = 'TIMEOUT_POLL';
           for (let attempt = 0; attempt < 900; attempt += 1) {
             const status = await window.jingxu.job.get({ jobId: queuedShot.data.id });
@@ -256,7 +255,8 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
             await new Promise((resolve) => setTimeout(resolve, 1000));
           }
           const polled = await window.jingxu.script.getWorkspace({ projectId });
-          if (!polled.ok) return { step: 'workspace:shot', errorCode: polled.error.code, projectId };
+          if (!polled.ok)
+            return { step: 'workspace:shot', errorCode: polled.error.code, projectId };
           workspace = polled.data;
           if (shotStatus === 'SUCCEEDED' && workspace.storyboard.current?.status === 'DRAFT') break;
           if (shotAttempt < 3) await new Promise((resolve) => setTimeout(resolve, 15_000));
@@ -551,9 +551,12 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
     if (process.env.JINGXU_DATA_ROOT_OVERRIDE === undefined) {
       const keepData = process.env.JINGXU_KEEP_FAILED_DATA === '1';
       if (!keepData)
-        await rm(isolatedData, { force: true, maxRetries: 10, recursive: true, retryDelay: 300 }).catch(
-          () => undefined,
-        );
+        await rm(isolatedData, {
+          force: true,
+          maxRetries: 10,
+          recursive: true,
+          retryDelay: 300,
+        }).catch(() => undefined);
       else console.info(`[full-chain] isolated data kept at ${isolatedData}`);
     }
   }

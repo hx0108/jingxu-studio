@@ -110,8 +110,7 @@ test('真实收官——选择视频→时间线→FFmpeg 导出 MP4', async () 
             projectId,
             shotId: shot.shotId,
           });
-          if (!frames.ok)
-            return { step: `frames:${shot.shotId}`, errorCode: frames.error.code };
+          if (!frames.ok) return { step: `frames:${shot.shotId}`, errorCode: frames.error.code };
           if (!frames.data.some((candidate) => candidate.selectedAt !== null)) {
             let frame = frames.data.find((candidate) => candidate.status === 'SUCCEEDED');
             for (let round = 1; round <= 3 && frame === undefined; round += 1) {
@@ -159,8 +158,7 @@ test('真实收官——选择视频→时间线→FFmpeg 导出 MP4', async () 
             projectId,
             shotId: shot.shotId,
           });
-          if (!existing.ok)
-            return { step: `list:${shot.shotId}`, errorCode: existing.error.code };
+          if (!existing.ok) return { step: `list:${shot.shotId}`, errorCode: existing.error.code };
           if (!existing.data.some((candidate) => candidate.selectedAt !== null)) {
             let usable = existing.data.find((candidate) => candidate.status === 'SUCCEEDED');
             for (let round = 1; round <= 3 && usable === undefined; round += 1) {
@@ -189,8 +187,7 @@ test('真实收官——选择视频→时间线→FFmpeg 导出 MP4', async () 
                   projectId,
                   taskId: generated.data.id,
                 });
-                if (!task.ok)
-                  return { step: `task:${shot.shotId}`, errorCode: task.error.code };
+                if (!task.ok) return { step: `task:${shot.shotId}`, errorCode: task.error.code };
                 phase = task.data.phase;
                 if (['COMPLETED', 'FAILED', 'CANCELLED'].includes(phase)) break;
               }
@@ -198,8 +195,7 @@ test('真实收官——选择视频→时间线→FFmpeg 导出 MP4', async () 
                 projectId,
                 shotId: shot.shotId,
               });
-              if (!listed.ok)
-                return { step: `list2:${shot.shotId}`, errorCode: listed.error.code };
+              if (!listed.ok) return { step: `list2:${shot.shotId}`, errorCode: listed.error.code };
               usable = listed.data.find(
                 (candidate) => !priorIds.has(candidate.id) && candidate.status === 'SUCCEEDED',
               );
@@ -210,8 +206,7 @@ test('真实收官——选择视频→时间线→FFmpeg 导出 MP4', async () 
               projectId,
               requestId: requestId(`sel-${shot.shotId}`),
             });
-            if (!selected.ok)
-              return { step: `sel:${shot.shotId}`, errorCode: selected.error.code };
+            if (!selected.ok) return { step: `sel:${shot.shotId}`, errorCode: selected.error.code };
           }
         }
         const timeline = await window.jingxu.video.createTimeline({

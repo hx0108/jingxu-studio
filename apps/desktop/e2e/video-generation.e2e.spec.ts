@@ -12,6 +12,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
 const desktopRoot = path.resolve(__dirname, '..');
@@ -102,6 +104,7 @@ test('§6.1-T1 单镜头视频—异步生成、受限 video 比较、选择与�
     const seeded = await seedStoryboardReady(page, '视频单镜头');
     await prepareSelectedFirstFrames(page, seeded.projectId, 1);
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '视频单镜头');
     await page.getByRole('button', { name: '视频生成', exact: true }).click();
     await page.locator('.shot-card', { hasText: '#1' }).click();
@@ -140,6 +143,7 @@ test('§6.1-T1 单镜头视频—异步生成、受限 video 比较、选择与�
     );
     expect(secondFirstFrame).toBeTruthy();
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '视频单镜头');
     await page.getByRole('button', { name: '视频生成', exact: true }).click();
     await page.locator('.shot-card', { hasText: '#1' }).click();
@@ -180,6 +184,7 @@ test('§6.1-T1 单镜头视频—异步生成、受限 video 比较、选择与�
       { projectId: seeded.projectId },
     );
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '视频单镜头');
     await page.locator('.shot-card', { hasText: '#1' }).click();
     await expect(page.locator('#video-panel')).toContainText(
@@ -264,6 +269,7 @@ test('§6.1-T2 整集视频批量—跳过、失败隔离 PARTIAL 与失败镜�
     const seeded = await seedStoryboardReady(page, '视频批量');
     await prepareSelectedFirstFrames(page, seeded.projectId, 5);
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '视频批量');
 
     await page.getByRole('button', { name: '为整集生成视频' }).click();
@@ -303,6 +309,7 @@ test('§6.1-T2 视频批次取消—在飞镜头自然收口，未建档镜头�
     const seeded = await seedStoryboardReady(page, '视频批次取消');
     await prepareSelectedFirstFrames(page, seeded.projectId, seeded.shotCount);
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '视频批次取消');
 
     await page.getByRole('button', { name: '为整集生成视频' }).click();
@@ -334,6 +341,7 @@ test('§6.1-T2 视频批次重启—在飞任务待人工且剩余镜头继续�
     const seeded = await seedStoryboardReady(page, '视频批次重启');
     await prepareSelectedFirstFrames(page, seeded.projectId, seeded.shotCount);
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '视频批次重启');
     await page.getByRole('button', { name: '为整集生成视频' }).click();
     await expect(
@@ -346,6 +354,7 @@ test('§6.1-T2 视频批次重启—在飞任务待人工且剩余镜头继续�
   const second = await launch(managedRoot);
   try {
     const page = await second.firstWindow();
+    await openProjectsList(page);
     await openStoryboard(page, '视频批次重启');
     await expect(page.locator('#video-batch-progress')).toContainText(
       '视频批次部分完成 · 进度 6/6 · 失败 1',

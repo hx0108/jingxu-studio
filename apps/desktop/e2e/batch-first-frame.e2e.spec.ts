@@ -10,6 +10,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
 const desktopRoot = path.resolve(__dirname, '..');
@@ -60,6 +62,7 @@ test('§6.2-T1 整集批量首帧—排队/生成中徽标流转至 COMPLETED，
     const seeded = await seedStoryboardReady(page, '批次全量');
     expect(seeded.shotCount).toBe(6);
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '批次全量');
 
     await page.getByRole('button', { name: '为整集生成首帧' }).click();
@@ -107,6 +110,7 @@ test('§6.2-T2 失败注入—候选级全败派生 PARTIAL，重试失败镜头
     const seeded = await seedStoryboardReady(page, '批次失败重试');
     expect(seeded.shotCount).toBe(6);
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '批次失败重试');
 
     await page.getByRole('button', { name: '为整集生成首帧' }).click();
@@ -147,6 +151,7 @@ test('§6.2-T3 取消剩余—批次 CANCELLED，在飞成员跑完，未建档�
     const seeded = await seedStoryboardReady(page, '批次取消');
     expect(seeded.shotCount).toBe(6);
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '批次取消');
 
     await page.getByRole('button', { name: '为整集生成首帧' }).click();
@@ -183,6 +188,7 @@ test('§6.2-T4 重启恢复—在飞任务标 INTERRUPTED 待人工，剩余队�
     const seeded = await seedStoryboardReady(page, '批次重启');
     expect(seeded.shotCount).toBe(6);
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '批次重启');
     await page.getByRole('button', { name: '为整集生成首帧' }).click();
     // 等到镜头2 在飞（无 provider 证据的 SUBMITTED）后硬退出。
@@ -196,6 +202,7 @@ test('§6.2-T4 重启恢复—在飞任务标 INTERRUPTED 待人工，剩余队�
   const second = await launch(managedRoot);
   try {
     const page = await second.firstWindow();
+    await openProjectsList(page);
     await openStoryboard(page, '批次重启');
     await expect(page.locator('#batch-progress')).toContainText(
       '首帧批次部分完成 · 进度 6/6 · 失败 1',

@@ -12,6 +12,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
 const execFileAsync = promisify(execFile);
@@ -63,6 +65,7 @@ test('§6.2-T5 调用证据—批跑后 SUBMIT 行数=候选数、ref 可 JOIN�
     const seeded = await seedStoryboardReady(page, '证据留档');
     expect(seeded.shotCount).toBe(6);
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '证据留档');
 
     await page.getByRole('button', { name: '为整集生成首帧' }).click();

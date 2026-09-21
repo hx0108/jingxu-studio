@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="768" height="512" viewBox="0 0 768 512">
+  <rect width="768" height="512" fill="#101827"/>
+  <path d="M0 374 180 248l138 82 162-174 288 218v138H0Z" fill="#29425d"/>
+  <path d="M570 352V128h76v224" fill="#e8e3d5"/>
+  <path d="m558 128 50-62 50 62Z" fill="#d7a928"/>
+  <circle cx="608" cy="112" r="22" fill="#fff2ad"/>
+  <path d="M608 112 164 30" stroke="#fff2ad" stroke-width="20" opacity=".28"/>
+  <path d="M0 420c160-42 310 48 468 0s224-18 300 18" fill="none" stroke="#6f93a8" stroke-width="18"/>
+  <text x="32" y="54" fill="#fff7df" font-family="sans-serif" font-size="28">演示画风 · 暴雨灯塔</text>
+</svg>

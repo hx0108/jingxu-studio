@@ -29,7 +29,7 @@ import { shotVideoBadge } from './storyboard-video-state-policy';
 import { StatusBadge } from '../ui/WorkspaceLayout';
 import { workspaceStatusLabel } from '../ui/workspace-status';
 
-type MediaWorkspaceStep = 'storyboard' | 'image' | 'video' | 'composition';
+export type MediaWorkspaceStep = 'storyboard' | 'image' | 'video' | 'composition';
 
 const SHOT_SIZE_LABELS: Record<StoryboardShotSummaryDto['shotSize'], string> = {
   CLOSE_UP: '近景',
@@ -79,6 +79,7 @@ const LOCKABLE_ROOT_LABELS: Readonly<Record<string, string>> = {
 const LOCKABLE_ROOTS = Object.keys(LOCKABLE_ROOT_LABELS);
 
 export interface StoryboardPanelProps {
+  readonly initialMediaStep?: MediaWorkspaceStep;
   readonly episodeTargetDurationSec: number;
   /** 列表级首帧状态底座（design D5）；null 表示尚未载入，不渲染徽标。 */
   readonly imageStates: StoryboardImageStatesDto | null;
@@ -121,6 +122,7 @@ export const StoryboardPanel = ({
   episodeTargetDurationSec,
   generateHint,
   imageStates,
+  initialMediaStep = 'storyboard',
   job,
   onBatchCancel,
   onBatchRetryFailed,
@@ -149,7 +151,17 @@ export const StoryboardPanel = ({
   const [editing, setEditing] = useState(false);
   const [shotEditorText, setShotEditorText] = useState('');
   const [shotEditorError, setShotEditorError] = useState<string | null>(null);
-  const [activeMediaStep, setActiveMediaStep] = useState<MediaWorkspaceStep>('storyboard');
+  const [activeMediaStep, setActiveMediaStep] = useState<MediaWorkspaceStep>(initialMediaStep);
+  const [syncedInitialStep, setSyncedInitialStep] = useState(initialMediaStep);
+  // 续作路由带来的步骤变化在渲染期同步（React 官方「根据 props 调整 state」模式）。
+  if (syncedInitialStep !== initialMediaStep) {
+    setSyncedInitialStep(initialMediaStep);
+    setActiveMediaStep(initialMediaStep);
+  }
+
+  useEffect(() => {
+    document.querySelector('#storyboard-panel')?.scrollIntoView({ behavior: 'smooth' });
+  }, [initialMediaStep]);
   const [consistency, setConsistency] = useState<ConsistencyPreflightDto | null>(null);
   const selectedShot =
     storyboard.shots.find((shot) => shot.shotId === selectedShotId) ?? storyboard.shots[0] ?? null;

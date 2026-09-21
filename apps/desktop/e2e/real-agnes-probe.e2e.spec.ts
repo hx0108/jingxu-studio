@@ -27,75 +27,77 @@ test('Agnes 腿调试', async () => {
         LOCALAPPDATA: process.env.JINGXU_DATA_ROOT_OVERRIDE ?? isolatedData,
       },
     });
-    application.process().stderr?.on('data', (chunk: Buffer) => { console.log(`[main-err] ${String(chunk)}`); });
-    application.process().stdout?.on('data', (chunk: Buffer) => { console.log(`[main-out] ${String(chunk)}`); });
+    application.process().stderr?.on('data', (chunk: Buffer) => {
+      console.log(`[main-err] ${String(chunk)}`);
+    });
+    application.process().stdout?.on('data', (chunk: Buffer) => {
+      console.log(`[main-out] ${String(chunk)}`);
+    });
     const page = await application.firstWindow();
     const debugProjectId = process.env.JINGXU_DEBUG_PROJECT_ID ?? '';
-    const debugShotIds = (process.env.JINGXU_DEBUG_SHOT_IDS ?? '')
-      .split(',')
-      .filter(Boolean);
+    const debugShotIds = (process.env.JINGXU_DEBUG_SHOT_IDS ?? '').split(',').filter(Boolean);
     const dbgProject = process.env.JINGXU_DEBUG_PROJECT_ID ?? '';
     const dbgShot = (process.env.JINGXU_DEBUG_SHOT_IDS ?? '').split(',')[0] ?? '';
     const result = await page.evaluate(
       async ({ key, preflightProject, preflightShotIds, dbgProject, dbgShot }) => {
-      const requestId = (prefix: string): string => `${prefix}_${crypto.randomUUID()}`;
-      const profile = await window.jingxu.provider.getProfile({
-        profileId: 'profile-video-agnes-primary',
-      });
-      if (!profile.ok) return `getProfile:${profile.error.code}`;
-      const saved = await window.jingxu.provider.saveCredential({
-        apiKey: key,
-        expectedVersionId: profile.data.versionId,
-        profileId: 'profile-video-agnes-primary',
-        requestId: requestId('key'),
-      });
-      if (!saved.ok) return `saveCredential:${saved.error.code}`;
-      const tested = await window.jingxu.provider.testCredential({
-        expectedVersionId: saved.data.versionId,
-        profileId: 'profile-video-agnes-primary',
-        requestId: requestId('test'),
-      });
-      const reread = await window.jingxu.provider.getProfile({
-        profileId: 'profile-video-agnes-primary',
-      });
-      const legA = {
-        saveVersionId: saved.data.versionId,
-        testedOk: tested.ok,
-        testedError: tested.ok ? null : tested.error,
-        reread: reread.ok ? reread.data : `reread:${reread.error.code}`,
-      };
-      // 对保留库复现 preflight（full-chain 失败现场：project_11f70bda…）
-      const preflightProjectLocal = preflightProject;
-      const preflightShotIdsLocal = preflightShotIds;
-      let preflightResult: unknown = 'skipped (no debug ids)';
-      if (preflightProject !== '' && preflightShotIds.length > 0) {
-        const pf = await window.jingxu.image.getConsistencyPreflight({
-          projectId: preflightProjectLocal,
-          shotIds: preflightShotIdsLocal,
+        const requestId = (prefix: string): string => `${prefix}_${crypto.randomUUID()}`;
+        const profile = await window.jingxu.provider.getProfile({
+          profileId: 'profile-video-agnes-primary',
         });
-        preflightResult = pf.ok ? pf.data : pf.error;
-      }
+        if (!profile.ok) return `getProfile:${profile.error.code}`;
+        const saved = await window.jingxu.provider.saveCredential({
+          apiKey: key,
+          expectedVersionId: profile.data.versionId,
+          profileId: 'profile-video-agnes-primary',
+          requestId: requestId('key'),
+        });
+        if (!saved.ok) return `saveCredential:${saved.error.code}`;
+        const tested = await window.jingxu.provider.testCredential({
+          expectedVersionId: saved.data.versionId,
+          profileId: 'profile-video-agnes-primary',
+          requestId: requestId('test'),
+        });
+        const reread = await window.jingxu.provider.getProfile({
+          profileId: 'profile-video-agnes-primary',
+        });
+        const legA = {
+          saveVersionId: saved.data.versionId,
+          testedOk: tested.ok,
+          testedError: tested.ok ? null : tested.error,
+          reread: reread.ok ? reread.data : `reread:${reread.error.code}`,
+        };
+        // 对保留库复现 preflight（full-chain 失败现场：project_11f70bda…）
+        const preflightProjectLocal = preflightProject;
+        const preflightShotIdsLocal = preflightShotIds;
+        let preflightResult: unknown = 'skipped (no debug ids)';
+        if (preflightProject !== '' && preflightShotIds.length > 0) {
+          const pf = await window.jingxu.image.getConsistencyPreflight({
+            projectId: preflightProjectLocal,
+            shotIds: preflightShotIdsLocal,
+          });
+          preflightResult = pf.ok ? pf.data : pf.error;
+        }
         let listProbe: unknown = 'skipped';
-      if (dbgProject !== '' && dbgShot !== '') {
-        const listed = await window.jingxu.video.listVideoCandidates({
-          projectId: dbgProject,
-          shotId: dbgShot,
-        });
-        listProbe = listed.ok
-          ? {
-              ok: true,
-              count: listed.data.length,
-              rows: listed.data.map((candidate) => ({
-                id: candidate.id.slice(0, 8),
-                status: candidate.status,
-                providerKind: candidate.providerKind,
-                isMock: candidate.isMock,
-                errorCode: candidate.errorCode,
-              })),
-            }
-          : { ok: false, errorCode: listed.error.code };
-      }
-      return { legA, preflightResult, listProbe };
+        if (dbgProject !== '' && dbgShot !== '') {
+          const listed = await window.jingxu.video.listVideoCandidates({
+            projectId: dbgProject,
+            shotId: dbgShot,
+          });
+          listProbe = listed.ok
+            ? {
+                ok: true,
+                count: listed.data.length,
+                rows: listed.data.map((candidate) => ({
+                  id: candidate.id.slice(0, 8),
+                  status: candidate.status,
+                  providerKind: candidate.providerKind,
+                  isMock: candidate.isMock,
+                  errorCode: candidate.errorCode,
+                })),
+              }
+            : { ok: false, errorCode: listed.error.code };
+        }
+        return { legA, preflightResult, listProbe };
       },
       {
         key: apiKey,

@@ -10,6 +10,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 const desktopRoot = path.resolve(__dirname, '..');
 const schemaResourcePath = path.resolve(
   desktopRoot,
@@ -61,6 +63,7 @@ const createProjectThroughUi = async (
   name: string,
   aspectRatio: '9:16' | '16:9',
 ): Promise<void> => {
+  await openProjectsList(page);
   const firstAction = page.getByRole('button', { name: '创建第一个项目' });
   if (await firstAction.isVisible()) await firstAction.click();
   else await page.getByRole('button', { name: '创建项目' }).click();
@@ -78,6 +81,7 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
 
   try {
     let page = await application.firstWindow();
+    await openProjectsList(page);
     await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await createProjectThroughUi(page, '竖屏项目', '9:16');
     await expect(page.getByText('1080×1920')).toBeVisible();
@@ -92,6 +96,7 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
 
     application = await launchApplication(managedRoot);
     page = await application.firstWindow();
+    await openProjectsList(page);
     await expect(page.getByRole('button', { name: /竖屏项目/u })).toBeVisible();
     await expect(page.getByRole('button', { name: /横屏项目/u })).toBeVisible();
     await page.getByRole('button', { name: /横屏项目/u }).click();
@@ -152,6 +157,7 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
     expect(surface).toEqual({
       apiFrozen: true,
       apiKeys: [
+        'creatorGuide',
         'evaluation',
         'events',
         'image',
@@ -197,6 +203,7 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
 
   try {
     const page = await application.firstWindow();
+    await openProjectsList(page);
     await expect(page.getByRole('button', { name: '创建第一个项目' })).toBeVisible();
 
     await page.getByRole('button', { name: '创建第一个项目' }).click();
@@ -260,6 +267,7 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
     expect(staleResult.current).toMatchObject({ ok: true, data: { name: '并发基准项目新版' } });
 
     await page.reload();
+    await openProjectsList(page);
     await page.getByRole('button', { name: /并发基准项目新版/u }).click();
     await page.getByRole('button', { name: '移入回收站' }).click();
     await expect(page.getByText(/不会删除 Provider 侧数据/u)).toBeVisible();
@@ -544,6 +552,7 @@ test('Schema 资源缺失—只读故障阻断四个写命令—原位修复后�
     await restoreSchemaResourceIfNeeded();
     await page.getByRole('button', { name: '重新检查' }).click();
     await expect(page.getByTestId('workspace-ready')).toBeVisible();
+    await openProjectsList(page);
     await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await expect
       .poll(async () => page.evaluate(() => window.jingxu.runtime.getStartupStatus()))

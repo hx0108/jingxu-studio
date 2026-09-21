@@ -352,6 +352,32 @@ button:disabled {
   line-height: 1.7;
 }
 
+.creator-home-hero button[data-primary-action] {
+  min-width: 190px;
+}
+
+.start-choice-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 22px 24px;
+  border: 1px solid rgb(226 133 61 / 36%);
+  border-radius: 16px;
+  background: rgb(226 133 61 / 8%);
+}
+
+.start-choice-panel h3,
+.start-choice-panel p {
+  margin: 4px 0;
+}
+
+.start-choice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .home-card-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

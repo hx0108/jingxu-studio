@@ -92,20 +92,12 @@ const runRealGeneration = async (modelId: string, invocationId: string): Promise
 };
 
 describe.skipIf(!gated || apiKey === '')('AgnesImageModelAdapter 真实 Canary', () => {
-  it(
-    '2.5 Flash（默认档）9:16 img2img 参考图经真实端点同步出图',
-    { timeout: 600_000 },
-    async () => {
-      await runRealGeneration(DEFAULT_AGNES_IMAGE_MODEL_ID, 'agnes-image-canary-25f-0001');
-    },
-  );
+  it('2.5 Flash（默认档）9:16 img2img 参考图经真实端点同步出图', { timeout: 600_000 }, async () => {
+    await runRealGeneration(DEFAULT_AGNES_IMAGE_MODEL_ID, 'agnes-image-canary-25f-0001');
+  });
 
-  it(
-    '2.1 Flash 20 秒间隔后同链验证（双模型请求形状一致）',
-    { timeout: 600_000 },
-    async () => {
-      await sleep(20_000);
-      await runRealGeneration(AGNES_IMAGE_2_1_FLASH_MODEL_ID, 'agnes-image-canary-21f-0001');
-    },
-  );
+  it('2.1 Flash 20 秒间隔后同链验证（双模型请求形状一致）', { timeout: 600_000 }, async () => {
+    await sleep(20_000);
+    await runRealGeneration(AGNES_IMAGE_2_1_FLASH_MODEL_ID, 'agnes-image-canary-21f-0001');
+  });
 });

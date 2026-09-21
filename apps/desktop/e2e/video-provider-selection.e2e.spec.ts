@@ -10,6 +10,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
 const desktopRoot = path.resolve(__dirname, '..');
@@ -93,6 +95,7 @@ test.describe('视频 Provider 设置与切换（low-cost 6.5）', () => {
       const seeded = await seedStoryboardReady(page, '视频偏好切换');
       await prepareSelectedFirstFrames(page, seeded.projectId, 1);
       await page.reload();
+      await openProjectsList(page);
       await openStoryboard(page, '视频偏好切换');
 
       // 设置页：Mock 醒目标记 + 两家视频卡（Seedance / Agnes）。
@@ -138,6 +141,7 @@ test.describe('视频 Provider 设置与切换（low-cost 6.5）', () => {
       const relaunched = await launch(managedRoot);
       try {
         const nextPage = await relaunched.firstWindow();
+        await openProjectsList(nextPage);
         const selection = await nextPage.evaluate(async () => {
           const result = await window.jingxu.provider.getVideoProviderSelection({
             requestId: 'e2e-vpsel-restart-get',
@@ -178,6 +182,7 @@ test.describe('视频 Provider 设置与切换（low-cost 6.5）', () => {
       const seeded = await seedStoryboardReady(page, '视频真实档缺凭据');
       await prepareSelectedFirstFrames(page, seeded.projectId, 1);
       await page.reload();
+      await openProjectsList(page);
       await openStoryboard(page, '视频真实档缺凭据');
       await page.getByRole('button', { name: '视频生成', exact: true }).click();
       await page.locator('.shot-card', { hasText: '#1' }).click();

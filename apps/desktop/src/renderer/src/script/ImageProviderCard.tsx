@@ -72,8 +72,8 @@ export const ImageProviderCardView = ({
     </summary>
     <div className="model-service-body" aria-labelledby="image-provider-title">
       <p>
-        用于首帧图片生成（2026-09-21 起由火山方舟 Seedream 切换至 Agnes Image）。
-        保存 Agnes API Key 并选择模型；完整 Key 不回显、不进入页面长期状态。
+        用于首帧图片生成（2026-09-21 起由火山方舟 Seedream 切换至 Agnes Image）。 保存 Agnes API Key
+        并选择模型；完整 Key 不回显、不进入页面长期状态。
       </p>
       {error !== null && (
         <p className="field-error" role="alert">

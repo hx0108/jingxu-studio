@@ -10,6 +10,7 @@ import type {
   ShotEditLockSummaryDto,
   StoryboardExportFormat,
   StoryboardVersionSummaryDto,
+  ScriptStage,
 } from '@jingxu/contracts';
 
 import { ExportDeviationDialog } from './ExportDeviationDialog';
@@ -45,6 +46,8 @@ type Stage = (typeof STAGES)[number][0];
 
 export interface ScriptWorkspaceViewProps {
   readonly projectId: string;
+  readonly initialMediaStep?: 'storyboard' | 'image' | 'video' | 'composition';
+  readonly initialStage?: Exclude<ScriptStage, 'SHOT_CONTRACT'>;
   readonly onDirtyChange: (dirty: boolean) => void;
   readonly onCommitted?: () => void;
   readonly onOpenSettings?: () => void;
@@ -52,12 +55,14 @@ export interface ScriptWorkspaceViewProps {
 
 export const ScriptWorkspaceView = ({
   projectId,
+  initialMediaStep = 'storyboard',
+  initialStage = 'CONCEPT',
   onDirtyChange,
   onCommitted,
   onOpenSettings = () => undefined,
 }: ScriptWorkspaceViewProps) => {
   const [workspace, setWorkspace] = useState<ScriptWorkspaceDto | null>(null);
-  const [selectedStage, setSelectedStage] = useState<Stage>('CONCEPT');
+  const [selectedStage, setSelectedStage] = useState<Stage>(initialStage);
   const [editorText, setEditorText] = useState('{}');
   const [providerReady, setProviderReady] = useState(false);
   const [job, setJob] = useState<JobSummaryDto | null>(null);
@@ -866,6 +871,7 @@ export const ScriptWorkspaceView = ({
       </WorkspaceLayout>
       {sceneScriptCurrent?.status === 'READY' && (
         <StoryboardPanel
+          initialMediaStep={initialMediaStep}
           batchBusy={batchBusy}
           episodeTargetDurationSec={workspace.episode.targetDurationSec}
           exportNotice={exportNotice}

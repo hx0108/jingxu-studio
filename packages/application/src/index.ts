@@ -5,6 +5,7 @@ export type {
   PersistenceRuntimePort,
 } from './ports/persistence/persistence-runtime-port';
 export type * from './ports/credential/index';
+export type * from './ports/creator-guide/index';
 export type * from './ports/evaluation/index';
 export type * from './ports/image-model/index';
 export type * from './ports/media/index';
@@ -13,6 +14,7 @@ export { assertJobTransition, JobInvariantError } from './ports/persistence/job/
 export type * from './ports/project/index';
 export * from './media/index';
 export * from './evaluation/index';
+export * from './creator-guide/index';
 export type * from './ports/schema-registry/index';
 export type * from './ports/script/index';
 export type * from './ports/text-model/index';

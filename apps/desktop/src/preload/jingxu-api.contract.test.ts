@@ -1,4 +1,5 @@
 import {
+  CREATOR_GUIDE_IPC_CHANNELS,
   EVALUATION_IPC_CHANNELS,
   IMAGE_IPC_CHANNELS,
   PROJECT_IPC_CHANNELS,
@@ -89,7 +90,9 @@ describe('window.jingxu 白名单 Contract', () => {
     expect(Object.isFrozen(api)).toBe(true);
     expect(Object.isFrozen(api.runtime)).toBe(true);
     expect(Object.isFrozen(api.project)).toBe(true);
+    expect(Object.isFrozen(api.creatorGuide)).toBe(true);
     expect(Object.keys(api).sort()).toEqual([
+      'creatorGuide',
       'evaluation',
       'events',
       'image',
@@ -117,6 +120,11 @@ describe('window.jingxu 白名单 Contract', () => {
       'listSamples',
     ]);
     expect(Object.keys(api.producibility).sort()).toEqual(['getReport', 'overrideFinding', 'run']);
+    expect(Object.keys(api.creatorGuide).sort()).toEqual([
+      'getNextAction',
+      'getPreparation',
+      'startDemo',
+    ]);
     expect(Object.keys(api.script).sort()).toEqual([
       'confirmVersion',
       'getWorkspace',
@@ -150,6 +158,79 @@ describe('window.jingxu 白名单 Contract', () => {
       [RUNTIME_IPC_CHANNELS.retryStartup, retry],
       [RUNTIME_IPC_CHANNELS.restoreBackup, restore],
     ]);
+  });
+
+  it('首次创作引导—Preload 仅开放三个严格方法并校验往返 DTO', async () => {
+    const nextAction = {
+      action: 'CHOOSE_START',
+      blocked: false,
+      fixAction: 'CREATE_PROJECT',
+      projectId: null,
+      reason: '还没有作品，可以先体验或创建作品',
+      stage: null,
+      target: 'START',
+      title: '开始制作第一集',
+    } as const;
+    const preparation = {
+      canProceed: true,
+      cost: { currency: null, effectiveAt: null, max: null, min: null, status: 'UNKNOWN' },
+      estimatedDurationSec: 60,
+      isDemo: false,
+      items: [
+        {
+          code: 'GENERATION_SERVICE_READY',
+          detail: '生成服务已经就绪',
+          fixAction: null,
+          label: '生成服务',
+          status: 'READY',
+        },
+      ],
+      operation: 'IMAGE',
+      preparationRevision: 'prep_revision_01',
+      projectId: 'project_12345678',
+      shotIds: ['shot_12345678'],
+    } as const;
+    const demo = {
+      isDemo: true,
+      projectId: 'project_12345678',
+      resumed: false,
+      summary: '演示项目已准备完成，不会产生真实费用',
+    } as const;
+    const invoke = vi.fn((channel: string) => {
+      if (channel === CREATOR_GUIDE_IPC_CHANNELS.getNextAction) {
+        return Promise.resolve({ ok: true, data: nextAction });
+      }
+      if (channel === CREATOR_GUIDE_IPC_CHANNELS.getPreparation) {
+        return Promise.resolve({ ok: true, data: preparation });
+      }
+      return Promise.resolve({ ok: true, data: demo });
+    });
+    const api = createJingxuApi(invoke);
+
+    await expect(api.creatorGuide.getNextAction({ projectId: null })).resolves.toEqual({
+      ok: true,
+      data: nextAction,
+    });
+    await expect(
+      api.creatorGuide.getPreparation({
+        episodeId: 'episode_12345678',
+        operation: 'IMAGE',
+        projectId: 'project_12345678',
+        shotIds: ['shot_12345678'],
+      }),
+    ).resolves.toEqual({ ok: true, data: preparation });
+    await expect(api.creatorGuide.startDemo({ requestId: 'request-demo-0001' })).resolves.toEqual({
+      ok: true,
+      data: demo,
+    });
+    expect(invoke.mock.calls.map(([channel]) => channel)).toEqual([
+      CREATOR_GUIDE_IPC_CHANNELS.getNextAction,
+      CREATOR_GUIDE_IPC_CHANNELS.getPreparation,
+      CREATOR_GUIDE_IPC_CHANNELS.startDemo,
+    ]);
+    await expect(
+      api.creatorGuide.getNextAction({ projectId: null, provider: 'hidden' } as never),
+    ).rejects.toThrow();
   });
 
   it('Main 返回 Schema 只读故障—Preload 输出校验—保留稳定阶段且不暴露资源细节', async () => {

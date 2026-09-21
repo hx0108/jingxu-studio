@@ -271,7 +271,8 @@ export const createImageFeatureRegistration = ({
         modelId: () => resolveCurrentImageModelId(),
         newId: randomUUID,
         // 换牌即换指纹（跨版本不去重）；modelId 已是哈希单独输入，不重复入指纹。
-        parametersFingerprint: (size) => `agnes-image-v1:${String(size.width)}x${String(size.height)}`,
+        parametersFingerprint: (size) =>
+          `agnes-image-v1:${String(size.width)}x${String(size.height)}`,
         workspaceQuery,
       });
       // 批次与调度器循环依赖以晚绑定解开：批次建批后 kick，调度器排空后推进批次。
@@ -288,7 +289,8 @@ export const createImageFeatureRegistration = ({
         mediaUnitOfWork,
         modelId: () => resolveCurrentImageModelId(),
         newId: randomUUID,
-        parametersFingerprint: (size) => `agnes-image-v1:${String(size.width)}x${String(size.height)}`,
+        parametersFingerprint: (size) =>
+          `agnes-image-v1:${String(size.width)}x${String(size.height)}`,
         workspaceQuery,
       });
       const scheduler = createMediaTaskScheduler({

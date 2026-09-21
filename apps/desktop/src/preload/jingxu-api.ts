@@ -2,6 +2,10 @@ import {
   appResultSchema,
   assetViewSchema,
   cancelBatchInputSchema,
+  CREATOR_GUIDE_IPC_CHANNELS,
+  creatorDemoResultSchema,
+  creatorNextActionResultSchema,
+  creatorPreparationResultSchema,
   EVENTS_IPC_CHANNELS,
   EVALUATION_IPC_CHANNELS,
   evaluationAddAnnotationInputSchema,
@@ -21,6 +25,8 @@ import {
   generateCandidatesForShotsInputSchema,
   generateCandidatesInputSchema,
   getConsistencyPreflightInputSchema,
+  getCreatorNextActionInputSchema,
+  getCreatorPreparationInputSchema,
   consistencyPreflightSchema,
   getMediaTaskInputSchema,
   IMAGE_IPC_CHANNELS,
@@ -90,6 +96,7 @@ import {
   scriptVersionSchema,
   scriptWorkspaceSchema,
   startupStatusSchema,
+  startCreatorDemoInputSchema,
   storyboardImageStatesSchema,
   storyboardVideoStatesSchema,
   subscriptionResultSchema,
@@ -153,6 +160,8 @@ import {
   type StartVideoExportInputDto,
   type UpdateVideoTimelineInputDto,
   type CreateProjectInputDto,
+  type GetCreatorNextActionInputDto,
+  type GetCreatorPreparationInputDto,
   type GenerateCandidatesForShotsInputDto,
   type GenerateCandidatesInputDto,
   type GetMediaTaskInputDto,
@@ -213,9 +222,11 @@ import {
   type GetVoiceMappingsInputDto,
   type SaveVoiceMappingInputDto,
   type SelectVoiceCandidateInputDto,
+  type StartCreatorDemoInputDto,
 } from '@jingxu/contracts';
 
 export {
+  CREATOR_GUIDE_IPC_CHANNELS,
   EVENTS_IPC_CHANNELS,
   EVALUATION_IPC_CHANNELS,
   IMAGE_IPC_CHANNELS,
@@ -234,6 +245,29 @@ export type InvokeIpc = (channel: string, ...arguments_: readonly unknown[]) => 
 
 export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
   Object.freeze({
+    creatorGuide: Object.freeze({
+      getNextAction: async (input: GetCreatorNextActionInputDto) =>
+        appResultSchema(creatorNextActionResultSchema).parse(
+          await invoke(
+            CREATOR_GUIDE_IPC_CHANNELS.getNextAction,
+            getCreatorNextActionInputSchema.parse(input),
+          ),
+        ),
+      getPreparation: async (input: GetCreatorPreparationInputDto) =>
+        appResultSchema(creatorPreparationResultSchema).parse(
+          await invoke(
+            CREATOR_GUIDE_IPC_CHANNELS.getPreparation,
+            getCreatorPreparationInputSchema.parse(input),
+          ),
+        ),
+      startDemo: async (input: StartCreatorDemoInputDto) =>
+        appResultSchema(creatorDemoResultSchema).parse(
+          await invoke(
+            CREATOR_GUIDE_IPC_CHANNELS.startDemo,
+            startCreatorDemoInputSchema.parse(input),
+          ),
+        ),
+    }),
     events: Object.freeze({
       subscribeJobUpdates: async (input: JobUpdatesSubscriptionDto) => {
         const validated = jobUpdatesSubscriptionSchema.parse(input);

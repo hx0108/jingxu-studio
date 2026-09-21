@@ -36,6 +36,10 @@ import {
   type ProjectFeatureRegistration,
 } from './composition/register-project-features';
 import {
+  createCreatorGuideFeatureRegistration,
+  type CreatorGuideFeatureRegistration,
+} from './composition/register-creator-guide-features';
+import {
   createProductionScriptService,
   createScriptFeatureRegistration,
   type ScriptFeatureRegistration,
@@ -73,6 +77,7 @@ const rendererName =
 let appProtocolRegistered = false;
 let persistenceRuntime: DesktopPersistenceRuntime | null = null;
 let projectFeatureRegistration: ProjectFeatureRegistration | null = null;
+let creatorGuideFeatureRegistration: CreatorGuideFeatureRegistration | null = null;
 let jobProviderFeatureRegistration: JobProviderFeatureRegistration | null = null;
 let scriptFeatureRegistration: ScriptFeatureRegistration | null = null;
 let storyboardFeatureRegistration: StoryboardFeatureRegistration | null = null;
@@ -103,6 +108,11 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 app.enableSandbox();
+// E2E 与本机正在运行的打包版共享默认 userData 会争抢单实例锁而静默退出；
+// 测试数据根下隔离 userData，使 E2E 与真实应用互不干扰。
+if (process.env.JINGXU_E2E === '1' && process.env.JINGXU_E2E_DATA_ROOT !== undefined) {
+  app.setPath('userData', path.join(path.resolve(process.env.JINGXU_E2E_DATA_ROOT), 'user-data'));
+}
 const singleInstanceLockAcquired = app.requestSingleInstanceLock();
 
 const getTrustedUrl = (): string => devServerUrl ?? PRODUCTION_URL;
@@ -272,6 +282,11 @@ if (!singleInstanceLockAcquired) {
           persistenceRuntime,
           trustedUrl: getTrustedUrl(),
         });
+        creatorGuideFeatureRegistration = createCreatorGuideFeatureRegistration({
+          ipcRegistrar,
+          persistenceRuntime,
+          trustedUrl: getTrustedUrl(),
+        });
         jobProviderFeatureRegistration = createJobProviderFeatureRegistration({
           clock: () => new Date().toISOString(),
           ipcRegistrar,
@@ -391,6 +406,7 @@ if (!singleInstanceLockAcquired) {
         registerProducibilityIpc(ipcRegistrar, producibilityFacade, getTrustedUrl());
         registerRuntimeIpc(ipcRegistrar, persistenceRuntime.startupService, getTrustedUrl(), () => {
           projectFeatureRegistration?.ensureRegistered();
+          creatorGuideFeatureRegistration?.ensureRegistered();
           jobProviderFeatureRegistration?.ensureRegistered();
           scriptFeatureRegistration?.ensureRegistered();
           storyboardFeatureRegistration?.ensureRegistered();
@@ -401,6 +417,7 @@ if (!singleInstanceLockAcquired) {
           voiceFeatureRegistration?.ensureRegistered();
         });
         projectFeatureRegistration.ensureRegistered();
+        creatorGuideFeatureRegistration.ensureRegistered();
         jobProviderFeatureRegistration.ensureRegistered();
         scriptFeatureRegistration.ensureRegistered();
         storyboardFeatureRegistration.ensureRegistered();

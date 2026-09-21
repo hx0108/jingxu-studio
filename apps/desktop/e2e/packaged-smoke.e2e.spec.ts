@@ -32,6 +32,11 @@ test('packaged smoke—jingxu-studio.exe boots to project UI', async () => {
     });
     try {
       const page = await application.firstWindow();
+      const projectsNav = page
+        .locator('nav[aria-label="全局导航"]')
+        .getByRole('button', { name: '我的项目', exact: true });
+      await expect(projectsNav).toBeVisible({ timeout: 20_000 });
+      await projectsNav.click();
       await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible({
         timeout: 20_000,
       });

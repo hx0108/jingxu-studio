@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import type { EvaluationApi } from './evaluation-api';
+import type { CreatorGuideApi } from './creator-guide-api';
 import type { ImageApi } from './image-api';
 import type { ProjectApi } from './project-api';
 import type { ProducibilityApi } from './producibility-api';
@@ -126,6 +127,7 @@ export const RUNTIME_IPC_CHANNELS = {
 } as const;
 
 export * from './app-result';
+export * from './creator-guide-api';
 export * from './evaluation-api';
 export * from './image-api';
 export * from './job-provider-api';
@@ -141,6 +143,7 @@ export * from './voice-api';
 export * from './transfer-api';
 
 export interface JingxuApi {
+  readonly creatorGuide: CreatorGuideApi;
   readonly events: EventsApi;
   readonly evaluation: EvaluationApi;
   readonly image: ImageApi;

@@ -1,0 +1,9 @@
+{
+  "version": "jingxu-demo/1",
+  "notice": "演示结果由本地合成数据与 Mock 生成，不会产生真实费用。",
+  "files": {
+    "demo-story.json": "523f8da45ac265b85a4640cd71db4506472ce293391686980f37da7bc3785f89",
+    "character-acheng.svg": "4a7ef75749dadf1a4edecfeb7be71d5ae0c343bbe57ed72a8a21ba4cbc279ae4",
+    "style-reference.svg": "042abddd408689b3d1fd29b342e0be2d7f8151e2728c5432a49d6952ebe9824c"
+  }
+}

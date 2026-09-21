@@ -13,6 +13,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
 const execFileAsync = promisify(execFile);
@@ -186,6 +188,7 @@ test('项目快照导出导入—幂等重放/覆盖确认/NEW_PROJECT/RTO/冲�
 
     // ---- UI 通路（导出）：目标已存在 → confirm 覆盖 → 通知只含 exportId/哈希尾/字节，无路径。 ----
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '项目快照闭环');
     const dialogMessages: string[] = [];
     page.on('dialog', async (dialog) => {
@@ -331,6 +334,7 @@ test('项目快照导出导入—幂等重放/覆盖确认/NEW_PROJECT/RTO/冲�
     // ---- UI 通路（导入 NEW_PROJECT）：通知无路径 + 列表刷新出新项目。 ----
     await writeFile(importFile, pristine);
     await page.reload();
+    await openProjectsList(page);
     await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
     await page.locator('button[name="import-project-snapshot"]').click();
     const importNotice = page.locator('p[role="status"]', { hasText: '快照已导入为新项目' });

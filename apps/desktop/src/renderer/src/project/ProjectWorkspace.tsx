@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { AppErrorDto, ProjectDetailDto, ProjectSummaryDto } from '@jingxu/contracts';
+import type {
+  AppErrorDto,
+  CreatorNextActionResultDto,
+  ProjectDetailDto,
+  ProjectSummaryDto,
+} from '@jingxu/contracts';
 
 import { useProjectUiStore } from '../store/project-ui-store';
 import { ConfirmActionDialog } from './ConfirmActionDialog';
@@ -18,6 +23,12 @@ import { ProviderSettings } from '../script/ProviderSettings';
 import { EvaluationWorkspace } from '../evaluation/EvaluationWorkspace';
 import { AppShell, ComingSoonPanel, type GlobalArea } from '../ui/AppShell';
 import { WorkspaceTopbar } from '../ui/WorkspaceTopbar';
+import { CreatorHome } from './CreatorHome';
+import {
+  getCreatorGuideClient,
+  routeForCreatorAction,
+  type CreatorWorkspaceRoute,
+} from './creator-guide-api';
 
 type Screen =
   | 'home'
@@ -59,7 +70,12 @@ export const ProjectWorkspace = () => {
     setListFilter,
     setDirty,
   } = useProjectUiStore();
-  const [screen, setScreen] = useState<Screen>('list');
+  const [screen, setScreen] = useState<Screen>('home');
+  const [creatorAction, setCreatorAction] = useState<CreatorNextActionResultDto | null>(null);
+  const [creatorGuidePending, setCreatorGuidePending] = useState(false);
+  const [creatorGuideError, setCreatorGuideError] = useState<string | null>(null);
+  const [showStartChoice, setShowStartChoice] = useState(false);
+  const [creatorRoute, setCreatorRoute] = useState<CreatorWorkspaceRoute | null>(null);
   const [pendingScreen, setPendingScreen] = useState<PendingTarget | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
   const [commandError, setCommandError] = useState<AppErrorDto | null>(null);
@@ -71,6 +87,43 @@ export const ProjectWorkspace = () => {
     selectedProjectId === null ? null : { projectId: selectedProjectId, scope: listScope },
   );
   const commands = useProjectCommands();
+
+  const refreshCreatorAction = async (): Promise<CreatorNextActionResultDto | null> => {
+    setCreatorGuidePending(true);
+    setCreatorGuideError(null);
+    try {
+      const result = await getCreatorGuideClient().getNextAction({ projectId: selectedProjectId });
+      if (!result.ok) {
+        setCreatorGuideError(result.error.userAction ?? '请稍后重试。');
+        return null;
+      }
+      setCreatorAction(result.data);
+      return result.data;
+    } catch {
+      setCreatorGuideError('请检查应用状态后重试。');
+      return null;
+    } finally {
+      setCreatorGuidePending(false);
+    }
+  };
+
+  useEffect(() => {
+    if (screen !== 'home') return;
+    // 只在回到首页或显式选择项目时刷新；点击主操作还会二次读取。
+    void getCreatorGuideClient()
+      .getNextAction({ projectId: selectedProjectId })
+      .then((result) => {
+        if (!result.ok) {
+          setCreatorGuideError(result.error.userAction ?? '请稍后重试。');
+          return;
+        }
+        setCreatorGuideError(null);
+        setCreatorAction(result.data);
+      })
+      .catch(() => {
+        setCreatorGuideError('请检查应用状态后重试。');
+      });
+  }, [screen, selectedProjectId]);
 
   useEffect(() => {
     const blockClose = (event: BeforeUnloadEvent): void => {
@@ -145,6 +198,23 @@ export const ProjectWorkspace = () => {
             : 'detail'
           : area;
     moveTo(target);
+  };
+
+  const continueEpisode = async (): Promise<void> => {
+    const latest = await refreshCreatorAction();
+    if (latest === null) return;
+    if (latest.projectId === null) {
+      setShowStartChoice(true);
+      return;
+    }
+    select(latest.projectId);
+    const route = routeForCreatorAction(latest);
+    if (route === null) {
+      setShowStartChoice(true);
+      return;
+    }
+    setCreatorRoute(route);
+    moveTo(route.screen);
   };
 
   const createProject = async (values: ProjectFormValues) => {
@@ -271,40 +341,22 @@ export const ProjectWorkspace = () => {
         )}
         {commandError !== null && <ProjectErrorBanner error={commandError} />}
         {screen === 'home' && (
-          <section className="home-dashboard">
-            <div className="hero-card">
-              <div>
-                <p className="eyebrow">从故事到成片</p>
-                <h2>按步骤完成你的下一部 AI 漫剧</h2>
-                <p>镜序会保留每个阶段的版本、锁定字段和失败证据，并在每一步告诉你接下来做什么。</p>
-              </div>
-              <button
-                onClick={() => {
-                  moveTo(selectedProjectId === null ? 'list' : 'detail');
-                }}
-                type="button"
-              >
-                {selectedProjectId === null ? '查看我的项目' : '继续当前项目'}
-              </button>
-            </div>
-            <div className="home-card-grid">
-              <article>
-                <span>01</span>
-                <h3>剧本开发</h3>
-                <p>从创意或已有剧本开始，逐阶段确认内容。</p>
-              </article>
-              <article>
-                <span>02</span>
-                <h3>分镜设计</h3>
-                <p>编辑镜头、管理锁定和检查可生产性。</p>
-              </article>
-              <article>
-                <span>03</span>
-                <h3>视频与导出</h3>
-                <p>选择候选、调整时间线并导出整集。</p>
-              </article>
-            </div>
-          </section>
+          <CreatorHome
+            action={creatorAction}
+            error={creatorGuideError}
+            onContinue={() => {
+              void continueEpisode();
+            }}
+            onCreate={() => {
+              setShowStartChoice(false);
+              moveTo('create');
+            }}
+            onRetry={() => {
+              void refreshCreatorAction();
+            }}
+            pending={creatorGuidePending}
+            showStartChoice={showStartChoice}
+          />
         )}
         {screen === 'assets' && (
           <ComingSoonPanel
@@ -486,6 +538,14 @@ export const ProjectWorkspace = () => {
                 </button>
               </div>
               <ScriptWorkspaceView
+                {...(creatorRoute !== null
+                  ? {
+                      ...(creatorRoute.mediaStep !== null
+                        ? { initialMediaStep: creatorRoute.mediaStep }
+                        : {}),
+                      initialStage: creatorRoute.stage,
+                    }
+                  : {})}
                 onCommitted={() => {
                   if (pendingScreen !== null) finishPendingNavigation();
                 }}

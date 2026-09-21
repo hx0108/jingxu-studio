@@ -133,6 +133,12 @@ export const projectErrorCodeSchema = z.enum([
   'EVALUATION_NOT_FOUND',
   'EVALUATION_DERIVE_NOT_READY',
   'EVALUATION_IMPORT_INVALID',
+  // 首次创作引导（simplify-first-run-creator-experience）。
+  'CREATOR_GUIDE_PROJECT_NOT_FOUND',
+  'CREATOR_GUIDE_SCOPE_STALE',
+  'DEMO_FIXTURE_INVALID',
+  'DEMO_INITIALIZATION_FAILED',
+  'PREPARATION_BLOCKED',
 ]);
 export type ProjectErrorCode = z.infer<typeof projectErrorCodeSchema>;
 

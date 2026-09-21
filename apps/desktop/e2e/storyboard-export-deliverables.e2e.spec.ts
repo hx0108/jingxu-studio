@@ -12,6 +12,8 @@ import {
   type Page,
 } from '@playwright/test';
 
+import { openProjectsList } from './support/app-navigation';
+
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
 const execFileAsync = promisify(execFile);
@@ -244,6 +246,7 @@ test('分镜交付物—Markdown 分镜表/可生产性报告/正脸长对白 WA
 
     // ---- UI 通路 v2：三入口并列，点「导出分镜表」→ 成功通知无路径。 ----
     await page.reload();
+    await openProjectsList(page);
     await openStoryboard(page, '分镜交付物闭环');
     await expect(page.locator('button[name="export-episode"]')).toBeVisible();
     await expect(page.locator('button[name="export-episode-report"]')).toBeVisible();
