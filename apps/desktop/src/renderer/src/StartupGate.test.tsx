@@ -107,7 +107,7 @@ describe('StartupGate', () => {
     );
 
     expect(markup).toContain('workspace-ready');
-    expect(markup).toContain('镜序 Studio');
+    expect(markup).toContain('AI漫剧 / 短剧创作平台');
     expect(markup).not.toContain('只读故障');
   });
 });

@@ -31,6 +31,11 @@ const SCHEMA_RESOURCE_DIRECTORY = path.join(
 let runtime: DesktopPersistenceRuntime | null = null;
 let root: string | null = null;
 
+const managedRoot = (): string => {
+  if (root === null) throw new Error('demo test root not initialized');
+  return path.join(root, 'managed');
+};
+
 const bootRuntime = async (): Promise<DesktopPersistenceRuntime> => {
   if (runtime !== null) return runtime;
   root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-demo-seed-'));
@@ -51,13 +56,16 @@ afterAll(async () => {
 describe('五分钟体验种子（3.3 集成·真实 SQLite 运行时）', () => {
   it('无凭据离线种子—五阶段与分镜全部 READY—项目标记 DEMO', async () => {
     const booted = await bootRuntime();
-    const seeder = createDemoSeeder({ persistenceRuntime: booted });
+    const seeder = createDemoSeeder({
+      managedRoot: managedRoot(),
+      persistenceRuntime: booted,
+    });
     const result = await seeder.seed('request_seed_it01');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.data).toMatchObject({ isDemo: true, resumed: false });
     const projectId = result.data.projectId;
-    expect(demoProjectRegistry.current()).toBe(projectId);
+    expect(demoProjectRegistry.has(projectId)).toBe(true);
 
     const workspace = await booted.getScriptWorkspaceQuery()?.getWorkspace(projectId);
     expect(workspace).not.toBeNull();
@@ -80,11 +88,20 @@ describe('五分钟体验种子（3.3 集成·真实 SQLite 运行时）', () =>
       repository.findById(projectId, 'ACTIVE'),
     );
     expect(demo?.experienceMode).toBe('DEMO');
+    const assets = await booted
+      .getMediaUnitOfWork()
+      ?.run(({ media }) => media.listAssets(projectId));
+    expect(
+      assets?.map((item) => `${item.asset.assetType}:${item.asset.bibleRefId}`).sort(),
+    ).toEqual(['CHARACTER:char_acheng', 'CHARACTER:char_zhouye', 'STYLE:project-style']);
   }, 60_000);
 
   it('再次种子—幂等恢复同一演示项目—不复制', async () => {
     const booted = await bootRuntime();
-    const seeder = createDemoSeeder({ persistenceRuntime: booted });
+    const seeder = createDemoSeeder({
+      managedRoot: managedRoot(),
+      persistenceRuntime: booted,
+    });
     const first = await seeder.seed('request_seed_it01');
     expect(first.ok).toBe(true);
     if (!first.ok) return;
@@ -97,7 +114,10 @@ describe('五分钟体验种子（3.3 集成·真实 SQLite 运行时）', () =>
 
   it('演示项目被移入回收站后—种子重新创建全新示例—登记指向新项目', async () => {
     const booted = await bootRuntime();
-    const seeder = createDemoSeeder({ persistenceRuntime: booted });
+    const seeder = createDemoSeeder({
+      managedRoot: managedRoot(),
+      persistenceRuntime: booted,
+    });
     const first = await seeder.seed('request_seed_it03');
     expect(first.ok).toBe(true);
     if (!first.ok) return;
@@ -116,6 +136,44 @@ describe('五分钟体验种子（3.3 集成·真实 SQLite 运行时）', () =>
     if (!second.ok) return;
     expect(second.data.resumed).toBe(false);
     expect(second.data.projectId).not.toBe(oldId);
-    expect(demoProjectRegistry.current()).toBe(second.data.projectId);
+    expect(demoProjectRegistry.has(second.data.projectId)).toBe(true);
+  }, 60_000);
+
+  it('半程阶段确认后故障—整项目与全部关联行回滚—同一 requestId 可安全重试', async () => {
+    const failureRoot = await mkdtemp(path.join(os.tmpdir(), 'jingxu-demo-rollback-'));
+    const managedRoot = path.join(failureRoot, 'managed');
+    const isolated = await createDesktopPersistenceRuntime({
+      clock: () => new Date().toISOString(),
+      managedRoot,
+      migrationDirectory: MIGRATION_DIRECTORY,
+      schemaResourceDirectory: SCHEMA_RESOURCE_DIRECTORY,
+    });
+    try {
+      const failed = await createDemoSeeder({
+        managedRoot,
+        onProgress: (event) =>
+          event === 'STAGE_READY:STORY_BIBLE'
+            ? Promise.reject(new Error('TEST_FAILURE_AFTER_STORY_BIBLE'))
+            : Promise.resolve(),
+        persistenceRuntime: isolated,
+      }).seed('request_seed_rollback');
+      expect(failed).toMatchObject({ ok: false, error: { code: 'DEMO_INITIALIZATION_FAILED' } });
+
+      const projects = isolated.getProjectUnitOfWork();
+      for (const scope of ['ACTIVE', 'DELETED'] as const) {
+        const page = await projects?.run(({ projects: repository }) =>
+          repository.listPage({ after: null, limit: 100, scope }),
+        );
+        expect(page?.items.some((item) => item.project.experienceMode === 'DEMO')).toBe(false);
+      }
+
+      const retried = await createDemoSeeder({ managedRoot, persistenceRuntime: isolated }).seed(
+        'request_seed_rollback',
+      );
+      expect(retried).toMatchObject({ ok: true, data: { resumed: false } });
+    } finally {
+      isolated.close();
+      await rm(failureRoot, { force: true, recursive: true });
+    }
   }, 60_000);
 });

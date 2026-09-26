@@ -39,10 +39,11 @@ const launch = async (
   });
 
 const openStoryboard = async (page: Page, name: string) => {
-  await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
   await page.locator('.project-card-main', { hasText: name }).click();
   await page.getByRole('button', { name: '进入剧本工作区' }).click();
-  await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
+  await page.locator('.creator-stage-progress').getByText('分镜设计', { exact: true }).click();
+  await expect(page.locator('.media-page-title')).toHaveText('分镜设计');
 };
 
 /** 经受限 image IPC 准备并选中首帧（Mock；不接触路径/数据库/Provider 原文）。 */
@@ -84,8 +85,8 @@ const prepareSelectedFirstFrames = async (
   );
 };
 
-test.describe('视频 Provider 设置与切换（low-cost 6.5）', () => {
-  test('设置卡三档可见 + Mock 醒目标记—保存当前档经 0023 持久化—重启后偏好保持且 Mock 任务不串线', async () => {
+test.describe('AGNES 视频 Provider 固定路由', () => {
+  test('设置页只展示 AGNES 视频服务—无 Seedance 切换入口—Mock 任务保持明确标识', async () => {
     test.setTimeout(420_000);
     const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-e2e-vpsel-t1-'));
     const managedRoot = path.join(root, 'managed');
@@ -98,45 +99,38 @@ test.describe('视频 Provider 设置与切换（low-cost 6.5）', () => {
       await openProjectsList(page);
       await openStoryboard(page, '视频偏好切换');
 
-      // 设置页：Mock 醒目标记 + 两家视频卡（Seedance / Agnes）。
-      await page.getByRole('button', { name: '设置', exact: true }).click();
-      await expect(page.getByText('联调模拟（Mock）')).toBeVisible();
-      await expect(page.getByText('零网络 Mock', { exact: false })).toBeVisible();
-      const seedanceCard = page.locator('details.model-service-card', {
-        has: page.locator('#video-provider-title-seedance'),
-      });
+      // 设置页：不暴露联调标记，只保留 AGNES 视频卡。
+      await page.getByRole('button', { name: '更多', exact: true }).click();
+      await page.getByRole('menuitem', { name: '设置', exact: true }).click();
+      await expect(page.getByText('联调模拟（Mock）')).toHaveCount(0);
+      await page.getByRole('button', { name: '管理', exact: true }).nth(2).click();
       const agnesCard = page.locator('details.model-service-card', {
         has: page.locator('#video-provider-title-agnes'),
       });
-      await expect(seedanceCard).toHaveCount(1);
       await expect(agnesCard).toHaveCount(1);
+      await expect(page.getByText('火山方舟视频服务', { exact: true })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: '设为当前视频档' })).toHaveCount(0);
       await agnesCard.locator('summary').click();
-      await expect(agnesCard).toContainText('Agnes Video 2.5 Flash');
-
-      // 保存当前视频档（Agnes）：偏好经 0023 单例落库，不触任何网络与凭据。
-      await agnesCard.getByRole('button', { name: '设为当前视频档' }).click();
-      await expect(agnesCard).toContainText('已设为当前视频档；重启应用后生效', {
-        timeout: 20_000,
-      });
-      await expect(agnesCard.locator('.model-current-provider-badge')).toHaveText('当前视频档');
+      await expect(agnesCard).toContainText('阿格尼斯视频 2.5 极速版');
+      await expect(agnesCard.locator('.model-current-provider-badge')).toHaveText('固定视频服务');
 
       // 回到工作台：Mock 链不受偏好影响——候选成功并带 6.4 模拟标识（零网络）。
       // 设置页不保留剧本区上下文，经项目列表重进剧本工作区。
-      await page.getByRole('button', { name: '我的项目' }).click();
+      await page.getByRole('button', { name: '我的作品' }).click();
       await openStoryboard(page, '视频偏好切换');
-      await page.getByRole('button', { name: '视频生成', exact: true }).click();
+      await page.locator('.creator-stage-progress').getByText('视频生成', { exact: true }).click();
       await page.locator('.shot-card', { hasText: '#1' }).click();
       const panel = page.locator('#video-panel');
       await panel.getByRole('button', { name: '生成视频候选' }).click();
       await expect(panel.getByText('视频任务状态：已完成')).toBeVisible({ timeout: 30_000 });
-      await expect(panel.getByText('Mock 模拟 · 不计费').first()).toBeVisible({
+      await expect(panel.getByText('模拟生成 · 不计费').first()).toBeVisible({
         timeout: 20_000,
       });
-      await expect(panel.getByText('来源 Seedance（模拟）').first()).toBeVisible({
+      await expect(panel.getByText('来源 阿格尼斯视频服务（模拟）').first()).toBeVisible({
         timeout: 20_000,
       });
 
-      // 重启（同一受管根）：偏好仍为 AGNES（0023 持久化），Mock 生成继续零网络成功。
+      // 重启（同一受管根）：API 缺省固定 AGNES，Mock 生成继续零网络成功。
       await application.close();
       const relaunched = await launch(managedRoot);
       try {
@@ -149,9 +143,15 @@ test.describe('视频 Provider 设置与切换（low-cost 6.5）', () => {
           if (!result.ok) throw new Error(result.error.code);
           return result.data;
         });
-        expect(selection).toMatchObject({ mode: 'AGNES' });
+        expect(selection).toMatchObject({
+          mode: 'AGNES',
+          providerProfileId: 'profile-video-agnes-primary',
+        });
         await openStoryboard(nextPage, '视频偏好切换');
-        await nextPage.getByRole('button', { name: '视频生成', exact: true }).click();
+        await nextPage
+          .locator('.creator-stage-progress')
+          .getByText('视频生成', { exact: true })
+          .click();
         await nextPage.locator('.shot-card', { hasText: '#1' }).click();
         const nextPanel = nextPage.locator('#video-panel');
         // 重启后新发起一轮 Mock 生成（偏好已 AGNES，但 Mock 链不受影响、零串线）。
@@ -159,11 +159,12 @@ test.describe('视频 Provider 设置与切换（low-cost 6.5）', () => {
         await expect(nextPanel.getByText('视频任务状态：已完成')).toBeVisible({
           timeout: 60_000,
         });
-        await expect(nextPanel.getByText('Mock 模拟 · 不计费').first()).toBeVisible();
+        await expect(nextPanel.getByText('模拟生成 · 不计费').first()).toBeVisible();
       } finally {
         await relaunched.close();
       }
     } finally {
+      await application.close().catch(() => undefined);
       await rm(root, { force: true, maxRetries: 10, recursive: true, retryDelay: 200 });
     }
   });
@@ -174,7 +175,7 @@ test.describe('视频 Provider 设置与切换（low-cost 6.5）', () => {
     // 仅视频特性关闭 Mock（main.ts E2E 逃生门）；图片/文本仍 Mock，全程零外网。
     const application = await launch(path.join(root, 'managed'), {
       JINGXU_E2E_VIDEO_REAL: '1',
-      JINGXU_VIDEO_PROVIDER: 'SEEDANCE',
+      JINGXU_VIDEO_PROVIDER: 'AGNES',
       JINGXU_VIDEO_REAL_PROVIDER: '1',
     });
     try {
@@ -184,21 +185,23 @@ test.describe('视频 Provider 设置与切换（low-cost 6.5）', () => {
       await page.reload();
       await openProjectsList(page);
       await openStoryboard(page, '视频真实档缺凭据');
-      await page.getByRole('button', { name: '视频生成', exact: true }).click();
+      await page.locator('.creator-stage-progress').getByText('视频生成', { exact: true }).click();
       await page.locator('.shot-card', { hasText: '#1' }).click();
       const panel = page.locator('#video-panel');
       await panel.getByRole('button', { name: '生成视频候选' }).click();
 
       // 稳定失败：指向视频配置入口的凭据错误（MODEL_CREDENTIAL_INVALID 的用户面
       // 文案）；绝不回退 Mock。
-      await expect(panel.locator('.field-error')).toContainText('API Key 校验未通过', {
+      await expect(panel.locator('.field-error')).toContainText('服务密钥校验未通过', {
         timeout: 30_000,
       });
-      await expect(panel.locator('.field-error')).toContainText('视频卡片中保存 ARK API Key');
+      await expect(panel.locator('.field-error')).toContainText(
+        '设置页的视频生成卡片中保存服务密钥',
+      );
       // 不生成任何模拟成功候选：无视频元素、无候选卡成功态。
       await expect(panel.locator('video')).toHaveCount(0);
       await expect(panel.locator('.candidate-card')).toHaveCount(0);
-      await expect(panel.getByText('Mock 模拟 · 不计费')).toHaveCount(0);
+      await expect(panel.getByText('模拟生成 · 不计费')).toHaveCount(0);
     } finally {
       await application.close();
       await rm(root, { force: true, maxRetries: 10, recursive: true, retryDelay: 200 });

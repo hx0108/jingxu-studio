@@ -232,9 +232,7 @@ export const createVoiceFeatureRegistration = ({
         steps: Array.from({ length: 128 }, () => ({ kind: 'SYNC' }) as const),
       });
       const synthesizeFor = (projectId: string | undefined): TtsModelPort =>
-        projectId !== undefined && demoProjectRegistry.current() === projectId
-          ? demoTtsModel
-          : ttsModel;
+        projectId !== undefined && demoProjectRegistry.has(projectId) ? demoTtsModel : ttsModel;
       const resolveCurrentModel = async (): Promise<Readonly<{ modelId: string }>> => {
         if (useE2eMock) return { modelId: DEFAULT_QWEN_TTS_MODEL_ID };
         const profile = await providerProfiles.findById(VOICE_CREDENTIAL_ID);
@@ -264,7 +262,8 @@ export const createVoiceFeatureRegistration = ({
         newId: randomUUID,
         registerAudio: (payload, projectId) => registrar.register(payload, projectId),
         repositories,
-        synthesize: (request, signal, projectId) => synthesizeFor(projectId).synthesize(request, signal),
+        synthesize: (request, signal, projectId) =>
+          synthesizeFor(projectId).synthesize(request, signal),
         normalizeError: (error) => ttsModel.normalizeError(error),
         workspaceQuery,
       });
@@ -277,7 +276,7 @@ export const createVoiceFeatureRegistration = ({
           ? {}
           : {
               assertCredentialReady: async (projectId) => {
-                if (demoProjectRegistry.current() === projectId) return;
+                if (demoProjectRegistry.has(projectId)) return;
                 await credentials.loadCredential(VOICE_CREDENTIAL_ID);
               },
             }),

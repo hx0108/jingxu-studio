@@ -257,7 +257,7 @@ describe('createJobProviderIpcService — 边界 Host', () => {
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('MODEL_CREDENTIAL_INVALID');
-    expect(result.error.userAction).toContain('API Key');
+    expect(result.error.userAction).toContain('服务密钥');
     // Provider 原始 detail 不得回显。
     expect(result.error.message).not.toContain('invalid api key');
     expect(result.error.traceId).toBe(TRACE_ID);
@@ -518,8 +518,8 @@ describe('createJobProviderIpcService — 图片档分发（image-credential-man
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('MODEL_CREDENTIAL_INVALID');
-    expect(result.error.message).toContain('密文无法解密');
-    expect(result.error.userAction).toContain('图片 Provider 设置');
+    expect(result.error.message).toContain('图片服务密钥无法解密读取');
+    expect(result.error.userAction).toContain('图片生成设置');
     // 存储层原因码不回显。
     expect(JSON.stringify(result)).not.toContain('CREDENTIAL_NOT_FOUND');
 
@@ -644,8 +644,8 @@ describe('createJobProviderIpcService — 视频档分发（shot-video-generatio
 
     expect(result.ok).toBe(false);
     expect(result.error.code).toBe('MODEL_CREDENTIAL_INVALID');
-    expect(result.error.message).toContain('密文无法解密');
-    expect(result.error.userAction).toContain('视频 Provider 设置');
+    expect(result.error.message).toContain('视频服务密钥无法解密读取');
+    expect(result.error.userAction).toContain('视频生成设置');
     // 存储层原因码不回显。
     expect(JSON.stringify(result)).not.toContain('CREDENTIAL_NOT_FOUND');
 
@@ -664,7 +664,7 @@ describe('createJobProviderIpcService — 视频档分发（shot-video-generatio
       PROVIDER_IPC_CHANNELS.testCredential,
       imageMutation,
     )) as { ok: false; error: { userAction: string | null } };
-    expect(imageResult.error.userAction).toContain('图片 Provider 设置');
+    expect(imageResult.error.userAction).toContain('图片生成设置');
   });
 });
 

@@ -17,6 +17,12 @@ export interface VideoTimelineVersionRecord extends VideoTimelineSummaryDto {
   readonly timelineId: string;
 }
 
+export interface VideoTimelineUpdateReceiptRecord {
+  readonly payloadSha256: string;
+  readonly projectId: string;
+  readonly timelineVersionId: string;
+}
+
 /**
  * 字幕轨的持久化形状：DTO 之外携带随版本冻结的样式快照 JSON（样式编辑器为
  * 非目标，恒为应用层默认样式常量；Renderer 只见 DTO 面）。
@@ -29,8 +35,15 @@ export interface VideoTimelineWriteTracks {
   /** 对齐记录随版本冻结（v2 D4）；由服务层按有效占用逐镜头计算，调用方不手填。 */
   readonly alignmentItems: readonly VideoTimelineAlignmentItemDto[];
   readonly audioVolume: number;
+  readonly bgmFadeInMs: number;
+  readonly bgmFadeOutMs: number;
+  readonly bgmMuted: boolean;
+  readonly bgmStartMs: number;
+  readonly bgmTrimInMs: number;
+  readonly bgmTrimOutMs: number | null;
   readonly subtitleItems: readonly VideoTimelineSubtitleItemInput[];
   readonly voiceItems: readonly VideoTimelineVoiceItemDto[];
+  readonly voiceTrackMuted: boolean;
 }
 
 export interface VideoAudioAssetRecord extends VideoAudioAssetSummaryDto {
@@ -63,6 +76,7 @@ export interface VideoCompositionRepository {
     episodeId: string,
     versionId: string | null,
   ): Promise<VideoTimelineVersionRecord | null>;
+  findTimelineUpdateReceipt(requestId: string): Promise<VideoTimelineUpdateReceiptRecord | null>;
   updateTimeline(
     input: {
       readonly audioAssetId: string | null;
@@ -70,11 +84,15 @@ export interface VideoCompositionRepository {
       readonly id: string;
       readonly inputHash: string;
       readonly items: readonly VideoTimelineItemDto[];
+      readonly payloadSha256: string;
       readonly projectId: string;
+      readonly requestId: string;
+      readonly traceId: string;
       readonly totalDurationMs: number;
     } & VideoTimelineWriteTracks,
   ): Promise<VideoTimelineVersionRecord>;
   findAudioAsset(projectId: string, assetId: string): Promise<VideoAudioAssetRecord | null>;
+  findAudioAssetById(assetId: string): Promise<VideoAudioAssetRecord | null>;
   findAudioAssetByHash(
     projectId: string,
     fileSha256: string,
@@ -102,6 +120,16 @@ export interface VideoCompositionRepository {
     projectId: string,
     requestId: string,
   ): Promise<VideoExportJobRecord | null>;
+  /** 首页续作只读投影：读取本集最近一次成功导出，不暴露文件路径。 */
+  findLatestSucceededExport(
+    projectId: string,
+    episodeId: string,
+  ): Promise<VideoExportJobRecord | null>;
+  listExports(
+    projectId: string,
+    episodeId: string,
+    limit: number,
+  ): Promise<readonly VideoExportJobRecord[]>;
   updateExportStatus(
     exportJobId: string,
     status: VideoExportStatus,

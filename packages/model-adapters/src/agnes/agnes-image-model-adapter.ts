@@ -203,7 +203,11 @@ export class AgnesImageModelAdapter implements ImageModelPort {
       });
       // 先读体再判错：非 2xx 的原始 body 是限流/风控复盘唯一证据。
       const { bodyText, truncated } = await readBodyCapped(response);
-      const raw: ImageRawResponse = Object.freeze({ bodyText, httpStatus: response.status, truncated });
+      const raw: ImageRawResponse = Object.freeze({
+        bodyText,
+        httpStatus: response.status,
+        truncated,
+      });
       if (!response.ok) {
         throw new AgnesImageAdapterError(this.#normalizeStatus(response.status), raw);
       }
@@ -255,7 +259,9 @@ export class AgnesImageModelAdapter implements ImageModelPort {
     try {
       parsed = new URL(resultRef.url);
     } catch {
-      throw new AgnesImageAdapterError(normalized('MODEL_RESULT_UNAVAILABLE', false, '重新生成候选'));
+      throw new AgnesImageAdapterError(
+        normalized('MODEL_RESULT_UNAVAILABLE', false, '重新生成候选'),
+      );
     }
     if (
       parsed.protocol !== 'https:' ||
@@ -263,7 +269,9 @@ export class AgnesImageModelAdapter implements ImageModelPort {
       parsed.password !== '' ||
       !hasAllowedDownloadDomain(parsed.hostname)
     ) {
-      throw new AgnesImageAdapterError(normalized('MODEL_RESULT_UNAVAILABLE', false, '重新生成候选'));
+      throw new AgnesImageAdapterError(
+        normalized('MODEL_RESULT_UNAVAILABLE', false, '重新生成候选'),
+      );
     }
     try {
       const response = await this.#fetch(parsed.toString(), {
@@ -282,7 +290,9 @@ export class AgnesImageModelAdapter implements ImageModelPort {
       const bytes = new Uint8Array(await response.arrayBuffer());
       const sniffed = sniffImageMime(bytes);
       if (sniffed === null) {
-        throw new AgnesImageAdapterError(normalized('MODEL_INVALID_RESPONSE', false, '重新生成候选'));
+        throw new AgnesImageAdapterError(
+          normalized('MODEL_INVALID_RESPONSE', false, '重新生成候选'),
+        );
       }
       return { bytes, mimeType: sniffed };
     } catch (error) {

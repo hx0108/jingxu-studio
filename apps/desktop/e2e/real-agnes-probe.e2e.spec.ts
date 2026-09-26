@@ -7,11 +7,13 @@ import { _electron as electron, test, type ElectronApplication } from '@playwrig
 // 临时调试探针：仅 Agnes 档 saveCredential→testCredential，捕获主进程 stderr。
 const desktopRoot = path.resolve(__dirname, '..');
 const agnesKeyFile = process.env.JINGXU_AGNES_KEY_FILE ?? '';
+const useStoredCredentials = process.env.JINGXU_USE_STORED_CREDENTIALS === '1';
 
 test('Agnes 腿调试', async () => {
   test.setTimeout(120_000);
-  test.skip(agnesKeyFile === '', '需要 key 文件');
-  const apiKey = (await readFile(agnesKeyFile, 'utf8')).replace(/\s+/g, '');
+  test.skip(!useStoredCredentials && agnesKeyFile === '', '需要已保存 AGNES 凭据或 key 文件');
+  const apiKey =
+    agnesKeyFile === '' ? '' : (await readFile(agnesKeyFile, 'utf8')).replace(/\s+/g, '');
   const isolatedData = await mkdtemp(path.join(os.tmpdir(), 'jingxu-agnes-dbg-'));
   test.setTimeout(120_000);
   let application: ElectronApplication | undefined;
@@ -45,13 +47,17 @@ test('Agnes 腿调试', async () => {
           profileId: 'profile-video-agnes-primary',
         });
         if (!profile.ok) return `getProfile:${profile.error.code}`;
-        const saved = await window.jingxu.provider.saveCredential({
-          apiKey: key,
-          expectedVersionId: profile.data.versionId,
-          profileId: 'profile-video-agnes-primary',
-          requestId: requestId('key'),
-        });
+        const saved =
+          key === ''
+            ? profile
+            : await window.jingxu.provider.saveCredential({
+                apiKey: key,
+                expectedVersionId: profile.data.versionId,
+                profileId: 'profile-video-agnes-primary',
+                requestId: requestId('key'),
+              });
         if (!saved.ok) return `saveCredential:${saved.error.code}`;
+        if (!saved.data.configured) return 'credential:not-configured';
         const tested = await window.jingxu.provider.testCredential({
           expectedVersionId: saved.data.versionId,
           profileId: 'profile-video-agnes-primary',

@@ -7,8 +7,8 @@ import path from 'node:path';
 import { _electron as electron, test, type ElectronApplication } from '@playwright/test';
 
 // 真实全链探针（low-cost 收尾后端到端实地验证；临时文件，测完删除）：
-// 剧本（真 Qwen 六阶段）→ 画风/角色参考上传（预检驱动）→ 首帧（真 Seedream）→
-// 切 Agnes 档生成视频（真 Adapter）→ 人工选择 → 时间线 → FFmpeg 导出 MP4。
+// 剧本（真 Qwen 六阶段）→ 画风/角色参考上传（预检驱动）→ 首帧（真 AGNES Image）→
+// AGNES Video 生成视频（真 Adapter）→ 人工选择 → 时间线 → FFmpeg 导出 MP4。
 // - 不设 JINGXU_E2E → 全部真实 Adapter
 // - LOCALAPPDATA 覆盖到临时目录 = 隔离数据根（fresh DB 自动迁移 head 24，不触真库）
 // - 门控：JINGXU_REAL_FULL_CHAIN=1 且三把 Key 文件齐备才运行；否则 skip 零网络
@@ -22,13 +22,13 @@ const ffmpegDirectory = path.join(desktopRoot, 'resources', 'ffmpeg');
 const readKey = async (file: string): Promise<string> =>
   file === '' ? '' : (await readFile(file, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
 
-/** 512×512 纯色 PNG（参考图资产占位；真实生成为 Seedream 输出）。 */
+/** 512×512 纯色 PNG（参考图资产占位；真实生成为 AGNES Image 输出）。 */
 const REFERENCE_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAHIElEQVR4nO3VMQ0AMAzAsKEbnGEq1MHoEUsGkC/nvgEg6KwXALDCAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAAKIMACDKAACiDAAgygAAogwAIMoAGCaPqfBT7EgPK29AAAAAElFTkSuQmCC';
 
 test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
   test.setTimeout(1_800_000);
-  test.skip(!gated, '需要 JINGXU_REAL_FULL_CHAIN=1；未配置的 Provider 将在剧本前置失败');
+  test.skip(!gated, '需要 JINGXU_REAL_FULL_CHAIN=1；未配置的 Provider 将在前置检查失败');
   const qwenKey = await readKey(qwenKeyFile);
   const agnesKey = await readKey(agnesKeyFile);
   const isolatedData = await mkdtemp(path.join(os.tmpdir(), 'jingxu-full-chain-'));
@@ -101,7 +101,7 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
         if (agnesError !== null) return { step: 'agnes-provider', errorCode: agnesError };
         steps.push({ step: 'providers-configured' });
 
-        // 当前视频档 → AGNES（0023 单例：先取 updatedAt 再 CAS 保存）
+        // 固定视频服务为 AGNES；兼容 API 仍以 CAS 保存相同值，验证不会回退旧 Provider。
         const current = await window.jingxu.provider.getVideoProviderSelection({
           requestId: requestId('selection-get'),
         });
@@ -127,7 +127,8 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
         if (!created.ok) return { step: 'project.create', errorCode: created.error.code };
         const projectId = created.data.id;
         const initialized = await window.jingxu.script.initializeOriginal({
-          creativeText: '一名失忆侦探在午夜列车醒来，必须在终点前找出偷走所有乘客记忆的人。',
+          creativeText:
+            '一名年轻列车员在山间慢车上帮助旅客寻找遗失的旅行手账，并在日落前完成归还。',
           dataProcessingConsent: true,
           projectId,
           requestId: requestId('initialize'),
@@ -348,7 +349,7 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
           };
         steps.push({ step: 'consistency-ready' });
 
-        // ── E. 首帧：真 Seedream 逐镜头生成并选择 ─────────────────────────────
+        // ── E. 首帧：真 AGNES Image 逐镜头生成并选择 ────────────────────────
         const firstFrameByShot = new Map<string, string>();
         for (const shotId of shotIds) {
           const generated = await window.jingxu.image.generateCandidates({
@@ -519,7 +520,10 @@ test('真实全链——剧本→首帧→视频→导出 MP4', async () => {
     );
     console.log(`REAL_FULL_CHAIN_RESULT ${JSON.stringify(result)}`);
     const ok = result as { exportFileSha256?: string; mediaUrl?: string | null };
-    if (ok.exportFileSha256 !== undefined && ok.mediaUrl != null) {
+    if (ok.exportFileSha256 === undefined || ok.mediaUrl == null) {
+      throw new Error(`REAL_FULL_CHAIN_INCOMPLETE ${JSON.stringify(result)}`);
+    }
+    {
       const effectiveRoot = process.env.JINGXU_DATA_ROOT_OVERRIDE ?? isolatedData;
       const managedRoot = path.join(effectiveRoot, 'JingxuStudio');
       const artifacts = path.resolve(__dirname, '../../../..', 'jingxu-tools');

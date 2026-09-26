@@ -19,7 +19,8 @@ export const AGNES_IMAGE_PROFILE_ID = 'profile-image-agnes-primary' as const;
 export const AGNES_IMAGE_SNAPSHOT_DATE = '2026-09-21' as const;
 
 /** API 域为固定常量（无 Workspace 拼接，SSRF 面收敛）。 */
-export const AGNES_IMAGE_GENERATIONS_URL = 'https://apihub.agnes-ai.com/v1/images/generations' as const;
+export const AGNES_IMAGE_GENERATIONS_URL =
+  'https://apihub.agnes-ai.com/v1/images/generations' as const;
 
 /** 官方建议客户端超时 60–360s（4K/复杂提示词取上限）。 */
 export const AGNES_IMAGE_INVOCATION_TIMEOUT_MS = 360_000;

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   findEditableSystemFields,
+  createStableBusinessKey,
+  parseAdvancedStageData,
   pointerToStageFieldId,
+  serializeStageData,
   STAGE_FIELD_COVERAGE,
 } from './stage-form-contract';
 
@@ -21,6 +24,31 @@ describe('五阶段结构化表单契约', () => {
     expect(STAGE_FIELD_COVERAGE.BEAT_SHEET).toHaveLength(5);
     expect(STAGE_FIELD_COVERAGE.SCENE_SCRIPT).toHaveLength(9);
     expect(Object.values(STAGE_FIELD_COVERAGE).flat()).not.toContain('project_id');
+  });
+
+  it('表单数据进入高级编辑再返回—合法对象无损 round-trip—系统字段被拒绝', () => {
+    const data = {
+      core_conflict: '冲突',
+      genre: '悬疑',
+      synopsis: '故事梗概',
+      target_audience: '青年',
+      theme: '选择',
+      title: '标题',
+    };
+    expect(parseAdvancedStageData(serializeStageData(data))).toEqual({ data, ok: true });
+    expect(parseAdvancedStageData('{"project_id":"project_hidden"}')).toEqual({
+      message: '不能编辑系统字段：project_id',
+      ok: false,
+    });
+    expect(parseAdvancedStageData('{')).toEqual({
+      message: '高级内容格式无效，请修正后再返回表单。',
+      ok: false,
+    });
+  });
+
+  it('重复项新增—按业务前缀生成稳定键—不复用已有键或数组位置', () => {
+    expect(createStableBusinessKey('char', ['char_001', 'char_003'])).toBe('char_002');
+    expect(createStableBusinessKey('script_scene', [])).toBe('script_scene_001');
   });
 
   it('JSON Pointer—角色键和数组下标稳定映射到中文控件字段', () => {

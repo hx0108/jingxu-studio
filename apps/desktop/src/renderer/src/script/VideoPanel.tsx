@@ -12,6 +12,7 @@ import type {
 
 import { describeProjectError } from '../project/project-error';
 import { workspaceStatusLabel } from '../ui/workspace-status';
+import { PROTOTYPE_ASSETS, prototypeAssetAt } from '../assets/prototype/prototype-assets';
 import { candidateImageSrc, isTerminalMediaTaskPhase } from './first-frame-policy';
 import {
   candidateVideoSrc,
@@ -29,21 +30,38 @@ import { shotVideoGenerationBusy } from './storyboard-video-state-policy';
 
 /** Provider 来源显示名（low-cost 6.4）：枚举之外的端点/模型事实不进 Renderer。 */
 const VIDEO_PROVIDER_LABELS: Record<'AGNES_VIDEO' | 'VOLCARK_SEEDANCE', string> = {
-  AGNES_VIDEO: 'Agnes',
-  VOLCARK_SEEDANCE: 'Seedance',
+  AGNES_VIDEO: '阿格尼斯视频服务',
+  VOLCARK_SEEDANCE: '豆包视频服务',
 };
 
 /** 视频候选比较板：当前输入世代可选择，STALE 世代仅供播放追溯。 */
 export interface VideoBoardProps {
   readonly busy: boolean;
   readonly candidates: readonly VideoCandidateViewDto[];
+  readonly isDemo?: boolean;
   readonly onSelect: (candidate: VideoCandidateViewDto) => void;
   readonly pendingCandidateId: string | null;
 }
 
-export const VideoBoard = ({ busy, candidates, onSelect, pendingCandidateId }: VideoBoardProps) => {
+export const VideoBoard = ({
+  busy,
+  candidates,
+  isDemo = false,
+  onSelect,
+  pendingCandidateId,
+}: VideoBoardProps) => {
   const groups = groupVideoCandidatesByGeneration(candidates);
-  if (candidates.length === 0) return <p className="action-hint">该镜头尚未生成视频候选。</p>;
+  if (candidates.length === 0)
+    return (
+      <section className="prototype-empty-candidates" aria-label="候选视频展示位置">
+        <p className="action-hint">该镜头尚未生成视频候选。生成后可在这里逐个预览并选择。</p>
+        <div aria-hidden="true" className="prototype-candidate-strip">
+          {PROTOTYPE_ASSETS.candidates.map((src, index) => (
+            <img alt="" key={src} src={src} style={{ opacity: 0.34 + index * 0.08 }} />
+          ))}
+        </div>
+      </section>
+    );
   return (
     <>
       {groups.map((group) => (
@@ -62,7 +80,7 @@ export const VideoBoard = ({ busy, candidates, onSelect, pendingCandidateId }: V
             {group.rounds.map((round) => String(round)).join('、')} 轮
           </h4>
           <ul className="candidate-grid">
-            {group.candidates.map((candidate) => {
+            {group.candidates.map((candidate, candidateIndex) => {
               const videoSrc = candidateVideoSrc(candidate);
               const selectable = !group.stale && isSelectableVideoCandidate(candidate);
               return (
@@ -76,6 +94,14 @@ export const VideoBoard = ({ busy, candidates, onSelect, pendingCandidateId }: V
                     <video
                       aria-label={`候选 ${candidate.id} 视频段`}
                       controls
+                      poster={
+                        isDemo
+                          ? prototypeAssetAt(
+                              PROTOTYPE_ASSETS.candidates,
+                              candidateIndex % PROTOTYPE_ASSETS.candidates.length,
+                            )
+                          : undefined
+                      }
                       preload="metadata"
                       src={videoSrc}
                     />
@@ -86,9 +112,7 @@ export const VideoBoard = ({ busy, candidates, onSelect, pendingCandidateId }: V
                       ? ' · 生成失败'
                       : ''}
                   </span>
-                  {candidate.isMock && (
-                    <span className="mock-source-badge">Mock 模拟 · 不计费</span>
-                  )}
+                  {candidate.isMock && <span className="mock-source-badge">模拟生成 · 不计费</span>}
                   <small>
                     第 {String(candidate.roundNo)} 轮 · 候选 {String(candidate.indexInRound + 1)} ·
                     请求 {String(candidate.requestedDurationSec)}s · 实际{' '}
@@ -128,6 +152,7 @@ export const VideoBoard = ({ busy, candidates, onSelect, pendingCandidateId }: V
 };
 
 export interface VideoPanelProps {
+  readonly isDemo?: boolean;
   readonly projectId: string;
   readonly shot: StoryboardShotSummaryDto;
   readonly storyboardStatus: StoryboardVersionSummaryDto['status'] | null;
@@ -138,7 +163,13 @@ export interface VideoPanelProps {
  * 逐镜头视频面板：仅将已选首帧作为图生视频输入锚点；首帧与视频均使用
  * jingxu://media 受限 URL，Renderer 不取得路径、mp4 字节或 Provider 原始响应。
  */
-export const VideoPanel = ({ projectId, shot, storyboardStatus, videoState }: VideoPanelProps) => {
+export const VideoPanel = ({
+  isDemo = false,
+  projectId,
+  shot,
+  storyboardStatus,
+  videoState,
+}: VideoPanelProps) => {
   const [candidates, setCandidates] = useState<readonly VideoCandidateViewDto[] | null>(null);
   const [selectedFirstFrame, setSelectedFirstFrame] = useState<ImageCandidateViewDto | null>(null);
   const [task, setTask] = useState<MediaTaskViewDto | null>(null);
@@ -278,12 +309,85 @@ export const VideoPanel = ({ projectId, shot, storyboardStatus, videoState }: Vi
     task?.providerKind == null
       ? null
       : `视频任务运行中 · 来源 ${VIDEO_PROVIDER_LABELS[task.providerKind]}${
-          task.isMock === true ? ' · Mock 模拟（不计费）' : ''
+          task.isMock === true ? ' · 模拟生成（不计费）' : ''
         }`;
+  const selectedVideo = candidates?.find(
+    (candidate) => candidate.selectedAt !== null && candidateVideoSrc(candidate) !== null,
+  );
+  const selectedVideoSrc = selectedVideo === undefined ? null : candidateVideoSrc(selectedVideo);
+  const asObject = (value: unknown): Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const constraints = asObject(shot.document.generation_constraints);
+  const content = asObject(shot.document.content);
+  const videoRequirement =
+    typeof constraints.video_prompt === 'string' ? constraints.video_prompt : shot.narrativePurpose;
+  const action = typeof content.action === 'string' ? content.action : shot.narrativePurpose;
+  const demoReference = isDemo
+    ? shot.sequence === 2
+      ? PROTOTYPE_ASSETS.heroineMain
+      : (prototypeAssetAt(PROTOTYPE_ASSETS.shots, shot.sequence - 1) ?? null)
+    : null;
+  const candidateBoard =
+    candidates === null ? (
+      <p aria-live="polite">正在加载视频候选…</p>
+    ) : (
+      <VideoBoard
+        busy={taskActive}
+        candidates={candidates}
+        isDemo={isDemo}
+        onSelect={select}
+        pendingCandidateId={pendingCandidateId}
+      />
+    );
 
   return (
     <section aria-labelledby="video-panel-title" className="video-panel" id="video-panel">
       <h3 id="video-panel-title">视频候选 · 镜头 #{String(shot.sequence)}</h3>
+      <div className="video-panel-hero">
+        <div className="video-panel-preview-stack">
+          <div className="video-panel-preview">
+            {demoReference !== null ? (
+              <img alt="演示视频封面" src={demoReference} />
+            ) : selectedVideoSrc !== null ? (
+              <video
+                aria-label="当前已选视频候选"
+                controls
+                preload="metadata"
+                src={selectedVideoSrc}
+              />
+            ) : (
+              <p className="candidate-placeholder">尚无可预览的视频候选</p>
+            )}
+            <p>
+              {demoReference !== null
+                ? '演示视频封面 · 实际模拟候选可播放和追溯'
+                : selectedVideoSrc !== null
+                  ? '当前已选视频候选'
+                  : '生成视频后可在这里预览'}
+            </p>
+          </div>
+          <div className="media-candidate-strip">{candidateBoard}</div>
+        </div>
+        <section aria-label="动态要求" className="video-panel-requirements">
+          <h3>动态要求</h3>
+          <dl>
+            <div>
+              <dt>人物与动作</dt>
+              <dd>{action}</dd>
+            </div>
+            <div>
+              <dt>镜头运动</dt>
+              <dd>{videoRequirement}</dd>
+            </div>
+            <div>
+              <dt>目标时长</dt>
+              <dd>{String(shot.targetDurationSec)} 秒</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
       {taskSourceLine !== null && taskActive && (
         <p aria-live="polite" className="action-hint">
           {taskSourceLine}
@@ -319,16 +423,6 @@ export const VideoPanel = ({ projectId, shot, storyboardStatus, videoState }: Vi
           <summary>查看失败详情</summary>
           <code>{task.errorCode}</code>
         </details>
-      )}
-      {candidates === null ? (
-        <p aria-live="polite">正在加载视频候选…</p>
-      ) : (
-        <VideoBoard
-          busy={taskActive}
-          candidates={candidates}
-          onSelect={select}
-          pendingCandidateId={pendingCandidateId}
-        />
       )}
     </section>
   );

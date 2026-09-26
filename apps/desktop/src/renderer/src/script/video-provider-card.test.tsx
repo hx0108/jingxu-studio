@@ -49,9 +49,10 @@ describe('VideoProviderCardView（shot-video-generation 4.4）', () => {
   it('已配置—三个受限模型可见—Key 输入不回显任何已保存值', () => {
     const html = render();
     expect(html).toContain('已配置（末四位 8888）');
-    expect(html).toContain('Seedance-2.0-mini');
-    expect(html).toContain('Seedance-2.0');
-    expect(html).toContain('Seedance-2.5');
+    expect(html).toContain('豆包视频 2.0 轻量版');
+    expect(html).toContain('豆包视频 2.0');
+    expect(html).toContain('豆包视频 2.5');
+    expect(html).toContain('value="doubao-seedance-2-0-mini-260615"');
     expect(html).not.toContain('value="ark');
   });
 
@@ -68,7 +69,7 @@ describe('VideoProviderCardView（shot-video-generation 4.4）', () => {
   it('首次读取 Profile 失败—仍允许选择模型并保存输入的 Key', () => {
     const html = render({ apiKey: 'ark-secret', profile: null });
 
-    expect(html).toContain('Seedance-2.5');
+    expect(html).toContain('豆包视频 2.5');
     expect(html).not.toContain('<select disabled=""');
     // 测试/删除没有已保存密文时仍禁用；模型和凭据的首次保存必须可用。
     expect(html.match(/disabled=""/gu)).toHaveLength(2);
@@ -104,11 +105,10 @@ describe('VideoProviderCardView（shot-video-generation 4.4）', () => {
 describe('VideoProviderCardView—Agnes 低价档（low-cost 6.3）', () => {
   it('两档受限模型可见—徽标仅当前档显示—免费/限流提示在卡内', () => {
     const html = render({ variant: AGNES_VIDEO_CARD_VARIANT, modelId: 'agnes-video-v2.0' });
-    expect(html).toContain('Agnes Video V2.0');
-    expect(html).toContain('Agnes Video 2.5 Flash');
-    expect(html).toContain('Agnes AI');
-    expect(html).toContain('$0/秒');
-    expect(html).toContain('每分钟限 1 个任务');
+    expect(html).toContain('阿格尼斯视频 2.0');
+    expect(html).toContain('阿格尼斯视频 2.5 极速版');
+    expect(html).toContain('免费档与限流口径以服务商公告为准');
+    expect(html).not.toContain('$0/秒');
     expect(html).not.toContain('model-current-provider-badge');
   });
 
@@ -128,13 +128,13 @@ describe('VideoProviderCardView—Agnes 低价档（low-cost 6.3）', () => {
   });
 });
 
-describe('Mock 标记（low-cost 6.3）', () => {
-  it('Mock 醒目标记—声明零网络/不计费/不读密钥且不可在页面选择', () => {
+describe('联调模拟标记（low-cost 6.3）', () => {
+  it('联调模拟提示—声明零网络/不计费/不读密钥且不可在页面选择', () => {
     const html = renderToStaticMarkup(<MockVideoNotice />);
-    expect(html).toContain('联调模拟（Mock）');
-    expect(html).toContain('零网络 Mock');
+    expect(html).toContain('联调模拟');
+    expect(html).toContain('本地模拟');
     expect(html).toContain('不计费');
     expect(html).toContain('不能在此页面选择或关闭');
-    expect(html).toContain('JINGXU_VIDEO_PROVIDER=MOCK');
+    expect(html).not.toContain('MOCK');
   });
 });

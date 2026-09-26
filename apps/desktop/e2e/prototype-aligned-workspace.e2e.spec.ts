@@ -44,9 +44,9 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
     await page.getByRole('checkbox').check();
     await page.getByRole('button', { name: '创建剧本工作区' }).click();
 
-    await expect(page.locator('.guided-workspace')).toBeVisible();
-    await expect(page.getByText('六阶段创作流程')).toBeVisible();
-    await expect(page.locator('.production-phase')).toHaveCount(6);
+    await expect(page.locator('.creator-workspace-page')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '创作故事梗概' })).toBeVisible();
+    await expect(page.locator('nav[aria-label="六步创作流程"] > button')).toHaveCount(6);
     await page.setViewportSize({ height: 1064, width: 1728 });
     await page.waitForTimeout(500);
     const metrics = await page.evaluate(() => {
@@ -61,26 +61,21 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
         return getComputedStyle(element).fontSize;
       };
       return {
-        flowWidth: Math.round(rect('.workspace-flow').width),
+        creatorBarWidth: Math.round(rect('.creator-stage-bar').width),
+        creatorPageWidth: Math.round(rect('.creator-workspace-page').width),
+        globalNavigationVisible:
+          getComputedStyle(document.querySelector('.global-navigation') ?? document.body)
+            .display !== 'none',
         inspectorFontSize: fontSize('.workspace-inspector'),
         inspectorWidth: Math.round(rect('.workspace-inspector').width),
-        navFontSize: fontSize('.global-nav-item'),
-        pillBorderRadius: getComputedStyle(document.querySelector('.status-pill') ?? document.body)
-          .borderRadius,
-        sidebarWidth: Math.round(rect('.global-sidebar').width),
-        topbarText: document.querySelector('.workspace-topbar')?.textContent ?? '',
+        stageCount: document.querySelectorAll('nav[aria-label="六步创作流程"] > button').length,
       };
     });
-    expect(metrics).toMatchObject({
-      flowWidth: 264,
-      inspectorFontSize: '13px',
-      inspectorWidth: 360,
-      navFontSize: '13px',
-      pillBorderRadius: '0px',
-      sidebarWidth: 208,
-    });
-    expect(metrics.topbarText).not.toContain('项目进度自动保存');
-    expect(metrics.topbarText).not.toContain('最近保存于刚刚');
+    expect(metrics.creatorBarWidth).toBe(metrics.creatorPageWidth);
+    expect(metrics.globalNavigationVisible).toBe(false);
+    expect(metrics.inspectorFontSize).toBe('13px');
+    expect(metrics.inspectorWidth).toBeGreaterThanOrEqual(280);
+    expect(metrics.stageCount).toBe(6);
     await expect
       .poll(() => page.evaluate(() => ({ height: innerHeight, width: innerWidth })))
       .toEqual({ height: 1064, width: 1728 });
@@ -88,11 +83,14 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
       path: testInfo.outputPath('implementation-script.png'),
     });
 
-    await page.getByRole('button', { name: '设置', exact: true }).click({ force: true });
-    await expect(page.getByRole('heading', { name: '模型服务', exact: true })).toBeVisible();
+    await page.locator('.creator-more-button').click();
+    await page.getByRole('menuitem', { name: '设置', exact: true }).click();
+    await expect(page.getByRole('heading', { name: '设置', exact: true })).toBeVisible();
+    await expect(page.locator('.approved-service-list article')).toHaveCount(4);
+    await page.locator('.approved-service-details > summary').click();
     await expect(page.locator('.model-service-card')).toHaveCount(5);
     const settingsMetrics = await page.evaluate(() => {
-      const pageElement = document.querySelector('.model-services-page');
+      const pageElement = document.querySelector('.approved-settings-page');
       const status = document.querySelector('.model-configuration-status');
       if (!(pageElement instanceof HTMLElement) || !(status instanceof HTMLElement)) {
         throw new Error('missing model service layout');
@@ -105,11 +103,9 @@ test('批准原型布局—真实创作工作区与模型服务保持可读三�
         statusMarkWidth: getComputedStyle(status, '::before').width,
       };
     });
-    expect(settingsMetrics).toMatchObject({
-      contentLeft: 208,
-      statusBorder: 'none',
-      statusMarkWidth: '6px',
-    });
+    expect(settingsMetrics.contentLeft).toBeGreaterThan(0);
+    expect(settingsMetrics.statusBorder).toBe('none');
+    expect(settingsMetrics.statusMarkWidth).toBe('6px');
     await page.screenshot({
       path: testInfo.outputPath('implementation-settings.png'),
     });

@@ -119,6 +119,16 @@ export interface AudioGraphVoiceSpec {
   readonly volume: number;
 }
 
+export interface AudioGraphMusicSpec {
+  readonly inputIndex: number;
+  readonly volume: number;
+  readonly startMs?: number | undefined;
+  readonly trimInMs?: number | undefined;
+  readonly trimOutMs?: number | null | undefined;
+  readonly fadeInMs?: number | undefined;
+  readonly fadeOutMs?: number | undefined;
+}
+
 /**
  * 滤镜图路径的混音段（v2 §6.1）：源音轨按镜头起点定位 + N 路配音（adelay 偏移）
  * + BGM（音量/结尾淡出数据化）→ amix(normalize=0)。防削波上限与总时长封顶在
@@ -131,7 +141,7 @@ export const buildAudioFilterGraph = ({
   sourceAudios,
   voices,
 }: {
-  readonly backgroundMusic: Readonly<{ inputIndex: number; volume: number }> | null;
+  readonly backgroundMusic: Readonly<AudioGraphMusicSpec> | null;
   readonly durationSec: number;
   readonly fadeOutSec?: number | undefined;
   readonly sourceAudios: readonly Readonly<{ inputIndex: number; startMs: number }>[];
@@ -161,8 +171,28 @@ export const buildAudioFilterGraph = ({
   }
   if (backgroundMusic !== null) {
     const [name, label] = mixLabel();
+    const startMs = backgroundMusic.startMs ?? 0;
+    const trimInMs = backgroundMusic.trimInMs ?? 0;
+    const fadeInMs = backgroundMusic.fadeInMs ?? 0;
+    const fadeOutMs = backgroundMusic.fadeOutMs ?? Math.round(fadeOutSec * 1000);
+    const availableMs =
+      backgroundMusic.trimOutMs === null || backgroundMusic.trimOutMs === undefined
+        ? Math.max(0, Math.round(durationSec * 1000) - startMs)
+        : backgroundMusic.trimOutMs - trimInMs;
+    const trimmed =
+      backgroundMusic.trimOutMs === null || backgroundMusic.trimOutMs === undefined
+        ? trimInMs > 0
+          ? `,atrim=start=${seconds(trimInMs)},asetpts=PTS-STARTPTS`
+          : ''
+        : `,atrim=start=${seconds(trimInMs)}:end=${seconds(backgroundMusic.trimOutMs)},asetpts=PTS-STARTPTS`;
+    const fadeIn = fadeInMs > 0 ? `,afade=t=in:st=0:d=${seconds(fadeInMs)}` : '';
+    const fadeOut =
+      fadeOutMs > 0
+        ? `,afade=t=out:st=${seconds(Math.max(0, availableMs - fadeOutMs))}:d=${seconds(fadeOutMs)}`
+        : '';
+    const delay = startMs > 0 ? `,adelay=${String(startMs)}:all=1` : '';
     chains.push(
-      `[${String(backgroundMusic.inputIndex)}:a]${MIX_INPUT_HEAD},volume=${backgroundMusic.volume.toFixed(2)},afade=t=out:st=${Math.max(0, durationSec - fadeOutSec).toFixed(3)}:d=${fadeOutSec.toFixed(3)},atrim=duration=${durationSec.toFixed(3)}[${name}]`,
+      `[${String(backgroundMusic.inputIndex)}:a]${MIX_INPUT_HEAD}${trimmed},volume=${backgroundMusic.volume.toFixed(2)}${fadeIn}${fadeOut}${delay},atrim=duration=${durationSec.toFixed(3)}[${name}]`,
     );
     labels.push(label);
   }
@@ -175,6 +205,7 @@ export const buildAudioFilterGraph = ({
 
 export interface FilterGraphClipSpec {
   readonly extendedMs: number;
+  readonly gapBeforeMs?: number | undefined;
   readonly trimInMs: number;
   readonly trimOutMs: number;
 }
@@ -193,12 +224,23 @@ export const buildExtendedVideoFilterGraph = ({
 }): string => {
   // tpad 置于 fps 归一之后：静帧延展在输出帧率网格上克隆，帧数与 extendedMs 对齐
   // （tpad 在异构输入帧率上先运行会被 fps 重采样吃掉大部分克隆帧）。
-  const chains = clips.map((clip, index) => {
+  const chains: string[] = [];
+  const segments: string[] = [];
+  clips.forEach((clip, index) => {
+    if ((clip.gapBeforeMs ?? 0) > 0) {
+      chains.push(
+        `color=c=black:s=${String(width)}x${String(height)}:r=${String(fps)}:d=${seconds(clip.gapBeforeMs ?? 0)},format=yuv420p,settb=1/${String(fps)}[gap${String(index)}]`,
+      );
+      segments.push(`[gap${String(index)}]`);
+    }
     const tpad =
       clip.extendedMs > 0 ? `,tpad=stop_mode=clone:stop_duration=${seconds(clip.extendedMs)}` : '';
-    return `[${String(index)}:v]trim=start=${seconds(clip.trimInMs)}:end=${seconds(clip.trimOutMs)},setpts=PTS-STARTPTS,${buildVideoCompositionFilter(width, height, fps)}${tpad},format=yuv420p,settb=1/${String(fps)}[v${String(index)}]`;
+    chains.push(
+      `[${String(index)}:v]trim=start=${seconds(clip.trimInMs)}:end=${seconds(clip.trimOutMs)},setpts=PTS-STARTPTS,${buildVideoCompositionFilter(width, height, fps)}${tpad},format=yuv420p,settb=1/${String(fps)}[v${String(index)}]`,
+    );
+    segments.push(`[v${String(index)}]`);
   });
-  return `${chains.join(';')};${clips.map((_, index) => `[v${String(index)}]`).join('')}concat=n=${String(clips.length)}:v=1:a=0[vout]`;
+  return `${chains.join(';')};${segments.join('')}concat=n=${String(segments.length)}:v=1:a=0[vout]`;
 };
 
 /**
@@ -207,11 +249,13 @@ export const buildExtendedVideoFilterGraph = ({
  * demuxer 表达）。
  */
 export const usesFilterGraphPath = (
-  clips: readonly Readonly<{ extendedMs?: number | undefined }>[],
+  clips: readonly Readonly<{ extendedMs?: number | undefined; gapBeforeMs?: number | undefined }>[],
   voiceCount: number,
   subtitleCount = 0,
 ): boolean =>
-  voiceCount > 0 || subtitleCount > 0 || clips.some((clip) => (clip.extendedMs ?? 0) > 0);
+  voiceCount > 0 ||
+  subtitleCount > 0 ||
+  clips.some((clip) => (clip.extendedMs ?? 0) > 0 || (clip.gapBeforeMs ?? 0) > 0);
 
 export interface SubtitleAssCueSpec {
   readonly endMs: number;
@@ -301,6 +345,7 @@ export const createFfmpegVideoComposer = ({
   compose: async ({
     audioStorageRelPath,
     backgroundMusicVolume: backgroundMusicVolumeInput,
+    backgroundMusicSettings,
     clips,
     exportJobId,
     fps,
@@ -341,10 +386,15 @@ export const createFfmpegVideoComposer = ({
         concatLines.push(`inpoint ${seconds(clip.trimInMs)}`);
         concatLines.push(`outpoint ${seconds(clip.trimOutMs)}`);
       }
-      const expectedDurationSec = clips.reduce(
-        (total, clip) => total + (clip.trimOutMs - clip.trimInMs + (clip.extendedMs ?? 0)) / 1_000,
-        0,
-      );
+      let plannedEndMs = 0;
+      const clipPlan = clips.map((clip) => {
+        const startMs = clip.targetStartMs ?? plannedEndMs;
+        if (startMs < plannedEndMs) throw new Error('VIDEO_TIMELINE_OVERLAP');
+        const gapBeforeMs = startMs - plannedEndMs;
+        plannedEndMs = startMs + clip.trimOutMs - clip.trimInMs + (clip.extendedMs ?? 0);
+        return { ...clip, gapBeforeMs, startMs };
+      });
+      const expectedDurationSec = plannedEndMs / 1_000;
       const probes = await Promise.all(
         resolvedClips.map((clipPath) =>
           execFileAsync(
@@ -366,6 +416,14 @@ export const createFfmpegVideoComposer = ({
       );
       const sourceHasAudio = probes.some(({ stdout }) => stdout.trim().length > 0);
       const backgroundMusicVolume = backgroundMusicVolumeInput ?? DEFAULT_BACKGROUND_MUSIC_VOLUME;
+      const editedMusic =
+        backgroundMusicSettings !== undefined &&
+        (backgroundMusicSettings.bgmFadeInMs !== 0 ||
+          backgroundMusicSettings.bgmFadeOutMs !== 2000 ||
+          backgroundMusicSettings.bgmMuted ||
+          backgroundMusicSettings.bgmStartMs !== 0 ||
+          backgroundMusicSettings.bgmTrimInMs !== 0 ||
+          backgroundMusicSettings.bgmTrimOutMs !== null);
       // 两条路径共享的尾程：编码执行 → 规格探测校验 → CAS 落盘与命名导出。
       const runFfmpegAndValidate = async (
         args: readonly string[],
@@ -400,7 +458,7 @@ export const createFfmpegVideoComposer = ({
           storageRelPath: stored.storageRelPath,
         };
       };
-      if (!usesFilterGraphPath(clips, voices.length, subtitles.length)) {
+      if (!usesFilterGraphPath(clipPlan, voices.length, subtitles.length) && !editedMusic) {
         // 现状路径（回归锁）：无配音无延展时保持 concat demuxer 行为不变。
         await writeFile(listPath, `${concatLines.join('\n')}\n`, 'utf8');
         const args = [
@@ -412,15 +470,24 @@ export const createFfmpegVideoComposer = ({
           '0',
           '-i',
           listPath,
-          ...(audioStorageRelPath === null
+          ...(audioStorageRelPath === null || backgroundMusicSettings?.bgmMuted === true
             ? []
             : ['-stream_loop', '-1', '-i', await resolve(audioStorageRelPath)]),
           '-map',
           '0:v:0',
-          ...(audioStorageRelPath === null ? ['-map', '0:a?'] : ['-map', '[aout]']),
-          ...(audioStorageRelPath === null
+          ...(audioStorageRelPath === null || backgroundMusicSettings?.bgmMuted === true
+            ? ['-map', '0:a?']
+            : ['-map', '[aout]']),
+          ...(audioStorageRelPath === null || backgroundMusicSettings?.bgmMuted === true
             ? []
-            : ['-filter_complex', buildBackgroundMusicFilter(sourceHasAudio, expectedDurationSec)]),
+            : [
+                '-filter_complex',
+                buildBackgroundMusicFilter(
+                  sourceHasAudio,
+                  expectedDurationSec,
+                  backgroundMusicVolume,
+                ),
+              ]),
           '-vf',
           buildVideoCompositionFilter(width, height, fps),
           '-c:v',
@@ -441,22 +508,20 @@ export const createFfmpegVideoComposer = ({
         voicePaths.push(await resolve(voice.storageRelPath));
       }
       const resolvedAudio =
-        audioStorageRelPath === null ? null : await resolve(audioStorageRelPath);
+        audioStorageRelPath === null || backgroundMusicSettings?.bgmMuted === true
+          ? null
+          : await resolve(audioStorageRelPath);
       const inputSection: string[] = [];
       for (const clipPath of resolvedClips) inputSection.push('-i', clipPath);
       for (const voicePath of voicePaths) inputSection.push('-i', voicePath);
       if (resolvedAudio !== null) inputSection.push('-stream_loop', '-1', '-i', resolvedAudio);
-      const graphClips = clips.map((clip) => ({
+      const graphClips = clipPlan.map((clip) => ({
         extendedMs: clip.extendedMs ?? 0,
+        gapBeforeMs: clip.gapBeforeMs,
         trimInMs: clip.trimInMs,
         trimOutMs: clip.trimOutMs,
       }));
-      const clipStartsMs: number[] = [];
-      let cursorMs = 0;
-      for (const clip of graphClips) {
-        clipStartsMs.push(cursorMs);
-        cursorMs += clip.trimOutMs - clip.trimInMs + clip.extendedMs;
-      }
+      const clipStartsMs = clipPlan.map((clip) => clip.startMs);
       const videoFilters = buildExtendedVideoFilterGraph({
         clips: graphClips,
         fps,
@@ -476,7 +541,15 @@ export const createFfmpegVideoComposer = ({
         backgroundMusic:
           resolvedAudio === null
             ? null
-            : { inputIndex: clips.length + voices.length, volume: backgroundMusicVolume },
+            : {
+                inputIndex: clips.length + voices.length,
+                volume: backgroundMusicVolume,
+                startMs: backgroundMusicSettings?.bgmStartMs ?? 0,
+                trimInMs: backgroundMusicSettings?.bgmTrimInMs ?? 0,
+                trimOutMs: backgroundMusicSettings?.bgmTrimOutMs ?? null,
+                fadeInMs: backgroundMusicSettings?.bgmFadeInMs ?? 0,
+                fadeOutMs: backgroundMusicSettings?.bgmFadeOutMs ?? 2000,
+              },
         durationSec: expectedDurationSec,
         sourceAudios: probes.flatMap(({ stdout }, index) =>
           stdout.trim().length > 0
@@ -485,7 +558,7 @@ export const createFfmpegVideoComposer = ({
         ),
         voices: voices.map((voice, index) => ({
           inputIndex: clips.length + index,
-          offsetMs: voice.offsetMs,
+          offsetMs: voice.targetStartMs ?? voice.offsetMs,
           trimInMs: voice.trimInMs,
           trimOutMs: voice.trimOutMs,
           volume: voice.volume,
@@ -517,6 +590,7 @@ export const createFfmpegVideoComposer = ({
       if (
         error instanceof Error &&
         (error.message === 'VIDEO_OUTPUT_INVALID' ||
+          error.message === 'VIDEO_TIMELINE_OVERLAP' ||
           error.message === 'VIDEO_SOURCE_CORRUPTED' ||
           error.message === 'VIDEO_EXPORT_CANCELLED' ||
           error.message === 'VIDEO_EXPORT_WRITE_FAILED' ||

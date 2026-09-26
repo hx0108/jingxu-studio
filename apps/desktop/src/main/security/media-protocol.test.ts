@@ -16,6 +16,12 @@ const VIDEO_REF: MediaStoredFileRef = {
   storageRelPath: 'projects/project_00000001/videos/ab/abcd.mp4',
 };
 
+const AUDIO_REF: MediaStoredFileRef = {
+  byteSize: 4,
+  mimeType: 'audio/mpeg',
+  storageRelPath: 'projects/project_00000001/audio/ab/abcd.mp3',
+};
+
 const buildDependencies = (
   overrides: Partial<Pick<MediaProtocolDependencies, 'locator'>> = {},
 ): MediaProtocolDependencies => ({
@@ -159,6 +165,30 @@ describe('handleMediaProtocolRequest', () => {
     expect(response.headers.get('Content-Type')).toBe('video/mp4');
     expect(response.headers.get('Accept-Ranges')).toBe('bytes');
     expect(dependencies.locator.findVideoCandidateMedia).toHaveBeenCalledWith('vcand_0000001');
+  });
+
+  it('背景音乐—只通过 video-audio 受限标识反查并支持 Range', async () => {
+    const findVideoAudioMedia = vi.fn(() => Promise.resolve(AUDIO_REF));
+    const dependencies = buildDependencies({
+      locator: {
+        findAssetVersionMedia: vi.fn(() => Promise.resolve(null)),
+        findCandidateMedia: vi.fn(() => Promise.resolve(null)),
+        findVideoAudioMedia,
+        findVideoCandidateMedia: vi.fn(() => Promise.resolve(null)),
+        findVideoExportMedia: vi.fn(() => Promise.resolve(null)),
+      },
+    });
+    const response = await handleMediaProtocolRequest(
+      {
+        method: 'GET',
+        rangeHeader: 'bytes=1-2',
+        url: 'jingxu://media/video-audio/audio_00000001',
+      },
+      dependencies,
+    );
+    expect(response.status).toBe(206);
+    expect(response.headers.get('Content-Type')).toBe('audio/mpeg');
+    expect(findVideoAudioMedia).toHaveBeenCalledWith('audio_00000001');
   });
 
   it('已成功导出的视频—仅经 video-export 受限标识反查并支持播放 Range', async () => {

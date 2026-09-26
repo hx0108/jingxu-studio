@@ -201,6 +201,26 @@ const createMainWindow = async (): Promise<void> => {
                   return null;
                 }
               },
+              findVideoAudioMedia: async (assetId) => {
+                const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
+                if (unitOfWork === null) return null;
+                try {
+                  return await unitOfWork.run(async ({ composition }) => {
+                    const repository = composition?.composition;
+                    if (repository === undefined) return null;
+                    const row = await repository.findAudioAssetById(assetId);
+                    return row === null
+                      ? null
+                      : {
+                          byteSize: row.byteSize,
+                          mimeType: row.mimeType,
+                          storageRelPath: row.storageRelPath,
+                        };
+                  });
+                } catch {
+                  return null;
+                }
+              },
               findVideoExportMedia: async (exportJobId) => {
                 const unitOfWork = persistenceRuntime?.getMediaUnitOfWork() ?? null;
                 if (unitOfWork === null) return null;
@@ -283,7 +303,11 @@ if (!singleInstanceLockAcquired) {
           trustedUrl: getTrustedUrl(),
         });
         creatorGuideFeatureRegistration = createCreatorGuideFeatureRegistration({
+          demoResourceRoot: app.isPackaged
+            ? path.join(process.resourcesPath, 'demo')
+            : path.join(app.getAppPath(), 'resources', 'demo'),
           ipcRegistrar,
+          managedRoot,
           persistenceRuntime,
           trustedUrl: getTrustedUrl(),
         });
@@ -341,9 +365,6 @@ if (!singleInstanceLockAcquired) {
           trustedUrl: getTrustedUrl(),
           useE2eMock: process.env.JINGXU_E2E === '1',
         });
-        // 视频当前 Provider 偏好（0023 单例）：环境变量仍可显式覆盖（E2E/联调启动器）。
-        const videoProviderSelection =
-          (await persistenceRuntime.getVideoProviderPreferences()?.get()) ?? null;
         videoFeatureRegistration = createVideoFeatureRegistration({
           clock: () => new Date().toISOString(),
           ipcRegistrar,
@@ -356,7 +377,6 @@ if (!singleInstanceLockAcquired) {
           // Mock（图片/文本仍 Mock），配合 JINGXU_VIDEO_PROVIDER 验证真实档缺凭据
           // 稳定失败；正常 E2E 缺省仍全 Mock 零网络。
           useE2eMock: process.env.JINGXU_E2E === '1' && process.env.JINGXU_E2E_VIDEO_REAL !== '1',
-          videoProviderMode: videoProviderSelection?.mode,
         });
         voiceFeatureRegistration = createVoiceFeatureRegistration({
           clock: () => new Date().toISOString(),

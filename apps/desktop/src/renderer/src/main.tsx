@@ -5,8 +5,9 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { createQueryClient } from './lib/query-client';
 import './assets/fonts/fonts.css';
-import './styles.css';
 import './prototype-alignment.css';
+import './styles.css';
+import './approved-prototype.css';
 
 const rootElement = document.querySelector<HTMLDivElement>('#root');
 if (rootElement === null) {

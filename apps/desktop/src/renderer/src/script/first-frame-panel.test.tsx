@@ -156,9 +156,9 @@ describe('FirstFrameUploadForm 可观察基线（参考图上传约束前置）'
     const html = renderToStaticMarkup(<FirstFrameUploadForm busy={false} onSubmit={vi.fn()} />);
     expect(html).toContain('id="reference-upload-form"');
     expect(html).toContain('accept="image/png,image/jpeg,image/webp"');
-    expect(html).toContain('参考图（≤20MB PNG/JPEG/WebP）');
-    expect(html).toContain('资产引用 ID（char_*/scene_*/project-style）');
-    expect(html).toContain('scene_train');
+    expect(html).toContain('参考图（不超过 20 兆，支持常见图片格式）');
+    expect(html).toContain('资产引用标识');
+    expect(html).toContain('请输入与故事设定一致的角色或场景标识');
     expect(html).toContain('value="STYLE"');
     expect(html).toContain('上传参考图');
     expect(html).toContain('disabled=""');

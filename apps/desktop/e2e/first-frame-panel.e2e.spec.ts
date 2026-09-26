@@ -79,19 +79,20 @@ test('§5.3 逐镜头首帧面板—生成/选择/参考图升版 STALE 与受�
     // UI happy path：重载后从项目列表走真实入口进分镜工作区。
     await page.reload();
     await openProjectsList(page);
-    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
     await page.locator('.project-card-main', { hasText: '首帧闭环' }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
-    await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
-    await page.getByRole('button', { name: '画面生成', exact: true }).click();
+    await page.locator('.creator-stage-progress').getByText('分镜设计', { exact: true }).click();
+    await expect(page.locator('.media-page-title')).toHaveText('分镜设计');
+    await page.locator('.creator-stage-progress').getByText('画面生成', { exact: true }).click();
     await page.locator('.shot-card', { hasText: '#1' }).click();
 
     // 首帧面板：READY 整集下可生成；候选经受限取图协议真实解码。
     const panel = page.locator('#first-frame-panel');
-    await expect(panel.getByRole('heading', { name: '首帧候选 · 镜头 #1' })).toBeVisible();
+    await expect(panel).toBeVisible();
     await expect(panel.getByText('该镜头尚未生成首帧候选。')).toBeVisible();
-    await panel.getByRole('button', { name: '生成首帧候选' }).click();
-    await expect(panel.getByText('任务状态：已完成')).toBeVisible({ timeout: 30_000 });
+    await panel.getByRole('button', { name: '生成镜头画面' }).click();
+    await expect(panel.getByText('当前生成：已完成')).toBeVisible({ timeout: 30_000 });
     await waitForDecodedImages(page);
     await expect(panel.locator('.candidate-card')).toHaveCount(4);
     await expect(panel.locator('.candidate-grid img')).toHaveCount(4);
@@ -103,7 +104,7 @@ test('§5.3 逐镜头首帧面板—生成/选择/参考图升版 STALE 与受�
     await expect(panel.getByRole('button', { name: '设为当前首帧' })).toHaveCount(3);
 
     // 参考图升版 v2：旧世代候选全员 STALE_INPUT + 受影响镜头清单。
-    await page.getByLabel('资产引用 ID（char_*/scene_*/project-style）').fill('scene_train');
+    await page.getByLabel('资产引用标识').fill('scene_train');
     await page.getByLabel('资产显示名称').fill('午夜列车');
     await page.locator('#reference-upload-form input[type="file"]').setInputFiles({
       buffer: Buffer.from([4, 5, 6]),
@@ -111,7 +112,7 @@ test('§5.3 逐镜头首帧面板—生成/选择/参考图升版 STALE 与受�
       name: 'scene-train-v2.png',
     });
     await page.getByRole('button', { name: '上传参考图' }).click();
-    await expect(panel.getByText('参考图已上传为版本 v2')).toBeVisible({ timeout: 15_000 });
+    await expect(panel.getByText('参考图已保存。')).toBeVisible({ timeout: 15_000 });
     await expect(panel.getByText('受影响镜头（候选已标记失效，需重新生成）：')).toBeVisible();
     await expect(panel.locator('.affected-shot-list li')).toHaveCount(1);
     await expect(panel.locator('.affected-shot-list li')).toContainText(

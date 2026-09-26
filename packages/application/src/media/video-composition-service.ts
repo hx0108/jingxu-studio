@@ -9,6 +9,7 @@ import type {
   VideoTimelineSummaryDto,
   CancelVideoExportInputDto,
   GetVideoExportJobInputDto,
+  ListVideoExportsInputDto,
   StartVideoExportInputDto,
   VideoExportJobDto,
 } from '@jingxu/contracts';
@@ -26,6 +27,7 @@ import type {
 import type { ScriptWorkspaceQueryPort } from '../ports/script/script-workspace-query-port';
 import { alignVoiceToShot, extractVoiceShotFields } from '../voice';
 import type { VideoTimelineVoiceItemDto } from '@jingxu/contracts';
+import { validateEditedAudioTracks, validateEditedTimeline } from './timeline-edit-validation';
 
 /**
  * 字幕默认样式快照（design D5：默认字体 + 安全区；样式编辑器为非目标）。
@@ -71,6 +73,7 @@ export interface ImportedBackgroundMusic {
 /** 启用中的配音轨（混音层输入）；storageRelPath 仅存于 Main 边界内，不出 Renderer。 */
 export interface VideoComposerVoiceInput {
   readonly offsetMs: number;
+  readonly targetStartMs?: number | undefined;
   readonly storageRelPath: string;
   readonly trimInMs: number;
   readonly trimOutMs: number;
@@ -90,10 +93,25 @@ export interface VideoComposerPort {
     readonly audioStorageRelPath: string | null;
     /** BGM 音量数据化；缺省沿用旧硬编码 0.20（无配音回归锁的现状值）。 */
     readonly backgroundMusicVolume?: number | undefined;
+    readonly backgroundMusicSettings?:
+      | Readonly<
+          Pick<
+            VideoTimelineSummaryDto,
+            | 'bgmFadeInMs'
+            | 'bgmFadeOutMs'
+            | 'bgmMuted'
+            | 'bgmStartMs'
+            | 'bgmTrimInMs'
+            | 'bgmTrimOutMs'
+          >
+        >
+      | undefined;
+    readonly voiceTrackMuted?: boolean | undefined;
     readonly clips: readonly Readonly<{
       /** FREEZE_EXTEND 的冻末帧静帧延展；缺省 0 → 现状 concat 合成路径。 */
       extendedMs?: number | undefined;
       storageRelPath: string;
+      targetStartMs?: number | undefined;
       trimInMs: number;
       trimOutMs: number;
     }>[];
@@ -152,6 +170,10 @@ export interface VideoCompositionService {
     input: GetVideoExportJobInputDto,
     traceId: string,
   ): Promise<AppResultDto<VideoExportJobDto>>;
+  listExports(
+    input: ListVideoExportsInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<VideoExportJobDto[]>>;
   cancelExport(
     input: CancelVideoExportInputDto,
     traceId: string,
@@ -226,6 +248,12 @@ const toTimelineDto = (record: VideoTimelineVersionRecord): VideoTimelineSummary
           originalFileName: record.audioAsset.originalFileName,
         },
   audioVolume: record.audioVolume,
+  bgmFadeInMs: record.bgmFadeInMs,
+  bgmFadeOutMs: record.bgmFadeOutMs,
+  bgmMuted: record.bgmMuted,
+  bgmStartMs: record.bgmStartMs,
+  bgmTrimInMs: record.bgmTrimInMs,
+  bgmTrimOutMs: record.bgmTrimOutMs,
   createdAt: record.createdAt,
   episodeId: record.episodeId,
   episodeVersionId: record.episodeVersionId,
@@ -238,6 +266,7 @@ const toTimelineDto = (record: VideoTimelineVersionRecord): VideoTimelineSummary
   totalDurationMs: record.totalDurationMs,
   versionNo: record.versionNo,
   voiceItems: record.voiceItems,
+  voiceTrackMuted: record.voiceTrackMuted,
 });
 
 const toExportJobDto = (record: VideoExportJobRecord): VideoExportJobDto => ({
@@ -327,28 +356,6 @@ const computeAlignmentItems = (
   return { error: null, rows };
 };
 
-const validateItems = (items: readonly VideoTimelineItemDto[]): string | null => {
-  if (items.length === 0 || items.every((item) => !item.enabled)) return 'VIDEO_TRIM_INVALID';
-  const shots = new Set<string>();
-  const positions = new Set<number>();
-  for (const item of items) {
-    if (shots.has(item.shotId) || positions.has(item.position)) return 'VIDEO_TRIM_INVALID';
-    shots.add(item.shotId);
-    positions.add(item.position);
-    if (
-      !Number.isInteger(item.trimInMs) ||
-      !Number.isInteger(item.trimOutMs) ||
-      item.trimInMs < 0 ||
-      item.trimOutMs <= item.trimInMs
-    )
-      return 'VIDEO_TRIM_INVALID';
-  }
-  if (![...positions].every((position) => position >= 0 && position < items.length)) {
-    return 'VIDEO_TRIM_INVALID';
-  }
-  return null;
-};
-
 export const createVideoCompositionService = (
   dependencies: VideoCompositionServiceDependencies,
 ): VideoCompositionService => {
@@ -375,6 +382,7 @@ export const createVideoCompositionService = (
       return failure('VIDEO_COMPOSITION_NOT_READY', traceId);
     if (current.status !== 'READY') return failure('VIDEO_COMPOSITION_NOT_READY', traceId);
     const items: VideoTimelineItemDto[] = [];
+    let nextClipStartMs = 0;
     // 配音轨与字幕轨从当前工作区派生（spec：字幕从镜头 spoken_text 派生且默认启用；
     // 配音仅收录当前选中的 SUCCEEDED 候选，人工未选择=空轨道）。
     const voiceItems: VideoTimelineSummaryDto['voiceItems'] = [];
@@ -386,6 +394,7 @@ export const createVideoCompositionService = (
         return failure('VIDEO_SOURCE_MISSING', traceId);
       items.push({
         candidateId: candidate.id,
+        clipId: `clip_${shot.shotId}`,
         enabled: true,
         fileSha256: candidate.fileSha256,
         generationInputHash: candidate.generationInputHash,
@@ -393,9 +402,11 @@ export const createVideoCompositionService = (
         position: shot.sequence - 1,
         providerKind: candidate.provenance?.providerKind ?? null,
         shotId: shot.shotId,
+        targetStartMs: nextClipStartMs,
         trimInMs: 0,
         trimOutMs: Math.max(1, Math.round(candidate.actualDurationSec * 1_000)),
       });
+      nextClipStartMs += Math.max(1, Math.round(candidate.actualDurationSec * 1_000));
       const selectedVoice = await dependencies.mediaUnitOfWork.run(async ({ voice }) => {
         if (voice === undefined) return null;
         const rows = await voice.generation.listCandidatesByShot(shot.shotId);
@@ -404,11 +415,13 @@ export const createVideoCompositionService = (
       if (selectedVoice?.durationMs != null && selectedVoice.fileSha256 != null) {
         voiceItems.push({
           candidateId: selectedVoice.id,
+          clipId: `voice_${shot.shotId}`,
           enabled: true,
           fileSha256: selectedVoice.fileSha256,
           generationInputHash: selectedVoice.generationInputHash,
           offsetMs: 0,
           shotId: shot.shotId,
+          targetStartMs: items.at(-1)?.targetStartMs ?? 0,
           trimInMs: 0,
           trimOutMs: selectedVoice.durationMs,
           volume: 1,
@@ -442,6 +455,12 @@ export const createVideoCompositionService = (
     const created = await composition.createTimeline({
       alignmentItems: alignment.rows,
       audioVolume: DEFAULT_BACKGROUND_MUSIC_VOLUME,
+      bgmFadeInMs: 0,
+      bgmFadeOutMs: 2000,
+      bgmMuted: false,
+      bgmStartMs: 0,
+      bgmTrimInMs: 0,
+      bgmTrimOutMs: null,
       episodeId: input.episodeId,
       episodeVersionId: current.id,
       formatProfileId: current.formatProfileId,
@@ -452,6 +471,7 @@ export const createVideoCompositionService = (
       subtitleItems,
       totalDurationMs: items.reduce((sum, item) => sum + item.trimOutMs - item.trimInMs, 0),
       voiceItems,
+      voiceTrackMuted: false,
     });
     return success(await enrichTimelineItems(dependencies.mediaUnitOfWork, toTimelineDto(created)));
   };
@@ -475,13 +495,69 @@ export const createVideoCompositionService = (
   };
 
   const updateTimeline = async (
-    input: UpdateVideoTimelineInputDto,
+    rawInput: UpdateVideoTimelineInputDto,
     traceId: string,
   ): Promise<AppResultDto<VideoTimelineSummaryDto>> => {
-    const validation = validateItems(input.items);
-    if (validation !== null) return failure(validation, traceId);
+    const input = {
+      ...rawInput,
+      audioVolume: rawInput.audioVolume ?? DEFAULT_BACKGROUND_MUSIC_VOLUME,
+      bgmFadeInMs: rawInput.bgmFadeInMs ?? 0,
+      bgmFadeOutMs: rawInput.bgmFadeOutMs ?? 2000,
+      bgmMuted: rawInput.bgmMuted ?? false,
+      bgmStartMs: rawInput.bgmStartMs ?? 0,
+      bgmTrimInMs: rawInput.bgmTrimInMs ?? 0,
+      bgmTrimOutMs: rawInput.bgmTrimOutMs ?? null,
+      items: rawInput.items.map((item) => ({
+        ...item,
+        isMock: item.isMock ?? null,
+        providerKind: item.providerKind ?? null,
+      })),
+      subtitleItems: rawInput.subtitleItems ?? [],
+      voiceItems: rawInput.voiceItems ?? [],
+      voiceTrackMuted: rawInput.voiceTrackMuted ?? false,
+    };
+    const { requestId: _requestId, ...idempotencyPayload } = input;
+    void _requestId;
+    const payloadSha256 = dependencies.hashPayload(idempotencyPayload);
     const composition = await compositionOf(dependencies.mediaUnitOfWork);
     if (composition === null) return failure('PROJECT_PERSISTENCE_FAILED', traceId);
+    const existingReceipt = await composition.findTimelineUpdateReceipt(input.requestId);
+    if (existingReceipt !== null) {
+      if (
+        existingReceipt.projectId !== input.projectId ||
+        existingReceipt.payloadSha256 !== payloadSha256
+      )
+        return failure('REQUEST_ID_REUSED', traceId);
+      const existing = await composition.findTimelineVersion(
+        input.projectId,
+        input.episodeId,
+        existingReceipt.timelineVersionId,
+      );
+      return existing === null
+        ? failure('PROJECT_PERSISTENCE_FAILED', traceId)
+        : success(await enrichTimelineItems(dependencies.mediaUnitOfWork, toTimelineDto(existing)));
+    }
+    const validation = validateEditedTimeline(input.items);
+    if (validation.error !== null) return failure(validation.error, traceId);
+    const audioValidation = validateEditedAudioTracks(input.voiceItems, {
+      audioAssetId: input.audioAssetId,
+      fadeInMs: input.bgmFadeInMs,
+      fadeOutMs: input.bgmFadeOutMs,
+      startMs: input.bgmStartMs,
+      trimInMs: input.bgmTrimInMs,
+      trimOutMs: input.bgmTrimOutMs,
+      volume: input.audioVolume,
+    });
+    if (audioValidation !== null) return failure(audioValidation, traceId);
+    const musicDurationMs =
+      input.bgmTrimOutMs === null
+        ? validation.totalDurationMs - input.bgmStartMs
+        : input.bgmTrimOutMs - input.bgmTrimInMs;
+    if (
+      input.audioAssetId !== null &&
+      (musicDurationMs <= 0 || input.bgmFadeInMs + input.bgmFadeOutMs > musicDurationMs)
+    )
+      return failure('VIDEO_AUDIO_FADE_INVALID', traceId);
     const current = await composition.findTimelineVersion(
       input.projectId,
       input.episodeId,
@@ -561,34 +637,62 @@ export const createVideoCompositionService = (
     const inputHash = dependencies.hashPayload({
       audioAssetId: input.audioAssetId,
       audioVolume: input.audioVolume,
+      bgmFadeInMs: input.bgmFadeInMs,
+      bgmFadeOutMs: input.bgmFadeOutMs,
+      bgmMuted: input.bgmMuted,
+      bgmStartMs: input.bgmStartMs,
+      bgmTrimInMs: input.bgmTrimInMs,
+      bgmTrimOutMs: input.bgmTrimOutMs,
       episodeVersionId: current.episodeVersionId,
       items: input.items,
       mappingSnapshot,
       subtitleItems,
       voiceItems: input.voiceItems,
+      voiceTrackMuted: input.voiceTrackMuted,
     });
-    return success(
-      await enrichTimelineItems(
-        dependencies.mediaUnitOfWork,
-        toTimelineDto(
-          await composition.updateTimeline({
-            alignmentItems: alignment.rows,
-            audioAssetId: input.audioAssetId,
-            audioVolume: input.audioVolume,
-            expectedVersionId: input.expectedVersionId,
-            id: dependencies.newId(),
-            inputHash,
-            items: input.items,
-            projectId: input.projectId,
-            subtitleItems,
-            totalDurationMs: input.items
-              .filter((item) => item.enabled)
-              .reduce((sum, item) => sum + item.trimOutMs - item.trimInMs, 0),
-            voiceItems: input.voiceItems,
-          }),
-        ),
-      ),
-    );
+    const saved = await dependencies.mediaUnitOfWork.run(async ({ composition: repositories }) => {
+      const repository = repositories?.composition;
+      if (repository === undefined) throw new Error('PROJECT_PERSISTENCE_FAILED');
+      const concurrentReceipt = await repository.findTimelineUpdateReceipt(input.requestId);
+      if (concurrentReceipt !== null) {
+        if (
+          concurrentReceipt.projectId !== input.projectId ||
+          concurrentReceipt.payloadSha256 !== payloadSha256
+        )
+          throw new Error('REQUEST_ID_REUSED');
+        const existing = await repository.findTimelineVersion(
+          input.projectId,
+          input.episodeId,
+          concurrentReceipt.timelineVersionId,
+        );
+        if (existing === null) throw new Error('PROJECT_PERSISTENCE_FAILED');
+        return existing;
+      }
+      return repository.updateTimeline({
+        alignmentItems: alignment.rows,
+        audioAssetId: input.audioAssetId,
+        audioVolume: input.audioVolume,
+        bgmFadeInMs: input.bgmFadeInMs,
+        bgmFadeOutMs: input.bgmFadeOutMs,
+        bgmMuted: input.bgmMuted,
+        bgmStartMs: input.bgmStartMs,
+        bgmTrimInMs: input.bgmTrimInMs,
+        bgmTrimOutMs: input.bgmTrimOutMs,
+        expectedVersionId: input.expectedVersionId,
+        id: dependencies.newId(),
+        inputHash,
+        items: input.items,
+        payloadSha256,
+        projectId: input.projectId,
+        requestId: input.requestId,
+        subtitleItems,
+        totalDurationMs: validation.totalDurationMs,
+        traceId,
+        voiceItems: input.voiceItems,
+        voiceTrackMuted: input.voiceTrackMuted,
+      });
+    });
+    return success(await enrichTimelineItems(dependencies.mediaUnitOfWork, toTimelineDto(saved)));
   };
 
   const importBackgroundMusic = async (
@@ -622,6 +726,16 @@ export const createVideoCompositionService = (
     return job === null ? failure('VIDEO_SOURCE_MISSING', traceId) : success(toExportJobDto(job));
   };
 
+  const listExports = async (
+    input: ListVideoExportsInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<VideoExportJobDto[]>> => {
+    const composition = await compositionOf(dependencies.mediaUnitOfWork);
+    if (composition === null) return failure('PROJECT_PERSISTENCE_FAILED', traceId);
+    const jobs = await composition.listExports(input.projectId, input.episodeId, input.limit ?? 5);
+    return success(jobs.map(toExportJobDto));
+  };
+
   const runExport = async (
     input: StartVideoExportInputDto,
     jobId: string,
@@ -649,17 +763,31 @@ export const createVideoCompositionService = (
         timeline.alignmentItems.map((row) => [row.shotId, row.extendedMs]),
       );
       // 镜头在成片时间轴上的窗口（含延展）与合成片段序一致；字幕条按此窗口落位。
-      const clipSpans = new Map<string, { readonly endMs: number; readonly startMs: number }>();
+      const clipSpans = new Map<
+        string,
+        readonly { readonly endMs: number; readonly startMs: number }[]
+      >();
+      const timelineShiftByShot = new Map<string, number>();
       const clips = await dependencies.mediaUnitOfWork.run(async ({ video }) => {
         const values = [] as {
           extendedMs: number;
           storageRelPath: string;
+          targetStartMs: number;
           trimInMs: number;
           trimOutMs: number;
         }[];
-        let cursorMs = 0;
-        for (const item of timeline.items) {
-          if (!item.enabled) continue;
+        const sortedItems = [...timeline.items]
+          .filter((item) => item.enabled)
+          .sort(
+            (left, right) =>
+              left.targetStartMs - right.targetStartMs || left.position - right.position,
+          );
+        const lastPositionByShot = new Map<string, number>();
+        sortedItems.forEach((item, index) => {
+          lastPositionByShot.set(item.shotId, index);
+        });
+        let accumulatedExtensionMs = 0;
+        for (const [index, item] of sortedItems.entries()) {
           const candidate = await video.findCandidateById(input.projectId, item.candidateId);
           if (
             candidate?.status !== 'SUCCEEDED' ||
@@ -670,18 +798,25 @@ export const createVideoCompositionService = (
             candidate.storageRelPath === null
           )
             throw new Error('VIDEO_SOURCE_STALE');
-          const extendedMs = extendedByShot.get(item.shotId) ?? 0;
-          clipSpans.set(item.shotId, {
-            endMs: cursorMs + (item.trimOutMs - item.trimInMs) + extendedMs,
-            startMs: cursorMs,
-          });
-          cursorMs += item.trimOutMs - item.trimInMs + extendedMs;
+          const targetStartMs = item.targetStartMs + accumulatedExtensionMs;
+          timelineShiftByShot.set(item.shotId, accumulatedExtensionMs);
+          const extendedMs =
+            lastPositionByShot.get(item.shotId) === index
+              ? (extendedByShot.get(item.shotId) ?? 0)
+              : 0;
+          const span = {
+            endMs: targetStartMs + (item.trimOutMs - item.trimInMs) + extendedMs,
+            startMs: targetStartMs,
+          };
+          clipSpans.set(item.shotId, [...(clipSpans.get(item.shotId) ?? []), span]);
           values.push({
             extendedMs,
             storageRelPath: candidate.storageRelPath,
+            targetStartMs,
             trimInMs: item.trimInMs,
             trimOutMs: item.trimOutMs,
           });
+          accumulatedExtensionMs += extendedMs;
         }
         if (values.length === 0) throw new Error('VIDEO_TRIM_INVALID');
         return values;
@@ -694,7 +829,7 @@ export const createVideoCompositionService = (
       if (voiceRepositories === null) throw new Error('PROJECT_PERSISTENCE_FAILED');
       const voices = [] as VideoComposerVoiceInput[];
       for (const voiceItem of timeline.voiceItems) {
-        if (!voiceItem.enabled) continue;
+        if (!voiceItem.enabled || timeline.voiceTrackMuted) continue;
         const candidate = await voiceRepositories.findCandidate(
           input.projectId,
           voiceItem.candidateId,
@@ -708,6 +843,7 @@ export const createVideoCompositionService = (
           throw new Error('VOICE_CANDIDATE_STALE');
         voices.push({
           offsetMs: voiceItem.offsetMs,
+          targetStartMs: voiceItem.targetStartMs + (timelineShiftByShot.get(voiceItem.shotId) ?? 0),
           storageRelPath: candidate.storageRelPath,
           trimInMs: voiceItem.trimInMs,
           trimOutMs: voiceItem.trimOutMs,
@@ -726,7 +862,7 @@ export const createVideoCompositionService = (
         if (workspace === null) throw new Error('SUBTITLE_SOURCE_STALE');
         for (const sub of timeline.subtitleItems) {
           if (!sub.enabled) continue;
-          const span = clipSpans.get(sub.shotId);
+          const spans = clipSpans.get(sub.shotId) ?? [];
           const shot = workspace.storyboard.currentShots.find(
             (entry) => entry.shotId === sub.shotId,
           );
@@ -735,23 +871,34 @@ export const createVideoCompositionService = (
               ? null
               : (extractVoiceShotFields(shot.version.document)?.spokenText ?? null);
           if (
-            span === undefined ||
+            spans.length === 0 ||
             text === null ||
             dependencies.hashText(text) !== sub.spokenTextSha256
           )
             throw new Error('SUBTITLE_SOURCE_STALE');
-          subtitles.push({
-            endMs: span.endMs,
-            safeAreaPct: sub.safeAreaPct,
-            spokenText: text,
-            startMs: span.startMs,
-          });
+          for (const span of spans) {
+            subtitles.push({
+              endMs: span.endMs,
+              safeAreaPct: sub.safeAreaPct,
+              spokenText: text,
+              startMs: span.startMs,
+            });
+          }
         }
       }
       await composition.updateExportStatus(jobId, 'VALIDATING');
       const result = await dependencies.composer.compose({
         audioStorageRelPath: audio?.storageRelPath ?? null,
         backgroundMusicVolume: timeline.audioVolume,
+        backgroundMusicSettings: {
+          bgmFadeInMs: timeline.bgmFadeInMs,
+          bgmFadeOutMs: timeline.bgmFadeOutMs,
+          bgmMuted: timeline.bgmMuted,
+          bgmStartMs: timeline.bgmStartMs,
+          bgmTrimInMs: timeline.bgmTrimInMs,
+          bgmTrimOutMs: timeline.bgmTrimOutMs,
+        },
+        voiceTrackMuted: timeline.voiceTrackMuted,
         clips,
         exportJobId: jobId,
         fps: profile.fps,
@@ -807,7 +954,9 @@ export const createVideoCompositionService = (
       projectId: input.projectId,
       requestId: input.requestId,
       timelineVersionId: timeline.id,
-      totalDurationMs: timeline.totalDurationMs,
+      totalDurationMs:
+        timeline.totalDurationMs +
+        timeline.alignmentItems.reduce((sum, row) => sum + row.extendedMs, 0),
     });
     void runExport(input, job.id, traceId);
     return success(toExportJobDto(job));
@@ -852,6 +1001,7 @@ export const createVideoCompositionService = (
     getExportJob,
     getTimeline,
     importBackgroundMusic,
+    listExports,
     recoverUnfinishedExports,
     startExport,
     updateTimeline,

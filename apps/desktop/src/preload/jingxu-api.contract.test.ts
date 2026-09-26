@@ -462,6 +462,7 @@ describe('window.jingxu 白名单 Contract', () => {
       'getTimeline',
       'getVideoTask',
       'importBackgroundMusic',
+      'listExports',
       'listStoryboardVideoStates',
       'listVideoCandidates',
       'selectVideoCandidate',

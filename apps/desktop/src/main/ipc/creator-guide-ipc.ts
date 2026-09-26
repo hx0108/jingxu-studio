@@ -4,7 +4,9 @@ import type {
   AppResultDto,
   CreatorDemoResultDto,
   CreatorNextActionResultDto,
+  CreatorPreparationResultDto,
   GetCreatorNextActionInputDto,
+  GetCreatorPreparationInputDto,
   StartCreatorDemoInputDto,
 } from '@jingxu/contracts';
 import {
@@ -12,7 +14,9 @@ import {
   CREATOR_GUIDE_IPC_CHANNELS,
   creatorDemoResultSchema,
   creatorNextActionResultSchema,
+  creatorPreparationResultSchema,
   getCreatorNextActionInputSchema,
+  getCreatorPreparationInputSchema,
   startCreatorDemoInputSchema,
 } from '@jingxu/contracts';
 
@@ -34,6 +38,10 @@ export interface CreatorGuideIpcService {
     input: GetCreatorNextActionInputDto,
     traceId: string,
   ): Promise<AppResultDto<CreatorNextActionResultDto>>;
+  getPreparation(
+    input: GetCreatorPreparationInputDto,
+    traceId: string,
+  ): Promise<AppResultDto<CreatorPreparationResultDto>>;
   startDemo(
     input: StartCreatorDemoInputDto,
     traceId: string,
@@ -84,6 +92,22 @@ export const registerCreatorGuideIpc = (
     try {
       const parsed = appResultSchema(creatorNextActionResultSchema).safeParse(
         await service.getNextAction(input, traceId),
+      );
+      return parsed.success ? parsed.data : unavailable(traceId);
+    } catch {
+      return unavailable(traceId);
+    }
+  });
+
+  registrar.handle(CREATOR_GUIDE_IPC_CHANNELS.getPreparation, async (event, ...arguments_) => {
+    assertTrustedIpcSender(event, trustedUrl);
+    const traceId = traceIds.newTraceId();
+    const input = parseSingleIpcArgument(getCreatorPreparationInputSchema, arguments_);
+    if (input === null) return invalidRequest(traceId);
+
+    try {
+      const parsed = appResultSchema(creatorPreparationResultSchema).safeParse(
+        await service.getPreparation(input, traceId),
       );
       return parsed.success ? parsed.data : unavailable(traceId);
     } catch {

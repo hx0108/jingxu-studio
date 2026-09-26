@@ -11,10 +11,18 @@ import { SKIP_REASON_LABELS, speakerLabel } from './video-timeline-ui';
 
 interface VoicePanelProps {
   readonly episodeId: string;
+  readonly onPrepare?: ((proceed: () => void) => void) | undefined;
   readonly projectId: string;
 }
 
 const formatError = (message: string): string => message || '操作失败，请重试。';
+
+const VOICE_OPTIONS = [
+  ['Neil', '音色一（默认旁白）'],
+  ['Elias', '音色二'],
+  ['Mochi', '音色三'],
+  ['Stella', '音色四'],
+] as const;
 
 const candidateStatusBadge = (status: VoiceCandidateViewDto['status']): string | null => {
   if (status === 'STALE_INPUT') return '已过期（源分镜已变更）';
@@ -27,7 +35,7 @@ const candidateStatusBadge = (status: VoiceCandidateViewDto['status']): string |
  * 配音工作台（v2 §7.1）：音色映射编辑、整集批量生成、逐镜头候选选择与
  * 受限 URL 试听。全部经冻结 voice/script IPC；Renderer 不接触本地路径。
  */
-export const VoicePanel = ({ episodeId, projectId }: VoicePanelProps) => {
+export const VoicePanel = ({ episodeId, onPrepare, projectId }: VoicePanelProps) => {
   const [mappings, setMappings] = useState<VoiceMappingDto[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [shotIds, setShotIds] = useState<string[]>([]);
@@ -145,8 +153,8 @@ export const VoicePanel = ({ episodeId, projectId }: VoicePanelProps) => {
             <div className="shot-card" key={row.speakerId}>
               <span>{speakerLabel(row.speakerId)}</span>
               <label>
-                音色 ID
-                <input
+                音色
+                <select
                   name={`voice-id-${row.speakerId}`}
                   onChange={(event) => {
                     setDrafts((current) => ({
@@ -154,9 +162,14 @@ export const VoicePanel = ({ episodeId, projectId }: VoicePanelProps) => {
                       [row.speakerId]: event.target.value,
                     }));
                   }}
-                  type="text"
                   value={drafts[row.speakerId] ?? row.voiceId}
-                />
+                >
+                  {VOICE_OPTIONS.map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </label>
             </div>
           ))}
@@ -176,7 +189,11 @@ export const VoicePanel = ({ episodeId, projectId }: VoicePanelProps) => {
         <button
           disabled={busy || shotIds.length === 0}
           name="generate-voice-batch"
-          onClick={() => void generateEpisodeBatch()}
+          onClick={() => {
+            const proceed = () => void generateEpisodeBatch();
+            if (onPrepare === undefined) proceed();
+            else onPrepare(proceed);
+          }}
           type="button"
         >
           整集批量生成配音

@@ -9,6 +9,10 @@ import type {
 export type E2eFailureScenario =
   '401' | '429' | '5xx' | 'timeout' | 'invalid-json' | 'repair-failure' | 'stale' | 'late-response';
 
+export type E2eCandidateDataFactory = (
+  stage: TextGenerationRequest['stage'],
+) => Readonly<Record<string, unknown>>;
+
 class E2eScriptModelError extends Error {
   public constructor(public readonly normalized: NormalizedModelError) {
     super(normalized.code);
@@ -169,10 +173,15 @@ const candidateData = (
 
 /** Deterministic, network-free model used only when Main explicitly enables the E2E harness. */
 export class E2eScriptTextModelAdapter implements TextModelPort {
+  readonly #candidateData: E2eCandidateDataFactory;
   readonly #scenario: E2eFailureScenario | null;
   #attempt = 0;
 
-  public constructor(scenario: E2eFailureScenario | null = null) {
+  public constructor(
+    scenario: E2eFailureScenario | null = null,
+    candidateDataFactory: E2eCandidateDataFactory = candidateData,
+  ) {
+    this.#candidateData = candidateDataFactory;
     this.#scenario = scenario;
   }
 
@@ -202,7 +211,7 @@ export class E2eScriptTextModelAdapter implements TextModelPort {
             finishReason: 'stop',
             modelReported: 'jingxu-e2e-script-model',
             providerRequestId: `e2e-late-${request.invocationId}`,
-            rawText: JSON.stringify({ data: candidateData(request.stage) }),
+            rawText: JSON.stringify({ data: this.#candidateData(request.stage) }),
             usage: { inputTokens: 1, outputTokens: 1 },
           });
         }, 1_000);
@@ -228,7 +237,7 @@ export class E2eScriptTextModelAdapter implements TextModelPort {
       finishReason: 'stop',
       modelReported: 'jingxu-e2e-script-model',
       providerRequestId: `e2e-${request.invocationId}`,
-      rawText: JSON.stringify({ data: candidateData(request.stage) }),
+      rawText: JSON.stringify({ data: this.#candidateData(request.stage) }),
       usage: { inputTokens: 1, outputTokens: 1 },
     });
   }

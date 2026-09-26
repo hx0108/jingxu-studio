@@ -171,9 +171,9 @@ describe('AgnesImageModelAdapter', () => {
     const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
       Promise.resolve(jsonResponse({ created: 1, data: [{ b64_json: '', revised_prompt: '' }] })),
     );
-    await expect(adapterOf(fetchMock).submit(request(), new AbortController().signal)).rejects.toMatchObject(
-      { name: 'AgnesImageAdapterError' },
-    );
+    await expect(
+      adapterOf(fetchMock).submit(request(), new AbortController().signal),
+    ).rejects.toMatchObject({ name: 'AgnesImageAdapterError' });
   });
 
   it('HTTP 状态矩阵—401 凭据/429 限流可重试/5xx 服务端可重试/404 模型不可用', async () => {

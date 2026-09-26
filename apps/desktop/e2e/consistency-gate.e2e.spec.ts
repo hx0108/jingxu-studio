@@ -22,10 +22,11 @@ const environment = (): Record<string, string> =>
 const openStoryboard = async (page: Page, projectName: string): Promise<void> => {
   await page.reload();
   await openProjectsList(page);
-  await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
   await page.locator('.project-card-main', { hasText: projectName }).click();
   await page.getByRole('button', { name: '进入剧本工作区' }).click();
-  await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
+  await page.locator('.creator-stage-progress').getByText('分镜设计', { exact: true }).click();
+  await expect(page.locator('.media-page-title')).toHaveText('分镜设计');
 };
 
 test('§5.4 一致性门禁—缺失项可见、生成禁用、批量去重汇总、补齐后恢复（E2E Mock）', async () => {
@@ -47,6 +48,7 @@ test('§5.4 一致性门禁—缺失项可见、生成禁用、批量去重汇�
     });
     expect(seeded.shotCount).toBe(6);
     await openStoryboard(page, '一致性门禁');
+    await page.locator('.media-advanced-actions > summary').click();
 
     // 批量入口（分镜 tab）：按钮禁用 + 去重汇总（6 镜头重复引用也只各一条）。
     const batchButton = page.getByRole('button', { name: '为整集生成首帧' });
@@ -61,12 +63,12 @@ test('§5.4 一致性门禁—缺失项可见、生成禁用、批量去重汇�
     expect(new Set(batchMissing).size).toBe(batchMissing.length);
 
     // 切到画面生成 tab：单镜头面板未就绪 + 缺失清单 + 按钮可见但禁用。
-    await page.getByRole('button', { name: '画面生成', exact: true }).first().click();
+    await page.locator('.creator-stage-progress').getByText('画面生成', { exact: true }).click();
     const panel = page.locator('#first-frame-panel');
     await expect(panel.getByText('一致性输入未就绪')).toBeVisible({ timeout: 15_000 });
     await expect(panel.getByText('缺少画风锚点：项目画风')).toBeVisible();
     await expect(panel.getByText('缺少角色参考图：林夜')).toBeVisible();
-    const generate = panel.getByRole('button', { name: '生成首帧候选' });
+    const generate = panel.getByRole('button', { name: '生成镜头画面' });
     await expect(generate).toBeVisible();
     await expect(generate).toBeDisabled();
 

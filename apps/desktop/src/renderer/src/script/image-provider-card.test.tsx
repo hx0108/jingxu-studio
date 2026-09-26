@@ -41,8 +41,10 @@ describe('ImageProviderCardView（image-credential-management D4；2026-09-21 �
   it('已配置—末四位与模型下拉可见—双模型选项齐备—Key 不回显', () => {
     const html = render();
     expect(html).toContain('已配置（末四位 9999）');
-    expect(html).toContain('Agnes Image 2.5 Flash');
-    expect(html).toContain('Agnes Image 2.1 Flash');
+    expect(html).toContain('画面模型 2.5 极速版');
+    expect(html).toContain('画面模型 2.1 极速版');
+    expect(html).toContain('value="agnes-image-2.5-flash"');
+    expect(html).toContain('value="agnes-image-2.1-flash"');
     expect(html).not.toContain('readOnly=""');
   });
 

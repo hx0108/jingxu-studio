@@ -212,4 +212,42 @@ export class SqliteProducibilityRepository implements ProducibilityRepositoryPor
       return row?.id ?? null;
     });
   }
+
+  public findLatestReferencePriceSnapshot(): Promise<{
+    readonly currency: string;
+    readonly effectiveAt: string;
+    readonly expiresAt: string;
+    readonly max: number;
+    readonly min: number;
+  } | null> {
+    return syncToPromise(() => {
+      const row = this.db
+        .prepare(
+          `SELECT currency, price_range_json, effective_at, expires_at
+           FROM reference_price_snapshots
+           WHERE capability_type = 'SHOT_PACKAGE' AND billing_unit = 'PER_SHOT' AND enabled = 1
+           ORDER BY effective_at DESC, id DESC LIMIT 1`,
+        )
+        .get() as
+        | {
+            readonly currency: string;
+            readonly effective_at: string;
+            readonly expires_at: string;
+            readonly price_range_json: string;
+          }
+        | undefined;
+      if (row === undefined) return null;
+      const range = JSON.parse(row.price_range_json) as {
+        readonly max: number;
+        readonly min: number;
+      };
+      return {
+        currency: row.currency,
+        effectiveAt: row.effective_at,
+        expiresAt: row.expires_at,
+        max: range.max,
+        min: range.min,
+      };
+    });
+  }
 }

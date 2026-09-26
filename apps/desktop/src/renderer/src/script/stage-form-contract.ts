@@ -74,3 +74,43 @@ export const findEditableSystemFields = (data: Readonly<Record<string, unknown>>
   Object.keys(data)
     .filter((key) => SCRIPT_DATA_SYSTEM_FIELDS.has(key))
     .sort();
+
+export type StageData = Readonly<Record<string, unknown>>;
+
+/** 高级编辑回表单的唯一解析入口；非法 JSON、数组和系统字段均不得覆盖当前草稿。 */
+export const parseAdvancedStageData = (
+  text: string,
+):
+  | { readonly data: StageData; readonly ok: true }
+  | { readonly message: string; readonly ok: false } => {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { message: '高级内容格式无效，请修正后再返回表单。', ok: false };
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return { message: '阶段内容必须是一个结构化对象。', ok: false };
+  }
+  const data = parsed as Readonly<Record<string, unknown>>;
+  const systemFields = findEditableSystemFields(data);
+  if (systemFields.length > 0) {
+    return { message: `不能编辑系统字段：${systemFields.join('、')}`, ok: false };
+  }
+  return { data, ok: true };
+};
+
+export const serializeStageData = (data: StageData): string => JSON.stringify(data, null, 2);
+
+/** 重复项业务键不依赖数组位置；取当前集合内第一个可用的稳定递增键。 */
+export const createStableBusinessKey = (
+  prefix: 'char' | 'scene' | 'prop' | 'beat' | 'script_scene',
+  existing: readonly string[],
+): string => {
+  const used = new Set(existing);
+  for (let index = 1; index <= 999; index += 1) {
+    const candidate = `${prefix}_${String(index).padStart(3, '0')}`;
+    if (!used.has(candidate)) return candidate;
+  }
+  throw new Error('STAGE_BUSINESS_KEY_EXHAUSTED');
+};

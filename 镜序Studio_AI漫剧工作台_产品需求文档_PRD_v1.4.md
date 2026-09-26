@@ -793,7 +793,7 @@ ShotContract 的“时长”是控制层目标值，不是生成层承诺值。�
 - Probe 不证明生成质量好。
 - 只对当前启用 Provider 在版本变化、连续异常、能力过期或正式发布前执行。
 - Probe 有真实调用成本：设单次 Probe 预算上限，能力状态设默认有效期（如 14 天），仅在过期或触发条件命中时重新探测，不做高频轮询。
-- 个人项目 V2 仅接入一家图片、一家 TTS Provider；视频联调可受限接入 Seedance、万相与 Agnes 三家（2026-09-19 增补 Agnes：`agnes-video-v2.0` 与 `agnes-video-2.5-flash` 两档当前 $0/秒促销、免费档约 1 RPM），且每个任务必须由用户显式选择并冻结其 Provider/Profile/模型/能力快照。不得按价格、质量或失败自动路由、自动切换或回退。
+- 当前 V2 实施统一使用 Agnes：图片新任务固定 `AGNES_IMAGE`（`agnes-image-2.5-flash` / `agnes-image-2.1-flash`），视频新任务固定 `AGNES_VIDEO`（`agnes-video-v2.0` / `agnes-video-2.5-flash`）；模型仍由用户在 Agnes 白名单内显式选择并随任务冻结 Provider/Profile/模型/能力快照。历史 Seedance/万相记录只读保留用于审计，不再作为新任务选项；不得按价格、质量或失败自动路由、自动切换或跨 Provider 回退。促销与限流只属于带日期的能力快照，不构成长期价格或质量承诺。
 
 ### 10.5 资产与关键帧
 

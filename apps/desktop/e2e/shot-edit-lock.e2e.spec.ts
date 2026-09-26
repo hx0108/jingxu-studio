@@ -346,14 +346,16 @@ test('分镜逐镜头编辑与锁定—编辑往返/锁阻断/解锁/非法路�
     // ---- UI 通路：项目导航、编辑入口、锁徽标、锁阻断错误、七根级入口 ----
     await page.reload();
     await openProjectsList(page);
-    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
     await page.locator('.project-card-main', { hasText: '编辑锁定闭环' }).first().click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
-    await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
+    await page.locator('.creator-stage-progress').getByText('分镜设计', { exact: true }).click();
+    await expect(page.locator('.media-page-title')).toHaveText('分镜设计');
 
     const firstCard = page.locator('.shot-card', { hasText: '#1' }).first();
     await firstCard.click();
     await expect(page.getByRole('heading', { name: '镜头 #1 详情' })).toBeVisible();
+    await page.locator('.shot-lock-panel').getByText('高级信息与镜头保护').click();
     // 七根级锁定入口与编辑入口可见（D1/D3）。
     await expect(page.locator('button[name="lock-shot-dialogue"]')).toBeVisible();
     await expect(page.locator('button[name="lock-shot-acceptance"]')).toBeVisible();
@@ -377,8 +379,11 @@ test('分镜逐镜头编辑与锁定—编辑往返/锁阻断/解锁/非法路�
     await editor.fill(JSON.stringify(blockedDocument, null, 2));
     await page.locator('button[name="save-shot-edit"]').click();
     await expect(page.locator('section.inline-error')).toContainText('SHOT_LOCK_CONFLICT');
+    await expect(editor).toBeVisible();
+    await expect(editor).toHaveValue(JSON.stringify(blockedDocument, null, 2));
 
     // 解锁 → 徽标消失。
+    await page.locator('button[name="cancel-shot-edit"]').click();
     await page.locator('button[name="unlock-shot"]').click();
     await expect(page.locator('.shot-card.active-tab .status-locked')).toHaveCount(0);
 

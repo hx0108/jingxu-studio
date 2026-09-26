@@ -15,7 +15,7 @@
 
 > 本文只承诺 V1。V2 的图片、视频、TTS、口型、时间线和成本对账，以及 V3 的自动质量评估与返工闭环，只保留扩展边界，不进入当前实现。
 
-> 实施注记（非 V1 发布范围）：视频实验路径默认使用零网络 Mock；真实调用只能显式开启，且人工显式选择 Seedance / Agnes 两家之一、禁止自动路由（详见 §6.7；万相档已于 2026-09-20 按用户决策整体移除）。Seedance 新建 Profile 默认 `Seedance-2.0-mini`；Agnes 固定 `apihub.agnes-ai.com` + `agnes-video-v2.0`（默认）/`agnes-video-2.5-flash`（固定 5 秒/720P，完成态取顶层 `url`，下载域按注册域后缀 allowlist）。两家 API Key 使用独立安全存储引用（`profile-video-primary` / `profile-video-agnes-primary`），Provider Adapter 仅在 Main 侧访问固定 HTTPS allowlist；Provider、Profile、模型、能力快照与 Mock 标记在建档事务冻结（migration 0023/0024，head 24），调度器按任务冻结事实解析 Adapter，当前偏好变化不影响在途任务。Agnes 事实冻结探针已于 2026-09-19 经授权运行（$0/秒促销档），但不构成画质或生产认证；万相档已整体移除，运行面无万相请求路径。该路径不改变 V1 发布验收、真实 Provider 认证或成本结论。
+> 实施注记（非 V1 发布范围）：图片与视频新任务统一使用 Agnes；开发和 E2E 仍默认使用显式零网络 Mock。图片固定 `profile-image-agnes-primary` 与 `agnes-image-2.5-flash` / `agnes-image-2.1-flash` 白名单，视频固定 `profile-video-agnes-primary` 与 `agnes-video-v2.0` / `agnes-video-2.5-flash` 白名单。Provider Adapter 仅在 Main 侧访问固定 HTTPS allowlist；Provider、Profile、模型、能力快照与 Mock 标记在建档事务冻结，当前模型偏好变化不影响在途任务。历史 Seedance/万相 Profile、候选和调用证据仅为兼容与审计读取，不再进入新任务路由或设置入口；不得自动跨模型或跨 Provider 回退。既有 Agnes 事实冻结探针不构成画质、计费或生产认证，该路径也不改变 V1 发布验收结论。
 >
 > 实施注记（V2 Change）：`v2-video-composition-export` 已增加单集不可变时间线、音频资产和导出 Job 的 SQLite 结构、Main 侧 Dialog/FFprobe/FFmpeg 边界及 `jingxu://media/video-export` 受限预览。固定 FFmpeg/FFprobe 制品、真实本地合成、V2 Electron E2E 与 Windows 打包已有历史门禁证据；任何后续 Renderer 改造仍须重新验证，且该能力不改变 V1 发布门槛。
 
@@ -609,13 +609,13 @@ Prompt 必须：
 
 ### 6.7 V2 低价视频 Provider 快照（low-cost-video-provider-integration）
 
-- **Provider 受限枚举**：`MOCK | SEEDANCE | AGNES` 为 Main-only 模式（`JINGXU_VIDEO_PROVIDER` 或组合根注入；Renderer 只能经 `provider.get/saveVideoProviderSelection` 提交 `SEEDANCE|AGNES` 受限选择，MOCK 不可入库）。万相档已移除（2026-09-20）：选择枚举不再接受 `WAN`。开发/E2E 缺省 Mock（零凭据读取零网络）；正式缺凭据以 `MODEL_CREDENTIAL_INVALID` 稳定拒绝，绝不回退 Mock。
-- **能力快照驱动档位**：`VideoRequestCapability` 按 0024 播种快照冻结——Seedance `[5,10]×[720,1080]`、Agnes `[5,5]×[720]`（固定 5 秒/720P）；建档与请求蓝图同源按冻结溯源解析，超上限经 `requested_duration_sec` 如实标注，无静默降级。
+- **Provider 受限枚举**：新视频任务在 Main 侧固定解析为 `AGNES`；Renderer 不再提供 Seedance/万相选择，`MOCK` 只允许显式开发/E2E 注入且不可入库。历史 `SEEDANCE`/`WAN` 行仅按原冻结事实只读展示。正式缺 Agnes 凭据以 `MODEL_CREDENTIAL_INVALID` 稳定拒绝，绝不回退 Mock 或旧 Provider。
+- **能力快照驱动档位**：`VideoRequestCapability` 对新任务只从 Agnes 冻结快照解析 `[5,5]×[720]`（固定 5 秒/720P）；历史 Seedance 快照继续用于既有记录解释，不参与新建档。建档与请求蓝图同源按冻结溯源解析，超上限经 `requested_duration_sec` 如实标注，无静默降级。
 - **VideoModelResolver 依赖方向**：Application Port `(provenance) => VideoModelPort`；组合根实现固定映射（Mock 标记优先于 Provider 枚举）。媒体调度器可选注入 `resolveModel(task)`——视频实例按任务行 0024 溯源列解析 Adapter（submit/poll/download/错误归一同源），图片实例不注入、固定 Adapter 行为零变化。恢复/迟到处理只读任务冻结值，零重发。
 - **持久化（migration 0023/0024，head 24）**：0023 建 `video_provider_preferences` 单例（mode↔Profile 固定映射 CHECK）；0024 重建 `video_generation_tasks`/`video_candidates` 增 `provider_kind/provider_profile_id/model_id/capability_snapshot_id/is_mock` 五非空列（Provider↔Profile 映射 CHECK + 快照 FK），播种 `agnes-video/v1`、`volcark-seedance-video/v3`（2.x 家族）canonical 快照（`dashscope-wan-video/v1` 为移除前播种的不可改残留）；历史行只按受控 model_id 回填，未知模型/无候选证据以 NOT NULL 违例整体回滚阻断，不猜测 Provider。
 - **错误归一化**：沿用 §6.4 稳定码表——401/403→`MODEL_CREDENTIAL_INVALID`、429→`MODEL_RATE_LIMITED`（Agnes 免费档 1 RPM 预期常见，可重试）、5xx/网络→`MODEL_PROVIDER_ERROR`/`MODEL_NETWORK_ERROR`、非法 JSON→`MODEL_INVALID_RESPONSE`、非法参数/图片→`MODEL_INPUT_TOO_LARGE`、404→`MODEL_MODEL_UNAVAILABLE`、内容拒绝→`MODEL_CONTENT_REJECTED`；任务 UNKNOWN、文档外状态与过期结果 URL→`MODEL_RESULT_UNAVAILABLE`（不可自动重发，两 Adapter 一致）。Provider 错误不触发跨档回退。
 - **视图脱敏（6.4）**：候选视图与时间线条目只增 `providerKind` 枚举与 `isMock` 布尔（读取时富化）；模型 id、端点、Workspace 域名、结果 URL、原始响应与路径仍不进 Renderer。
-- **真实 Canary 边界**：自动化门禁全部 Mock/注入 fetch 零网络；万相探针已随档移除取消（2026-09-20）；Agnes Adapter 级 Canary 待授权后在 `JINGXU_REAL_AGNES_VIDEO_PROBE=1` 门控下单次运行并留存脱敏证据。
+- **真实 Canary 边界**：自动化门禁全部 Mock/注入 fetch 零网络；Agnes 图片/视频 Adapter 级 Canary 只在对应显式环境开关和凭据同时存在时单次运行并留存脱敏证据。未授权时必须跳过且不得伪造通过，本轮原型一致性打包不运行付费探针。
 
 ## 7. 校验架构
 
@@ -1166,6 +1166,7 @@ Renderer 只使用 `window.jingxu` 的逐方法接口。所有 Command 带 `requ
 | `producibility` | `run/getReport/overrideFinding`                                         | 已接入规则报告 IPC；当前报告存储仍为进程内，SQLite Report/Finding/Override 持久化待完成 |
 | `transfer`      | `exportJson/exportMarkdown/importJson`                                  | 未实现                                                                                  |
 | `provider`      | `getProfile/saveProfile/saveCredential/testCredential/deleteCredential` | 未实现                                                                                  |
+| `creatorGuide`  | `getNextAction/startDemo/getPreparation`                               | 已接入：首页续作、受限离线示例初始化与生成前只读聚合；Preload 只返回用户可见的准备项、时长与参考成本，不返回密钥、端点、路径、模型快照、完整 Prompt 或原始响应 |
 | `events`        | `subscribeJobUpdates/subscribeProjectUpdates`                           | 未实现                                                                                  |
 
 统一错误结构：
@@ -1182,6 +1183,8 @@ interface AppError {
 ```
 
 Renderer 不接收 SQL、文件系统堆栈、请求 Authorization header、API Key 或未脱敏 Provider 原始错误。
+
+首次体验的 `startDemo` 只创建 `projects.experience_mode='DEMO'` 的本地项目，并使用随包、哈希校验的合成故事与参考图片；演示文本与媒体生成固定走 Mock，不读取用户凭据、不访问网络、不产生真实费用。失败时持久层仅允许清除本次新建的 DEMO 项目及其外键后代，并清理同项目受管文件夹；普通项目不能调用该清理入口。四份 PRD-owned 正式 JSON Schema 未因该交互变更而修改。
 
 `StartupStatusDto.currentPhase` 已包含 `SCHEMA_REGISTRY`，上述十个 `SCHEMA_*` 错误通过既有三方法 Runtime API 返回，不新增 `schema.*` 或通用 IPC。Schema 故障的 `allowedActions` 仅为 `RETRY`；数据库恢复语义保持不变。
 
@@ -1314,7 +1317,7 @@ session.defaultSession.setPermissionRequestHandler((_wc, _permission, callback) 
 
 - 使用 Electron `safeStorage` 异步 API 加密；Windows 由 DPAPI 保护加密密钥。
 - 密文单独保存到 `secrets/<credential_ref>.bin`；SQLite 只保存不透明引用和最后验证时间。
-- 视频两档密文互不触碰（low-cost §6.7）：`profile-video-primary`（ARK）/`profile-video-agnes-primary` 各自独立保存/轮换/删除与审计；切换当前视频档不读、不写、不删另一档密文，保存选择本身零网络零凭据读取。万相凭据引用（`profile-video-wan-primary`）随档移除不再被运行面引用。
+- 新视频任务只读取 `profile-video-agnes-primary`；历史 `profile-video-primary`（Seedance）与已移除的万相引用不得被新任务读取、写入或删除，旧记录仍按冻结 Profile 只读审计。图片新任务同理只读取 `profile-image-agnes-primary`，旧 `profile-image-primary` 不参与路由。
 - 保存前验证 `safeStorage` 可用；不可用时阻断凭据保存，不降级为明文。
 - UI 只显示“已配置/未配置”和可选末 4 位，不能回显完整 Key。
 - 删除凭据同时删除密文文件并写审计事件；日志与导出不包含密文。

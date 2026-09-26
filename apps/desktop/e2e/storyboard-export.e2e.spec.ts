@@ -43,10 +43,12 @@ const launch = async (managedRoot: string, exportDir: string): Promise<ElectronA
 
 /** 重载后从项目列表走真实入口进分镜工作台（复用既有 E2E 驱动路径）。 */
 const openStoryboard = async (page: Page, projectName: string): Promise<void> => {
-  await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
   await page.locator('.project-card-main', { hasText: projectName }).click();
   await page.getByRole('button', { name: '进入剧本工作区' }).click();
-  await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
+  await page.locator('.creator-stage-progress').getByText('分镜设计', { exact: true }).click();
+  await expect(page.locator('.media-page-title')).toHaveText('分镜设计');
+  await page.locator('.media-advanced-actions > summary').click();
 };
 
 test('整集分镜导出—READY 门禁/1.1.0 JSON 落盘/Σ 偏离确认重发/路径红线/审计留痕（storyboard-export）', async () => {

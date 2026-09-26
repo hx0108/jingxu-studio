@@ -25,6 +25,9 @@ export const videoCandidateStatusSchema = z.enum(['PENDING', 'SUCCEEDED', 'FAILE
 export const videoCandidateMediaUrl = (candidateId: string): string =>
   `jingxu://media/video-candidate/${candidateId}`;
 
+export const videoAudioAssetMediaUrl = (assetId: string): string =>
+  `jingxu://media/video-audio/${assetId}`;
+
 export const videoCandidateViewSchema = z
   .object({
     /** Provider 回报的实际时长（秒）；未回报则 null 如实记录，不得伪造估算。 */
@@ -157,6 +160,8 @@ const videoExportJobIdSchema = idSchema;
 export const videoTimelineItemSchema = z
   .object({
     candidateId: candidateIdSchema,
+    /** 同一候选可拆分/复制为多个片段；片段身份不能依赖数组位置或镜头 ID。 */
+    clipId: idSchema,
     enabled: z.boolean(),
     fileSha256: hashSchema,
     generationInputHash: hashSchema,
@@ -166,6 +171,7 @@ export const videoTimelineItemSchema = z
     /** 同上：导出前检查的模拟来源标识；null = 候选不可追溯（历史行如实）。 */
     providerKind: z.enum(['VOLCARK_SEEDANCE', 'AGNES_VIDEO']).nullable().default(null),
     shotId: shotIdSchema,
+    targetStartMs: z.number().int().nonnegative(),
     trimInMs: z.number().int().nonnegative(),
     trimOutMs: z.number().int().positive(),
   })
@@ -184,11 +190,13 @@ export const videoTimelineVoiceItemSchema = z
      */
     alignmentOverride: z.enum(['TRIM_AUDIO', 'FORCE_TRIM', 'EARLY_CUT_NEXT']).nullable().optional(),
     candidateId: candidateIdSchema,
+    clipId: idSchema,
     enabled: z.boolean(),
     fileSha256: hashSchema,
     generationInputHash: hashSchema,
     offsetMs: z.number().int().nonnegative(),
     shotId: shotIdSchema,
+    targetStartMs: z.number().int().nonnegative(),
     trimInMs: z.number().int().nonnegative(),
     trimOutMs: z.number().int().positive(),
     volume: z.number().min(0).max(1),
@@ -252,18 +260,25 @@ export const videoTimelineSummarySchema = z
     audioAsset: videoAudioAssetSummarySchema.nullable(),
     /** BGM 音量（0020 数据化；既有版本行读出默认 0.2=旧硬编码等效）。 */
     audioVolume: z.number().min(0).max(1),
+    bgmFadeInMs: z.number().int().nonnegative(),
+    bgmFadeOutMs: z.number().int().nonnegative(),
+    bgmMuted: z.boolean(),
+    bgmStartMs: z.number().int().nonnegative(),
+    bgmTrimInMs: z.number().int().nonnegative(),
+    bgmTrimOutMs: z.number().int().positive().nullable(),
     createdAt: isoDateTimeSchema,
     episodeId: idSchema,
     episodeVersionId: idSchema,
     formatProfileId: idSchema,
     id: videoTimelineIdSchema,
     inputHash: hashSchema,
-    items: z.array(videoTimelineItemSchema).max(20),
+    items: z.array(videoTimelineItemSchema).max(60),
     parentVersionId: videoTimelineVersionIdSchema.nullable(),
     subtitleItems: z.array(videoTimelineSubtitleItemSchema).max(20),
     totalDurationMs: z.number().int().nonnegative(),
     versionNo: z.number().int().positive(),
-    voiceItems: z.array(videoTimelineVoiceItemSchema).max(20),
+    voiceItems: z.array(videoTimelineVoiceItemSchema).max(60),
+    voiceTrackMuted: z.boolean(),
   })
   .strict();
 
@@ -324,22 +339,54 @@ export const updateVideoTimelineInputSchema = z
   .object({
     audioAssetId: videoAudioAssetIdSchema.nullable(),
     audioVolume: z.number().min(0).max(1).default(0.2),
+    bgmFadeInMs: z.number().int().nonnegative().default(0),
+    bgmFadeOutMs: z.number().int().nonnegative().default(2000),
+    bgmMuted: z.boolean().default(false),
+    bgmStartMs: z.number().int().nonnegative().default(0),
+    bgmTrimInMs: z.number().int().nonnegative().default(0),
+    bgmTrimOutMs: z.number().int().positive().nullable().default(null),
     episodeId: idSchema,
     expectedVersionId: videoTimelineVersionIdSchema,
-    items: z.array(videoTimelineItemSchema).min(1).max(20),
+    items: z.array(videoTimelineItemSchema).min(1).max(60),
     projectId: projectIdSchema,
     requestId: requestIdSchema,
     subtitleItems: z.array(videoTimelineSubtitleItemSchema).max(20).default([]),
-    voiceItems: z.array(videoTimelineVoiceItemSchema).max(20).default([]),
+    voiceItems: z.array(videoTimelineVoiceItemSchema).max(60).default([]),
+    voiceTrackMuted: z.boolean().default(false),
   })
   .strict()
   .superRefine((value, context) => {
-    // 两轨条目都必须锚定在时间线视频轨的镜头集合内，且每镜头至多一项。
-    const shotIds = new Set(value.items.map((item) => item.shotId));
+    const clipIds = new Set(value.items.map((item) => item.clipId));
+    if (clipIds.size !== value.items.length) {
+      context.addIssue({ code: 'custom', message: '画面片段 ID 不得重复。', path: ['items'] });
+    }
+    if (new Set(value.voiceItems.map((item) => item.clipId)).size !== value.voiceItems.length) {
+      context.addIssue({ code: 'custom', message: '对白片段 ID 不得重复。', path: ['voiceItems'] });
+    }
     for (const [field, entries] of [
-      ['subtitleItems', value.subtitleItems] as const,
+      ['items', value.items] as const,
       ['voiceItems', value.voiceItems] as const,
-    ] as const) {
+    ]) {
+      entries.forEach((entry, index) => {
+        if (entry.targetStartMs % 100 !== 0) {
+          context.addIssue({
+            code: 'custom',
+            message: '片段起点必须对齐 100 毫秒刻度。',
+            path: [field, index, 'targetStartMs'],
+          });
+        }
+      });
+    }
+    if (value.bgmTrimOutMs !== null && value.bgmTrimOutMs <= value.bgmTrimInMs) {
+      context.addIssue({
+        code: 'custom',
+        message: '配乐出点必须晚于入点。',
+        path: ['bgmTrimOutMs'],
+      });
+    }
+    // 字幕轨必须锚定在视频轨的镜头集合内，且每镜头至多一项。
+    const shotIds = new Set(value.items.map((item) => item.shotId));
+    for (const [field, entries] of [['subtitleItems', value.subtitleItems] as const] as const) {
       const seen = new Set<string>();
       for (const entry of entries) {
         if (seen.has(entry.shotId)) {
@@ -361,6 +408,16 @@ export const updateVideoTimelineInputSchema = z
         }
       }
     }
+    for (const entry of value.voiceItems) {
+      if (!shotIds.has(entry.shotId)) {
+        context.addIssue({
+          code: 'custom',
+          message: '对白片段引用了不在画面轨中的镜头。',
+          path: ['voiceItems'],
+        });
+        break;
+      }
+    }
   });
 export const importVideoBackgroundMusicInputSchema = z
   .object({ projectId: projectIdSchema, requestId: requestIdSchema })
@@ -375,6 +432,13 @@ export const startVideoExportInputSchema = z
   .strict();
 export const getVideoExportJobInputSchema = z
   .object({ exportJobId: videoExportJobIdSchema, projectId: projectIdSchema })
+  .strict();
+export const listVideoExportsInputSchema = z
+  .object({
+    episodeId: idSchema,
+    limit: z.number().int().min(1).max(10).default(5),
+    projectId: projectIdSchema,
+  })
   .strict();
 export const cancelVideoExportInputSchema = z
   .object({
@@ -406,12 +470,13 @@ export type VideoExportJobDto = z.infer<typeof videoExportJobSchema>;
 export type VideoExportStatus = z.infer<typeof videoExportStatusSchema>;
 export type CreateVideoTimelineInputDto = z.infer<typeof createVideoTimelineInputSchema>;
 export type GetVideoTimelineInputDto = z.infer<typeof getVideoTimelineInputSchema>;
-export type UpdateVideoTimelineInputDto = z.infer<typeof updateVideoTimelineInputSchema>;
+export type UpdateVideoTimelineInputDto = z.input<typeof updateVideoTimelineInputSchema>;
 export type ImportVideoBackgroundMusicInputDto = z.infer<
   typeof importVideoBackgroundMusicInputSchema
 >;
 export type StartVideoExportInputDto = z.infer<typeof startVideoExportInputSchema>;
 export type GetVideoExportJobInputDto = z.infer<typeof getVideoExportJobInputSchema>;
+export type ListVideoExportsInputDto = z.input<typeof listVideoExportsInputSchema>;
 export type CancelVideoExportInputDto = z.infer<typeof cancelVideoExportInputSchema>;
 
 export interface VideoApi {
@@ -453,6 +518,8 @@ export interface VideoApi {
   ): Promise<AppResultDto<VideoAudioAssetSummaryDto>>;
   startExport(input: StartVideoExportInputDto): Promise<AppResultDto<VideoExportJobDto>>;
   getExportJob(input: GetVideoExportJobInputDto): Promise<AppResultDto<VideoExportJobDto>>;
+  /** 最近导出记录只返回可审计任务摘要，不暴露主机文件路径。 */
+  listExports(input: ListVideoExportsInputDto): Promise<AppResultDto<VideoExportJobDto[]>>;
   cancelExport(input: CancelVideoExportInputDto): Promise<AppResultDto<VideoExportJobDto>>;
 }
 
@@ -467,6 +534,7 @@ export const VIDEO_IPC_CHANNELS = {
   cancelExport: 'video.cancelExport',
   createTimeline: 'video.createTimeline',
   getExportJob: 'video.getExportJob',
+  listExports: 'video.listExports',
   getTimeline: 'video.getTimeline',
   importBackgroundMusic: 'video.importBackgroundMusic',
   startExport: 'video.startExport',

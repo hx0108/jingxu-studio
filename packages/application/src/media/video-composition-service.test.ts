@@ -9,6 +9,7 @@ import {
 } from './video-composition-service';
 
 const HASH = 'a'.repeat(64);
+const HASH_B = 'b'.repeat(64);
 const NOW = '2026-08-24T00:00:00.000Z';
 type CreateExportInput = Parameters<VideoCompositionRepository['createExportJob']>[0];
 type CreateTimelineInput = Parameters<VideoCompositionRepository['createTimeline']>[0];
@@ -17,6 +18,7 @@ type ComposeCallInput = Parameters<VideoComposerPort['compose']>[0];
 
 const item = (overrides: Record<string, unknown> = {}) => ({
   candidateId: 'candidate_0001',
+  clipId: 'clip_00000001',
   enabled: true,
   fileSha256: HASH,
   generationInputHash: HASH,
@@ -24,6 +26,7 @@ const item = (overrides: Record<string, unknown> = {}) => ({
   isMock: null,
   providerKind: null,
   shotId: 'shot_0001',
+  targetStartMs: 0,
   trimInMs: 0,
   trimOutMs: 1_000,
   ...overrides,
@@ -33,6 +36,12 @@ const timeline = (overrides: Record<string, unknown> = {}) => ({
   alignmentItems: [],
   audioAsset: null,
   audioVolume: 0.2,
+  bgmFadeInMs: 0,
+  bgmFadeOutMs: 2000,
+  bgmMuted: false,
+  bgmStartMs: 0,
+  bgmTrimInMs: 0,
+  bgmTrimOutMs: null,
   createdAt: NOW,
   episodeId: 'episode_0001',
   episodeVersionId: 'episode_version_0001',
@@ -46,6 +55,7 @@ const timeline = (overrides: Record<string, unknown> = {}) => ({
   totalDurationMs: 1_000,
   versionNo: 1,
   voiceItems: [],
+  voiceTrackMuted: false,
   ...overrides,
 });
 
@@ -117,7 +127,9 @@ interface BuildOptions {
   readonly candidateQueue?: readonly unknown[];
   readonly currentTimeline?: Record<string, unknown> | null;
   readonly existingExport?: Record<string, unknown> | null;
+  readonly existingUpdateReceipt?: Record<string, unknown> | null;
   readonly mapping?: ReadonlyMap<string, string>;
+  readonly recentExports?: readonly unknown[];
   readonly status?: 'READY' | 'DRAFT';
   readonly unfinishedExports?: readonly unknown[];
   readonly voiceCandidate?: Record<string, unknown> | null;
@@ -172,7 +184,9 @@ const buildService = (options: BuildOptions = {}) => {
     findExportJob: vi.fn(() => Promise.resolve(null)),
     findExportJobByRequestId: vi.fn(() => Promise.resolve(options.existingExport ?? null)),
     findTimelineVersion: vi.fn(() => Promise.resolve(timeline(options.currentTimeline ?? {}))),
+    findTimelineUpdateReceipt: vi.fn(() => Promise.resolve(options.existingUpdateReceipt ?? null)),
     insertAudioAsset: vi.fn(),
+    listExports: vi.fn(() => Promise.resolve(options.recentExports ?? [])),
     listUnfinishedExports: vi.fn(() => Promise.resolve(options.unfinishedExports ?? [])),
     completeExport: completeExportMock,
     updateExportStatus: updateExportStatusMock,
@@ -238,11 +252,13 @@ const buildService = (options: BuildOptions = {}) => {
 
 const voiceItem = (overrides: Record<string, unknown> = {}) => ({
   candidateId: 'vcan_0001',
+  clipId: 'voice_shot_0001',
   enabled: true,
   fileSha256: HASH,
   generationInputHash: HASH,
   offsetMs: 0,
   shotId: 'shot_0001',
+  targetStartMs: 0,
   trimInMs: 0,
   trimOutMs: 1_500,
   volume: 1,
@@ -250,6 +266,51 @@ const voiceItem = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('VideoCompositionService', () => {
+  it('最近导出记录—按项目与单集查询并只返回脱敏 DTO', async () => {
+    const record = {
+      byteSize: 2048,
+      createdAt: NOW,
+      episodeId: 'episode_0001',
+      errorCode: null,
+      fileSha256: HASH,
+      id: 'export_0001',
+      inputHash: HASH_B,
+      mediaUrl: 'jingxu://media/video-export/export_0001',
+      projectId: 'project_0001',
+      status: 'SUCCEEDED',
+      storageRelPath: 'projects/project_0001/exports/private.mp4',
+      timelineVersionId: 'timeline_version_0001',
+      totalDurationMs: 1_000,
+      updatedAt: NOW,
+    } as const;
+    const { composition, service } = buildService({ recentExports: [record] });
+
+    const result = await service.listExports(
+      { episodeId: 'episode_0001', limit: 5, projectId: 'project_0001' },
+      'trace_list_exports',
+    );
+
+    expect(composition.listExports).toHaveBeenCalledWith('project_0001', 'episode_0001', 5);
+    expect(result).toEqual({
+      data: [
+        {
+          byteSize: 2048,
+          createdAt: NOW,
+          errorCode: null,
+          fileSha256: HASH,
+          id: 'export_0001',
+          mediaUrl: 'jingxu://media/video-export/export_0001',
+          status: 'SUCCEEDED',
+          timelineVersionId: 'timeline_version_0001',
+          totalDurationMs: 1_000,
+          updatedAt: NOW,
+        },
+      ],
+      ok: true,
+    });
+    expect(JSON.stringify(result)).not.toContain('storageRelPath');
+  });
+
   it('非 READY 单集创建时间线—拒绝且不写入', async () => {
     const { composition, service } = buildService({ status: 'DRAFT' });
     const result = await service.createTimeline(
@@ -306,7 +367,10 @@ describe('VideoCompositionService', () => {
       },
       'trace_2',
     );
-    expect(result).toMatchObject({ data: { items: [item()] }, ok: true });
+    expect(result).toMatchObject({
+      data: { items: [item({ clipId: 'clip_shot_0001' })] },
+      ok: true,
+    });
     expect(composition.createTimeline).toHaveBeenCalledWith(
       expect.objectContaining({
         audioVolume: 0.2,
@@ -325,7 +389,7 @@ describe('VideoCompositionService', () => {
     // inputHash 纳入两轨与映射快照（spec：V2 inputHash 包含配音/字幕/映射）。
     expect(hashPayload).toHaveBeenCalledWith({
       episodeVersionId: 'episode_version_0001',
-      items: [item()],
+      items: [item({ clipId: 'clip_shot_0001' })],
       mappingSnapshot: [{ speakerId: 'narrator', voiceId: 'Neil' }],
       subtitleItems: [
         expect.objectContaining({
@@ -720,6 +784,73 @@ describe('VideoCompositionService', () => {
     });
   });
 
+  it('前序镜头冻结延长—后续画面起点累计平移且导出时长包含延长量', async () => {
+    const secondCandidate = candidate({
+      fileSha256: HASH_B,
+      generationInputHash: HASH_B,
+      id: 'candidate_0002',
+      storageRelPath: 'projects/project_0001/videos/bb/' + HASH_B + '.mp4',
+    });
+    const { completeExportMock, composeMock, composition, service } = buildService({
+      candidateQueue: [candidate(), secondCandidate],
+      currentTimeline: {
+        alignmentItems: [
+          {
+            audioDurationMs: 1_500,
+            category: 'SLIGHTLY_LONG',
+            dialogueComplete: true,
+            extendedMs: 500,
+            manualOverride: null,
+            rulesVersion: VOICE_ALIGNMENT_RULES_VERSION,
+            shotDurationMs: 1_000,
+            shotId: 'shot_0001',
+            storyboardFallback: false,
+            strategy: 'FREEZE_EXTEND',
+          },
+        ],
+        items: [
+          item(),
+          item({
+            candidateId: 'candidate_0002',
+            clipId: 'clip_00000002',
+            fileSha256: HASH_B,
+            generationInputHash: HASH_B,
+            position: 1,
+            shotId: 'shot_0002',
+            targetStartMs: 1_000,
+          }),
+        ],
+        totalDurationMs: 2_000,
+      },
+    });
+    composeMock.mockResolvedValue({
+      byteSize: 1_024,
+      fileSha256: HASH,
+      storageRelPath: 'projects/project_0001/exports/aa/' + HASH + '.mp4',
+    });
+
+    await service.startExport(
+      {
+        episodeId: 'episode_0001',
+        projectId: 'project_0001',
+        requestId: 'request_export_shifted_extension',
+        timelineVersionId: 'timeline_version_0001',
+      },
+      'trace_export_shifted_extension',
+    );
+
+    await vi.waitFor(() => {
+      expect(completeExportMock).toHaveBeenCalledTimes(1);
+    });
+    expect((composeMock.mock.calls[0]?.[0] as ComposeCallInput | undefined)?.clips).toEqual([
+      expect.objectContaining({ extendedMs: 500, targetStartMs: 0 }),
+      expect.objectContaining({ extendedMs: 0, targetStartMs: 1_500 }),
+    ]);
+    expect(composition.createExportJob).toHaveBeenCalledWith(
+      expect.objectContaining({ totalDurationMs: 2_500 }),
+    );
+  });
+
   it('导出时配音候选失效—稳定码落库且不进入合成', async () => {
     const { composeMock, service, updateExportStatusMock } = buildService({
       candidateQueue: [candidate()],
@@ -794,6 +925,56 @@ describe('VideoCompositionService', () => {
     // 字幕窗口含延展：镜头占位 1000ms + FREEZE_EXTEND 500ms → [0, 1500]。
     expect((composeMock.mock.calls[0]?.[0] as ComposeCallInput | undefined)?.subtitles).toEqual([
       { endMs: 1_500, safeAreaPct: 5, spokenText: SPOKEN_TEXT, startMs: 0 },
+    ]);
+  });
+
+  it('同镜头分割为多个启用画面片段—字幕按每个片段窗口显式展开', async () => {
+    const { completeExportMock, composeMock, service } = buildService({
+      candidateQueue: [candidate(), candidate()],
+      currentTimeline: {
+        items: [
+          item({ clipId: 'clip_00000001', trimOutMs: 500 }),
+          item({
+            clipId: 'clip_00000002',
+            position: 1,
+            targetStartMs: 800,
+            trimInMs: 500,
+          }),
+        ],
+        subtitleItems: [
+          {
+            enabled: true,
+            safeAreaPct: 5,
+            shotId: 'shot_0001',
+            spokenTextSha256: `sha:${SPOKEN_TEXT}`,
+            styleSnapshotJson: DEFAULT_SUBTITLE_STYLE_SNAPSHOT_JSON,
+          },
+        ],
+        totalDurationMs: 1_300,
+      },
+    });
+    composeMock.mockResolvedValue({
+      byteSize: 1_024,
+      fileSha256: HASH,
+      storageRelPath: 'projects/project_0001/exports/aa/' + HASH + '.mp4',
+    });
+
+    await service.startExport(
+      {
+        episodeId: 'episode_0001',
+        projectId: 'project_0001',
+        requestId: 'request_export_split_subtitles',
+        timelineVersionId: 'timeline_version_0001',
+      },
+      'trace_export_split_subtitles',
+    );
+
+    await vi.waitFor(() => {
+      expect(completeExportMock).toHaveBeenCalledTimes(1);
+    });
+    expect((composeMock.mock.calls[0]?.[0] as ComposeCallInput | undefined)?.subtitles).toEqual([
+      { endMs: 500, safeAreaPct: 5, spokenText: SPOKEN_TEXT, startMs: 0 },
+      { endMs: 1_300, safeAreaPct: 5, spokenText: SPOKEN_TEXT, startMs: 800 },
     ]);
   });
 
@@ -994,6 +1175,74 @@ describe('VideoCompositionService', () => {
         voiceItems: [voiceItem({ offsetMs: 120 })],
       }),
     );
+  });
+
+  it('相同 requestId 与相同载荷重放—返回已提交时间线且不创建新版本', async () => {
+    const { composition, service } = buildService({
+      existingUpdateReceipt: {
+        payloadSha256: HASH,
+        projectId: 'project_0001',
+        timelineVersionId: 'timeline_version_0001',
+      },
+    });
+    const result = await service.updateTimeline(
+      {
+        audioAssetId: null,
+        episodeId: 'episode_0001',
+        expectedVersionId: 'timeline_version_0001',
+        items: [item()],
+        projectId: 'project_0001',
+        requestId: 'request_timeline_replay',
+      },
+      'trace_timeline_replay',
+    );
+
+    expect(result).toMatchObject({ data: { id: 'timeline_version_0001' }, ok: true });
+    expect(composition.updateTimeline).not.toHaveBeenCalled();
+  });
+
+  it('相同 requestId 与不同载荷重放—REQUEST_ID_REUSED 且零写入', async () => {
+    const { composition, service } = buildService({
+      existingUpdateReceipt: {
+        payloadSha256: HASH_B,
+        projectId: 'project_0001',
+        timelineVersionId: 'timeline_version_0001',
+      },
+    });
+    const result = await service.updateTimeline(
+      {
+        audioAssetId: null,
+        episodeId: 'episode_0001',
+        expectedVersionId: 'timeline_version_0001',
+        items: [item()],
+        projectId: 'project_0001',
+        requestId: 'request_timeline_reused',
+      },
+      'trace_timeline_reused',
+    );
+
+    expect(result).toMatchObject({ error: { code: 'REQUEST_ID_REUSED' }, ok: false });
+    expect(composition.updateTimeline).not.toHaveBeenCalled();
+  });
+
+  it('expectedVersionId 已过期—拒绝保存且零写入', async () => {
+    const { composition, service } = buildService({
+      currentTimeline: { id: 'timeline_version_new' },
+    });
+    const result = await service.updateTimeline(
+      {
+        audioAssetId: null,
+        episodeId: 'episode_0001',
+        expectedVersionId: 'timeline_version_0001',
+        items: [item()],
+        projectId: 'project_0001',
+        requestId: 'request_timeline_stale_head',
+      },
+      'trace_timeline_stale_head',
+    );
+
+    expect(result).toMatchObject({ error: { code: 'VIDEO_SOURCE_STALE' }, ok: false });
+    expect(composition.updateTimeline).not.toHaveBeenCalled();
   });
 
   it('相同 requestId 改变时间线—拒绝复用且不创建第二个导出 Job', async () => {

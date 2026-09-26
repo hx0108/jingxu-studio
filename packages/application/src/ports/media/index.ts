@@ -6,6 +6,7 @@ export type {
   VideoTimelineAlignmentItemDto,
   VideoExportJobRecord,
   VideoTimelineSubtitleItemInput,
+  VideoTimelineUpdateReceiptRecord,
   VideoTimelineVersionRecord,
   VideoTimelineWriteTracks,
 } from './video-composition-repository';

@@ -407,11 +407,13 @@ describe('migration 0020（v2-voice-audio-timeline D3）', () => {
         insertRow(database, 'voice_candidates', validCandidate('vc_item'));
         insertRow(database, 'video_timeline_voice_items', {
           candidate_id: 'vc_item',
+          clip_id: 'voice_clip_1',
           enabled: 1,
           file_sha256: HASH,
           generation_input_hash: HASH,
           offset_ms: 0,
           shot_id: 'shot_1',
+          target_start_ms: 0,
           timeline_version_id: 'tvv_1',
           trim_in_ms: 0,
           trim_out_ms: 1_500,
@@ -428,11 +430,13 @@ describe('migration 0020（v2-voice-audio-timeline D3）', () => {
         expect(() =>
           insertRow(database, 'video_timeline_voice_items', {
             candidate_id: 'vc_item',
+            clip_id: 'voice_clip_bad_trim',
             enabled: 1,
             file_sha256: HASH,
             generation_input_hash: HASH,
             offset_ms: 0,
             shot_id: 'shot_1',
+            target_start_ms: 0,
             timeline_version_id: 'tvv_1',
             trim_in_ms: 1_000,
             trim_out_ms: 1_000,
@@ -442,11 +446,13 @@ describe('migration 0020（v2-voice-audio-timeline D3）', () => {
         expect(() =>
           insertRow(database, 'video_timeline_voice_items', {
             candidate_id: 'vc_item',
+            clip_id: 'voice_clip_bad_volume',
             enabled: 1,
             file_sha256: HASH,
             generation_input_hash: HASH,
             offset_ms: 0,
             shot_id: 'shot_1',
+            target_start_ms: 0,
             timeline_version_id: 'tvv_1',
             trim_in_ms: 0,
             trim_out_ms: 1_500,

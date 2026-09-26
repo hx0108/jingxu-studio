@@ -87,10 +87,11 @@ describe('shouldUseMockVideoModel', () => {
 });
 
 describe('resolveVideoProviderMode', () => {
-  it('仅接受 MOCK、SEEDANCE、AGNES 三种 Main-only 受限模式（万相已移除）', () => {
+  it('新任务只接受 MOCK 或 AGNES，正式缺省固定 AGNES，拒绝历史 SEEDANCE', () => {
     expect(resolveVideoProviderMode('MOCK')).toBe('MOCK');
-    expect(resolveVideoProviderMode('SEEDANCE')).toBe('SEEDANCE');
     expect(resolveVideoProviderMode('AGNES')).toBe('AGNES');
+    expect(resolveVideoProviderMode(undefined)).toBe('AGNES');
+    expect(() => resolveVideoProviderMode('SEEDANCE')).toThrow('VIDEO_PROVIDER_MODE_INVALID');
     expect(() => resolveVideoProviderMode('WAN')).toThrow('VIDEO_PROVIDER_MODE_INVALID');
     expect(() => resolveVideoProviderMode('arbitrary-provider')).toThrow(
       'VIDEO_PROVIDER_MODE_INVALID',
@@ -311,7 +312,7 @@ describe('createVideoFeatureRegistration', () => {
   it('注册边界—固定 video 频道白名单—READY 前统一 STARTUP_WRITE_BLOCKED', () => {
     const harness = buildHarness(false);
     expect([...harness.handlers.keys()].sort()).toEqual(Object.values(VIDEO_IPC_CHANNELS).sort());
-    expect(harness.handlers.size).toBe(14);
+    expect(harness.handlers.size).toBe(Object.values(VIDEO_IPC_CHANNELS).length);
     expect(harness.registration.ensureRegistered()).toBe(false);
   });
 

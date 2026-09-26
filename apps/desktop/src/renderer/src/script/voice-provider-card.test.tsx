@@ -41,7 +41,8 @@ describe('VoiceProviderCardView（v2-voice-audio-timeline 3.1）', () => {
   it('已配置—注册表内模型可见—Key 输入不回显任何已保存值', () => {
     const html = render();
     expect(html).toContain('已配置（末四位 8888）');
-    expect(html).toContain('千问3-TTS-Instruct-Flash');
+    expect(html).toContain('千问语音指令极速版');
+    expect(html).toContain('value="qwen3-tts-instruct-flash"');
     // 同 key 双档提示如实呈现：与文本档共用同一把 DashScope Key。
     expect(html).toContain('再粘贴一次');
     expect(html).not.toContain('value="dashscope');
@@ -59,7 +60,7 @@ describe('VoiceProviderCardView（v2-voice-audio-timeline 3.1）', () => {
 
   it('首次读取 Profile 失败—仍允许选择模型并保存输入的 Key', () => {
     const html = render({ apiKey: 'dashscope-secret', profile: null });
-    expect(html).toContain('千问3-TTS-Instruct-Flash');
+    expect(html).toContain('千问语音指令极速版');
     expect(html).not.toContain('<select disabled=""');
     expect(html.match(/disabled=""/gu)).toHaveLength(2);
   });

@@ -211,7 +211,7 @@ describe('Job Provider Events IPC Contract', () => {
     ).toBe(false);
   });
 
-  it('视频 Provider 选择 DTO—只接受 SEEDANCE/AGNES—MOCK、WAN 与任意 URL/地域/域名/音频/密钥字段拒绝', () => {
+  it('视频 Provider 选择 DTO—历史输出可读取 SEEDANCE/AGNES—MOCK、WAN 与敏感字段拒绝', () => {
     // MOCK 是 Main-only 联调模式，Renderer 不能提交（design D1）；选择面也不承载
     // 任何端点/地域/Workspace/参数/密钥事实——这些都冻结在能力快照与 Adapter。
     const selection = {
@@ -249,7 +249,7 @@ describe('Job Provider Events IPC Contract', () => {
     );
   });
 
-  it('视频 Provider 选择命令—受限 mode 与 expectedUpdatedAt—strict 拒绝多余字段或缺字段', () => {
+  it('视频 Provider 选择命令—新选择只接受 AGNES—拒绝 SEEDANCE、MOCK 与多余字段', () => {
     const input = { expectedUpdatedAt: null, mode: 'AGNES', requestId: 'request-123' };
     expect(videoProviderSelectionSaveInputSchema.safeParse(input).success).toBe(true);
     expect(
@@ -260,6 +260,9 @@ describe('Job Provider Events IPC Contract', () => {
     ).toBe(true);
     expect(
       videoProviderSelectionSaveInputSchema.safeParse({ ...input, mode: 'MOCK' }).success,
+    ).toBe(false);
+    expect(
+      videoProviderSelectionSaveInputSchema.safeParse({ ...input, mode: 'SEEDANCE' }).success,
     ).toBe(false);
     expect(
       videoProviderSelectionSaveInputSchema.safeParse({

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import type { AppErrorDto, ProviderProfileDto, VideoProviderSelectionDto } from '@jingxu/contracts';
+import type { AppErrorDto, ProviderProfileDto } from '@jingxu/contracts';
 
 import { createScriptRequestId, getProviderClient, rendererTransportError } from './script-api';
 
@@ -8,13 +8,13 @@ import { createScriptRequestId, getProviderClient, rendererTransportError } from
 const VIDEO_PROFILE_ID = 'profile-video-primary';
 const AGNES_VIDEO_PROFILE_ID = 'profile-video-agnes-primary';
 const VIDEO_MODELS = [
-  { id: 'doubao-seedance-2-0-mini-260615', label: 'Seedance-2.0-mini' },
-  { id: 'doubao-seedance-2-0-260128', label: 'Seedance-2.0' },
-  { id: 'doubao-seedance-2-5-260628', label: 'Seedance-2.5' },
+  { id: 'doubao-seedance-2-0-mini-260615', label: '豆包视频 2.0 轻量版' },
+  { id: 'doubao-seedance-2-0-260128', label: '豆包视频 2.0' },
+  { id: 'doubao-seedance-2-5-260628', label: '豆包视频 2.5' },
 ] as const;
 const AGNES_MODELS = [
-  { id: 'agnes-video-v2.0', label: 'Agnes Video V2.0' },
-  { id: 'agnes-video-2.5-flash', label: 'Agnes Video 2.5 Flash' },
+  { id: 'agnes-video-v2.0', label: '阿格尼斯视频 2.0' },
+  { id: 'agnes-video-2.5-flash', label: '阿格尼斯视频 2.5 极速版' },
 ] as const;
 
 /** 卡片变体（low-cost D7）：受限枚举与文案在此冻结（四档：Mock 说明 + 三家真实档）。 */
@@ -32,27 +32,25 @@ export interface VideoCardVariant {
 
 export const SEEDANCE_VIDEO_CARD_VARIANT: VideoCardVariant = {
   defaultModelId: 'doubao-seedance-2-0-mini-260615',
-  intro:
-    '用于逐镜头视频段生成（Seedance 首帧图生视频）。选择模型后自行保存 ARK API Key；完整 Key 不回显、不进入页面长期状态。',
-  keyLabel: 'ARK API Key',
+  intro: '用于逐镜头生成视频片段；完整服务密钥不会回显，也不会进入页面长期状态。',
+  keyLabel: '服务密钥',
   mark: '视',
   models: VIDEO_MODELS,
   mode: 'SEEDANCE',
   profileId: VIDEO_PROFILE_ID,
-  providerName: '火山方舟 ARK',
+  providerName: '火山方舟视频服务',
   subtitle: '视频模型',
 };
 
 export const AGNES_VIDEO_CARD_VARIANT: VideoCardVariant = {
   defaultModelId: 'agnes-video-v2.0',
-  intro:
-    '低价视频档（Agnes 首帧图生视频，固定 5 秒 / 720P）。当前官方 $0/秒促销期（2.5 Flash 为限时免费），免费档约每分钟限 1 个任务；完整 Key 不回显、不进入页面长期状态。',
-  keyLabel: 'Agnes API Key',
+  intro: '用于以较低成本生成五秒视频片段；完整服务密钥不会回显，也不会进入页面长期状态。',
+  keyLabel: '服务密钥',
   mark: '价',
   models: AGNES_MODELS,
   mode: 'AGNES',
   profileId: AGNES_VIDEO_PROFILE_ID,
-  providerName: 'Agnes AI',
+  providerName: '阿格尼斯视频服务',
   subtitle: '视频模型 · 低价档',
 };
 
@@ -102,7 +100,7 @@ export const VideoProviderCardView = ({
           <p className="eyebrow">{variant.subtitle}</p>
           <h2 id={headingId}>{variant.providerName}</h2>
         </div>
-        {isCurrentProvider && <span className="model-current-provider-badge">当前视频档</span>}
+        {isCurrentProvider && <span className="model-current-provider-badge">固定视频服务</span>}
         <span
           className={`model-configuration-status${profile?.configured === true ? ' configured' : ''}`}
         >
@@ -192,8 +190,8 @@ export const VideoProviderCardView = ({
         </p>
         <p className="action-hint">
           {variant.mode === 'AGNES'
-            ? '测试仅验证密文可解密读取，不发起计费请求。免费档促销与限流口径以 Agnes 官方公告为准；切换当前视频档后需重启应用生效。'
-            : '测试仅验证密文可解密读取，不发起计费请求，也不代表模型已开通。若生成提示模型不可用，请在火山方舟为该 API Key 开通所选模型或配置接入点。切换当前视频档后需重启应用生效。'}
+            ? '测试仅验证密文可解密读取，不发起计费请求。免费档与限流口径以服务商公告为准；切换视频档后需重启应用生效。'
+            : '测试仅验证密文可解密读取，不发起计费请求，也不代表模型已开通。若生成提示模型不可用，请在服务商控制台开通所选模型。切换视频档后需重启应用生效。'}
         </p>
       </div>
     </details>
@@ -201,12 +199,11 @@ export const VideoProviderCardView = ({
 };
 
 export const VideoProviderCard = ({
-  variant = SEEDANCE_VIDEO_CARD_VARIANT,
+  variant = AGNES_VIDEO_CARD_VARIANT,
 }: {
   readonly variant?: VideoCardVariant;
 }) => {
   const [profile, setProfile] = useState<ProviderProfileDto | null>(null);
-  const [selection, setSelection] = useState<VideoProviderSelectionDto | null>(null);
   const [apiKey, setApiKey] = useState('');
   const [modelId, setModelId] = useState(variant.defaultModelId);
   const [error, setError] = useState<AppErrorDto | null>(null);
@@ -230,12 +227,6 @@ export const VideoProviderCard = ({
       .catch(() => {
         if (active) setError(rendererTransportError());
       });
-    void getProviderClient()
-      .getVideoProviderSelection({ requestId: createScriptRequestId('video-selection-get') })
-      .then((result) => {
-        if (active && result.ok) setSelection(result.data);
-      })
-      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -266,42 +257,12 @@ export const VideoProviderCard = ({
     }
   };
 
-  const isCurrentProvider = selection?.mode === variant.mode;
-  const setCurrentProvider = (): void => {
-    if (selection === null) return;
-    setPending(true);
-    setError(null);
-    setFeedback('正在处理…');
-    void getProviderClient()
-      .saveVideoProviderSelection({
-        expectedUpdatedAt: selection.updatedAt,
-        mode: variant.mode,
-        requestId: createScriptRequestId('video-selection-save'),
-      })
-      .then((result) => {
-        if (result.ok) {
-          setSelection(result.data);
-          setFeedback('已设为当前视频档；重启应用后生效');
-        } else {
-          setError(result.error);
-          setFeedback('');
-        }
-      })
-      .catch(() => {
-        setError(rendererTransportError());
-        setFeedback('');
-      })
-      .finally(() => {
-        setPending(false);
-      });
-  };
-
   return (
     <VideoProviderCardView
       apiKey={apiKey}
       error={error}
       feedback={feedback}
-      isCurrentProvider={isCurrentProvider}
+      isCurrentProvider={variant.mode === 'AGNES'}
       modelId={modelId}
       onApiKeyChange={setApiKey}
       onDelete={() => {
@@ -351,7 +312,7 @@ export const VideoProviderCard = ({
           '凭据已安全保存，可执行解密测试',
         );
       }}
-      onSetCurrent={selection === null ? null : setCurrentProvider}
+      onSetCurrent={null}
       onTest={() => {
         if (profile === null) return;
         void apply(
@@ -382,8 +343,7 @@ export const AgnesVideoProviderCard = () => (
  */
 export const MockVideoNotice = () => (
   <p className="action-hint" role="note">
-    <strong>联调模拟（Mock）</strong>：视频生成在开发与自动化测试下默认走零网络 Mock，
-    不调用外部模型、不计费、不读取任何密钥；该模式由 Main 环境变量控制
-    （JINGXU_VIDEO_PROVIDER=MOCK），不能在此页面选择或关闭。
+    <strong>联调模拟</strong>
+    ：视频生成在开发与自动化测试下走本地模拟，不调用外部模型、不计费、不读取任何密钥；此模式由应用运行环境控制，不能在此页面选择或关闭。
   </p>
 );

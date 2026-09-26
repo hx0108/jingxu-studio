@@ -2,6 +2,7 @@ import type {
   AppResultDto,
   CreatorDemoResultDto,
   CreatorNextActionResultDto,
+  CreatorPreparationResultDto,
 } from '@jingxu/contracts';
 import { CREATOR_GUIDE_IPC_CHANNELS } from '@jingxu/contracts';
 import { describe, expect, it, vi } from 'vitest';
@@ -40,6 +41,29 @@ const demoResult = {
   },
 } as const satisfies AppResultDto<CreatorDemoResultDto>;
 
+const preparationResult = {
+  ok: true,
+  data: {
+    canProceed: true,
+    cost: { currency: null, effectiveAt: null, max: null, min: null, status: 'UNKNOWN' },
+    estimatedDurationSec: 60,
+    isDemo: true,
+    items: [
+      {
+        code: 'DEMO_ZERO_COST',
+        detail: '体验模式不会产生真实费用。',
+        fixAction: null,
+        label: '参考成本',
+        status: 'READY',
+      },
+    ],
+    operation: 'IMAGE',
+    preparationRevision: 'revision_demo_0001',
+    projectId: PROJECT_ID,
+    shotIds: ['shot_12345678'],
+  },
+} as const satisfies AppResultDto<CreatorPreparationResultDto>;
+
 const trustedEvent = (): CreatorGuideIpcEvent => {
   const frame = { url: TRUSTED_URL };
   return { sender: { mainFrame: frame }, senderFrame: frame };
@@ -52,6 +76,7 @@ const createHarness = () => {
   >();
   const service = {
     getNextAction: vi.fn(() => Promise.resolve(okResult)),
+    getPreparation: vi.fn(() => Promise.resolve(preparationResult)),
     startDemo: vi.fn(() => Promise.resolve(demoResult)),
   } satisfies CreatorGuideIpcService;
   registerCreatorGuideIpc(
@@ -73,6 +98,15 @@ describe('creator guide IPC Contract', () => {
       }),
     ).resolves.toEqual(okResult);
     expect(service.getNextAction).toHaveBeenCalledWith({ projectId: PROJECT_ID }, TRACE_ID);
+
+    await expect(
+      handlers.get(CREATOR_GUIDE_IPC_CHANNELS.getPreparation)?.(trustedEvent(), {
+        episodeId: 'episode_12345678',
+        operation: 'IMAGE',
+        projectId: PROJECT_ID,
+        shotIds: ['shot_12345678'],
+      }),
+    ).resolves.toEqual(preparationResult);
 
     await expect(
       handlers.get(CREATOR_GUIDE_IPC_CHANNELS.startDemo)?.(trustedEvent(), {

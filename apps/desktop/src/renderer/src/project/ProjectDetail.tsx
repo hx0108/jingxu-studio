@@ -77,11 +77,16 @@ export const ProjectDetailView = ({
       <p id="storyboard-disabled-reason">分镜能力在剧本工作区内提供：请先进入剧本工作区。</p>
     </div>
     <section aria-labelledby="profile-title">
-      <h3 id="profile-title">画面规格版本</h3>
-      <ProfileCard label="当前版本" profile={detail.currentFormatProfile} />
-      {detail.formatProfileHistory.map((profile) => (
-        <ProfileCard key={profile.id} label="历史版本" profile={profile} />
-      ))}
+      <h3 id="profile-title">画面规格</h3>
+      <ProfileCard label="当前设置" profile={detail.currentFormatProfile} />
+      {detail.formatProfileHistory.length > 0 && (
+        <details className="technical-details">
+          <summary>历史与恢复</summary>
+          {detail.formatProfileHistory.map((profile) => (
+            <ProfileCard key={profile.id} label="历史设置" profile={profile} />
+          ))}
+        </details>
+      )}
     </section>
     <section className="danger-zone" aria-labelledby="danger-title">
       <h3 id="danger-title">项目状态</h3>

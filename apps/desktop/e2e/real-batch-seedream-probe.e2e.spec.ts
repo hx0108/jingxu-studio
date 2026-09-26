@@ -1,5 +1,4 @@
-// 【已退役 2026-09-21】图片档已切换 Agnes Image（agnes-image-2.5/2.1-flash）；本探针
-// 针对 Seedream/ARK 实测路径保留为历史证据，默认门控零网络，不再随图片档演进。
+// AGNES Image 整集批量真实闭环探针。
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -14,8 +13,8 @@ import {
 
 import { seedRealStoryboardReady } from './support/real-probe-seeding';
 
-// 真实火山方舟 Seedream 整集批量首帧联调探针（临时取证，测完可删）：
-// - 不设 JINGXU_E2E → 文本走真实 QwenTextModelAdapter、图片走真实 SeedreamImageModelAdapter
+// 真实 AGNES Image 整集批量首帧联调探针（临时取证，测完可删）：
+// - 不设 JINGXU_E2E → 文本走真实 QwenTextModelAdapter、图片走真实 AgnesImageModelAdapter
 //   + 生产数据根；--no-proxy-server 直连（系统代理间歇不可用会污染取证）
 // - 全新项目路径：批次一 UI 发起 → 首镜头在飞时 UI 取消 → CANCELLED + 在飞自然终态；
 //   随后「为整集生成首帧」驱动剩余镜头收敛（服务端当前世代跳过，跳过清单恰为已就绪镜头）
@@ -27,11 +26,12 @@ import { seedRealStoryboardReady } from './support/real-probe-seeding';
 //   （限流中断的探针不重花钱重播种）。待生成口径对齐应用：当前世代 ≥1 张即「已有首帧」
 //   （15:0x 实录 1/4 镜头被新批跳过、空目标不建批），续跑收敛线 = 全员 ≥1；「同轮恰 4 张」
 //   与全员 4 张的严格断言仅全新跑强制
-// - 门控：未设 JINGXU_REAL_KEY_FILE / JINGXU_REAL_WORKSPACE_ID / JINGXU_REAL_ARK_KEY_FILE 时 skip
+// - 门控：允许显式 Key 文件，或 JINGXU_USE_STORED_CREDENTIALS=1 复用本机已保存凭据
 const desktopRoot = path.resolve(__dirname, '..');
 const keyFile = process.env.JINGXU_REAL_KEY_FILE ?? '';
 const workspaceId = process.env.JINGXU_REAL_WORKSPACE_ID ?? '';
-const arkKeyFile = process.env.JINGXU_REAL_ARK_KEY_FILE ?? '';
+const agnesKeyFile = process.env.JINGXU_AGNES_KEY_FILE ?? '';
+const useStoredCredentials = process.env.JINGXU_USE_STORED_CREDENTIALS === '1';
 const resumeProjectId = process.env.JINGXU_REAL_BATCH_PROJECT_ID ?? '';
 const freshProjectName = `真实批次联调-${String(Date.now())}`;
 
@@ -78,14 +78,14 @@ const pollImageStates = async (
   throw new Error(`POLL_TIMEOUT ${JSON.stringify(latest)}`);
 };
 
-test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + 限流重试收敛 + 空目标幂等）', async () => {
+test('真实 AGNES Image 整集批量首帧探针（取消在飞 + 新批跳过 + 限流重试收敛 + 空目标幂等）', async () => {
   test.setTimeout(2_100_000);
   test.skip(
-    !keyFile || !workspaceId || !arkKeyFile,
-    '需要 JINGXU_REAL_KEY_FILE、JINGXU_REAL_WORKSPACE_ID 与 JINGXU_REAL_ARK_KEY_FILE',
+    !useStoredCredentials && (!keyFile || !workspaceId || !agnesKeyFile),
+    '需要已保存 Qwen/AGNES 凭据，或对应 Key 文件与工作空间',
   );
-  const apiKey = (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
-  const arkApiKey = (await readFile(arkKeyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
+  const apiKey =
+    keyFile === '' ? '' : (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
 
   let application: ElectronApplication | undefined;
   try {
@@ -94,7 +94,7 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
       env: environment(),
     });
     const page = await application.firstWindow();
-    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
+    await page.getByRole('heading', { name: '我的作品', exact: true }).waitFor({ timeout: 30_000 });
 
     // 阶段一：全新项目走真实 Qwen 六阶段播种；续跑项目只校验分镜仍 READY 并取镜头清单。
     let projectId = '';
@@ -145,34 +145,16 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
     expect(shotCount).toBeGreaterThanOrEqual(2);
     const firstShotId = shotIds[0] ?? '';
 
-    // 阶段二：ARK Key 走 UI 路径（与 real-seedream-probe 同闭环：先删后存→解密测试）。
-    await page.reload();
-    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
-    await page.locator('.project-card-main', { hasText: cardName }).click();
-    await page.getByRole('button', { name: '进入剧本工作区' }).click();
-    await page.getByRole('heading', { name: '分镜工作台' }).waitFor();
-    await page.getByRole('button', { name: '设置', exact: true }).click();
-    const imageCard = page.locator('section[aria-labelledby="image-provider-title"]');
-    await imageCard
-      .getByRole('heading', { name: '图片模型服务（火山方舟 ARK）' })
-      .waitFor({ timeout: 30_000 });
-    // 已配置且末四位与本轮密钥一致 → 直接复用不删存（删除确认框曾需人工应答，15:0x 实录
-    // 卡住整轮探针）；未配置或密钥不一致才走「先删后存」重建。
-    const configuredText = `已配置（末四位 ${arkApiKey.slice(-4)}）`;
-    if ((await imageCard.getByText(configuredText).count()) === 0) {
-      if ((await imageCard.getByText(/已配置/).count()) > 0) {
-        page.once('dialog', (dialog) => {
-          void dialog.accept();
-        });
-        await imageCard.getByRole('button', { name: '删除凭据' }).click();
-        await imageCard.getByText('凭据已删除').waitFor({ timeout: 15_000 });
-      }
-      await imageCard.getByLabel('ARK API Key').fill(arkApiKey);
-      await imageCard.getByRole('button', { name: '保存凭据' }).click();
-      await imageCard.getByText(configuredText).waitFor({ timeout: 15_000 });
+    const imageProfile = await page.evaluate(async () =>
+      window.jingxu.provider.getProfile({ profileId: 'profile-image-agnes-primary' }),
+    );
+    if (
+      !imageProfile.ok ||
+      !imageProfile.data.configured ||
+      imageProfile.data.provider !== 'AGNES_IMAGE'
+    ) {
+      throw new Error('AGNES_IMAGE_CREDENTIAL_NOT_READY');
     }
-    await imageCard.getByRole('button', { name: '测试凭据' }).click();
-    await imageCard.getByText(/· 密文可解密读取/).waitFor({ timeout: 15_000 });
 
     // 阶段三·批次一（仅全新项目）：UI 发起 → 首镜头在建档且存在排队镜头 → UI 取消。
     let batch1Id = '';
@@ -417,7 +399,7 @@ test('真实 Seedream 整集批量首帧探针（取消在飞 + 新批跳过 + �
         : ([...finalStates.batches].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0] ??
           null);
     await page.reload();
-    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
+    await page.getByRole('heading', { name: '我的作品', exact: true }).waitFor({ timeout: 30_000 });
     await page.locator('.project-card-main', { hasText: cardName }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
     await page.getByRole('heading', { name: '分镜工作台' }).waitFor();

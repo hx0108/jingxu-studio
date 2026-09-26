@@ -2,6 +2,8 @@ import type {
   CreatorGuideProjectSnapshot,
   CreatorGuideQueryPort,
   CreatorStageStatus,
+  MediaConsistencyService,
+  MediaUnitOfWorkPort,
   ProjectUnitOfWorkPort,
   ScriptWorkspaceQueryPort,
 } from '@jingxu/application';
@@ -26,6 +28,8 @@ const missingStages = (): Record<ScriptStage, CreatorStageStatus> => ({
 
 /** 以现有只读 Port 组合首页导航投影，不保存任何状态。 */
 export const createCreatorGuideQuery = (deps: {
+  readonly consistency?: MediaConsistencyService;
+  readonly media?: MediaUnitOfWorkPort;
   readonly projects: ProjectUnitOfWorkPort;
   readonly scripts: ScriptWorkspaceQueryPort;
 }): CreatorGuideQueryPort => ({
@@ -71,15 +75,114 @@ export const createCreatorGuideQuery = (deps: {
     }
     stages.SHOT_CONTRACT = workspace.storyboard.current?.status ?? 'MISSING';
 
+    const shotIds = workspace.storyboard.currentShots.map((shot) => shot.shotId);
+    let consistencyBlocks: CreatorGuideProjectSnapshot['consistencyBlocks'] = [];
+    if (
+      workspace.storyboard.current?.status === 'READY' &&
+      shotIds.length > 0 &&
+      deps.consistency !== undefined
+    ) {
+      const preflight = await deps.consistency.getPreflight(
+        { projectId, shotIds },
+        `creator-guide-${projectId}`,
+      );
+      if (preflight.ok) {
+        const kinds = new Set(preflight.data.missingItems.map((item) => item.kind));
+        consistencyBlocks = [
+          ...(kinds.has('STYLE') ? (['STYLE_REFERENCE'] as const) : []),
+          ...(kinds.has('CHARACTER') ? (['CHARACTER_REFERENCE'] as const) : []),
+        ];
+      }
+    }
+
+    let imagesReady = false;
+    let videosReady = false;
+    let voiceReady = false;
+    let exportReady = false;
+    if (
+      workspace.storyboard.current?.status === 'READY' &&
+      shotIds.length > 0 &&
+      consistencyBlocks.length === 0 &&
+      deps.media !== undefined
+    ) {
+      ({ exportReady, imagesReady, videosReady, voiceReady } = await deps.media.run(
+        async ({ composition, media, video, voice }) => {
+          const selectedForVersion = (
+            candidates: readonly {
+              readonly selectedAt: string | null;
+              readonly shotVersionId: string;
+              readonly status: string;
+            }[],
+            versionId: string,
+          ): boolean =>
+            candidates.some(
+              (candidate) =>
+                candidate.status === 'SUCCEEDED' &&
+                candidate.selectedAt !== null &&
+                candidate.shotVersionId === versionId,
+            );
+          const imageStates = await Promise.all(
+            workspace.storyboard.currentShots.map(async (shot) =>
+              selectedForVersion(await media.listCandidates(shot.shotId), shot.version.id),
+            ),
+          );
+          const videoStates = await Promise.all(
+            workspace.storyboard.currentShots.map(async (shot) =>
+              selectedForVersion(await video.listCandidates(shot.shotId), shot.version.id),
+            ),
+          );
+          const spokenShots = workspace.storyboard.currentShots.filter((shot) => {
+            try {
+              const document = JSON.parse(shot.version.document) as {
+                readonly content?: { readonly spoken_text?: unknown };
+              };
+              return (
+                typeof document.content?.spoken_text === 'string' &&
+                document.content.spoken_text.trim() !== ''
+              );
+            } catch {
+              return true;
+            }
+          });
+          const voiceStates =
+            spokenShots.length === 0
+              ? []
+              : voice === undefined
+                ? spokenShots.map(() => false)
+                : await Promise.all(
+                    spokenShots.map(async (shot) =>
+                      selectedForVersion(
+                        await voice.generation.listCandidatesByShot(shot.shotId),
+                        shot.version.id,
+                      ),
+                    ),
+                  );
+          const succeededExport =
+            composition === undefined || workspace.episode === null
+              ? null
+              : await composition.composition.findLatestSucceededExport(
+                  projectId,
+                  workspace.episode.id,
+                );
+          return {
+            exportReady: succeededExport !== null,
+            imagesReady: imageStates.every(Boolean),
+            videosReady: videoStates.every(Boolean),
+            voiceReady: voiceStates.every(Boolean),
+          };
+        },
+      ));
+    }
+
     return {
-      consistencyBlocks: [],
-      exportReady: false,
-      imagesReady: false,
+      consistencyBlocks,
+      exportReady,
+      imagesReady,
       projectId,
       sourceInputReady: workspace.sourceInput !== null,
       stages,
-      videosReady: false,
-      voiceReady: false,
+      videosReady,
+      voiceReady,
     };
   },
 });

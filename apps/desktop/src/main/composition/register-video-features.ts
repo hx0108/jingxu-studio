@@ -28,12 +28,9 @@ import {
   AGNES_VIDEO_PROFILE_ID,
   DEFAULT_AGNES_VIDEO_MODEL_ID,
   type AgnesVideoModelId,
-  DEFAULT_SEEDANCE_VIDEO_MODEL_ID,
-  getSeedanceVideoModel,
   isAgnesVideoModelId,
   NARRATOR_DEFAULT_VOICE_ID,
   SEEDANCE_DURATION_RANGE,
-  SEEDANCE_MODEL_ID,
   SEEDANCE_VIDEO_SEGMENT_TIMEOUT_MS,
   SeedanceVideoModelAdapter,
   createMockModelError,
@@ -53,7 +50,7 @@ import type { VideoApiService } from '@jingxu/application';
 /** ARK Key 的 safeStorage 凭据引用（视频独立档，与图片档分存；design D2）。 */
 export const VIDEO_CREDENTIAL_ID = 'profile-video-primary';
 export const AGNES_VIDEO_CREDENTIAL_ID = AGNES_VIDEO_PROFILE_ID;
-export type VideoProviderMode = 'MOCK' | 'SEEDANCE' | 'AGNES';
+export type VideoProviderMode = 'MOCK' | 'AGNES';
 /** 每轮候选数 N（拍板 D3）。 */
 export const VIDEO_CANDIDATE_COUNT = 2;
 /** ASYNC Provider 单候选轮询截止：视频段生成远慢于图片，分钟级预算。 */
@@ -87,9 +84,8 @@ export const shouldUseMockVideoModel = (
   forceMock || (environment.nodeEnv !== 'production' && environment.realProvider !== '1');
 
 export const resolveVideoProviderMode = (value: string | undefined): VideoProviderMode => {
-  if (value === undefined || value === '')
-    return shouldUseMockVideoModel(false) ? 'MOCK' : 'SEEDANCE';
-  if (value === 'MOCK' || value === 'SEEDANCE' || value === 'AGNES') return value;
+  if (value === undefined || value === '') return 'AGNES';
+  if (value === 'MOCK' || value === 'AGNES') return value;
   throw new Error('VIDEO_PROVIDER_MODE_INVALID');
 };
 
@@ -190,6 +186,7 @@ export const createVideoFeatureRegistration = ({
   videoProviderMode,
   pollIntervalMs,
 }: RegisterVideoFeaturesOptions): VideoFeatureRegistration => {
+  const forceRealDemoMedia = process.env.JINGXU_REAL_DEMO_MEDIA_PROBE === '1';
   const providerMode = useE2eMock
     ? 'MOCK'
     : resolveVideoProviderMode(process.env.JINGXU_VIDEO_PROVIDER ?? videoProviderMode);
@@ -310,6 +307,8 @@ export const createVideoFeatureRegistration = ({
       activeCompositionService?.startExport(input, traceId) ?? Promise.resolve(blocked()),
     getExportJob: (input, traceId) =>
       activeCompositionService?.getExportJob(input, traceId) ?? Promise.resolve(blocked()),
+    listExports: (input, traceId) =>
+      activeCompositionService?.listExports(input, traceId) ?? Promise.resolve(blocked()),
     cancelExport: (input, traceId) =>
       activeCompositionService?.cancelExport(input, traceId) ?? Promise.resolve(blocked()),
   };
@@ -322,13 +321,8 @@ export const createVideoFeatureRegistration = ({
   );
 
   /**
-   * 门控联调接线（保留路径）：设 JINGXU_VIDEO_CREDENTIAL_FILE（指向 ARK Key 明文文件）
-   * 且非 E2E Mock 时，启动期一次性写入视频固定凭据（safeStorage 密文；wx 独占创建，
-   * 已存在不覆盖——不吞并 UI 已保存的 Key）。Key 只经此路径入密文，不进环境快照、
-   * 日志与数据库；任何失败只报原因码不回显内容。正式配置走 provider 通道的视频档
-   * （ProviderSettings 视频卡片；与图片档分存互不影响）。
-   * Agnes 档同构：JINGXU_AGNES_CREDENTIAL_FILE → profile-video-agnes-primary
-   * （快速联调通道；Provider 设置 UI 卡落地前的 key 入仓路径）。
+   * 门控联调接线：JINGXU_AGNES_CREDENTIAL_FILE → 固定 AGNES 视频 Profile。
+   * 启动期一次性写入 safeStorage 密文；已存在不覆盖。Key 不进环境快照、日志或数据库。
    */
   const bootstrapCredentialFromFile = (
     keyFile: string | undefined,
@@ -360,13 +354,6 @@ export const createVideoFeatureRegistration = ({
       }
     }
   };
-  const bootstrapVideoCredential = (): void => {
-    bootstrapCredentialFromFile(
-      process.env.JINGXU_VIDEO_CREDENTIAL_FILE,
-      VIDEO_CREDENTIAL_ID,
-      '视频',
-    );
-  };
   const bootstrapAgnesVideoCredential = (): void => {
     bootstrapCredentialFromFile(
       process.env.JINGXU_AGNES_CREDENTIAL_FILE,
@@ -390,7 +377,6 @@ export const createVideoFeatureRegistration = ({
       ) {
         return false;
       }
-      bootstrapVideoCredential();
       bootstrapAgnesVideoCredential();
 
       const store = createContentAddressedStore(managedRoot);
@@ -399,8 +385,8 @@ export const createVideoFeatureRegistration = ({
         safeStorage,
         secretsDirectory: path.join(managedRoot, 'secrets'),
       });
-      // 四 Adapter 全量构建（low-cost D4/任务 4.2）：调度器按任务 0024 冻结溯源解析，
-      // 当前偏好变化不影响在途任务；Mock 标记优先于 Provider 枚举（模拟 Seedance 形态）。
+      // 新任务固定 AGNES；Seedance Adapter 仅用于恢复升级前已冻结的历史任务，
+      // 不再进入当前 Provider 选择或新任务建档。
       const mockVideoModel: VideoModelPort = new MockVideoModelAdapter({
         // Mock 适配器逐次消耗声明式步骤且实例应用级共享（预算外提交按
         // MODEL_UNKNOWN 候选级失败，兼作失控循环的天然熔断）。
@@ -433,9 +419,7 @@ export const createVideoFeatureRegistration = ({
       const activeVideoModel: VideoModelPort =
         providerMode === 'MOCK'
           ? mockVideoModel
-          : providerMode === 'SEEDANCE'
-            ? seedanceVideoModel
-            : resolveAgnesVideoModel(DEFAULT_AGNES_VIDEO_MODEL_ID);
+          : resolveAgnesVideoModel(DEFAULT_AGNES_VIDEO_MODEL_ID);
       const resolveVideoModel: VideoModelResolver = (provenance) => {
         if (provenance.isMock) return mockVideoModel;
         if (provenance.providerKind === 'AGNES_VIDEO')
@@ -446,34 +430,20 @@ export const createVideoFeatureRegistration = ({
       const resolveCurrentProvenance = async (): Promise<VideoProviderProvenance> => {
         if (providerMode === 'MOCK') {
           return {
-            capabilitySnapshotId: CAPABILITY_SNAPSHOT_BY_MODE.SEEDANCE,
-            isMock: true,
-            modelId: SEEDANCE_MODEL_ID,
-            providerKind: 'VOLCARK_SEEDANCE',
-            providerProfileId: 'profile-video-primary',
-          };
-        }
-        if (providerMode === 'AGNES') {
-          // 与 Seedance 分支同构：读 Agnes Profile 已保存模型（设置卡「保存模型
-          // 选择」落行值），无行/未保存回落默认 V2.0；注册表外即抛不带病运行。
-          const profile = await providerProfiles.findById(AGNES_VIDEO_CREDENTIAL_ID);
-          return {
             capabilitySnapshotId: CAPABILITY_SNAPSHOT_BY_MODE.AGNES,
-            isMock: false,
-            modelId: resolveAgnesVideoModelId(profile?.modelId),
+            isMock: true,
+            modelId: DEFAULT_AGNES_VIDEO_MODEL_ID,
             providerKind: 'AGNES_VIDEO',
-            providerProfileId: 'profile-video-agnes-primary',
+            providerProfileId: AGNES_VIDEO_CREDENTIAL_ID,
           };
         }
-        const profile = await providerProfiles.findById(VIDEO_CREDENTIAL_ID);
-        const resolved = getSeedanceVideoModel(profile?.modelId ?? DEFAULT_SEEDANCE_VIDEO_MODEL_ID);
-        if (resolved === null) throw new Error('VIDEO_MODEL_CONFIGURATION_INVALID');
+        const profile = await providerProfiles.findById(AGNES_VIDEO_CREDENTIAL_ID);
         return {
-          capabilitySnapshotId: CAPABILITY_SNAPSHOT_BY_MODE.SEEDANCE,
+          capabilitySnapshotId: CAPABILITY_SNAPSHOT_BY_MODE.AGNES,
           isMock: false,
-          modelId: resolved.id,
-          providerKind: 'VOLCARK_SEEDANCE',
-          providerProfileId: 'profile-video-primary',
+          modelId: resolveAgnesVideoModelId(profile?.modelId),
+          providerKind: 'AGNES_VIDEO',
+          providerProfileId: AGNES_VIDEO_CREDENTIAL_ID,
         };
       };
       // 首帧字节读取（images 命名空间，内容寻址）：与图片调度器写入路径同一落盘口径。
@@ -501,7 +471,7 @@ export const createVideoFeatureRegistration = ({
         capabilityOf: resolveRequestCapability,
         hashPayload,
         mediaUnitOfWork,
-        modelId: SEEDANCE_MODEL_ID,
+        modelId: DEFAULT_AGNES_VIDEO_MODEL_ID,
         newId: randomUUID,
         workspaceQuery,
         resolveProvenance: resolveCurrentProvenance,
@@ -511,10 +481,8 @@ export const createVideoFeatureRegistration = ({
           ? {}
           : {
               assertCredentialReady: async (projectId) => {
-                if (demoProjectRegistry.current() === projectId) return;
-                await credentials.loadCredential(
-                  providerMode === 'AGNES' ? AGNES_VIDEO_CREDENTIAL_ID : VIDEO_CREDENTIAL_ID,
-                );
+                if (demoProjectRegistry.has(projectId) && !forceRealDemoMedia) return;
+                await credentials.loadCredential(AGNES_VIDEO_CREDENTIAL_ID);
               },
             }),
       });
@@ -528,7 +496,7 @@ export const createVideoFeatureRegistration = ({
           kickScheduler?.(projectId);
         },
         mediaUnitOfWork,
-        modelId: SEEDANCE_MODEL_ID,
+        modelId: DEFAULT_AGNES_VIDEO_MODEL_ID,
         newId: randomUUID,
         workspaceQuery,
         resolveProvenance: resolveCurrentProvenance,
@@ -544,7 +512,7 @@ export const createVideoFeatureRegistration = ({
         // 按任务冻结溯源解析 Adapter（low-cost D4）：无溯源行回退当前模式首配。
         // 演示项目优先路由 Mock（simplify-first-run 3.3），真实项目仍按溯源。
         resolveModel: (task) =>
-          demoProjectRegistry.current() === task.projectId
+          demoProjectRegistry.has(task.projectId) && !forceRealDemoMedia
             ? mockVideoModel
             : task.provenance === undefined
               ? null
@@ -581,10 +549,8 @@ export const createVideoFeatureRegistration = ({
           ? {}
           : {
               assertCredentialReady: async (projectId) => {
-                if (demoProjectRegistry.current() === projectId) return;
-                await credentials.loadCredential(
-                  providerMode === 'AGNES' ? AGNES_VIDEO_CREDENTIAL_ID : VIDEO_CREDENTIAL_ID,
-                );
+                if (demoProjectRegistry.has(projectId) && !forceRealDemoMedia) return;
+                await credentials.loadCredential(AGNES_VIDEO_CREDENTIAL_ID);
               },
             }),
         batch,

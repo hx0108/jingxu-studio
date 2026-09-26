@@ -262,7 +262,7 @@ describe('VideoGenerationService.generateVideoCandidates', () => {
       error: {
         code: 'MODEL_CREDENTIAL_INVALID',
         retryable: false,
-        userAction: '在剧本工作区「Provider 设置」的视频卡片中保存 ARK API Key 后重试。',
+        userAction: '在设置页的视频生成卡片中保存服务密钥后重试。',
       },
       ok: false,
     });

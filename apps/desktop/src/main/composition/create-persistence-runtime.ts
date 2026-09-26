@@ -29,6 +29,7 @@ import type {
 
 export interface DesktopPersistenceRuntime {
   readonly close: () => void;
+  readonly discardIncompleteDemoProject: (projectId: string) => Promise<void>;
   readonly getEvaluationUnitOfWork: () => EvaluationUnitOfWorkPort | null;
   readonly getFormatProfileRepository: () => FormatProfileRepository | null;
   readonly getJobUnitOfWork: () => JobUnitOfWorkPort | null;
@@ -93,6 +94,7 @@ export const createDesktopPersistenceRuntime = async ({
       startupService.close();
       registry.close();
     },
+    discardIncompleteDemoProject: (projectId) => adapter.discardIncompleteDemoProject(projectId),
     getFormatProfileRepository: () => adapter.getFormatProfileRepository(),
     getEvaluationUnitOfWork: () => adapter.getEvaluationUnitOfWork(),
     getJobUnitOfWork: () => adapter.getJobUnitOfWork(),

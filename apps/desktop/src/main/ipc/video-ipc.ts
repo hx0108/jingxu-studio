@@ -12,6 +12,7 @@ import {
   getVideoTimelineInputSchema,
   importVideoBackgroundMusicInputSchema,
   listStoryboardVideoStatesInputSchema,
+  listVideoExportsInputSchema,
   listVideoCandidatesInputSchema,
   mediaBatchViewSchema,
   mediaTaskViewSchema,
@@ -37,6 +38,7 @@ import type {
   GetVideoTimelineInputDto,
   ImportVideoBackgroundMusicInputDto,
   ListStoryboardVideoStatesInputDto,
+  ListVideoExportsInputDto,
   ListVideoCandidatesInputDto,
   MediaBatchViewDto,
   MediaTaskViewDto,
@@ -116,6 +118,10 @@ export interface VideoIpcService {
     input: GetVideoExportJobInputDto,
     traceId: string,
   ) => Promise<AppResultDto<VideoExportJobDto>>;
+  readonly listExports: (
+    input: ListVideoExportsInputDto,
+    traceId: string,
+  ) => Promise<AppResultDto<VideoExportJobDto[]>>;
   readonly cancelExport: (
     input: CancelVideoExportInputDto,
     traceId: string,
@@ -215,6 +221,7 @@ export const registerVideoIpc = (
   const timelineResult = appResultSchema(videoTimelineSummarySchema);
   const audioResult = appResultSchema(videoAudioAssetSummarySchema);
   const exportResult = appResultSchema(videoExportJobSchema);
+  const exportListResult = appResultSchema(z.array(videoExportJobSchema));
 
   const registerQuery = <TInput, TOutput>(
     channel: string,
@@ -316,6 +323,12 @@ export const registerVideoIpc = (
     getVideoExportJobInputSchema,
     exportResult,
     (input, traceId) => service.getExportJob(input, traceId),
+  );
+  registerQuery(
+    VIDEO_IPC_CHANNELS.listExports,
+    listVideoExportsInputSchema,
+    exportListResult,
+    (input, traceId) => service.listExports(input, traceId),
   );
   registerCommand(
     VIDEO_IPC_CHANNELS.createTimeline,

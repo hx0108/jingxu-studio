@@ -3,6 +3,7 @@ import type {
   VideoCompositionRepository,
   VideoExportJobRecord,
   VideoTimelineSubtitleItemInput,
+  VideoTimelineUpdateReceiptRecord,
   VideoTimelineVersionRecord,
   VideoTimelineWriteTracks,
 } from '@jingxu/application';
@@ -41,29 +42,44 @@ const requiredNumber = (row: Row, column: string): number => {
     throw new PersistenceRuntimeError('VIDEO_COMPOSITION_ROW_CORRUPT');
   return value;
 };
-const parseItems = (rows: readonly Row[]): VideoTimelineItemDto[] =>
-  rows.map((row) => ({
-    candidateId: requiredString(row, 'candidate_id'),
-    enabled: requiredNumber(row, 'enabled') === 1,
-    fileSha256: requiredString(row, 'file_sha256'),
-    generationInputHash: requiredString(row, 'generation_input_hash'),
-    isMock: null,
-    providerKind: null,
-    position: requiredNumber(row, 'position'),
-    shotId: requiredString(row, 'shot_id'),
-    trimInMs: requiredNumber(row, 'trim_in_ms'),
-    trimOutMs: requiredNumber(row, 'trim_out_ms'),
-  }));
+const parseItems = (rows: readonly Row[]): VideoTimelineItemDto[] => {
+  let nextStartMs = 0;
+  return rows.map((row) => {
+    const startMs = nextStartMs;
+    nextStartMs += requiredNumber(row, 'trim_out_ms') - requiredNumber(row, 'trim_in_ms');
+    return {
+      candidateId: requiredString(row, 'candidate_id'),
+      clipId:
+        typeof row.clip_id === 'string' ? row.clip_id : `clip_${requiredString(row, 'shot_id')}`,
+      enabled: requiredNumber(row, 'enabled') === 1,
+      fileSha256: requiredString(row, 'file_sha256'),
+      generationInputHash: requiredString(row, 'generation_input_hash'),
+      isMock: null,
+      providerKind: null,
+      position: requiredNumber(row, 'position'),
+      shotId: requiredString(row, 'shot_id'),
+      targetStartMs: typeof row.target_start_ms === 'number' ? row.target_start_ms : startMs,
+      trimInMs: requiredNumber(row, 'trim_in_ms'),
+      trimOutMs: requiredNumber(row, 'trim_out_ms'),
+    };
+  });
+};
 
 /** 配音轨行 → DTO（shot_id 字母序确定性返回；既有版本行无轨道=空数组）。 */
 const parseVoiceItems = (rows: readonly Row[]): VideoTimelineVoiceItemDto[] =>
   rows.map((row) => ({
     candidateId: requiredString(row, 'candidate_id'),
+    clipId:
+      typeof row.clip_id === 'string' ? row.clip_id : `voice_${requiredString(row, 'shot_id')}`,
     enabled: requiredNumber(row, 'enabled') === 1,
     fileSha256: requiredString(row, 'file_sha256'),
     generationInputHash: requiredString(row, 'generation_input_hash'),
     offsetMs: requiredNumber(row, 'offset_ms'),
     shotId: requiredString(row, 'shot_id'),
+    targetStartMs:
+      typeof row.target_start_ms === 'number'
+        ? row.target_start_ms
+        : requiredNumber(row, 'offset_ms'),
     trimInMs: requiredNumber(row, 'trim_in_ms'),
     trimOutMs: requiredNumber(row, 'trim_out_ms'),
     volume: requiredNumber(row, 'volume'),
@@ -157,8 +173,9 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
         .prepare(
           `INSERT INTO video_timeline_versions
          (id, timeline_id, episode_version_id, format_profile_id, version_no, parent_version_id,
-          input_hash, audio_asset_id, total_duration_ms, audio_volume, created_at)
-         VALUES (?, ?, ?, ?, 1, NULL, ?, NULL, ?, ?, ?)`,
+          input_hash, audio_asset_id, total_duration_ms, audio_volume, voice_track_muted,
+          bgm_start_ms, bgm_trim_in_ms, bgm_trim_out_ms, bgm_muted, bgm_fade_in_ms, bgm_fade_out_ms, created_at)
+         VALUES (?, ?, ?, ?, 1, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.id,
@@ -168,6 +185,13 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
           input.inputHash,
           input.totalDurationMs,
           input.audioVolume,
+          Number(input.voiceTrackMuted),
+          input.bgmStartMs,
+          input.bgmTrimInMs,
+          input.bgmTrimOutMs,
+          Number(input.bgmMuted),
+          input.bgmFadeInMs,
+          input.bgmFadeOutMs,
           now,
         );
       this.insertItems(input.id, input.items);
@@ -187,13 +211,48 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
       const row = this.database
         .prepare(
           `SELECT v.id, v.timeline_id, v.episode_version_id, v.format_profile_id, v.version_no,
-                v.parent_version_id, v.input_hash, v.audio_asset_id, v.total_duration_ms, v.audio_volume, v.created_at,
+                v.parent_version_id, v.input_hash, v.audio_asset_id, v.total_duration_ms, v.audio_volume,
+                v.voice_track_muted, v.bgm_start_ms, v.bgm_trim_in_ms, v.bgm_trim_out_ms,
+                v.bgm_muted, v.bgm_fade_in_ms, v.bgm_fade_out_ms, v.created_at,
                 t.project_id, t.episode_id
          FROM video_timeline_versions v JOIN video_timelines t ON t.id = v.timeline_id
          WHERE t.project_id = ? AND t.episode_id = ? AND v.id = COALESCE(?, t.current_version_id)`,
         )
         .get(projectId, episodeId, versionId);
       return row === undefined ? null : this.mapTimeline(row);
+    });
+  }
+
+  public findTimelineUpdateReceipt(
+    requestId: string,
+  ): Promise<VideoTimelineUpdateReceiptRecord | null> {
+    return syncToPromise(() => {
+      const row = this.database
+        .prepare(
+          `SELECT payload_sha256, project_id, result_ref_json
+           FROM command_receipts
+           WHERE request_id = ? AND command_name = 'UPDATE_VIDEO_TIMELINE'`,
+        )
+        .get(requestId);
+      if (row === undefined) return null;
+      const value = row as Row;
+      let result: unknown;
+      try {
+        result = JSON.parse(requiredString(value, 'result_ref_json'));
+      } catch {
+        throw new PersistenceRuntimeError('VIDEO_COMPOSITION_ROW_CORRUPT');
+      }
+      const timelineVersionId =
+        typeof result === 'object' && result !== null && 'timelineVersionId' in result
+          ? (result as { readonly timelineVersionId?: unknown }).timelineVersionId
+          : null;
+      if (typeof timelineVersionId !== 'string' || timelineVersionId.length === 0)
+        throw new PersistenceRuntimeError('VIDEO_COMPOSITION_ROW_CORRUPT');
+      return {
+        payloadSha256: requiredString(value, 'payload_sha256'),
+        projectId: requiredString(value, 'project_id'),
+        timelineVersionId,
+      };
     });
   }
 
@@ -204,14 +263,18 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
       readonly id: string;
       readonly inputHash: string;
       readonly items: readonly VideoTimelineItemDto[];
+      readonly payloadSha256: string;
       readonly projectId: string;
+      readonly requestId: string;
+      readonly traceId: string;
       readonly totalDurationMs: number;
     } & VideoTimelineWriteTracks,
   ): Promise<VideoTimelineVersionRecord> {
     return syncToPromise(() => {
       const current = this.database
         .prepare(
-          `SELECT t.id AS timeline_id, t.episode_id, v.episode_version_id, v.format_profile_id, v.version_no
+          `SELECT t.id AS timeline_id, t.episode_id, v.episode_version_id, v.format_profile_id,
+                  v.version_no, v.input_hash
          FROM video_timeline_versions v JOIN video_timelines t ON t.id = v.timeline_id
          WHERE t.project_id = ? AND v.id = ? AND t.current_version_id = v.id`,
         )
@@ -225,8 +288,9 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
         .prepare(
           `INSERT INTO video_timeline_versions
          (id, timeline_id, episode_version_id, format_profile_id, version_no, parent_version_id,
-          input_hash, audio_asset_id, total_duration_ms, audio_volume, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          input_hash, audio_asset_id, total_duration_ms, audio_volume, voice_track_muted,
+          bgm_start_ms, bgm_trim_in_ms, bgm_trim_out_ms, bgm_muted, bgm_fade_in_ms, bgm_fade_out_ms, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           input.id,
@@ -239,12 +303,54 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
           input.audioAssetId,
           input.totalDurationMs,
           input.audioVolume,
+          Number(input.voiceTrackMuted),
+          input.bgmStartMs,
+          input.bgmTrimInMs,
+          input.bgmTrimOutMs,
+          Number(input.bgmMuted),
+          input.bgmFadeInMs,
+          input.bgmFadeOutMs,
           now,
         );
       this.insertItems(input.id, input.items);
       this.insertVoiceItems(input.id, input.voiceItems);
       this.insertSubtitleItems(input.id, input.subtitleItems);
       this.insertAlignmentItems(input.id, input.alignmentItems);
+      this.database
+        .prepare(
+          `INSERT INTO audit_events
+           (id, project_id, actor, action, object_type, object_id, object_version_id,
+            before_sha256, after_sha256, metadata_json, trace_id, created_at)
+           VALUES (?, ?, 'USER', 'VIDEO_TIMELINE_UPDATED', 'VIDEO_TIMELINE', ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          `audit_${input.id}`,
+          input.projectId,
+          requiredString(row, 'timeline_id'),
+          input.id,
+          requiredString(row, 'input_hash'),
+          input.inputHash,
+          JSON.stringify({
+            itemCount: input.items.length,
+            voiceItemCount: input.voiceItems.length,
+          }),
+          input.traceId,
+          now,
+        );
+      this.database
+        .prepare(
+          `INSERT INTO command_receipts
+           (request_id, command_name, payload_sha256, project_id, result_ref_json, trace_id, committed_at)
+           VALUES (?, 'UPDATE_VIDEO_TIMELINE', ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          input.requestId,
+          input.payloadSha256,
+          input.projectId,
+          JSON.stringify({ timelineVersionId: input.id }),
+          input.traceId,
+          now,
+        );
       this.database
         .prepare('UPDATE video_timelines SET current_version_id = ?, updated_at = ? WHERE id = ?')
         .run(input.id, now, requiredString(row, 'timeline_id'));
@@ -263,6 +369,17 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
           'SELECT id, project_id, original_file_name, file_sha256, byte_size, mime_type, storage_rel_path FROM video_audio_assets WHERE project_id = ? AND id = ?',
         )
         .get(projectId, assetId);
+      return row === undefined ? null : mapAudio(row);
+    });
+  }
+
+  public findAudioAssetById(assetId: string): Promise<VideoAudioAssetRecord | null> {
+    return syncToPromise(() => {
+      const row = this.database
+        .prepare(
+          'SELECT id, project_id, original_file_name, file_sha256, byte_size, mime_type, storage_rel_path FROM video_audio_assets WHERE id = ?',
+        )
+        .get(assetId);
       return row === undefined ? null : mapAudio(row);
     });
   }
@@ -362,6 +479,35 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
     });
   }
 
+  public findLatestSucceededExport(
+    projectId: string,
+    episodeId: string,
+  ): Promise<VideoExportJobRecord | null> {
+    return syncToPromise(() => {
+      const row = this.database
+        .prepare(
+          "SELECT * FROM video_export_jobs WHERE project_id = ? AND episode_id = ? AND status = 'SUCCEEDED' ORDER BY updated_at DESC, id ASC LIMIT 1",
+        )
+        .get(projectId, episodeId);
+      return row === undefined ? null : mapExport(row);
+    });
+  }
+
+  public listExports(
+    projectId: string,
+    episodeId: string,
+    limit: number,
+  ): Promise<readonly VideoExportJobRecord[]> {
+    return syncToPromise(() =>
+      this.database
+        .prepare(
+          'SELECT * FROM video_export_jobs WHERE project_id = ? AND episode_id = ? ORDER BY updated_at DESC, id ASC LIMIT ?',
+        )
+        .all(projectId, episodeId, limit)
+        .map(mapExport),
+    );
+  }
+
   public updateExportStatus(
     exportJobId: string,
     status: VideoExportStatus,
@@ -448,17 +594,19 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
   private insertItems(versionId: string, items: readonly VideoTimelineItemDto[]): void {
     const statement = this.database.prepare(
       `INSERT INTO video_timeline_items
-       (timeline_version_id, shot_id, candidate_id, file_sha256, generation_input_hash, position, enabled, trim_in_ms, trim_out_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (timeline_version_id, clip_id, shot_id, candidate_id, file_sha256, generation_input_hash, position, target_start_ms, enabled, trim_in_ms, trim_out_ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     items.forEach((item) =>
       statement.run(
         versionId,
+        item.clipId,
         item.shotId,
         item.candidateId,
         item.fileSha256,
         item.generationInputHash,
         item.position,
+        item.targetStartMs,
         item.enabled ? 1 : 0,
         item.trimInMs,
         item.trimOutMs,
@@ -469,17 +617,19 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
   private insertVoiceItems(versionId: string, items: readonly VideoTimelineVoiceItemDto[]): void {
     const statement = this.database.prepare(
       `INSERT INTO video_timeline_voice_items
-       (timeline_version_id, shot_id, candidate_id, file_sha256, generation_input_hash, offset_ms, volume, trim_in_ms, trim_out_ms, enabled)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (timeline_version_id, clip_id, shot_id, candidate_id, file_sha256, generation_input_hash, offset_ms, target_start_ms, volume, trim_in_ms, trim_out_ms, enabled)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     );
     items.forEach((item) =>
       statement.run(
         versionId,
+        item.clipId,
         item.shotId,
         item.candidateId,
         item.fileSha256,
         item.generationInputHash,
         item.offsetMs,
+        item.targetStartMs,
         item.volume,
         item.trimInMs,
         item.trimOutMs,
@@ -540,12 +690,12 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
     const id = requiredString(row, 'id');
     const items = this.database
       .prepare(
-        'SELECT shot_id, candidate_id, file_sha256, generation_input_hash, position, enabled, trim_in_ms, trim_out_ms FROM video_timeline_items WHERE timeline_version_id = ? ORDER BY position',
+        'SELECT clip_id, shot_id, candidate_id, file_sha256, generation_input_hash, position, target_start_ms, enabled, trim_in_ms, trim_out_ms FROM video_timeline_items WHERE timeline_version_id = ? ORDER BY position',
       )
       .all(id) as Row[];
     const voiceItems = this.database
       .prepare(
-        'SELECT shot_id, candidate_id, file_sha256, generation_input_hash, offset_ms, volume, trim_in_ms, trim_out_ms, enabled FROM video_timeline_voice_items WHERE timeline_version_id = ? ORDER BY shot_id',
+        'SELECT clip_id, shot_id, candidate_id, file_sha256, generation_input_hash, offset_ms, target_start_ms, volume, trim_in_ms, trim_out_ms, enabled FROM video_timeline_voice_items WHERE timeline_version_id = ? ORDER BY target_start_ms, clip_id',
       )
       .all(id) as Row[];
     const subtitleItems = this.database
@@ -565,6 +715,12 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
       alignmentItems: parseAlignmentItems(alignmentItems),
       audioAsset,
       audioVolume: requiredNumber(row, 'audio_volume'),
+      bgmFadeInMs: requiredNumber(row, 'bgm_fade_in_ms'),
+      bgmFadeOutMs: requiredNumber(row, 'bgm_fade_out_ms'),
+      bgmMuted: requiredNumber(row, 'bgm_muted') === 1,
+      bgmStartMs: requiredNumber(row, 'bgm_start_ms'),
+      bgmTrimInMs: requiredNumber(row, 'bgm_trim_in_ms'),
+      bgmTrimOutMs: row.bgm_trim_out_ms === null ? null : requiredNumber(row, 'bgm_trim_out_ms'),
       createdAt: requiredString(row, 'created_at'),
       episodeId: requiredString(row, 'episode_id'),
       episodeVersionId: requiredString(row, 'episode_version_id'),
@@ -578,6 +734,7 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
       totalDurationMs: requiredNumber(row, 'total_duration_ms'),
       versionNo: requiredNumber(row, 'version_no'),
       voiceItems: parseVoiceItems(voiceItems),
+      voiceTrackMuted: requiredNumber(row, 'voice_track_muted') === 1,
     };
   }
 
@@ -589,7 +746,9 @@ export class SqliteVideoCompositionRepository implements VideoCompositionReposit
     const row = this.database
       .prepare(
         `SELECT v.id, v.timeline_id, v.episode_version_id, v.format_profile_id, v.version_no,
-              v.parent_version_id, v.input_hash, v.audio_asset_id, v.total_duration_ms, v.audio_volume, v.created_at,
+              v.parent_version_id, v.input_hash, v.audio_asset_id, v.total_duration_ms, v.audio_volume,
+              v.voice_track_muted, v.bgm_start_ms, v.bgm_trim_in_ms, v.bgm_trim_out_ms,
+              v.bgm_muted, v.bgm_fade_in_ms, v.bgm_fade_out_ms, v.created_at,
               t.project_id, t.episode_id
        FROM video_timeline_versions v JOIN video_timelines t ON t.id = v.timeline_id
        WHERE t.project_id = ? AND t.episode_id = ? AND v.id = ?`,

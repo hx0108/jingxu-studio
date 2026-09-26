@@ -83,10 +83,34 @@
       "stage": "BEAT_SHEET",
       "data": {
         "beats": [
-          { "beat_id": "beat_demo_01", "sequence": 1, "purpose": "建立倒计时", "description": "灯塔广播响起，阿澄找到旧信。", "estimated_duration_sec": 15 },
-          { "beat_id": "beat_demo_02", "sequence": 2, "purpose": "制造追赶阻力", "description": "阿澄冒雨下山，提灯在码头熄灭。", "estimated_duration_sec": 15 },
-          { "beat_id": "beat_demo_03", "sequence": 3, "purpose": "完成情绪突破", "description": "阿澄喊出迟来的道歉，周野回头。", "estimated_duration_sec": 18 },
-          { "beat_id": "beat_demo_04", "sequence": 4, "purpose": "留下余韵", "description": "信被交付，渡船离岛，灯塔最后亮起。", "estimated_duration_sec": 12 }
+          {
+            "beat_id": "beat_demo_01",
+            "sequence": 1,
+            "purpose": "建立倒计时",
+            "description": "灯塔广播响起，阿澄找到旧信。",
+            "estimated_duration_sec": 15
+          },
+          {
+            "beat_id": "beat_demo_02",
+            "sequence": 2,
+            "purpose": "制造追赶阻力",
+            "description": "阿澄冒雨下山，提灯在码头熄灭。",
+            "estimated_duration_sec": 15
+          },
+          {
+            "beat_id": "beat_demo_03",
+            "sequence": 3,
+            "purpose": "完成情绪突破",
+            "description": "阿澄喊出迟来的道歉，周野回头。",
+            "estimated_duration_sec": 18
+          },
+          {
+            "beat_id": "beat_demo_04",
+            "sequence": 4,
+            "purpose": "留下余韵",
+            "description": "信被交付，渡船离岛，灯塔最后亮起。",
+            "estimated_duration_sec": 12
+          }
         ]
       }
     },
@@ -104,7 +128,9 @@
             "scene_id": "scene_lighthouse",
             "character_ids": ["char_acheng"],
             "action": "阿澄掀开松动的木板，取出旧信。窗外闪电照亮停机通知。",
-            "spoken_lines": [{ "speaker_id": "char_acheng", "line_type": "DIALOGUE", "text": "原来你一直在等他。" }],
+            "spoken_lines": [
+              { "speaker_id": "char_acheng", "line_type": "DIALOGUE", "text": "原来你一直在等他。" }
+            ],
             "estimated_duration_sec": 24
           },
           {
@@ -114,8 +140,16 @@
             "character_ids": ["char_acheng", "char_zhouye"],
             "action": "阿澄冲上湿滑栈桥，高举重新亮起的提灯。周野在跳板尽头回身。",
             "spoken_lines": [
-              { "speaker_id": "char_acheng", "line_type": "DIALOGUE", "text": "这封信晚了十年，但我不想让它再错过今晚。" },
-              { "speaker_id": "char_zhouye", "line_type": "DIALOGUE", "text": "有些信，只要抵达就不算太晚。" }
+              {
+                "speaker_id": "char_acheng",
+                "line_type": "DIALOGUE",
+                "text": "这封信晚了十年，但我不想让它再错过今晚。"
+              },
+              {
+                "speaker_id": "char_zhouye",
+                "line_type": "DIALOGUE",
+                "text": "有些信，只要抵达就不算太晚。"
+              }
             ],
             "estimated_duration_sec": 36
           }

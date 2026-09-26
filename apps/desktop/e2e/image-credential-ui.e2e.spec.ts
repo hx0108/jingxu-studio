@@ -40,16 +40,19 @@ test('§3.2 图片凭据 UI 闭环—保存→解密测试→删除：密文固�
     await seedStoryboardReady(page, '图片凭据闭环');
     await page.reload();
     await openProjectsList(page);
-    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
     await page.locator('.project-card-main', { hasText: '图片凭据闭环' }).click();
     await page.getByRole('button', { name: '进入剧本工作区' }).click();
-    await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
-    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await page.locator('.creator-stage-progress').getByText('分镜设计', { exact: true }).click();
+    await expect(page.locator('.media-page-title')).toHaveText('分镜设计');
+    await page.locator('.creator-more-button').click();
+    await page.getByRole('menuitem', { name: '设置', exact: true }).click();
+    await page.locator('.approved-service-details > summary').click();
 
     const card = page.locator('details.model-service-card', {
       has: page.locator('#image-provider-title'),
     });
-    await expect(card.getByRole('heading', { name: 'Agnes AI' })).toBeVisible();
+    await expect(card.getByRole('heading', { name: '阿格尼斯画面服务' })).toBeVisible();
     await card.locator('summary').click();
     // 惰性默认档：模型下拉默认 2.5 Flash、未配置、验证范围如实文案。
     await expect(card.locator('select')).toHaveValue('agnes-image-2.5-flash');
@@ -58,10 +61,10 @@ test('§3.2 图片凭据 UI 闭环—保存→解密测试→删除：密文固�
 
     // 保存：密文按固定 id 真实落盘，输入即清空，状态行只露末 4 位。
     const key = 'e2e-image-key-abcd9999';
-    await card.getByLabel('Agnes API Key').fill(key);
+    await card.getByLabel('服务密钥').fill(key);
     await card.getByRole('button', { name: '保存凭据' }).click();
     await expect(card.getByText('已配置（末四位 9999）')).toBeVisible({ timeout: 15_000 });
-    await expect(card.getByLabel('Agnes API Key')).toHaveValue('');
+    await expect(card.getByLabel('服务密钥')).toHaveValue('');
     const secretPath = path.join(managed, 'secrets', 'profile-image-agnes-primary.bin');
     const ciphertext = await readFile(secretPath);
     expect(ciphertext.byteLength).toBeGreaterThan(0);

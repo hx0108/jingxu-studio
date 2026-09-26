@@ -327,10 +327,12 @@ try {
         return {
           apiFrozen: Object.isFrozen(api),
           childApisFrozen: [
+            'creatorGuide',
             'evaluation',
             'events',
             'image',
             'job',
+            'producibility',
             'project',
             'provider',
             'runtime',
@@ -338,6 +340,7 @@ try {
             'storyboard',
             'transfer',
             'video',
+            'voice',
           ].every((key) => Object.isFrozen(api[key])),
           credentialSaved,
           evaluation,
@@ -356,10 +359,12 @@ try {
       !jobProviderSurface.childApisFrozen ||
       JSON.stringify(jobProviderSurface.keys) !==
         JSON.stringify([
+          'creatorGuide',
           'evaluation',
           'events',
           'image',
           'job',
+          'producibility',
           'project',
           'provider',
           'runtime',
@@ -367,13 +372,19 @@ try {
           'storyboard',
           'transfer',
           'video',
+          'voice',
         ]) ||
       JSON.stringify(jobProviderSurface.scriptKeys) !==
         JSON.stringify([
           'confirmVersion',
           'getWorkspace',
+          'importInput',
+          'initializeInput',
           'initializeOriginal',
+          'listLocks',
+          'lockPath',
           'restoreVersion',
+          'rewriteSelection',
           'saveDraft',
         ])
     ) {

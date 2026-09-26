@@ -226,8 +226,8 @@ describe('SQLite PersistenceRuntimeAdapter', () => {
     await createOnlineBackup({
       backupId: 'backup_invalidaudit',
       clock: () => '2026-08-08T00:00:00.000Z',
-      // 迁移 head 0026 后备份基线含 Agnes Image 能力快照与项目体验标记列。
-      currentVersion: 26,
+      // 备份版本必须与当前完整迁移集合一致。
+      currentVersion: 27,
       database,
       paths,
     });

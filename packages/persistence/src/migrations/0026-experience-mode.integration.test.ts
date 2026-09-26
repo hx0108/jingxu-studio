@@ -13,17 +13,13 @@ const NOW = '2026-09-21T00:00:00.000Z';
 const openDatabaseAt = async (
   root: string,
   fileName: string,
-  versions: number | undefined,
+  versions: number,
 ): Promise<SqliteTestDatabase> => {
   const database = new SqliteTestDatabase(path.join(root, fileName));
   try {
     database.pragma('foreign_keys = ON');
     const migrations = await loadMigrationSet(MIGRATIONS);
-    applyMigrations(
-      database,
-      versions === undefined ? migrations : migrations.slice(0, versions),
-      () => NOW,
-    );
+    applyMigrations(database, migrations.slice(0, versions), () => NOW);
     return database;
   } catch (error) {
     database.close();
@@ -44,7 +40,7 @@ const insertProject = (database: SqliteTestDatabase, id: string, name: string): 
 describe('0026 projects.experience_mode 升级', () => {
   it('空库—全量迁移至 0026—列存在且 STANDARD/DEMO 均可写入', async () => {
     await withSqliteTestContext(async (context) => {
-      const database = await openDatabaseAt(context.root, 'empty.db', undefined);
+      const database = await openDatabaseAt(context.root, 'empty.db', 26);
       try {
         const applied = database
           .prepare('SELECT MAX(version) AS version FROM schema_migrations')
@@ -95,7 +91,7 @@ describe('0026 projects.experience_mode 升级', () => {
       try {
         insertProject(database, 'project_legacy_01', '升级前项目');
         const migrations = await loadMigrationSet(MIGRATIONS);
-        applyMigrations(database, migrations, () => NOW);
+        applyMigrations(database, migrations.slice(0, 26), () => NOW);
         const rows = database
           .prepare('SELECT id, experience_mode FROM projects')
           .all() as unknown as readonly {
@@ -154,7 +150,7 @@ describe('0026 projects.experience_mode 升级', () => {
           );
         }
         const migrations = await loadMigrationSet(MIGRATIONS);
-        applyMigrations(database, migrations, () => NOW);
+        applyMigrations(database, migrations.slice(0, 26), () => NOW);
         const counts = database
           .prepare(
             'SELECT experience_mode, COUNT(*) AS total FROM projects GROUP BY experience_mode',

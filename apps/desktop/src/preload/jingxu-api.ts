@@ -115,6 +115,7 @@ import {
   getVideoTimelineInputSchema,
   importVideoBackgroundMusicInputSchema,
   listStoryboardVideoStatesInputSchema,
+  listVideoExportsInputSchema,
   listVideoCandidatesInputSchema,
   selectVideoCandidateInputSchema,
   startVideoExportInputSchema,
@@ -155,6 +156,7 @@ import {
   type GetVideoTimelineInputDto,
   type ImportVideoBackgroundMusicInputDto,
   type ListStoryboardVideoStatesInputDto,
+  type ListVideoExportsInputDto,
   type ListVideoCandidatesInputDto,
   type SelectVideoCandidateInputDto,
   type StartVideoExportInputDto,
@@ -728,6 +730,10 @@ export const createJingxuApi = (invoke: InvokeIpc): JingxuApi =>
       getExportJob: async (input: GetVideoExportJobInputDto) =>
         appResultSchema(videoExportJobSchema).parse(
           await invoke(VIDEO_IPC_CHANNELS.getExportJob, getVideoExportJobInputSchema.parse(input)),
+        ),
+      listExports: async (input: ListVideoExportsInputDto) =>
+        appResultSchema(videoExportJobSchema.array()).parse(
+          await invoke(VIDEO_IPC_CHANNELS.listExports, listVideoExportsInputSchema.parse(input)),
         ),
       cancelExport: async (input: CancelVideoExportInputDto) =>
         appResultSchema(videoExportJobSchema).parse(

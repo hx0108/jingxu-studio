@@ -82,13 +82,13 @@ test('§9.1 临时根—创建 9:16/16:9 项目并重启—列表详情稳定且
   try {
     let page = await application.firstWindow();
     await openProjectsList(page);
-    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
     await createProjectThroughUi(page, '竖屏项目', '9:16');
     await expect(page.getByText('1080×1920')).toBeVisible();
-    await expect(page.getByText('当前版本 v1')).toBeVisible();
+    await expect(page.getByText('当前设置 v1')).toBeVisible();
     await page
       .locator('nav[aria-label="全局导航"]')
-      .getByRole('button', { name: '我的项目', exact: true })
+      .getByRole('button', { name: '我的作品', exact: true })
       .click();
     await createProjectThroughUi(page, '横屏项目', '16:9');
     await expect(page.getByText('1920×1080')).toBeVisible();
@@ -270,7 +270,7 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
     await openProjectsList(page);
     await page.getByRole('button', { name: /并发基准项目新版/u }).click();
     await page.getByRole('button', { name: '移入回收站' }).click();
-    await expect(page.getByText(/不会删除 Provider 侧数据/u)).toBeVisible();
+    await expect(page.getByText(/不会删除模型服务侧数据/u)).toBeVisible();
     await page
       .getByRole('dialog', { name: '将项目移入回收站？' })
       .getByRole('button', { name: '取消' })
@@ -310,7 +310,7 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
     await expect(page.getByLabel('项目名称')).toHaveValue('dirty 取消保留');
     await page
       .locator('nav[aria-label="全局导航"]')
-      .getByRole('button', { name: '我的项目', exact: true })
+      .getByRole('button', { name: '我的作品', exact: true })
       .click();
     await page
       .getByRole('dialog', { name: '创作设定尚未保存' })
@@ -319,7 +319,7 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
     await expect(page.getByLabel('项目名称')).toHaveValue('dirty 取消保留');
     await page
       .locator('nav[aria-label="全局导航"]')
-      .getByRole('button', { name: '我的项目', exact: true })
+      .getByRole('button', { name: '我的作品', exact: true })
       .click();
     await page.getByRole('button', { name: '放弃修改' }).click();
     await expect(page.getByRole('button', { name: /并发基准项目新版/u })).toBeVisible();
@@ -329,7 +329,7 @@ test('§9.2 临时根—失败、并发、软删恢复与 dirty 三选项—无�
     await page.getByLabel('项目名称').fill('dirty 保存成功');
     await page
       .locator('nav[aria-label="全局导航"]')
-      .getByRole('button', { name: '我的项目', exact: true })
+      .getByRole('button', { name: '我的作品', exact: true })
       .click();
     await page.getByRole('button', { name: '保存并离开' }).click();
     await expect(page.getByRole('button', { name: /dirty 保存成功/u })).toBeVisible();
@@ -553,7 +553,7 @@ test('Schema 资源缺失—只读故障阻断四个写命令—原位修复后�
     await page.getByRole('button', { name: '重新检查' }).click();
     await expect(page.getByTestId('workspace-ready')).toBeVisible();
     await openProjectsList(page);
-    await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
     await expect
       .poll(async () => page.evaluate(() => window.jingxu.runtime.getStartupStatus()))
       .toMatchObject({

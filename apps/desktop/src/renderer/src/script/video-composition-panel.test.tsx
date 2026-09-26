@@ -5,6 +5,7 @@ import {
   VideoCompositionPanel,
   VideoExportJobStatus,
   VideoExportMockNotice,
+  VideoExportRecords,
 } from './VideoCompositionPanel';
 
 const job = (overrides: Record<string, unknown> = {}) => ({
@@ -31,8 +32,8 @@ describe('VideoCompositionPanel', () => {
       />,
     );
     expect(html).toContain('生成时间线');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*name="import-video-background-music"/u);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*name="start-video-export"/u);
+    expect(html).not.toContain('name="import-video-background-music"');
+    expect(html).not.toContain('name="start-video-export"');
     expect(html).not.toContain('ffmpeg');
     expect(html).not.toContain('C:');
     // 未载入时间线：BGM 音量与对齐摘要均不渲染（对齐摘要随版本数据出现）。
@@ -65,7 +66,7 @@ describe('VideoCompositionPanel', () => {
     expect(failed).toContain('<summary>查看错误详情</summary>');
     expect(failed).toContain('FFMPEG_NOT_AVAILABLE');
     expect(cancelled).toContain('导出已取消');
-    expect(succeeded).toContain('aria-label="已导出 MP4 预览"');
+    expect(succeeded).toContain('aria-label="已导出成片预览"');
     expect(succeeded).toContain('jingxu://media/video-export/export_0001');
     expect(`${running}${failed}${cancelled}${succeeded}`).not.toContain('C:');
     expect(`${running}${failed}${cancelled}${succeeded}`).not.toContain('--');
@@ -75,8 +76,34 @@ describe('VideoCompositionPanel', () => {
 describe('VideoExportMockNotice（low-cost 6.4 导出前检查）', () => {
   it('含模拟视频段—醒目提示数量与模拟口径；零模拟不渲染', () => {
     const withMock = renderToStaticMarkup(<VideoExportMockNotice count={2} />);
-    expect(withMock).toContain('导出前检查：时间线包含 2 个模拟（Mock）视频段');
-    expect(withMock).toContain('不代表真实 Provider 画质');
+    expect(withMock).toContain('导出前检查：时间线包含 2 个模拟视频段');
+    expect(withMock).toContain('不代表真实服务生成画质');
+    expect(withMock).not.toContain('Mock');
+    expect(withMock).not.toContain('Provider');
     expect(renderToStaticMarkup(<VideoExportMockNotice count={0} />)).toBe('');
+  });
+});
+
+describe('VideoExportRecords', () => {
+  it('真实记录—展示稳定状态和时间，不泄露本地路径', () => {
+    const html = renderToStaticMarkup(
+      <VideoExportRecords
+        jobs={[
+          job({
+            byteSize: 100,
+            fileSha256: 'a'.repeat(64),
+            mediaUrl: 'jingxu://media/video-export/export_0001',
+            status: 'SUCCEEDED',
+          }),
+        ]}
+        onSelect={() => undefined}
+      />,
+    );
+    expect(html).toContain('最近导出记录');
+    expect(html).toContain('1 秒成片');
+    expect(html).toContain('已完成');
+    expect(html).toContain('查看成片');
+    expect(html).not.toContain('C:');
+    expect(html).not.toContain('storageRelPath');
   });
 });

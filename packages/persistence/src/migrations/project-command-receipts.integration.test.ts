@@ -158,6 +158,7 @@ describe('0002 migration 资源集合', () => {
       { name: '0024_low_cost_video_provider_provenance.sql', version: 24 },
       { name: '0025_agnes_image_provider.sql', version: 25 },
       { name: '0026_project_experience_mode.sql', version: 26 },
+      { name: '0027_editable_composition_timeline.sql', version: 27 },
     ]);
     expect(migrations[0]?.sha256).toBe(FROZEN_0001_SHA256);
     expect(migrations[1]?.sha256).toMatch(/^[a-f0-9]{64}$/u);
@@ -189,7 +190,7 @@ describe('0002 migration 资源集合', () => {
     );
   });
 
-  it('空库—应用完整集合—终态版本 24 且 command_receipts 登记对象存在', async () => {
+  it('空库—应用完整集合—终态版本 27 且 command_receipts 登记对象存在', async () => {
     await withMigratedDatabase((database) => {
       expect(
         database.prepare('SELECT version FROM schema_migrations ORDER BY version').all(),
@@ -220,6 +221,7 @@ describe('0002 migration 资源集合', () => {
         { version: 24 },
         { version: 25 },
         { version: 26 },
+        { version: 27 },
       ]);
       const objects = database
         .prepare(
@@ -250,7 +252,7 @@ describe('0002 migration 资源集合', () => {
         .all();
       expect(after).toEqual(before);
       expect(database.prepare('SELECT COUNT(*) AS count FROM schema_migrations').get()).toEqual({
-        count: 26,
+        count: 27,
       });
       database.close();
     });

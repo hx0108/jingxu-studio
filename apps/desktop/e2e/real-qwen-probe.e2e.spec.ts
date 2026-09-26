@@ -11,6 +11,7 @@ import { _electron as electron, test, type ElectronApplication } from '@playwrig
 const desktopRoot = path.resolve(__dirname, '..');
 const keyFile = process.env.JINGXU_REAL_KEY_FILE ?? '';
 const workspaceId = process.env.JINGXU_REAL_WORKSPACE_ID ?? '';
+const useStoredCredentials = process.env.JINGXU_USE_STORED_CREDENTIALS === '1';
 const stages = ['CONCEPT', 'STORY_BIBLE', 'EPISODE_OUTLINE', 'BEAT_SHEET', 'SCENE_SCRIPT'] as const;
 
 const environment = (): Record<string, string> =>
@@ -25,8 +26,12 @@ const environment = (): Record<string, string> =>
 
 test('真实 Qwen 五阶段全流程探针', async () => {
   test.setTimeout(600_000);
-  test.skip(!keyFile || !workspaceId, '需要 JINGXU_REAL_KEY_FILE 与 JINGXU_REAL_WORKSPACE_ID');
-  const apiKey = (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
+  test.skip(
+    !useStoredCredentials && (!keyFile || !workspaceId),
+    '需要已保存凭据，或 JINGXU_REAL_KEY_FILE 与 JINGXU_REAL_WORKSPACE_ID',
+  );
+  const apiKey =
+    keyFile === '' ? '' : (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
 
   let application: ElectronApplication | undefined;
   try {

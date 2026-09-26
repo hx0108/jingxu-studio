@@ -20,6 +20,7 @@ export const schemaResourceDirectory = path.resolve(
   '../../packages/validation/resources/schemas',
 );
 export const ffmpegResourceDirectory = path.resolve(import.meta.dirname, 'resources/ffmpeg');
+export const demoResourceDirectory = path.resolve(import.meta.dirname, 'resources/demo');
 
 interface FfmpegResourceManifest {
   readonly files: Readonly<Record<'ffmpeg.exe' | 'ffprobe.exe' | 'LICENSE.txt', string>>;
@@ -117,7 +118,12 @@ const forgeConfig = {
     // 峰值磁盘占用减半（模板目录默认落在系统盘 os.tmpdir，全盘吃紧时会 ENOSPC）。
     ...(process.env.JINGXU_PACKAGER_TMPDIR === '0' ? { tmpdir: false } : {}),
     executableName: 'jingxu-studio',
-    extraResource: [migrationResourceDirectory, schemaResourceDirectory, ffmpegResourceDirectory],
+    extraResource: [
+      migrationResourceDirectory,
+      schemaResourceDirectory,
+      ffmpegResourceDirectory,
+      demoResourceDirectory,
+    ],
     // Electron Packager 在该回调之前才完成 extraResource 复制；packageAfterCopy
     // 发生得更早，无法验证最终随包的 FFmpeg 制品。
     afterCopyExtraResources: [

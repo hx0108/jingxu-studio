@@ -1,9 +1,10 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 
-import { AppShell, ComingSoonPanel } from './AppShell';
+import { AppShell, ComingSoonPanel, MORE_AREAS } from './AppShell';
 import { StatusBadge, WorkspaceLayout } from './WorkspaceLayout';
 import { WorkspaceTopbar } from './WorkspaceTopbar';
+import { CreatorStageBar } from './CreatorStageBar';
 
 describe('引导式工作台框架', () => {
   it('全局导航使用中文并标识当前位置', () => {
@@ -12,37 +13,55 @@ describe('引导式工作台框架', () => {
         <p>当前内容</p>
       </AppShell>,
     );
-    for (const label of [
-      '首页',
-      '我的项目',
-      '创作工作台',
-      '素材库',
-      '生成任务',
-      '导出记录',
-      '质量与评测',
-      '设置',
-    ]) {
+    for (const label of ['镜序', '我的作品', '质量评测', '设置', '更多', 'AI漫剧 / 短剧创作平台']) {
       expect(html).toContain(label);
     }
     expect(html).toContain('aria-current="page"');
-    expect(html).toContain('大富翁的每一天');
+    expect(html).not.toContain('大富翁的每一天');
     expect(html).not.toContain('JINGXU STUDIO');
+    expect(html).not.toContain('生成任务');
+    expect(MORE_AREAS).toStrictEqual([
+      ['workspace', '创作工作台'],
+      ['assets', '素材库'],
+      ['tasks', '生成任务'],
+      ['exports', '导出记录'],
+    ]);
   });
 
-  it('三栏布局保留流程、创作区与渐进式检查器', () => {
+  it('取消旧阶段侧栏，仅保留新原型主画布与右侧检查器', () => {
     const html = renderToStaticMarkup(
-      <WorkspaceLayout flow={<p>六阶段流程</p>} inspector={<p>版本与锁</p>}>
+      <WorkspaceLayout inspector={<p>生成故事概念</p>}>
         <p>当前创作内容</p>
       </WorkspaceLayout>,
     );
-    expect(html).toContain('workspace-flow');
+    expect(html).not.toContain('workspace-flow');
     expect(html).toContain('workspace-canvas');
     expect(html).toContain('workspace-inspector');
-    expect(html).toContain('上下文检查器');
-    expect(html).toContain('aria-label="检查器内容"');
-    expect(html).toContain('aria-pressed="true"');
-    expect(html).toContain('版本与锁');
-    expect(html).toContain('任务');
+    expect(html).toContain('当前创作内容');
+    expect(html).toContain('生成故事概念');
+    expect(html).not.toContain('准备状态');
+    expect(html).not.toContain('版本与锁');
+  });
+
+  it('新原型顶部流程完整展示六步中文创作路径', () => {
+    const html = renderToStaticMarkup(
+      <CreatorStageBar
+        activeStage="storyboard"
+        onBack={vi.fn()}
+        onOpenEvaluation={vi.fn()}
+        onOpenHistory={vi.fn()}
+        onOpenProjectSettings={vi.fn()}
+        onOpenSettings={vi.fn()}
+        onSelect={vi.fn()}
+        projectName="午后列车"
+        workType="短剧"
+      />,
+    );
+    for (const label of ['故事构思', '剧本完善', '分镜设计', '画面生成', '视频生成', '合成导出']) {
+      expect(html).toContain(label);
+    }
+    expect(html).toContain('aria-current="step"');
+    expect(html).not.toContain('六阶段创作流程');
   });
 
   it('项目顶栏只展示定位信息，不重复展示自动保存文案', () => {

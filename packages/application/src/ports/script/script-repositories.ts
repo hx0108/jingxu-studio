@@ -76,6 +76,13 @@ export interface ProducibilityRepositoryPort {
   }> | null>;
   findLatestCapabilitySnapshotId(): Promise<string | null>;
   findLatestReferencePriceSnapshotId(): Promise<string | null>;
+  readonly findLatestReferencePriceSnapshot?: () => Promise<{
+    readonly currency: string;
+    readonly effectiveAt: string;
+    readonly expiresAt: string;
+    readonly max: number;
+    readonly min: number;
+  } | null>;
 }
 
 /** Script input freezing only needs the current immutable FormatProfile snapshot. */

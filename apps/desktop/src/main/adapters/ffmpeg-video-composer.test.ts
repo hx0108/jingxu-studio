@@ -190,6 +190,53 @@ describe('FfmpegVideoComposer', () => {
     expect((JSON.parse(stdout) as { streams: unknown[] }).streams).toHaveLength(1);
   }, 30_000);
 
+  it('真实 FFmpeg—两个画面片段之间保留三百毫秒黑场', async () => {
+    const store = createContentAddressedStore(root);
+    const source = await store.write({
+      bytes: MOCK_VIDEO_MP4_BYTES,
+      mimeType: 'video/mp4',
+      namespace: 'videos',
+      projectId: 'project_gap_0001',
+    });
+    const composer = createFfmpegVideoComposer({
+      ffmpegPath: path.join(resourceDirectory, 'ffmpeg.exe'),
+      ffprobePath: path.join(resourceDirectory, 'ffprobe.exe'),
+      managedRoot: root,
+      store,
+    });
+    const result = await composer.compose({
+      audioStorageRelPath: null,
+      clips: [
+        { storageRelPath: source.storageRelPath, targetStartMs: 0, trimInMs: 0, trimOutMs: 500 },
+        {
+          storageRelPath: source.storageRelPath,
+          targetStartMs: 800,
+          trimInMs: 500,
+          trimOutMs: 1000,
+        },
+      ],
+      exportJobId: 'export_gap_0001',
+      fps: 10,
+      height: 48,
+      projectId: 'project_gap_0001',
+      signal: new AbortController().signal,
+      width: 48,
+    });
+    const outputPath = await store.resolvePathWithinProjects(result.storageRelPath);
+    const { stdout } = await execFileAsync(path.join(resourceDirectory, 'ffprobe.exe'), [
+      '-v',
+      'error',
+      '-show_entries',
+      'format=duration',
+      '-of',
+      'json',
+      outputPath,
+    ]);
+    const probe = JSON.parse(stdout) as { format: { duration: string } };
+    expect(Number(probe.format.duration)).toBeGreaterThanOrEqual(1.2);
+    expect(Number(probe.format.duration)).toBeLessThan(1.5);
+  }, 30_000);
+
   it('滤镜图路径判据与数据驱动构建（§6.1）', () => {
     // 回归锁判据：无配音且零延展 → 现状 concat 路径。
     expect(usesFilterGraphPath([], 0)).toBe(false);
@@ -197,6 +244,7 @@ describe('FfmpegVideoComposer', () => {
     expect(usesFilterGraphPath([{ extendedMs: undefined }], 0)).toBe(false);
     expect(usesFilterGraphPath([{ extendedMs: 1 }], 0)).toBe(true);
     expect(usesFilterGraphPath([], 1)).toBe(true);
+    expect(usesFilterGraphPath([{ gapBeforeMs: 200 }], 0)).toBe(true);
 
     const audio = buildAudioFilterGraph({
       backgroundMusic: { inputIndex: 3, volume: 0.35 },
@@ -222,6 +270,24 @@ describe('FfmpegVideoComposer', () => {
     expect(audio).toContain(
       'amix=inputs=4:duration=longest:dropout_transition=0:normalize=0,apad=whole_dur=4.000,atrim=duration=4.000,alimiter=limit=0.980:level=disabled[aout]',
     );
+    const editedMusic = buildAudioFilterGraph({
+      backgroundMusic: {
+        inputIndex: 1,
+        volume: 0.4,
+        startMs: 500,
+        trimInMs: 100,
+        trimOutMs: 2100,
+        fadeInMs: 300,
+        fadeOutMs: 400,
+      },
+      durationSec: 4,
+      sourceAudios: [],
+      voices: [],
+    });
+    expect(editedMusic).toContain('atrim=start=0.100:end=2.100,asetpts=PTS-STARTPTS');
+    expect(editedMusic).toContain('afade=t=in:st=0:d=0.300');
+    expect(editedMusic).toContain('afade=t=out:st=1.600:d=0.400');
+    expect(editedMusic).toContain('adelay=500:all=1');
 
     const video = buildExtendedVideoFilterGraph({
       clips: [
@@ -237,6 +303,17 @@ describe('FfmpegVideoComposer', () => {
     );
     expect(video).toContain('[1:v]trim=start=0.200:end=0.700,setpts=PTS-STARTPTS,scale=');
     expect(video.endsWith(';[v0][v1]concat=n=2:v=1:a=0[vout]')).toBe(true);
+    const withGap = buildExtendedVideoFilterGraph({
+      clips: [
+        { extendedMs: 0, gapBeforeMs: 0, trimInMs: 0, trimOutMs: 500 },
+        { extendedMs: 0, gapBeforeMs: 300, trimInMs: 500, trimOutMs: 1000 },
+      ],
+      fps: 24,
+      height: 1920,
+      width: 1080,
+    });
+    expect(withGap).toContain('color=c=black:s=1080x1920:r=24:d=0.300');
+    expect(withGap).toContain('[v0][gap1][v1]concat=n=3:v=1:a=0[vout]');
 
     // 纯延展无任何音频输入时，混音段为空字符串（调用方省略 [aout] 映射）。
     expect(

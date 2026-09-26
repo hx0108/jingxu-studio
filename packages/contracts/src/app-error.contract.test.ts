@@ -34,6 +34,13 @@ describe('AppError / AppResult Contract', () => {
         'VOICE_MAPPING_MISSING',
         'VOICE_CANDIDATE_STALE',
         'VOICE_ALIGNMENT_BLOCKED',
+        'VIDEO_TIMELINE_CLIP_LIMIT',
+        'VIDEO_TIMELINE_CLIP_DUPLICATE',
+        'VIDEO_TIMELINE_CLIP_NOT_FOUND',
+        'VIDEO_TIMELINE_EMPTY',
+        'VIDEO_TIMELINE_OVERLAP',
+        'VIDEO_TIMELINE_START_INVALID',
+        'VIDEO_AUDIO_FADE_INVALID',
       ];
       for (const code of codes) {
         expect(projectErrorCodeSchema.parse(code)).toBe(code);

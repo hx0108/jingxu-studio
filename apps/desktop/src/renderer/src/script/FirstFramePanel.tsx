@@ -13,6 +13,7 @@ import type {
 
 import { describeProjectError } from '../project/project-error';
 import { workspaceStatusLabel } from '../ui/workspace-status';
+import { PROTOTYPE_ASSETS, prototypeAssetAt } from '../assets/prototype/prototype-assets';
 import {
   CANDIDATE_STATUS_LABELS,
   candidateImageSrc,
@@ -35,6 +36,7 @@ import { shotGenerationBusy } from './storyboard-image-state-policy';
 export interface FirstFramePanelProps {
   /** 列表级状态底座中该镜头的条目（batch-first-frame 5.3 一致性）；null 同未载入。 */
   readonly imageState: ShotImageStateDto | null;
+  readonly isDemo?: boolean;
   readonly projectId: string;
   readonly shot: StoryboardShotSummaryDto;
   /** 分镜当前整集状态；仅 READY 集合内的镜头可发起生成。 */
@@ -45,6 +47,7 @@ export interface FirstFramePanelProps {
 export interface FirstFrameBoardProps {
   readonly busy: boolean;
   readonly candidates: readonly ImageCandidateViewDto[];
+  readonly isDemo?: boolean;
   readonly onSelect: (candidate: ImageCandidateViewDto) => void;
   readonly pendingCandidateId: string | null;
 }
@@ -52,12 +55,22 @@ export interface FirstFrameBoardProps {
 export const FirstFrameBoard = ({
   busy,
   candidates,
+  isDemo = false,
   onSelect,
   pendingCandidateId,
 }: FirstFrameBoardProps) => {
   const groups = groupCandidatesByGeneration(candidates);
   if (candidates.length === 0) {
-    return <p className="action-hint">该镜头尚未生成首帧候选。</p>;
+    return (
+      <section className="prototype-empty-candidates" aria-label="候选画面展示位置">
+        <p className="action-hint">该镜头尚未生成首帧候选。生成后将在以下位置供你比较选择。</p>
+        <div aria-hidden="true" className="prototype-candidate-strip">
+          {PROTOTYPE_ASSETS.candidates.map((src, index) => (
+            <img alt="" key={src} src={src} style={{ opacity: 0.34 + index * 0.08 }} />
+          ))}
+        </div>
+      </section>
+    );
   }
   return (
     <>
@@ -77,8 +90,14 @@ export const FirstFrameBoard = ({
             {group.rounds.map((round) => String(round)).join('、')} 轮
           </h4>
           <ul className="candidate-grid">
-            {group.candidates.map((candidate) => {
-              const imageSrc = candidateImageSrc(candidate);
+            {group.candidates.map((candidate, candidateIndex) => {
+              const candidateSrc = candidateImageSrc(candidate);
+              const imageSrc = isDemo
+                ? (prototypeAssetAt(
+                    PROTOTYPE_ASSETS.candidates,
+                    candidateIndex % PROTOTYPE_ASSETS.candidates.length,
+                  ) ?? candidateSrc)
+                : candidateSrc;
               const selectable = !group.stale && isSelectableCandidate(candidate);
               return (
                 <li
@@ -198,12 +217,12 @@ export const FirstFrameUploadForm = ({ busy, onSubmit }: FirstFrameUploadFormPro
         </select>
       </label>
       <label>
-        资产引用 ID（char_*/scene_*/project-style）
+        资产引用标识
         <input
           onChange={(event) => {
             setBibleRefId(event.target.value);
           }}
-          placeholder="scene_train"
+          placeholder="请输入与故事设定一致的角色或场景标识"
           readOnly={assetType === 'STYLE'}
           value={bibleRefId}
         />
@@ -231,7 +250,7 @@ export const FirstFrameUploadForm = ({ busy, onSubmit }: FirstFrameUploadFormPro
         />
       </label>
       <label>
-        参考图（≤20MB PNG/JPEG/WebP）
+        参考图（不超过 20 兆，支持常见图片格式）
         <input
           accept="image/png,image/jpeg,image/webp"
           onChange={(event) => {
@@ -257,6 +276,7 @@ export const FirstFrameUploadForm = ({ busy, onSubmit }: FirstFrameUploadFormPro
 
 export const FirstFramePanel = ({
   imageState,
+  isDemo = false,
   projectId,
   shot,
   storyboardStatus,
@@ -476,6 +496,44 @@ export const FirstFramePanel = ({
               ? '请先补齐项目画风与全部出场角色参考图。'
               : null;
   const errorView = error === null ? null : describeProjectError(error);
+  const selectedCandidate = candidates?.find(
+    (candidate) => candidate.selectedAt !== null && candidateImageSrc(candidate) !== null,
+  );
+  const candidatePreview =
+    selectedCandidate === undefined ? null : candidateImageSrc(selectedCandidate);
+  const demoReference = isDemo
+    ? shot.sequence === 2
+      ? PROTOTYPE_ASSETS.heroineMain
+      : (prototypeAssetAt(PROTOTYPE_ASSETS.shots, shot.sequence - 1) ?? null)
+    : null;
+  const previewSrc = demoReference ?? candidatePreview;
+  const asObject = (value: unknown): Record<string, unknown> =>
+    typeof value === 'object' && value !== null && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  const content = asObject(shot.document.content);
+  const cinematography = asObject(shot.document.cinematography);
+  const constraints = asObject(shot.document.generation_constraints);
+  const imageRequirement =
+    typeof constraints.image_prompt === 'string' ? constraints.image_prompt : shot.narrativePurpose;
+  const action = typeof content.action === 'string' ? content.action : shot.narrativePurpose;
+  const emotion = typeof content.emotion === 'string' ? content.emotion : '以当前镜头文档为准';
+  const composition =
+    typeof cinematography.composition === 'string'
+      ? cinematography.composition
+      : '以当前镜头文档为准';
+  const candidateBoard =
+    candidates === null ? (
+      <p aria-live="polite">正在加载首帧候选…</p>
+    ) : (
+      <FirstFrameBoard
+        busy={taskActive}
+        candidates={candidates}
+        isDemo={isDemo}
+        onSelect={select}
+        pendingCandidateId={pendingCandidateId}
+      />
+    );
 
   return (
     <section
@@ -484,6 +542,49 @@ export const FirstFramePanel = ({
       id="first-frame-panel"
     >
       <h3 id="first-frame-title">首帧候选 · 镜头 #{String(shot.sequence)}</h3>
+      <div className="first-frame-hero">
+        <div className="first-frame-preview-stack">
+          <div className="first-frame-preview">
+            {previewSrc === null ? (
+              <p className="candidate-placeholder">尚无可预览的画面候选</p>
+            ) : (
+              <img
+                alt={demoReference !== null ? '演示候选画面' : '当前已选画面候选'}
+                src={previewSrc}
+              />
+            )}
+            <p className="first-frame-preview-caption">
+              {demoReference !== null
+                ? '演示候选画面 · 当前选择与任务记录可追溯'
+                : candidatePreview !== null
+                  ? '当前已选候选画面'
+                  : '生成画面后可在这里预览'}
+            </p>
+          </div>
+          <div className="media-candidate-strip">{candidateBoard}</div>
+        </div>
+        <section aria-label="画面要求" className="first-frame-requirements">
+          <h3>画面要求</h3>
+          <dl>
+            <div>
+              <dt>人物与动作</dt>
+              <dd>{action}</dd>
+            </div>
+            <div>
+              <dt>情绪</dt>
+              <dd>{emotion}</dd>
+            </div>
+            <div>
+              <dt>画面内容</dt>
+              <dd>{imageRequirement}</dd>
+            </div>
+            <div>
+              <dt>构图</dt>
+              <dd>{composition}</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
       {consistency !== null && (
         <section aria-label="角色与画风一致性" className="consistency-status">
           <h4>角色与画风一致性</h4>
@@ -518,13 +619,13 @@ export const FirstFramePanel = ({
           onClick={generate}
           type="button"
         >
-          生成首帧候选
+          生成镜头画面
         </button>
       </div>
       {generateHint !== null && <p className="action-hint">{generateHint}</p>}
       {task !== null && (
         <p aria-live="polite">
-          任务状态：{workspaceStatusLabel(task.phase)}
+          当前生成：{workspaceStatusLabel(task.phase)}
           {task.errorCode === null ? '' : ' · 可查看失败详情'}
         </p>
       )}
@@ -534,22 +635,12 @@ export const FirstFramePanel = ({
           <code>{task.errorCode}</code>
         </details>
       )}
-      {candidates === null ? (
-        <p aria-live="polite">正在加载首帧候选…</p>
-      ) : (
-        <FirstFrameBoard
-          busy={taskActive}
-          candidates={candidates}
-          onSelect={select}
-          pendingCandidateId={pendingCandidateId}
-        />
-      )}
       <section aria-labelledby="reference-upload-title">
-        <h4 id="reference-upload-title">资产参考图上传（升版将使旧输入世代候选失效）</h4>
+        <h4 id="reference-upload-title">补充创作参考图</h4>
         <FirstFrameUploadForm busy={uploadBusy} onSubmit={upload} />
         {uploadOutcome !== null && (
           <div aria-live="polite" className="upload-outcome">
-            <p>参考图已上传为版本 v{String(uploadOutcome.versionNo)}。</p>
+            <p>参考图已保存。</p>
             {uploadOutcome.affectedShots.length === 0 ? (
               <p>本次升版未影响任何镜头的既有候选。</p>
             ) : (

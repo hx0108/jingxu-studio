@@ -33,6 +33,7 @@ describe('creator home', () => {
       />,
     );
     expect(html).toContain('5 分钟体验（免配置·零费用）');
+    expect(html.match(/data-primary-action/g) ?? []).toHaveLength(1);
     for (const forbidden of ['JSON', 'Provider', 'requestId']) {
       expect(html).not.toContain(forbidden);
     }
@@ -53,7 +54,10 @@ describe('creator home', () => {
       />,
     );
 
-    expect(html).toContain('继续制作本集');
+    expect(html).toContain('开始创作');
+    expect(html).toContain('继续创作');
+    expect(html).toContain('AI漫剧');
+    expect(html).toContain('AI短剧');
     expect(html).toContain('生成单集大纲');
     expect(html.match(/data-primary-action/g) ?? []).toHaveLength(1);
     for (const forbidden of ['JSON', 'Provider', '版本', '能力快照', '任务 ID', '哈希']) {
@@ -85,6 +89,6 @@ describe('creator home', () => {
     ).toEqual({ mediaStep: 'image', screen: 'script', stage: 'SCENE_SCRIPT' });
     expect(
       routeForCreatorAction({ ...action, action: 'ADD_REFERENCES', target: 'ASSETS' }),
-    ).toEqual({ mediaStep: null, screen: 'assets', stage: 'SCENE_SCRIPT' });
+    ).toEqual({ mediaStep: 'image', screen: 'script', stage: 'SCENE_SCRIPT' });
   });
 });

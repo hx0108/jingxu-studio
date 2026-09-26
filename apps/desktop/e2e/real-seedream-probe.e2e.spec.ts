@@ -1,5 +1,4 @@
-// 【已退役 2026-09-21】图片档已切换 Agnes Image（agnes-image-2.5/2.1-flash）；本探针
-// 针对 Seedream/ARK 实测路径保留为历史证据，默认门控零网络，不再随图片档演进。
+// AGNES Image 单镜头真实闭环探针。
 import { readFile } from 'node:fs/promises';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,9 +7,9 @@ import path from 'node:path';
 import { encodeMockPng } from '@jingxu/model-adapters';
 import { _electron as electron, test, type ElectronApplication } from '@playwright/test';
 
-// 真实火山方舟 Seedream 联调探针（临时文件，测完删除）：
-// - 不设 JINGXU_E2E → 文本走真实 QwenTextModelAdapter、图片走真实 SeedreamImageModelAdapter + 生产数据根
-// - 文本凭据经 provider IPC 重存（JINGXU_REAL_REFRESH_CREDENTIAL=1）；ARK Key 走 UI 路径
+// 真实 AGNES Image 联调探针（临时文件，测完删除）：
+// - 不设 JINGXU_E2E → 文本走真实 QwenTextModelAdapter、图片走真实 AgnesImageModelAdapter + 生产数据根
+// - 文本凭据可经 provider IPC 重存；图片凭据使用已保存的 safeStorage 密文
 //   （image-credential-management 6.1）：真实页面 ImageProviderCard 保存→解密测试，替代 env 引导；
 //   Key 只经 page.fill 进入输入框，探针全程不回显、不落日志
 // - 文生图与参考图生图各一轮：轮1（未传资产，纯文生图）→ 上传资产 → 轮2（绑定资产，
@@ -18,11 +17,12 @@ import { _electron as electron, test, type ElectronApplication } from '@playwrig
 // - D3 留证：关进程后由 scripts/print-real-probe-invocations.mjs（纯 node，loader 不支持
 //   node:sqlite 故不走 spec）只读查询 model_invocations × script_stage_jobs，对比 2026-08-17
 //   基线（SHOT_CONTRACT 120s 超时 5/8）
-// - 门控：未设 JINGXU_REAL_KEY_FILE / JINGXU_REAL_WORKSPACE_ID / JINGXU_REAL_ARK_KEY_FILE 时 skip
+// - 门控：允许显式 Key 文件，或 JINGXU_USE_STORED_CREDENTIALS=1 复用本机已保存凭据
 const desktopRoot = path.resolve(__dirname, '..');
 const keyFile = process.env.JINGXU_REAL_KEY_FILE ?? '';
 const workspaceId = process.env.JINGXU_REAL_WORKSPACE_ID ?? '';
-const arkKeyFile = process.env.JINGXU_REAL_ARK_KEY_FILE ?? '';
+const agnesKeyFile = process.env.JINGXU_AGNES_KEY_FILE ?? '';
+const useStoredCredentials = process.env.JINGXU_USE_STORED_CREDENTIALS === '1';
 const stages = ['CONCEPT', 'STORY_BIBLE', 'EPISODE_OUTLINE', 'BEAT_SHEET', 'SCENE_SCRIPT'] as const;
 const projectName = `真实首帧联调-${String(Date.now())}`;
 
@@ -36,14 +36,14 @@ const environment = (): Record<string, string> =>
     ),
   );
 
-test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 + 升版 STALE）', async () => {
+test('真实 AGNES Image 首帧闭环探针（文生图 + 参考图生图 + 选择 + 升版 STALE）', async () => {
   test.setTimeout(1_200_000);
   test.skip(
-    !keyFile || !workspaceId || !arkKeyFile,
-    '需要 JINGXU_REAL_KEY_FILE、JINGXU_REAL_WORKSPACE_ID 与 JINGXU_REAL_ARK_KEY_FILE',
+    !useStoredCredentials && (!keyFile || !workspaceId || !agnesKeyFile),
+    '需要已保存 Qwen/AGNES 凭据，或对应 Key 文件与工作空间',
   );
-  const apiKey = (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
-  const arkApiKey = (await readFile(arkKeyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
+  const apiKey =
+    keyFile === '' ? '' : (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
   // 图片凭据不再经 env 引导：UI 保存按固定 id 覆盖轮换（任务 2.2），旧密文/旧 userData
   // 密钥不匹配的残留由「先删后存」的 UI 闭环清理；文本凭据由 JINGXU_REAL_REFRESH_CREDENTIAL=1
   // 在进程内走 saveCredential 重存。
@@ -67,7 +67,7 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
       ...(probeExecutable === '' ? {} : { executablePath: probeExecutable }),
     });
     const page = await application.firstWindow();
-    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
+    await page.getByRole('heading', { name: '我的作品', exact: true }).waitFor({ timeout: 30_000 });
 
     // 阶段一：真实 Qwen 五阶段 + SHOT_CONTRACT，取得 READY 分镜（与 real-qwen-probe 同源逻辑）。
     const seeded = await page.evaluate(
@@ -322,36 +322,18 @@ test('真实 Seedream 首帧闭环探针（文生图 + 参考图生图 + 选择 
       throw new Error(`REAL_SEEDREAM_SEED_FAILED ${JSON.stringify(seeded)}`);
     }
 
-    // ARK Key 走 UI 路径（6.1）：真实页面 ImageProviderCard「保存→解密测试」，替代 env 引导。
-    await page.reload();
-    await page.getByRole('heading', { name: '我的项目', exact: true }).waitFor({ timeout: 30_000 });
-    await page.locator('.project-card-main', { hasText: projectName }).click();
-    await page.getByRole('button', { name: '进入剧本工作区' }).click();
-    await page.getByRole('heading', { name: '分镜工作台' }).waitFor();
-    await page.getByRole('button', { name: '设置', exact: true }).click();
-    // CINE 主题后图片服务卡为 <details> 折叠面板：容器由旧 section[aria-labelledby]
-    // 改为含 #image-provider-title 的 details，标题收敛为「火山方舟 ARK」。
-    const imageCard = page.locator('details:has(#image-provider-title)');
-    await imageCard.getByRole('heading', { name: '火山方舟 ARK' }).waitFor({ timeout: 30_000 });
-    await imageCard.locator('summary').click();
-    await imageCard.getByLabel('ARK API Key').waitFor({ timeout: 10_000 });
-    // 生产档可能残留旧配置：先走 UI 删除，再完整复刻「保存→测试」闭环。
-    if ((await imageCard.getByText(/已配置/).count()) > 0) {
-      page.once('dialog', (dialog) => {
-        void dialog.accept();
-      });
-      await imageCard.getByRole('button', { name: '删除凭据' }).click();
-      await imageCard.getByText('凭据已删除').waitFor({ timeout: 15_000 });
+    const imageProfile = await page.evaluate(async () =>
+      window.jingxu.provider.getProfile({ profileId: 'profile-image-agnes-primary' }),
+    );
+    if (
+      !imageProfile.ok ||
+      !imageProfile.data.configured ||
+      imageProfile.data.provider !== 'AGNES_IMAGE'
+    ) {
+      throw new Error('AGNES_IMAGE_CREDENTIAL_NOT_READY');
     }
-    await imageCard.getByLabel('ARK API Key').fill(arkApiKey);
-    await imageCard.getByRole('button', { name: '保存凭据' }).click();
-    await imageCard
-      .getByText(`已配置（末四位 ${arkApiKey.slice(-4)}）`)
-      .waitFor({ timeout: 15_000 });
-    await imageCard.getByRole('button', { name: '测试凭据' }).click();
-    await imageCard.getByText(/· 密文可解密读取/).waitFor({ timeout: 15_000 });
 
-    // 阶段二：真实 Seedream 两轮候选 + 选择 + 升版 STALE。
+    // 阶段二：真实 AGNES Image 两轮候选 + 选择 + 升版 STALE。
     const referenceV1 = encodeMockPng('seedream-probe-ref-v1', 256, 256);
     const styleV1 = encodeMockPng('seedream-probe-style-v1', 256, 256);
     const styleV2 = encodeMockPng('seedream-probe-style-v2', 256, 256);

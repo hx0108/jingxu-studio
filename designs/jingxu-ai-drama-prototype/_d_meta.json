@@ -1,0 +1,23 @@
+{
+  "type": "design",
+  "designSystems": [],
+  "primaryDesignSystem": null,
+  "assets": {
+    "镜序 AI漫剧短剧平台 10页可点击高保真原型": {
+      "versions": [
+        {
+          "path": "index.html",
+          "createdAt": "2026-09-22T13:57:49.975Z",
+          "status": "needs-review",
+          "subtitle": "组件化十页原型与三轨可剪辑时间轴",
+          "viewport": {
+            "width": 1440,
+            "height": 1024
+          }
+        }
+      ]
+    }
+  },
+  "createdAt": "2026-09-22T13:57:49.978Z",
+  "updatedAt": "2026-09-23T02:24:59.610Z"
+}

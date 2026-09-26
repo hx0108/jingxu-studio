@@ -33,7 +33,7 @@ export const ConfirmActionDialog = ({
         <h2 id="confirm-title">{deleting ? '将项目移入回收站？' : '恢复这个项目？'}</h2>
         <p id="confirm-description">
           {deleting
-            ? `“${projectName}”会从活动列表移入回收站，本地项目目录、创作内容和 FormatProfile 历史不会被删除。此操作不会删除 Provider 侧数据。`
+            ? `“${projectName}”会从活动列表移入回收站，本地项目目录、创作内容和画幅设定历史不会被删除。此操作不会删除模型服务侧数据。`
             : `“${projectName}”会返回活动列表；若名称已被占用，恢复将被阻止且不会产生部分写入。`}
         </p>
         <div className="dialog-actions">

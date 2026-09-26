@@ -113,7 +113,7 @@ export const videoProviderSelectionGetInputSchema = z
 export const videoProviderSelectionSaveInputSchema = z
   .object({
     expectedUpdatedAt: z.string().min(1).nullable(),
-    mode: videoProviderSelectionModeSchema,
+    mode: z.literal('AGNES'),
     requestId: requestIdSchema,
   })
   .strict();

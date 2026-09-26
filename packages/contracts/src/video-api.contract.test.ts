@@ -5,12 +5,15 @@ import {
   VIDEO_IPC_CHANNELS,
   generateVideoCandidatesInputSchema,
   generateVideosForShotsInputSchema,
+  listVideoExportsInputSchema,
   startVideoExportInputSchema,
   storyboardVideoStatesSchema,
   updateVideoTimelineInputSchema,
+  videoAudioAssetMediaUrl,
   videoCandidateMediaUrl,
   videoCandidateViewSchema,
   videoTimelineSubtitleItemSchema,
+  videoTimelineItemSchema,
   videoTimelineVoiceItemSchema,
   videoExportJobSchema,
   videoTimelineSummarySchema,
@@ -49,6 +52,36 @@ const succeededCandidate = {
 } as const;
 
 describe('video-api contracts', () => {
+  it('背景音乐资产只通过受限协议 URL 暴露', () => {
+    expect(videoAudioAssetMediaUrl('audio_00000001')).toBe(
+      'jingxu://media/video-audio/audio_00000001',
+    );
+  });
+  it('画面片段—稳定片段身份、100 毫秒绝对起点与严格字段', () => {
+    const clip = {
+      candidateId: id,
+      clipId: 'clip_00000001',
+      enabled: true,
+      fileSha256: hash,
+      generationInputHash: hash,
+      isMock: null,
+      position: 0,
+      providerKind: null,
+      shotId,
+      targetStartMs: 0,
+      trimInMs: 0,
+      trimOutMs: 5000,
+    };
+    expect(videoTimelineItemSchema.safeParse(clip).success).toBe(true);
+    expect(videoTimelineItemSchema.safeParse({ ...clip, clipId: undefined }).success).toBe(false);
+    // 历史片段的毫秒起点保真读取；100ms 吸附仅约束用户新提交。
+    expect(videoTimelineItemSchema.safeParse({ ...clip, targetStartMs: 150 }).success).toBe(true);
+    expect(videoTimelineItemSchema.safeParse({ ...clip, targetStartMs: -100 }).success).toBe(false);
+    expect(
+      videoTimelineItemSchema.safeParse({ ...clip, localPath: 'C:\\private.mp4' }).success,
+    ).toBe(false);
+  });
+
   it('SUCCEEDED 视频候选—video-candidate 受限协议 URL 与时长口径字段', () => {
     expect(videoCandidateViewSchema.safeParse(succeededCandidate).success).toBe(true);
     // Provider 未回报实际时长：actualDurationSec null 如实记录。
@@ -128,6 +161,7 @@ describe('video-api contracts', () => {
       'getTimeline',
       'getVideoTask',
       'importBackgroundMusic',
+      'listExports',
       'listStoryboardVideoStates',
       'listVideoCandidates',
       'selectVideoCandidate',
@@ -139,9 +173,30 @@ describe('video-api contracts', () => {
     }
   });
 
+  it('最近导出查询—限定项目、单集和最多十条，不接受路径字段', () => {
+    expect(listVideoExportsInputSchema.parse({ episodeId: 'episode_00000001', projectId })).toEqual(
+      { episodeId: 'episode_00000001', limit: 5, projectId },
+    );
+    expect(
+      listVideoExportsInputSchema.safeParse({
+        episodeId: 'episode_00000001',
+        limit: 11,
+        projectId,
+      }).success,
+    ).toBe(false);
+    expect(
+      listVideoExportsInputSchema.safeParse({
+        episodeId: 'episode_00000001',
+        localPath: 'C:\\private',
+        projectId,
+      }).success,
+    ).toBe(false);
+  });
+
   it('时间线与导出 DTO—仅包含脱敏摘要、裁剪与成功状态不变量可验证', () => {
     const item = {
       candidateId: id,
+      clipId: 'clip_00000001',
       enabled: true,
       fileSha256: hash,
       generationInputHash: hash,
@@ -149,6 +204,7 @@ describe('video-api contracts', () => {
       isMock: null,
       providerKind: null,
       shotId,
+      targetStartMs: 0,
       trimInMs: 0,
       trimOutMs: 5000,
     };
@@ -168,6 +224,12 @@ describe('video-api contracts', () => {
       alignmentItems: [alignmentItem],
       audioAsset: null,
       audioVolume: 0.2,
+      bgmFadeInMs: 0,
+      bgmFadeOutMs: 2000,
+      bgmMuted: false,
+      bgmStartMs: 0,
+      bgmTrimInMs: 0,
+      bgmTrimOutMs: null,
       createdAt: iso,
       episodeId: 'episode_00001',
       episodeVersionId: 'epver_00000001',
@@ -180,6 +242,7 @@ describe('video-api contracts', () => {
       totalDurationMs: 5000,
       versionNo: 1,
       voiceItems: [],
+      voiceTrackMuted: false,
     };
     expect(videoTimelineSummarySchema.safeParse(timeline).success).toBe(true);
     expect(
@@ -204,14 +267,69 @@ describe('video-api contracts', () => {
     expect(defaulted.audioVolume).toBe(0.2);
     expect(defaulted.subtitleItems).toEqual([]);
     expect(defaulted.voiceItems).toEqual([]);
+    expect(defaulted.voiceTrackMuted).toBe(false);
+    expect(defaulted.bgmStartMs).toBe(0);
+    expect(defaulted.bgmTrimOutMs).toBeNull();
+    expect(defaulted.bgmFadeOutMs).toBe(2000);
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items: [{ ...item, targetStartMs: 150 }],
+        projectId,
+        requestId,
+      }).success,
+    ).toBe(false);
+    const secondClip = {
+      ...item,
+      clipId: 'clip_00000002',
+      position: 1,
+      targetStartMs: 2500,
+      trimInMs: 2500,
+      trimOutMs: 5000,
+    };
+    const submitClips = (items: unknown[]) =>
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items,
+        projectId,
+        requestId,
+      }).success;
+    expect(submitClips([{ ...item, trimOutMs: 2500 }, secondClip])).toBe(true);
+    expect(submitClips([item, { ...secondClip, clipId: item.clipId }])).toBe(false);
+    expect(submitClips([{ ...item, targetStartMs: -100 }])).toBe(false);
+    const manyClips = Array.from({ length: 61 }, (_, index) => ({
+      ...item,
+      clipId: `clip_${String(index).padStart(8, '0')}`,
+      position: index,
+      targetStartMs: index * 5000,
+    }));
+    expect(submitClips(manyClips.slice(0, 60))).toBe(true);
+    expect(submitClips(manyClips)).toBe(false);
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        audioAssetId: null,
+        bgmFadeInMs: -100,
+        episodeId: timeline.episodeId,
+        expectedVersionId: timeline.id,
+        items: [item],
+        projectId,
+        requestId,
+      }).success,
+    ).toBe(false);
     // 两轨条目必须锚定视频轨镜头集合；越界镜头与重复 shotId 均拒绝。
     const voiceItem = {
       candidateId: id,
+      clipId: 'voice_00000001',
       enabled: true,
       fileSha256: hash,
       generationInputHash: hash,
       offsetMs: 0,
       shotId,
+      targetStartMs: 0,
       trimInMs: 0,
       trimOutMs: 4000,
       volume: 1,
@@ -374,11 +492,13 @@ describe('video-api contracts', () => {
   it('配音轨条目—合法输入通过、音量越界与负偏移拒绝', () => {
     const voiceItem = {
       candidateId: id,
+      clipId: 'voice_00000001',
       enabled: true,
       fileSha256: hash,
       generationInputHash: hash,
       offsetMs: 0,
       shotId,
+      targetStartMs: 0,
       trimInMs: 0,
       trimOutMs: 3200,
       volume: 1,
@@ -390,6 +510,55 @@ describe('video-api contracts', () => {
     expect(videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, offsetMs: -1 }).success).toBe(
       false,
     );
+    expect(
+      videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, clipId: undefined }).success,
+    ).toBe(false);
+    expect(
+      videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, targetStartMs: 150 }).success,
+    ).toBe(true);
+    expect(videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, trimInMs: -1 }).success).toBe(
+      false,
+    );
+    expect(videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, trimOutMs: 0 }).success).toBe(
+      false,
+    );
+    expect(
+      videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, fileSha256: 'bad' }).success,
+    ).toBe(false);
+    expect(
+      videoTimelineVoiceItemSchema.safeParse({ ...voiceItem, generationInputHash: 'bad' }).success,
+    ).toBe(false);
+    const input = {
+      audioAssetId: null,
+      episodeId: 'episode_00001',
+      expectedVersionId: 'timelinever_001',
+      items: [
+        {
+          candidateId: id,
+          clipId: 'clip_00000001',
+          enabled: true,
+          fileSha256: hash,
+          generationInputHash: hash,
+          isMock: null,
+          position: 0,
+          providerKind: null,
+          shotId,
+          targetStartMs: 0,
+          trimInMs: 0,
+          trimOutMs: 5000,
+        },
+      ],
+      projectId,
+      requestId,
+      voiceItems: [{ ...voiceItem, targetStartMs: 100 }],
+    };
+    expect(updateVideoTimelineInputSchema.safeParse(input).success).toBe(true);
+    expect(
+      updateVideoTimelineInputSchema.safeParse({
+        ...input,
+        voiceItems: [{ ...voiceItem, targetStartMs: 150 }],
+      }).success,
+    ).toBe(false);
   });
 
   it('字幕轨条目—安全区百分比整数 0–20 之外拒绝', () => {

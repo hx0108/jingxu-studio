@@ -109,6 +109,7 @@ export const createImageFeatureRegistration = ({
   trustedUrl,
   useE2eMock = false,
 }: RegisterImageFeaturesOptions): ImageFeatureRegistration => {
+  const forceRealDemoMedia = process.env.JINGXU_REAL_DEMO_MEDIA_PROBE === '1';
   let registered = false;
   let activeService: ImageIpcService | null = null;
   let stopScheduler: () => Promise<void> = () => Promise.resolve();
@@ -307,7 +308,7 @@ export const createImageFeatureRegistration = ({
         hashText: (value) => createHash('sha256').update(value, 'utf8').digest('hex'),
         model: imageModel,
         resolveModel: (task) =>
-          demoProjectRegistry.current() === task.projectId ? demoImageModel : null,
+          demoProjectRegistry.has(task.projectId) && !forceRealDemoMedia ? demoImageModel : null,
         mediaUnitOfWork,
         newId: randomUUID,
         nowMs: Date.now,
@@ -337,7 +338,7 @@ export const createImageFeatureRegistration = ({
           useE2eMock
             ? undefined
             : async (projectId) => {
-                if (demoProjectRegistry.current() === projectId) return;
+                if (demoProjectRegistry.has(projectId) && !forceRealDemoMedia) return;
                 await credentials.loadCredential(IMAGE_CREDENTIAL_ID);
               },
         assetFileStore: {

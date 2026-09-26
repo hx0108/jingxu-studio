@@ -243,12 +243,13 @@ test('评测集—种子/九类规则/创建派生导入标注删除/路径红�
     // UI 双入口：项目详情按钮与全局导航均可达；提示文本不含本地路径。
     await page
       .locator('nav[aria-label="全局导航"]')
-      .getByRole('button', { name: '我的项目', exact: true })
+      .getByRole('button', { name: '我的作品', exact: true })
       .click();
     await page.locator('.project-card-main', { hasText: '评测集闭环' }).click();
     await page.getByRole('button', { name: '当前项目评测集' }).click();
-    await expect(page.getByRole('heading', { name: '结构化分镜评测集' })).toBeVisible();
-    await expect(page.getByText('样本列表')).toBeVisible();
+    await expect(page.getByRole('heading', { name: '质量评测' })).toBeVisible();
+    await page.locator('.evaluation-dataset-details > summary').click();
+    await expect(page.getByText(/样本列表/u)).toBeVisible();
     await page.getByRole('button', { name: '全部样本' }).click();
     await expect(page.getByText(/样本列表（\d+）/u)).toBeVisible();
     const surface = await page.evaluate(() => JSON.stringify(window.jingxu.evaluation));

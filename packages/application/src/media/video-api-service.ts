@@ -197,10 +197,10 @@ export const createVideoApiService = (
         } catch {
           return mediaFailure(
             'MODEL_CREDENTIAL_INVALID',
-            '视频 Provider 凭据未配置或密文不可解密。',
+            '视频服务凭据未配置或密文不可解密。',
             traceId,
             false,
-            '在剧本工作区「Provider 设置」的视频卡片中保存 ARK API Key 后重试。',
+            '在设置页的视频生成卡片中保存服务密钥后重试。',
           );
         }
       }

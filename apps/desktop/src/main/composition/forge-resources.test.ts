@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import forgeConfig, {
   assertFfmpegResources,
+  demoResourceDirectory,
   ffmpegResourceDirectory,
   migrationResourceDirectory,
   schemaResourceDirectory,
@@ -25,11 +26,18 @@ describe('Forge SQLite 资源清单', () => {
       migrationResourceDirectory,
       schemaResourceDirectory,
       ffmpegResourceDirectory,
+      demoResourceDirectory,
     ]);
     expect(forgeConfig.plugins.map(({ name }) => name)).not.toContain(
       '@electron-forge/plugin-auto-unpack-natives',
     );
     expect(JSON.stringify(forgeConfig)).not.toContain('better-sqlite3');
+  });
+
+  it('打包配置—包含离线五分钟体验的受审计示例资源', async () => {
+    await expect(access(path.join(demoResourceDirectory, 'demo-manifest.json'))).resolves.toBe(
+      undefined,
+    );
   });
 
   it('打包配置—检查 Schema 资源组—固定到 schemas/v1 且恰好匹配四条版本锁', async () => {

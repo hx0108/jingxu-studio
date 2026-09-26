@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import type {
+  CreatorPreparationOperation,
   JobSummaryDto,
   ConsistencyPreflightDto,
   StoryboardEditShotInputDto,
@@ -15,6 +16,7 @@ import type {
 } from '@jingxu/contracts';
 
 import { FirstFramePanel } from './FirstFramePanel';
+import { ShotStructuredFields } from './ShotStructuredFields';
 import { VoicePanel } from './VoicePanel';
 import { VideoPanel } from './VideoPanel';
 import { VideoCompositionPanel } from './VideoCompositionPanel';
@@ -28,8 +30,30 @@ import {
 import { shotVideoBadge } from './storyboard-video-state-policy';
 import { StatusBadge } from '../ui/WorkspaceLayout';
 import { workspaceStatusLabel } from '../ui/workspace-status';
+import { PROTOTYPE_ASSETS, prototypeAssetAt } from '../assets/prototype/prototype-assets';
 
 export type MediaWorkspaceStep = 'storyboard' | 'image' | 'video' | 'composition';
+
+const MEDIA_PAGE_COPY: Readonly<
+  Record<MediaWorkspaceStep, { readonly description: string; readonly title: string }>
+> = {
+  composition: {
+    description: '拖动、裁剪并对齐画面、对白与配乐，再生成完整成片。',
+    title: '合成导出',
+  },
+  image: {
+    description: '选择画面候选，保持角色、服装和场景连续。',
+    title: '画面生成',
+  },
+  storyboard: {
+    description: '逐镜头确认画面、人物、台词和镜头运动。',
+    title: '分镜设计',
+  },
+  video: {
+    description: '让选中的画面自然运动，并保持前后镜头连贯。',
+    title: '视频生成',
+  },
+};
 
 const SHOT_SIZE_LABELS: Record<StoryboardShotSummaryDto['shotSize'], string> = {
   CLOSE_UP: '近景',
@@ -79,6 +103,8 @@ const LOCKABLE_ROOT_LABELS: Readonly<Record<string, string>> = {
 const LOCKABLE_ROOTS = Object.keys(LOCKABLE_ROOT_LABELS);
 
 export interface StoryboardPanelProps {
+  readonly isDemo?: boolean;
+  readonly onMediaStepChange?: (step: MediaWorkspaceStep) => void;
   readonly initialMediaStep?: MediaWorkspaceStep;
   readonly episodeTargetDurationSec: number;
   /** 列表级首帧状态底座（design D5）；null 表示尚未载入，不渲染徽标。 */
@@ -100,6 +126,7 @@ export interface StoryboardPanelProps {
   readonly onConfirm: () => void;
   /** 逐镜头编辑/锁定/解锁命令（shot-edit-lock D1/D3）；面板组装完整 DTO 输入。 */
   readonly onEditShot: (input: StoryboardEditShotInputDto) => void;
+  readonly onDirtyChange?: (dirty: boolean) => void;
   /** storyboard-export：READY 整集三导出入口（deliverables D3；非 READY 不渲染）。 */
   readonly onExportEpisode: (format: StoryboardExportFormat) => void;
   readonly exportNotice: string | null;
@@ -110,6 +137,10 @@ export interface StoryboardPanelProps {
   readonly onGenerate: () => void;
   readonly onGenerateFirstFrames: () => void;
   readonly onGenerateVideos?: () => void;
+  readonly onPrepareOperation?: (
+    operation: CreatorPreparationOperation,
+    proceed: () => void,
+  ) => void;
   readonly onLockShot: (input: StoryboardLockShotInputDto) => void;
   readonly onRestore: (version: StoryboardVersionSummaryDto) => void;
   readonly onUnlockShot: (input: StoryboardUnlockShotInputDto) => void;
@@ -118,6 +149,8 @@ export interface StoryboardPanelProps {
 }
 
 export const StoryboardPanel = ({
+  isDemo = false,
+  onMediaStepChange,
   batchBusy,
   episodeTargetDurationSec,
   generateHint,
@@ -130,6 +163,7 @@ export const StoryboardPanel = ({
   onVideoBatchCancel,
   onVideoBatchRetryFailed,
   onConfirm,
+  onDirtyChange,
   onEditShot,
   onExportEpisode,
   exportNotice,
@@ -138,6 +172,7 @@ export const StoryboardPanel = ({
   snapshotNotice = null,
   onGenerate,
   onGenerateFirstFrames,
+  onPrepareOperation,
   onLockShot,
   onRestore,
   onUnlockShot,
@@ -151,6 +186,8 @@ export const StoryboardPanel = ({
   const [editing, setEditing] = useState(false);
   const [shotEditorText, setShotEditorText] = useState('');
   const [shotEditorError, setShotEditorError] = useState<string | null>(null);
+  const [shotFieldsDirty, setShotFieldsDirty] = useState(false);
+  const [syncedShotVersionId, setSyncedShotVersionId] = useState<string | null>(null);
   const [activeMediaStep, setActiveMediaStep] = useState<MediaWorkspaceStep>(initialMediaStep);
   const [syncedInitialStep, setSyncedInitialStep] = useState(initialMediaStep);
   // 续作路由带来的步骤变化在渲染期同步（React 官方「根据 props 调整 state」模式）。
@@ -159,12 +196,18 @@ export const StoryboardPanel = ({
     setActiveMediaStep(initialMediaStep);
   }
 
-  useEffect(() => {
-    document.querySelector('#storyboard-panel')?.scrollIntoView({ behavior: 'smooth' });
-  }, [initialMediaStep]);
   const [consistency, setConsistency] = useState<ConsistencyPreflightDto | null>(null);
   const selectedShot =
-    storyboard.shots.find((shot) => shot.shotId === selectedShotId) ?? storyboard.shots[0] ?? null;
+    storyboard.shots.find((shot) => shot.shotId === selectedShotId) ??
+    (isDemo ? storyboard.shots[1] : undefined) ??
+    storyboard.shots[0] ??
+    null;
+  if (syncedShotVersionId !== (selectedShot?.versionId ?? null)) {
+    setSyncedShotVersionId(selectedShot?.versionId ?? null);
+    setShotFieldsDirty(false);
+    setEditing(false);
+    setShotEditorError(null);
+  }
   const current = storyboard.current;
   const totalDurationSec = storyboard.totalDurationSec;
   const durationOverLimit = totalDurationSec > episodeTargetDurationSec;
@@ -229,8 +272,10 @@ export const StoryboardPanel = ({
     >
       <header className="script-heading">
         <div>
-          <p className="eyebrow">单集生产工作台</p>
+          <p className="eyebrow">分镜工作台 · 单集生产</p>
           <h2>分镜工作台</h2>
+          <h1 className="media-page-title">{MEDIA_PAGE_COPY[activeMediaStep].title}</h1>
+          <p className="media-page-description">{MEDIA_PAGE_COPY[activeMediaStep].description}</p>
         </div>
         <StatusBadge status={current?.status} />
       </header>
@@ -249,6 +294,7 @@ export const StoryboardPanel = ({
             key={step}
             onClick={() => {
               setActiveMediaStep(step);
+              onMediaStepChange?.(step);
             }}
             type="button"
           >
@@ -257,252 +303,350 @@ export const StoryboardPanel = ({
         ))}
       </nav>
       <p className="action-hint">
-        分镜由生成与确认产生整集版本；选中镜头后可编辑创意字段或对七类根字段加锁（编辑与锁定均产生新版本）。
+        先确认整集分镜，再逐镜头补画面、视频与配音；需要精细调整时可打开镜头编辑。
       </p>
       {current?.status === 'STALE_INPUT' && (
         <p className="field-error">上游已变化，当前分镜仅供查看；请重新生成。</p>
       )}
       <aside aria-label="单集操作与状态" className="media-context-panel">
-        <div aria-label="整集时长汇总" className="duration-summary">
-          <p>
-            镜头时长合计 {String(totalDurationSec)}s / 目标 {String(episodeTargetDurationSec)}s ·{' '}
-            {String(storyboard.shots.length)} 个镜头
-          </p>
-          <div className="duration-bar" role="presentation">
-            <div
-              className={durationOverLimit ? 'duration-fill duration-over' : 'duration-fill'}
-              style={{
-                width: `${String(Math.min(100, (totalDurationSec / episodeTargetDurationSec) * 100))}%`,
-              }}
-            />
-          </div>
-          {durationOverLimit && (
-            <p className="field-error">镜头总时长已超过单集目标时长，请重新生成分镜。</p>
-          )}
-        </div>
-        <div className="script-actions">
+        <h2>下一步</h2>
+        <p>
+          {activeMediaStep === 'storyboard'
+            ? '根据当前剧本生成并确认整集分镜。'
+            : activeMediaStep === 'image'
+              ? '生成并挑选最合适的画面候选。'
+              : activeMediaStep === 'video'
+                ? '根据动态要求生成本镜头视频。'
+                : '保存剪辑后生成完整成片。'}
+        </p>
+        {activeMediaStep === 'storyboard' && (
           <button
+            className="media-primary-action"
             disabled={generateHint !== null || jobActive || pending}
             onClick={onGenerate}
             type="button"
           >
             生成整集分镜
           </button>
+        )}
+        {activeMediaStep === 'image' && (
           <button
-            disabled={current?.status !== 'DRAFT' || jobActive || pending}
-            onClick={onConfirm}
+            className="media-primary-action"
+            disabled={!batchReady || runningBatch !== null || batchBusy}
+            onClick={() => {
+              if (onPrepareOperation === undefined) onGenerateFirstFrames();
+              else onPrepareOperation('IMAGE', onGenerateFirstFrames);
+            }}
             type="button"
           >
-            确认为可用
+            生成画面候选
           </button>
-          {/* 整集首帧（batch-first-frame 5.2）：READY 才可用；发起全量镜头，服务端按当前世代跳过。 */}
+        )}
+        {activeMediaStep === 'video' && (
           <button
-            disabled={
-              !batchReady ||
-              runningBatch !== null ||
-              batchBusy ||
-              (consistency !== null && !consistency.ready)
-            }
-            name="generate-first-frames-batch"
-            onClick={onGenerateFirstFrames}
-            type="button"
-          >
-            为整集生成首帧
-          </button>
-          {consistency !== null && !consistency.ready && (
-            <div className="consistency-status" role="status">
-              <p>整集一致性预检未通过，请先补齐：</p>
-              <ul>
-                {consistency.missingItems.map((item) => (
-                  <li key={`${item.kind}:${item.bibleRefId}`}>
-                    {item.kind === 'STYLE' ? '画风锚点' : '角色参考图'} · {item.displayName}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <button
+            className="media-primary-action"
             disabled={!batchReady || runningVideoBatch !== null || videoBatchBusy}
-            name="generate-videos-batch"
-            onClick={onGenerateVideos}
+            onClick={() => {
+              if (onGenerateVideos === undefined) return;
+              if (onPrepareOperation === undefined) onGenerateVideos();
+              else onPrepareOperation('VIDEO', onGenerateVideos);
+            }}
             type="button"
           >
-            为整集生成视频
+            生成本镜头视频
           </button>
-          {/* storyboard-export：READY 才渲染三导出入口（spec：非 READY 不渲染）。 */}
-          {current?.status === 'READY' && (
-            <>
-              <button
-                disabled={pending}
-                name="export-episode"
-                onClick={() => {
-                  onExportEpisode('EPISODE_JSON');
-                }}
-                type="button"
-              >
-                导出整集
-              </button>
-              <button
-                disabled={pending}
-                name="export-episode-markdown"
-                onClick={() => {
-                  onExportEpisode('MARKDOWN_TABLE');
-                }}
-                type="button"
-              >
-                导出分镜表
-              </button>
-              <button
-                disabled={pending}
-                name="export-episode-report"
-                onClick={() => {
-                  onExportEpisode('PRODUCIBILITY_REPORT');
-                }}
-                type="button"
-              >
-                导出报告
-              </button>
-              {/* project-transfer 4.3：项目快照（CURRENT_ONLY）导出与 RTO 恢复同门禁。 */}
-              {onExportSnapshot !== undefined && (
-                <button
-                  disabled={pending}
-                  name="export-project-snapshot"
-                  onClick={onExportSnapshot}
-                  type="button"
-                >
-                  导出项目快照
-                </button>
-              )}
-              {onRestoreSnapshot !== undefined && (
-                <button
-                  disabled={pending}
-                  name="restore-project-snapshot"
-                  onClick={onRestoreSnapshot}
-                  type="button"
-                >
-                  从快照恢复本项目
-                </button>
-              )}
-            </>
-          )}
-        </div>
-        {exportNotice !== null && (
-          <p className="action-hint" role="status">
-            {exportNotice}
-          </p>
         )}
-        {snapshotNotice != null && snapshotNotice !== '' && (
-          <p className="action-hint" role="status">
-            {snapshotNotice}
-          </p>
-        )}
-        {generateHint !== null && <p className="action-hint">{generateHint}</p>}
-        {current !== null && current.status !== 'READY' && (
-          <p className="action-hint">分镜整集确认可用后，可为整集批量生成首帧。</p>
-        )}
-        {latestBatch !== null && latestProgress !== null && (
-          <div aria-live="polite" className="batch-progress" id="batch-progress">
-            <p>
-              首帧批次{MEDIA_BATCH_STATUS_LABELS[latestBatch.status]} · 进度{' '}
-              {String(latestProgress.settled)}/{String(latestProgress.total)}
-              {latestProgress.failedShotIds.length > 0
-                ? ` · 失败 ${String(latestProgress.failedShotIds.length)}`
-                : ''}
-              {latestBatch.skippedShotIds.length > 0
-                ? ` · 跳过 ${String(latestBatch.skippedShotIds.length)}（当前世代已有首帧）`
-                : ''}
-              {latestBatch.errorCode === null ? '' : ` · ${latestBatch.errorCode}`}
-            </p>
-            {runningBatch !== null ? (
-              <button
-                className="danger-button"
-                disabled={batchBusy}
-                name="cancel-batch"
-                onClick={() => {
-                  onBatchCancel(latestBatch.batchId);
-                }}
-                type="button"
-              >
-                取消剩余镜头
-              </button>
-            ) : (
-              latestProgress.failedShotIds.length > 0 && (
-                <button
-                  disabled={batchBusy}
-                  name="retry-failed-shots"
-                  onClick={() => {
-                    onBatchRetryFailed(latestProgress.failedShotIds);
+        <button
+          className="secondary-button"
+          disabled={
+            activeMediaStep === 'composition' ||
+            (activeMediaStep === 'video' && onGenerateVideos === undefined)
+          }
+          onClick={() => {
+            if (activeMediaStep === 'storyboard') onGenerate();
+            else if (activeMediaStep === 'image') {
+              if (onPrepareOperation === undefined) onGenerateFirstFrames();
+              else onPrepareOperation('IMAGE', onGenerateFirstFrames);
+            } else if (onGenerateVideos !== undefined) {
+              if (onPrepareOperation === undefined) onGenerateVideos();
+              else onPrepareOperation('VIDEO', onGenerateVideos);
+            }
+          }}
+          title={activeMediaStep === 'composition' ? '请在剪辑区使用生成成片操作' : undefined}
+          type="button"
+        >
+          重新生成
+        </button>
+        <button
+          className="secondary-button"
+          onClick={() => {
+            setActiveMediaStep('storyboard');
+            onMediaStepChange?.('storyboard');
+          }}
+          type="button"
+        >
+          稍后处理
+        </button>
+        <details className="media-advanced-actions">
+          <summary>更多操作与真实状态</summary>
+          <div>
+            <div aria-label="整集时长汇总" className="duration-summary">
+              <p>
+                镜头时长合计 {String(totalDurationSec)}s / 目标 {String(episodeTargetDurationSec)}s
+                · {String(storyboard.shots.length)} 个镜头
+              </p>
+              <div className="duration-bar" role="presentation">
+                <div
+                  className={durationOverLimit ? 'duration-fill duration-over' : 'duration-fill'}
+                  style={{
+                    width: `${String(Math.min(100, (totalDurationSec / episodeTargetDurationSec) * 100))}%`,
                   }}
-                  type="button"
-                >
-                  重试失败镜头（新批次）
-                </button>
-              )
+                />
+              </div>
+              {durationOverLimit && (
+                <p className="field-error">镜头总时长已超过单集目标时长，请重新生成分镜。</p>
+              )}
+            </div>
+            <div className="script-actions">
+              <button
+                disabled={generateHint !== null || jobActive || pending}
+                onClick={onGenerate}
+                type="button"
+              >
+                生成整集分镜
+              </button>
+              <button
+                disabled={current?.status !== 'DRAFT' || jobActive || pending}
+                onClick={onConfirm}
+                type="button"
+              >
+                确认为可用
+              </button>
+              {/* 整集首帧（batch-first-frame 5.2）：READY 才可用；发起全量镜头，服务端按当前世代跳过。 */}
+              <button
+                disabled={
+                  !batchReady ||
+                  runningBatch !== null ||
+                  batchBusy ||
+                  (consistency !== null && !consistency.ready)
+                }
+                name="generate-first-frames-batch"
+                onClick={() => {
+                  if (onPrepareOperation === undefined) {
+                    onGenerateFirstFrames();
+                    return;
+                  }
+                  onPrepareOperation('IMAGE', onGenerateFirstFrames);
+                }}
+                type="button"
+              >
+                为整集生成首帧
+              </button>
+              {consistency !== null && !consistency.ready && (
+                <div className="consistency-status" role="status">
+                  <p>整集一致性预检未通过，请先补齐：</p>
+                  <ul>
+                    {consistency.missingItems.map((item) => (
+                      <li key={`${item.kind}:${item.bibleRefId}`}>
+                        {item.kind === 'STYLE' ? '画风锚点' : '角色参考图'} · {item.displayName}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <button
+                disabled={!batchReady || runningVideoBatch !== null || videoBatchBusy}
+                name="generate-videos-batch"
+                onClick={() => {
+                  if (onGenerateVideos === undefined) return;
+                  if (onPrepareOperation === undefined) {
+                    onGenerateVideos();
+                    return;
+                  }
+                  onPrepareOperation('VIDEO', onGenerateVideos);
+                }}
+                type="button"
+              >
+                为整集生成视频
+              </button>
+              {/* storyboard-export：READY 才渲染三导出入口（spec：非 READY 不渲染）。 */}
+              {current?.status === 'READY' && (
+                <>
+                  <button
+                    disabled={pending}
+                    name="export-episode"
+                    onClick={() => {
+                      onExportEpisode('EPISODE_JSON');
+                    }}
+                    type="button"
+                  >
+                    导出整集
+                  </button>
+                  <button
+                    disabled={pending}
+                    name="export-episode-markdown"
+                    onClick={() => {
+                      onExportEpisode('MARKDOWN_TABLE');
+                    }}
+                    type="button"
+                  >
+                    导出分镜表
+                  </button>
+                  <button
+                    disabled={pending}
+                    name="export-episode-report"
+                    onClick={() => {
+                      onExportEpisode('PRODUCIBILITY_REPORT');
+                    }}
+                    type="button"
+                  >
+                    导出报告
+                  </button>
+                  {/* project-transfer 4.3：项目快照（CURRENT_ONLY）导出与 RTO 恢复同门禁。 */}
+                  {onExportSnapshot !== undefined && (
+                    <button
+                      disabled={pending}
+                      name="export-project-snapshot"
+                      onClick={onExportSnapshot}
+                      type="button"
+                    >
+                      导出项目快照
+                    </button>
+                  )}
+                  {onRestoreSnapshot !== undefined && (
+                    <button
+                      disabled={pending}
+                      name="restore-project-snapshot"
+                      onClick={onRestoreSnapshot}
+                      type="button"
+                    >
+                      从快照恢复本项目
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+            {exportNotice !== null && (
+              <p className="action-hint" role="status">
+                {exportNotice}
+              </p>
+            )}
+            {snapshotNotice != null && snapshotNotice !== '' && (
+              <p className="action-hint" role="status">
+                {snapshotNotice}
+              </p>
+            )}
+            {generateHint !== null && <p className="action-hint">{generateHint}</p>}
+            {current !== null && current.status !== 'READY' && (
+              <p className="action-hint">分镜整集确认可用后，可为整集批量生成首帧。</p>
+            )}
+            {latestBatch !== null && latestProgress !== null && (
+              <div aria-live="polite" className="batch-progress" id="batch-progress">
+                <p>
+                  首帧批次{MEDIA_BATCH_STATUS_LABELS[latestBatch.status]} · 进度{' '}
+                  {String(latestProgress.settled)}/{String(latestProgress.total)}
+                  {latestProgress.failedShotIds.length > 0
+                    ? ` · 失败 ${String(latestProgress.failedShotIds.length)}`
+                    : ''}
+                  {latestBatch.skippedShotIds.length > 0
+                    ? ` · 跳过 ${String(latestBatch.skippedShotIds.length)}（当前世代已有首帧）`
+                    : ''}
+                  {latestBatch.errorCode === null ? '' : ` · ${latestBatch.errorCode}`}
+                </p>
+                {runningBatch !== null ? (
+                  <button
+                    className="danger-button"
+                    disabled={batchBusy}
+                    name="cancel-batch"
+                    onClick={() => {
+                      onBatchCancel(latestBatch.batchId);
+                    }}
+                    type="button"
+                  >
+                    取消剩余镜头
+                  </button>
+                ) : (
+                  latestProgress.failedShotIds.length > 0 && (
+                    <button
+                      disabled={batchBusy}
+                      name="retry-failed-shots"
+                      onClick={() => {
+                        onBatchRetryFailed(latestProgress.failedShotIds);
+                      }}
+                      type="button"
+                    >
+                      重试失败镜头（新批次）
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+            {latestVideoBatch !== null && latestVideoProgress !== null && (
+              <div aria-live="polite" className="batch-progress" id="video-batch-progress">
+                <p>
+                  视频批次{MEDIA_BATCH_STATUS_LABELS[latestVideoBatch.status]} · 进度{' '}
+                  {String(latestVideoProgress.settled)}/{String(latestVideoProgress.total)}
+                  {latestVideoProgress.failedShotIds.length > 0
+                    ? ` · 失败 ${String(latestVideoProgress.failedShotIds.length)}`
+                    : ''}
+                  {latestVideoBatch.skippedShotIds.length > 0
+                    ? ` · 跳过 ${String(latestVideoBatch.skippedShotIds.length)}（无首帧或当前世代已有视频）`
+                    : ''}
+                  {latestVideoBatch.errorCode === null ? '' : ` · ${latestVideoBatch.errorCode}`}
+                </p>
+                {runningVideoBatch !== null ? (
+                  <button
+                    className="danger-button"
+                    disabled={videoBatchBusy}
+                    name="cancel-video-batch"
+                    onClick={() => {
+                      onVideoBatchCancel?.(latestVideoBatch.batchId);
+                    }}
+                    type="button"
+                  >
+                    取消剩余视频镜头
+                  </button>
+                ) : (
+                  latestVideoProgress.failedShotIds.length > 0 && (
+                    <button
+                      disabled={videoBatchBusy}
+                      name="retry-failed-video-shots"
+                      onClick={() => {
+                        onVideoBatchRetryFailed?.(latestVideoProgress.failedShotIds);
+                      }}
+                      type="button"
+                    >
+                      重试失败视频镜头（新批次）
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+            {job !== null && (
+              <p aria-live="polite">
+                任务状态：{workspaceStatusLabel(job.status)}
+                {job.errorCode === null ? '' : ' · 查看失败详情'}
+              </p>
+            )}
+            {job?.status === 'FAILED' && job.errorCode !== null && (
+              <div className="inline-error">
+                <p>
+                  {STORYBOARD_JOB_ERROR_COPY[job.errorCode] ?? '分镜任务失败；可重试或重新生成。'}
+                </p>
+                <details className="technical-details">
+                  <summary>查看错误详情</summary>
+                  <code>{job.errorCode}</code>
+                </details>
+              </div>
             )}
           </div>
-        )}
-        {latestVideoBatch !== null && latestVideoProgress !== null && (
-          <div aria-live="polite" className="batch-progress" id="video-batch-progress">
-            <p>
-              视频批次{MEDIA_BATCH_STATUS_LABELS[latestVideoBatch.status]} · 进度{' '}
-              {String(latestVideoProgress.settled)}/{String(latestVideoProgress.total)}
-              {latestVideoProgress.failedShotIds.length > 0
-                ? ` · 失败 ${String(latestVideoProgress.failedShotIds.length)}`
-                : ''}
-              {latestVideoBatch.skippedShotIds.length > 0
-                ? ` · 跳过 ${String(latestVideoBatch.skippedShotIds.length)}（无首帧或当前世代已有视频）`
-                : ''}
-              {latestVideoBatch.errorCode === null ? '' : ` · ${latestVideoBatch.errorCode}`}
-            </p>
-            {runningVideoBatch !== null ? (
-              <button
-                className="danger-button"
-                disabled={videoBatchBusy}
-                name="cancel-video-batch"
-                onClick={() => {
-                  onVideoBatchCancel?.(latestVideoBatch.batchId);
-                }}
-                type="button"
-              >
-                取消剩余视频镜头
-              </button>
-            ) : (
-              latestVideoProgress.failedShotIds.length > 0 && (
-                <button
-                  disabled={videoBatchBusy}
-                  name="retry-failed-video-shots"
-                  onClick={() => {
-                    onVideoBatchRetryFailed?.(latestVideoProgress.failedShotIds);
-                  }}
-                  type="button"
-                >
-                  重试失败视频镜头（新批次）
-                </button>
-              )
-            )}
-          </div>
-        )}
-        {job !== null && (
-          <p aria-live="polite">
-            任务状态：{workspaceStatusLabel(job.status)}
-            {job.errorCode === null ? '' : ' · 查看失败详情'}
-          </p>
-        )}
-        {job?.status === 'FAILED' && job.errorCode !== null && (
-          <div className="inline-error">
-            <p>{STORYBOARD_JOB_ERROR_COPY[job.errorCode] ?? '分镜任务失败；可重试或重新生成。'}</p>
-            <details className="technical-details">
-              <summary>查看错误详情</summary>
-              <code>{job.errorCode}</code>
-            </details>
-          </div>
-        )}
+        </details>
       </aside>
       {storyboard.shots.length === 0 ? (
         <p>尚未生成分镜。上游场景剧本确认可用后可生成整集分镜。</p>
       ) : (
         <ul className="shot-card-list" aria-label="镜头列表">
-          {storyboard.shots.map((shot) => {
+          {storyboard.shots.map((shot, index) => {
             const imageState = shotStates.get(shot.shotId) ?? null;
             const videoState = shotVideoStates.get(shot.shotId) ?? null;
             const badge = imageState === null ? null : shotFirstFrameBadge(imageState);
@@ -515,10 +659,24 @@ export const StoryboardPanel = ({
                     selectedShot?.shotId === shot.shotId ? 'active-tab shot-card' : 'shot-card'
                   }
                   onClick={() => {
+                    if (
+                      shotFieldsDirty &&
+                      !globalThis.confirm('当前镜头有未保存修改。放弃修改并切换镜头？')
+                    ) {
+                      return;
+                    }
+                    setShotFieldsDirty(false);
+                    onDirtyChange?.(false);
                     setSelectedShotId(shot.shotId);
                   }}
                   type="button"
                 >
+                  <img
+                    alt=""
+                    aria-hidden="true"
+                    className="shot-card-visual"
+                    src={prototypeAssetAt(PROTOTYPE_ASSETS.shots, index)}
+                  />
                   <span>#{String(shot.sequence)}</span>
                   <span>
                     {SHOT_SIZE_LABELS[shot.shotSize]} · {CAMERA_MOTION_LABELS[shot.cameraMotion]}
@@ -550,45 +708,87 @@ export const StoryboardPanel = ({
       )}
       {selectedShot !== null && (
         <section aria-labelledby="shot-detail-title" className="shot-detail">
-          <h3 id="shot-detail-title">镜头 #{String(selectedShot.sequence)} 详情</h3>
-          <dl className="shot-core-details">
-            <div>
-              <dt>镜头 ID</dt>
-              <dd>{selectedShot.shotId}</dd>
+          <div className="shot-detail-heading">
+            <div className="shot-detail-title-block">
+              <p className="eyebrow">当前镜头</p>
+              <div className="shot-detail-title-row">
+                <h3
+                  aria-label={`镜头 #${String(selectedShot.sequence)} 详情`}
+                  id="shot-detail-title"
+                >
+                  镜头 {String(selectedShot.sequence)}
+                </h3>
+                <span>时长 {String(selectedShot.targetDurationSec)} 秒</span>
+              </div>
             </div>
+            <img
+              alt={`镜头 ${String(selectedShot.sequence)} 场景预览`}
+              className="shot-detail-preview"
+              src={
+                isDemo && selectedShot.sequence === 2
+                  ? PROTOTYPE_ASSETS.heroineMain
+                  : prototypeAssetAt(PROTOTYPE_ASSETS.shots, selectedShot.sequence - 1)
+              }
+            />
+            <div aria-label="镜头时长预览" className="shot-preview-ruler">
+              <span aria-hidden="true">▶</span>
+              <span>00:00 / 00:{String(selectedShot.targetDurationSec).padStart(2, '0')}</span>
+              <span aria-hidden="true" className="shot-preview-ruler-track">
+                <i />
+              </span>
+              <span aria-hidden="true">全屏</span>
+            </div>
+          </div>
+          <dl className="shot-core-details">
             <div>
               <dt>叙事目的</dt>
               <dd>{selectedShot.narrativePurpose}</dd>
             </div>
             <div>
               <dt>景别</dt>
-              <dd>
-                {SHOT_SIZE_LABELS[selectedShot.shotSize]}（{selectedShot.shotSize}）
-              </dd>
+              <dd>{SHOT_SIZE_LABELS[selectedShot.shotSize]}</dd>
             </div>
             <div>
               <dt>运机</dt>
-              <dd>
-                {CAMERA_MOTION_LABELS[selectedShot.cameraMotion]}（{selectedShot.cameraMotion}）
-              </dd>
+              <dd>{CAMERA_MOTION_LABELS[selectedShot.cameraMotion]}</dd>
             </div>
             <div>
               <dt>台词渲染</dt>
-              <dd>
-                {DIALOGUE_RENDER_LABELS[selectedShot.dialogueRenderMode]}（
-                {selectedShot.dialogueRenderMode}）
-              </dd>
+              <dd>{DIALOGUE_RENDER_LABELS[selectedShot.dialogueRenderMode]}</dd>
             </div>
             <div>
               <dt>目标时长</dt>
               <dd>{String(selectedShot.targetDurationSec)}s</dd>
             </div>
-            <div>
-              <dt>镜头版本</dt>
-              <dd>{selectedShot.versionId}</dd>
-            </div>
           </dl>
-          <div className="shot-lock-panel">
+          {activeMediaStep === 'storyboard' && !editing && (
+            <ShotStructuredFields
+              disabled={!shotCommandsEnabled}
+              document={selectedShot.document}
+              key={selectedShot.versionId}
+              onDirtyChange={(nextDirty) => {
+                setShotFieldsDirty(nextDirty);
+                onDirtyChange?.(nextDirty);
+              }}
+              onSave={(document) => {
+                onEditShot({
+                  ...commandTarget(),
+                  document,
+                  requestId: createScriptRequestId('shot-edit'),
+                  shotVersionId: selectedShot.versionId,
+                });
+              }}
+            />
+          )}
+          <details className="technical-details shot-lock-panel">
+            <summary>高级信息与镜头保护</summary>
+            <p>这里可以保护已确认的镜头信息，避免后续调整意外覆盖。</p>
+            <dl className="shot-technical-details">
+              <div>
+                <dt>镜头版本</dt>
+                <dd>{selectedShot.versionId}</dd>
+              </div>
+            </dl>
             <h4>字段锁定</h4>
             {selectedShot.lockedPaths.length > 0 ? (
               <ul aria-label="有效锁列表" className="version-list">
@@ -597,7 +797,7 @@ export const StoryboardPanel = ({
                     <span>🔒 {path}</span>
                     <button
                       className="secondary-button"
-                      disabled={!shotCommandsEnabled}
+                      disabled={!shotCommandsEnabled || shotFieldsDirty}
                       name="unlock-shot"
                       onClick={() => {
                         onUnlockShot({
@@ -625,7 +825,7 @@ export const StoryboardPanel = ({
                 return (
                   <button
                     className="secondary-button"
-                    disabled={!shotCommandsEnabled || covered}
+                    disabled={!shotCommandsEnabled || shotFieldsDirty || covered}
                     key={root}
                     name={`lock-shot-${root}`}
                     onClick={() => {
@@ -645,12 +845,12 @@ export const StoryboardPanel = ({
                 );
               })}
             </div>
-          </div>
+          </details>
           <div className="shot-editor-area">
             {editing ? (
               <form
                 className="script-form"
-                id="shot-editor"
+                id="script-stage-editor"
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (!shotCommandsEnabled) return;
@@ -658,7 +858,7 @@ export const StoryboardPanel = ({
                   try {
                     document_ = JSON.parse(shotEditorText) as Record<string, unknown>;
                   } catch {
-                    setShotEditorError('必须是有效 JSON 对象');
+                    setShotEditorError('必须是有效的结构化对象');
                     return;
                   }
                   setShotEditorError(null);
@@ -668,23 +868,24 @@ export const StoryboardPanel = ({
                     requestId: createScriptRequestId('shot-edit'),
                     shotVersionId: selectedShot.versionId,
                   });
-                  setEditing(false);
                 }}
               >
                 <label>
-                  镜头文档（ShotContract JSON）
+                  镜头结构化内容
                   <textarea
                     aria-describedby="shot-editor-help"
                     name="shot-editor-text"
                     onChange={(changeEvent) => {
                       setShotEditorText(changeEvent.target.value);
+                      setShotFieldsDirty(true);
+                      onDirtyChange?.(true);
                     }}
                     rows={18}
                     value={shotEditorText}
                   />
                 </label>
                 <small id="shot-editor-help">
-                  系统字段（版本/状态/血缘）由系统重写；保存创建新 DRAFT 版本并重算整集快照。
+                  系统字段（版本、状态与来源关系）由系统重写；保存后会创建新的草稿版本并重算整集快照。
                 </small>
                 {shotEditorError !== null && (
                   <p className="field-error" role="alert">
@@ -701,6 +902,8 @@ export const StoryboardPanel = ({
                     onClick={() => {
                       setEditing(false);
                       setShotEditorError(null);
+                      setShotFieldsDirty(false);
+                      onDirtyChange?.(false);
                     }}
                     type="button"
                   >
@@ -714,13 +917,21 @@ export const StoryboardPanel = ({
                   disabled={!shotCommandsEnabled}
                   name="open-shot-editor"
                   onClick={() => {
+                    if (
+                      shotFieldsDirty &&
+                      !globalThis.confirm('当前镜头有未保存修改。放弃修改并打开高级编辑？')
+                    ) {
+                      return;
+                    }
+                    setShotFieldsDirty(false);
+                    onDirtyChange?.(false);
                     setShotEditorText(JSON.stringify(selectedShot.document, null, 2));
                     setShotEditorError(null);
                     setEditing(true);
                   }}
                   type="button"
                 >
-                  编辑镜头
+                  高级编辑镜头
                 </button>
               </div>
             )}
@@ -728,6 +939,7 @@ export const StoryboardPanel = ({
           <div className="media-stage-content" hidden={activeMediaStep !== 'image'}>
             <FirstFramePanel
               imageState={shotStates.get(selectedShot.shotId) ?? null}
+              isDemo={isDemo}
               key={selectedShot.shotId}
               projectId={projectId}
               shot={selectedShot}
@@ -736,6 +948,7 @@ export const StoryboardPanel = ({
           </div>
           <div className="media-stage-content" hidden={activeMediaStep !== 'video'}>
             <VideoPanel
+              isDemo={isDemo}
               key={`video-${selectedShot.shotId}`}
               projectId={projectId}
               shot={selectedShot}
@@ -748,12 +961,33 @@ export const StoryboardPanel = ({
       <div className="composition-stage-content" hidden={activeMediaStep !== 'composition'}>
         {current?.status === 'READY' ? (
           <>
-            <VoicePanel episodeId={current.episodeId} projectId={projectId} />
             <VideoCompositionPanel
               episodeId={current.episodeId}
               episodeVersionId={current.id}
+              isDemo={isDemo}
+              onPrepareExport={
+                onPrepareOperation === undefined
+                  ? undefined
+                  : (proceed) => {
+                      onPrepareOperation('EXPORT', proceed);
+                    }
+              }
               projectId={projectId}
             />
+            <details className="composition-voice-advanced">
+              <summary>配音与音色设置</summary>
+              <VoicePanel
+                episodeId={current.episodeId}
+                onPrepare={
+                  onPrepareOperation === undefined
+                    ? undefined
+                    : (proceed) => {
+                        onPrepareOperation('VOICE', proceed);
+                      }
+                }
+                projectId={projectId}
+              />
+            </details>
           </>
         ) : (
           <section className="empty-state-panel">

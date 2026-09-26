@@ -615,11 +615,10 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     expect(await readdir(secretsDirectory)).toEqual(['profile-video-primary.bin']);
     expect(profiles.has('profile-video-agnes-primary')).toBe(false);
 
-    // Provider 切换零触碰（low-cost 6.2：保存选择本身零网络零凭据读取——密文唯一
-    // 入口 CredentialAdapter 经 safeStorage 代理计数，偏好轮转期间计数零增长）。
+    // AGNES 固定选择零触碰：保存选择本身零网络零凭据读取。
     const decryptCallsBeforeSelection = decryptString.mock.calls.length;
     const encryptCallsBeforeSelection = encryptString.mock.calls.length;
-    // 偏好轮转三家 mode，Profile 行与密文零读取零修改。
+    // 固定 AGNES mode，Profile 行与密文零读取零修改。
     const rowsSnapshot = JSON.stringify(
       [...profiles.values()].sort((a, b) => a.id.localeCompare(b.id)),
     );
@@ -628,8 +627,8 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
       requestId: 'request-video-selection-get-0',
     });
     expect(initial.data).toMatchObject({
-      mode: 'SEEDANCE',
-      providerProfileId: 'profile-video-primary',
+      mode: 'AGNES',
+      providerProfileId: 'profile-video-agnes-primary',
     });
     const updatedAtOf = (result: Awaited<ReturnType<typeof invoke>>): string | null =>
       result.data !== undefined && 'updatedAt' in result.data ? result.data.updatedAt : null;
@@ -650,15 +649,6 @@ describe('createJobProviderFeatureRegistration — Composition Root', () => {
     expect(second.data).toMatchObject({
       mode: 'AGNES',
       providerProfileId: 'profile-video-agnes-primary',
-    });
-    const third = await invoke(PROVIDER_IPC_CHANNELS.saveVideoProviderSelection, {
-      expectedUpdatedAt: updatedAtOf(second),
-      mode: 'SEEDANCE',
-      requestId: 'request-video-selection-save-3',
-    });
-    expect(third.data).toMatchObject({
-      mode: 'SEEDANCE',
-      providerProfileId: 'profile-video-primary',
     });
     expect(JSON.stringify([...profiles.values()].sort((a, b) => a.id.localeCompare(b.id)))).toBe(
       rowsSnapshot,

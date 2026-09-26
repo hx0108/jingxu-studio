@@ -152,7 +152,7 @@ const CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFa
   Object.freeze({
     MODEL_CANCELLED: { message: '请求已取消。', retryable: false, userAction: null },
     MODEL_CONTENT_REJECTED: {
-      message: '请求内容被 Provider 安全策略拒绝。',
+      message: '请求内容被模型服务安全策略拒绝。',
       retryable: false,
       userAction: '请调整输入内容后重试。',
     },
@@ -162,37 +162,37 @@ const CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFa
       userAction: '请减少输入长度后重试。',
     },
     MODEL_CREDENTIAL_INVALID: {
-      message: 'API Key 校验未通过，Provider 拒绝了该凭据。',
+      message: '服务密钥校验未通过，模型服务拒绝了该凭据。',
       retryable: false,
-      userAction: '请重新粘贴 API Key 并保存后再试。',
+      userAction: '请重新粘贴服务密钥并保存后再试。',
     },
     MODEL_INPUT_TOO_LARGE: {
-      message: '请求体超出 Provider 大小限制。',
+      message: '请求内容超出模型服务大小限制。',
       retryable: false,
       userAction: '请减少输入长度后重试。',
     },
     MODEL_INVALID_RESPONSE: {
-      message: 'Provider 返回内容无法解析。',
+      message: '模型服务返回内容无法解析。',
       retryable: true,
       userAction: '请重试。',
     },
     MODEL_NETWORK_ERROR: {
-      message: '网络不可用或无法连接 Provider。',
+      message: '网络不可用或无法连接模型服务。',
       retryable: true,
       userAction: '请检查网络连接（含代理设置）后重试。',
     },
     MODEL_PROVIDER_ERROR: {
-      message: 'Provider 服务端错误。',
+      message: '模型服务端错误。',
       retryable: true,
-      userAction: '请稍后重试；若持续失败请查看 Provider 状态页。',
+      userAction: '请稍后重试；若持续失败请查看模型服务状态页。',
     },
     MODEL_MODEL_UNAVAILABLE: {
-      message: '当前模型未开通或当前 API Key 无调用权限。',
+      message: '当前模型未开通或当前服务密钥无调用权限。',
       retryable: false,
       userAction: '请在火山方舟开通所选模型或配置对应接入点后重试。',
     },
     MODEL_RATE_LIMITED: {
-      message: 'Provider 限流，请稍后再试。',
+      message: '模型服务请求过多，请稍后再试。',
       retryable: true,
       userAction: '请等待片刻后重试。',
     },
@@ -207,7 +207,7 @@ const CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, CredentialTestFa
       userAction: '请重试；网络不佳时可稍后再试。',
     },
     MODEL_UNKNOWN: {
-      message: 'Provider 调用失败，原因未知。',
+      message: '模型服务调用失败，原因未知。',
       retryable: true,
       userAction: null,
     },
@@ -218,9 +218,9 @@ const IMAGE_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, Credential
   Object.freeze({
     ...CREDENTIAL_TEST_FAILURES,
     MODEL_CREDENTIAL_INVALID: {
-      message: '图片 API Key 密文无法解密读取（未配置、系统密钥变更或目录迁移）。',
+      message: '图片服务密钥无法解密读取（未配置、系统密钥变更或目录迁移）。',
       retryable: false,
-      userAction: '请在图片 Provider 设置中重新粘贴 ARK API Key 并保存。',
+      userAction: '请在图片生成设置中重新粘贴服务密钥并保存。',
     },
   });
 
@@ -229,9 +229,9 @@ const VIDEO_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, Credential
   Object.freeze({
     ...CREDENTIAL_TEST_FAILURES,
     MODEL_CREDENTIAL_INVALID: {
-      message: '视频 API Key 密文无法解密读取（未配置、系统密钥变更或目录迁移）。',
+      message: '视频服务密钥无法解密读取（未配置、系统密钥变更或目录迁移）。',
       retryable: false,
-      userAction: '请在视频 Provider 设置中重新粘贴 ARK API Key 并保存。',
+      userAction: '请在视频生成设置中重新粘贴服务密钥并保存。',
     },
   });
 
@@ -239,9 +239,9 @@ const AGNES_CREDENTIAL_TEST_FAILURES: Readonly<Record<ModelErrorCode, Credential
   Object.freeze({
     ...CREDENTIAL_TEST_FAILURES,
     MODEL_CREDENTIAL_INVALID: {
-      message: 'Agnes API Key 密文无法解密读取（未配置、系统密钥变更或目录迁移）。',
+      message: '阿格尼斯服务密钥无法解密读取（未配置、系统密钥变更或目录迁移）。',
       retryable: false,
-      userAction: '请在视频 Provider 设置中重新粘贴 Agnes API Key 并保存。',
+      userAction: '请在视频生成设置中重新粘贴阿格尼斯服务密钥并保存。',
     },
   });
 
@@ -490,8 +490,8 @@ export const createJobProviderIpcService = (
     return validateOutput(PROVIDER_PROFILE_RESULT, result, traceId);
   };
   const DEFAULT_VIDEO_SELECTION: VideoProviderSelection = {
-    mode: 'SEEDANCE',
-    providerProfileId: VIDEO_PROVIDER_PROFILE_BY_MODE.SEEDANCE,
+    mode: 'AGNES',
+    providerProfileId: VIDEO_PROVIDER_PROFILE_BY_MODE.AGNES,
     updatedAt: '1970-01-01T00:00:00.000Z',
   };
   const providerGetVideoSelection = async (
@@ -506,7 +506,7 @@ export const createJobProviderIpcService = (
       const selection = await preferences.get();
       return validateOutput(
         VIDEO_PROVIDER_SELECTION_RESULT,
-        ok(selection ?? DEFAULT_VIDEO_SELECTION),
+        ok(selection?.mode === 'AGNES' ? selection : DEFAULT_VIDEO_SELECTION),
         traceId,
       );
     } catch {

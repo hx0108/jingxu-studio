@@ -12,7 +12,7 @@ import {
   type Page,
 } from '@playwright/test';
 
-import { openProjectsList } from './support/app-navigation';
+import { confirmGenerationPreparation, openProjectsList } from './support/app-navigation';
 
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
@@ -45,10 +45,11 @@ const repeat = (token: string, count: number): string[] =>
 
 /** 重载后从项目列表走真实入口进分镜工作台（复用 batch-first-frame E2E 驱动路径）。 */
 const openStoryboard = async (page: Page, projectName: string): Promise<void> => {
-  await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
   await page.locator('.project-card-main', { hasText: projectName }).click();
   await page.getByRole('button', { name: '进入剧本工作区' }).click();
-  await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
+  await page.locator('.creator-stage-progress').getByText('分镜设计', { exact: true }).click();
+  await expect(page.locator('.media-page-title')).toHaveText('分镜设计');
 };
 
 test('§6.2-T5 调用证据—批跑后 SUBMIT 行数=候选数、ref 可 JOIN、失败原文落 blob（E2E Mock）', async () => {
@@ -62,13 +63,17 @@ test('§6.2-T5 调用证据—批跑后 SUBMIT 行数=候选数、ref 可 JOIN�
   const application = await launch(managedRoot, steps);
   try {
     const page = await application.firstWindow();
-    const seeded = await seedStoryboardReady(page, '证据留档');
+    const seeded = await seedStoryboardReady(page, '证据留档', undefined, {
+      imageProvider: true,
+    });
     expect(seeded.shotCount).toBe(6);
     await page.reload();
     await openProjectsList(page);
     await openStoryboard(page, '证据留档');
+    await page.locator('.media-advanced-actions > summary').click();
 
     await page.getByRole('button', { name: '为整集生成首帧' }).click();
+    await confirmGenerationPreparation(page);
     await expect(page.locator('#batch-progress')).toContainText(
       '首帧批次部分完成 · 进度 6/6 · 失败 1',
       { timeout: 60_000 },

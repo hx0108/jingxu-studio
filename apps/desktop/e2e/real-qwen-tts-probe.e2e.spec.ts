@@ -22,6 +22,7 @@ import { _electron as electron, test, type ElectronApplication } from '@playwrig
 const desktopRoot = path.resolve(__dirname, '..');
 const keyFile = process.env.JINGXU_REAL_KEY_FILE ?? '';
 const workspaceId = process.env.JINGXU_REAL_WORKSPACE_ID ?? '';
+const useStoredCredentials = process.env.JINGXU_USE_STORED_CREDENTIALS === '1';
 /** 复用旋钮：给定已 READY 的项目则跳过建项与文本链，直接进入配音阶段（真实计费预算）。 */
 const projectIdOverride = process.env.JINGXU_REAL_TTS_PROJECT_ID ?? '';
 const stages = ['CONCEPT', 'STORY_BIBLE', 'EPISODE_OUTLINE', 'BEAT_SHEET', 'SCENE_SCRIPT'] as const;
@@ -42,8 +43,12 @@ const environment = (): Record<string, string> =>
 
 test('真实 Qwen3-TTS 配音链路探针（五阶段→分镜 READY→音色映射→整集批→候选选择）', async () => {
   test.setTimeout(1_200_000);
-  test.skip(!keyFile || !workspaceId, '需要 JINGXU_REAL_KEY_FILE 与 JINGXU_REAL_WORKSPACE_ID');
-  const apiKey = (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
+  test.skip(
+    !useStoredCredentials && (!keyFile || !workspaceId),
+    '需要已保存凭据，或 JINGXU_REAL_KEY_FILE 与 JINGXU_REAL_WORKSPACE_ID',
+  );
+  const apiKey =
+    keyFile === '' ? '' : (await readFile(keyFile, 'utf8')).replace(/^﻿/, '').replace(/\s+/g, '');
 
   let application: ElectronApplication | undefined;
   try {

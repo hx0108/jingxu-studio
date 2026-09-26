@@ -8,29 +8,37 @@ import type { DesktopPersistenceRuntime } from './create-persistence-runtime';
  * 适配器，绝不在调度事务内再开查询。真实项目恒不在表中——零路由。
  */
 export interface DemoProjectRegistry {
-  readonly current: () => string | null;
-  readonly set: (projectId: string | null) => void;
+  readonly add: (projectId: string) => void;
+  readonly clear: () => void;
+  readonly has: (projectId: string) => boolean;
+  readonly remove: (projectId: string) => void;
   readonly prime: (runtime: DesktopPersistenceRuntime) => Promise<void>;
 }
 
 export const createDemoProjectRegistry = (): DemoProjectRegistry => {
-  let current: string | null = null;
+  const ids = new Set<string>();
   return {
-    current: () => current,
-    set: (projectId) => {
-      current = projectId;
+    add: (projectId) => ids.add(projectId),
+    clear: () => {
+      ids.clear();
+    },
+    has: (projectId) => ids.has(projectId),
+    remove: (projectId) => {
+      ids.delete(projectId);
     },
     prime: async (runtime) => {
       const projects = runtime.getProjectUnitOfWork();
       if (projects === null) return;
       await projects.run(async ({ projects: projectRepository }) => {
-        const page = await projectRepository.listPage({
-          after: null,
-          limit: 100,
-          scope: 'ACTIVE',
-        });
-        const demo = page.items.find((item) => item.project.experienceMode === 'DEMO');
-        current = demo?.project.id ?? null;
+        ids.clear();
+        let after: { readonly id: string; readonly updatedAt: string } | null = null;
+        do {
+          const page = await projectRepository.listPage({ after, limit: 100, scope: 'ACTIVE' });
+          for (const item of page.items) {
+            if (item.project.experienceMode === 'DEMO') ids.add(item.project.id);
+          }
+          after = page.nextAfter;
+        } while (after !== null);
       });
     },
   };

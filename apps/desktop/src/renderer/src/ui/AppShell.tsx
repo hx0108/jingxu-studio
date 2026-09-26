@@ -1,19 +1,13 @@
-import type { ReactNode } from 'react';
-
-import { Icon, type IconName } from './icons';
+import { useState, type ReactNode } from 'react';
 
 export type GlobalArea =
   'home' | 'projects' | 'workspace' | 'assets' | 'tasks' | 'exports' | 'evaluation' | 'settings';
 
-const GLOBAL_AREAS: readonly [GlobalArea, string, IconName][] = [
-  ['home', '首页', 'home'],
-  ['projects', '我的项目', 'folder'],
-  ['workspace', '创作工作台', 'clapper'],
-  ['assets', '素材库', 'layers'],
-  ['tasks', '生成任务', 'tasks'],
-  ['exports', '导出记录', 'export'],
-  ['evaluation', '质量与评测', 'gauge'],
-  ['settings', '设置', 'sliders'],
+export const MORE_AREAS: readonly [GlobalArea, string][] = [
+  ['workspace', '创作工作台'],
+  ['assets', '素材库'],
+  ['tasks', '生成任务'],
+  ['exports', '导出记录'],
 ];
 
 export interface AppShellProps {
@@ -23,45 +17,101 @@ export interface AppShellProps {
   readonly projectName?: string | null;
 }
 
-export const AppShell = ({ activeArea, children, onNavigate, projectName }: AppShellProps) => (
-  <main className="app-shell">
-    <aside className="global-sidebar">
-      <div className="brand-lockup">
-        <span className="brand-mark" aria-hidden="true">
-          镜
-        </span>
-        <div>
-          <strong>镜序 Studio</strong>
-          <small>AI 漫剧工作台</small>
-        </div>
-      </div>
-      <nav aria-label="全局导航" className="global-navigation">
-        {GLOBAL_AREAS.map(([area, label, icon]) => (
+export const AppShell = ({ activeArea, children, onNavigate, projectName }: AppShellProps) => {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const navigate = (area: GlobalArea): void => {
+    setMoreOpen(false);
+    onNavigate(area);
+  };
+  return (
+    <main className="app-shell" data-area={activeArea}>
+      <header className="global-header">
+        <button
+          aria-label="返回镜序首页"
+          className="brand-lockup"
+          onClick={() => {
+            navigate('home');
+          }}
+          type="button"
+        >
+          <span aria-hidden="true" className="brand-mark">
+            镜
+          </span>
+          <span className="brand-copy">
+            <strong>镜序</strong>
+            <small>AI漫剧 / 短剧创作平台</small>
+          </span>
+        </button>
+        <nav aria-label="全局导航" className="global-navigation">
           <button
-            aria-current={activeArea === area ? 'page' : undefined}
-            className={activeArea === area ? 'global-nav-item active' : 'global-nav-item'}
-            key={area}
+            aria-current={activeArea === 'projects' ? 'page' : undefined}
+            className="global-nav-item"
             onClick={() => {
-              onNavigate(area);
+              navigate('projects');
             }}
             type="button"
           >
-            <span aria-hidden="true" className="global-nav-icon">
-              <Icon name={icon} />
-            </span>
-            <span>{label}</span>
+            我的作品
           </button>
-        ))}
-      </nav>
-      <div className="sidebar-project-context">
-        <small>当前项目</small>
-        <strong>{projectName ?? '尚未选择项目'}</strong>
-        {projectName !== null && projectName !== undefined && <span>第 1 集 · 竖屏 9:16</span>}
-      </div>
-    </aside>
-    <section className="app-content">{children}</section>
-  </main>
-);
+          <button
+            aria-current={activeArea === 'evaluation' ? 'page' : undefined}
+            className="global-nav-item"
+            onClick={() => {
+              navigate('evaluation');
+            }}
+            type="button"
+          >
+            质量评测
+          </button>
+          <button
+            aria-current={activeArea === 'settings' ? 'page' : undefined}
+            className="global-nav-item"
+            onClick={() => {
+              navigate('settings');
+            }}
+            type="button"
+          >
+            设置
+          </button>
+          <div className="global-more-wrap">
+            <button
+              aria-current={MORE_AREAS.some(([area]) => area === activeArea) ? 'page' : undefined}
+              aria-expanded={moreOpen}
+              aria-haspopup="menu"
+              className="global-nav-item"
+              onClick={() => {
+                setMoreOpen(!moreOpen);
+              }}
+              type="button"
+            >
+              更多
+            </button>
+            {moreOpen && (
+              <div className="global-more-menu" role="menu">
+                {MORE_AREAS.map(([area, label]) => (
+                  <button
+                    key={area}
+                    onClick={() => {
+                      navigate(area);
+                    }}
+                    role="menuitem"
+                    type="button"
+                  >
+                    {label}
+                  </button>
+                ))}
+                {projectName && <p>当前作品：{projectName}</p>}
+              </div>
+            )}
+          </div>
+        </nav>
+      </header>
+      <section aria-label="页面内容" className="app-content" tabIndex={0}>
+        {children}
+      </section>
+    </main>
+  );
+};
 
 export const ComingSoonPanel = ({
   title,

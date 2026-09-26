@@ -14,6 +14,7 @@ import {
 } from '@playwright/test';
 
 import { seedStoryboardReady } from './support/storyboard-seeding';
+import { confirmGenerationPreparation, openProjectsList } from './support/app-navigation';
 
 const execFileAsync = promisify(execFile);
 const desktopRoot = path.resolve(__dirname, '..');
@@ -153,6 +154,50 @@ const prepareSelectedVideoCandidates = async (
   );
 };
 
+const prepareSelectedVoiceCandidates = async (
+  page: Page,
+  projectId: string,
+  shotIds: readonly string[],
+): Promise<void> => {
+  await page.evaluate(
+    async ({ pid, selectedShotIds }) => {
+      const workspace = await window.jingxu.script.getWorkspace({ projectId: pid });
+      if (!workspace.ok) throw new Error(workspace.error.code);
+      const batch = await window.jingxu.voice.generateForEpisode({
+        episodeId: workspace.data.episode.id,
+        projectId: pid,
+        requestId: `composition_voice_batch_${crypto.randomUUID()}`,
+        shotIds: selectedShotIds,
+      });
+      if (!batch.ok) throw new Error(batch.error.code);
+      for (const shotId of batch.data.targetShotIds) {
+        let selected = false;
+        for (let attempt = 0; attempt < 120 && !selected; attempt += 1) {
+          const generations = await window.jingxu.voice.getGenerations({
+            projectId: pid,
+            shotId,
+          });
+          if (!generations.ok) throw new Error(generations.error.code);
+          const candidate = generations.data.find((item) => item.status === 'SUCCEEDED');
+          if (candidate === undefined) {
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            continue;
+          }
+          const result = await window.jingxu.voice.selectCandidate({
+            candidateId: candidate.id,
+            projectId: pid,
+            requestId: `composition_select_voice_${crypto.randomUUID()}`,
+          });
+          if (!result.ok) throw new Error(result.error.code);
+          selected = true;
+        }
+        if (!selected) throw new Error(`COMPOSITION_VOICE_CANDIDATE_TIMEOUT:${shotId}`);
+      }
+    },
+    { pid: projectId, selectedShotIds: [...shotIds] },
+  );
+};
+
 const createTimelineForProject = async (page: Page, projectId: string) =>
   page.evaluate(async (pid) => {
     const workspace = await window.jingxu.script.getWorkspace({ projectId: pid });
@@ -201,6 +246,193 @@ const compositionE2eName =
   process.env.JINGXU_E2E_EXECUTABLE === undefined
     ? 'E2E-V2-VIDEO-COMPOSE-SUCCESS—真实 FFmpeg 合成、Main 音乐导入、原子 MP4、哈希与受限预览'
     : 'E2E-V2-VIDEO-COMPOSE-PACKAGED—Windows 成品离线 Mock 合成与包内 FFmpeg/FFprobe 验证';
+
+test('E2E-V2-VIDEO-TIMELINE-UI—三轨剪辑、撤销重做、保存与刷新恢复', async () => {
+  test.setTimeout(300_000);
+  const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-e2e-video-timeline-ui-'));
+  const managedRoot = path.join(root, 'managed');
+  const exportDirectory = path.join(root, 'exports');
+  const audioFile = path.join(root, 'background.wav');
+  await mkdir(exportDirectory, { recursive: true });
+  await execFileAsync(path.join(ffmpegDirectory, 'ffmpeg.exe'), [
+    '-hide_banner',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=440:sample_rate=48000',
+    '-t',
+    '2',
+    '-c:a',
+    'pcm_s16le',
+    audioFile,
+  ]);
+
+  const application = await launch(managedRoot, audioFile, exportDirectory);
+  try {
+    const page = await application.firstWindow();
+    const seeded = await seedStoryboardReady(page, '三轨剪辑界面闭环');
+    const shotIds = await prepareSelectedFirstFrames(page, seeded.projectId);
+    await prepareSelectedVideoCandidates(page, seeded.projectId, shotIds);
+
+    await openProjectsList(page);
+    await page.locator('.project-card-main', { hasText: '三轨剪辑界面闭环' }).click();
+    await page.getByRole('button', { name: '进入剧本工作区' }).click();
+    await page.locator('.creator-stage-progress').getByText('合成导出', { exact: true }).click();
+
+    await page.getByRole('button', { name: '生成时间线', exact: true }).click();
+    const editor = page.getByRole('region', { name: '可剪辑时间线' });
+    await expect(editor).toBeVisible();
+    await expect(editor.getByRole('group', { name: '画面轨' })).toBeVisible();
+    await expect(editor.getByRole('group', { name: '对白轨' })).toBeVisible();
+    await expect(editor.getByRole('group', { name: '配乐轨' })).toBeVisible();
+
+    const videoClips = editor.getByRole('button', { name: /^画面片段 / });
+    await expect(videoClips).toHaveCount(shotIds.length);
+    const firstClipBox = await videoClips.first().boundingBox();
+    const videoLaneBox = await editor
+      .getByRole('group', { name: '画面轨' })
+      .locator('.composition-track-lane')
+      .boundingBox();
+    if (firstClipBox === null || videoLaneBox === null)
+      throw new Error('TIMELINE_DRAG_TARGET_MISSING');
+    await videoClips.first().dispatchEvent('pointerdown', {
+      clientX: firstClipBox.x + firstClipBox.width / 2,
+      clientY: firstClipBox.y + firstClipBox.height / 2,
+      pointerId: 1,
+    });
+    await page.evaluate(
+      ({ x, y }) => {
+        window.dispatchEvent(
+          new PointerEvent('pointermove', { clientX: x, clientY: y, pointerId: 1 }),
+        );
+        window.dispatchEvent(
+          new PointerEvent('pointerup', { clientX: x, clientY: y, pointerId: 1 }),
+        );
+      },
+      {
+        x: videoLaneBox.x + videoLaneBox.width * 0.2,
+        y: firstClipBox.y + firstClipBox.height / 2,
+      },
+    );
+    await videoClips.first().dispatchEvent('click');
+    const startInput = editor.getByLabel('起点（毫秒）').first();
+    await expect(startInput).not.toHaveValue('0');
+    await startInput.fill('0');
+    await editor.getByLabel('素材入点（毫秒）').first().fill('100');
+    const outInput = editor.getByLabel('素材出点（毫秒）').first();
+    await outInput.fill('900');
+    const startMs = Number(await startInput.inputValue());
+    const outMs = Number(await outInput.inputValue());
+    const splitAtMs = startMs + Math.max(100, Math.floor(outMs / 200) * 100);
+    await editor.getByLabel('播放头位置').fill(String(splitAtMs));
+    await editor.getByRole('button', { name: '在播放头处分割' }).click();
+    await expect(videoClips).toHaveCount(shotIds.length + 1);
+    await expect(editor.getByText('有未保存修改')).toBeVisible();
+
+    await editor.getByRole('button', { name: '撤销' }).click();
+    await expect(videoClips).toHaveCount(shotIds.length);
+    await editor.getByRole('button', { name: '重做' }).click();
+    await expect(videoClips).toHaveCount(shotIds.length + 1);
+    await videoClips.last().click();
+    await editor.getByRole('button', { name: '复制到末尾' }).click();
+    await expect(videoClips).toHaveCount(shotIds.length + 2);
+    await videoClips.last().click();
+    await editor.getByRole('button', { name: '删除片段' }).click();
+    await expect(videoClips).toHaveCount(shotIds.length + 1);
+
+    await page.getByRole('button', { name: '导入背景音乐', exact: true }).click();
+    await expect(page.getByText(/已导入背景音乐/)).toBeVisible();
+    await editor.getByLabel('配乐静音').check();
+    await editor.getByLabel('对白轨静音').check();
+    await editor.getByLabel('配乐音量').fill('0.35');
+    await editor.getByLabel('淡入（毫秒）').fill('500');
+    await editor.getByLabel('淡出（毫秒）').fill('700');
+
+    await page.getByRole('button', { name: '保存时间线', exact: true }).click();
+    await expect(page.getByText('时间线已保存为新版本。')).toBeVisible();
+    await expect(page.getByText('第 2 版', { exact: true })).toBeVisible();
+    await expect(editor.getByText('有未保存修改')).toHaveCount(0);
+
+    await page.waitForTimeout(500);
+    await page.reload();
+    await openProjectsList(page);
+    await page.locator('.project-card-main', { hasText: '三轨剪辑界面闭环' }).click();
+    await page.getByRole('button', { name: '进入剧本工作区' }).click();
+    await page.locator('.creator-stage-progress').getByText('合成导出', { exact: true }).click();
+
+    const restoredEditor = page.getByRole('region', { name: '可剪辑时间线' });
+    await expect(restoredEditor).toBeVisible();
+    await expect(page.getByText('第 2 版', { exact: true })).toBeVisible();
+    await expect(restoredEditor.getByLabel('配乐静音')).toBeChecked();
+    await expect(restoredEditor.getByLabel('对白轨静音')).toBeChecked();
+    await expect(restoredEditor.getByLabel('配乐音量')).toHaveValue('0.35');
+    await expect(restoredEditor.getByLabel('淡入（毫秒）')).toHaveValue('500');
+    await expect(restoredEditor.getByLabel('淡出（毫秒）')).toHaveValue('700');
+    await expect(restoredEditor.getByRole('button', { name: /^画面片段 / })).toHaveCount(
+      shotIds.length + 1,
+    );
+  } finally {
+    await application.close();
+    if (process.env.JINGXU_KEEP_E2E_ARTIFACTS !== '1') {
+      await rm(root, { force: true, recursive: true });
+    }
+  }
+});
+
+test('E2E-V2-VIDEO-TIMELINE-UNSAVED—未保存三轨草稿禁止创建导出任务', async () => {
+  test.setTimeout(300_000);
+  const root = await mkdtemp(path.join(os.tmpdir(), 'jingxu-e2e-video-timeline-unsaved-'));
+  const managedRoot = path.join(root, 'managed');
+  const exportDirectory = path.join(root, 'exports');
+  const audioFile = path.join(root, 'background.wav');
+  await mkdir(exportDirectory, { recursive: true });
+  const application = await launch(managedRoot, audioFile, exportDirectory);
+  try {
+    const page = await application.firstWindow();
+    const seeded = await seedStoryboardReady(page, '未保存导出阻断');
+    const shotIds = await prepareSelectedFirstFrames(page, seeded.projectId);
+    await prepareSelectedVideoCandidates(page, seeded.projectId, shotIds);
+    await prepareSelectedVoiceCandidates(page, seeded.projectId, shotIds);
+
+    await openProjectsList(page);
+    await page.locator('.project-card-main', { hasText: '未保存导出阻断' }).click();
+    await page.getByRole('button', { name: '进入剧本工作区' }).click();
+    await page.locator('.creator-stage-progress').getByText('合成导出', { exact: true }).click();
+    await page.getByRole('button', { name: '生成时间线', exact: true }).click();
+
+    const editor = page.getByRole('region', { name: '可剪辑时间线' });
+    await expect(editor).toBeVisible();
+    await editor.getByLabel('配乐音量').fill('0.4');
+    await expect(editor.getByText('有未保存修改')).toBeVisible();
+    const databasePath = path.join(managedRoot, 'data', 'jingxu.sqlite');
+    const before = await sqliteGet<{ count: number }>(
+      databasePath,
+      `SELECT count(*) AS count FROM video_export_jobs`,
+    );
+
+    await page.getByRole('button', { name: '生成成片', exact: true }).click();
+    const preparation = page.getByRole('dialog', { name: '确认本次生成准备' });
+    await expect(preparation.getByRole('button', { name: '确认并开始' })).toBeEnabled();
+    await confirmGenerationPreparation(page);
+    const unsavedDialog = page.getByRole('dialog', { name: '时间线有未保存修改' });
+    await expect(unsavedDialog).toBeVisible();
+    const after = await sqliteGet<{ count: number }>(
+      databasePath,
+      `SELECT count(*) AS count FROM video_export_jobs`,
+    );
+    expect(after.count).toBe(before.count);
+    await unsavedDialog.getByRole('button', { name: '取消', exact: true }).click();
+    await editor.getByRole('button', { name: '撤销', exact: true }).click();
+    await expect(editor.getByText('有未保存修改')).toHaveCount(0);
+    await page.locator('.creator-stage-progress').getByText('视频生成', { exact: true }).click();
+  } finally {
+    await application.close();
+    if (process.env.JINGXU_KEEP_E2E_ARTIFACTS !== '1') {
+      await rm(root, { force: true, recursive: true });
+    }
+  }
+});
 
 test(compositionE2eName, async () => {
   test.setTimeout(300_000);
@@ -295,6 +527,21 @@ test(compositionE2eName, async () => {
     expect(result.mediaUrl).toMatch(/^jingxu:\/\/media\/video-export\//u);
     expect(result.fileSha256).toMatch(/^[a-f0-9]{64}$/u);
     expect(result.byteSize).toBeGreaterThan(0);
+    await page.reload();
+    await page.waitForFunction(() => typeof window.jingxu.video.getTimeline === 'function');
+    const recovered = await page.evaluate(async (projectId) => {
+      const workspace = await window.jingxu.script.getWorkspace({ projectId });
+      if (!workspace.ok) throw new Error(workspace.error.code);
+      return window.jingxu.video.getTimeline({
+        episodeId: workspace.data.episode.id,
+        projectId,
+        timelineVersionId: null,
+      });
+    }, seeded.projectId);
+    expect(recovered.ok).toBe(true);
+    if (!recovered.ok) throw new Error(recovered.error.code);
+    expect(recovered.data.id).toBe(result.timelineVersionId);
+    expect(recovered.data.versionNo).toBe(2);
     const outputPath = path.join(exportDirectory, `jingxu-video-${result.id}.mp4`);
     const output = await readFile(outputPath);
     expect(createHash('sha256').update(output).digest('hex')).toBe(result.fileSha256);

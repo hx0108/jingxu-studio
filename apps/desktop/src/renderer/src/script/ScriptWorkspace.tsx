@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   AppErrorDto,
   AppResultDto,
+  CreatorPreparationOperation,
+  CreatorPreparationResultDto,
   JobSummaryDto,
   MediaBatchViewDto,
   ScriptVersionDto,
@@ -20,6 +22,7 @@ import { ProviderSettings } from './ProviderSettings';
 import { DirtyLeaveDialog } from '../project/DirtyLeaveDialog';
 import { getTransferClient } from '../project/transfer-api';
 import { formatTransferWarnings } from '../project/transfer-copy';
+import { getCreatorGuideClient } from '../project/creator-guide-api';
 import {
   createScriptRequestId,
   getImageClient,
@@ -34,6 +37,15 @@ import { useStoryboardImageStates } from './use-storyboard-image-states';
 import { useStoryboardVideoStates } from './use-storyboard-video-states';
 import { StatusBadge, WorkspaceLayout } from '../ui/WorkspaceLayout';
 import { nextScriptStageLabel, workspaceStatusLabel } from '../ui/workspace-status';
+import { StageStructuredForm } from './StageStructuredForm';
+import { PreparationDialog } from './PreparationDialog';
+import { CreatorStageBar, type CreatorStage } from '../ui/CreatorStageBar';
+import {
+  parseAdvancedStageData,
+  pointerToStageFieldId,
+  serializeStageData,
+  type StageData,
+} from './stage-form-contract';
 
 const STAGES = [
   ['CONCEPT', '故事概念'],
@@ -44,26 +56,43 @@ const STAGES = [
 ] as const;
 type Stage = (typeof STAGES)[number][0];
 
+const formalScriptPageTitle = (stage: Stage): '故事构思' | '剧本完善' =>
+  stage === 'CONCEPT' ? '故事构思' : '剧本完善';
+
 export interface ScriptWorkspaceViewProps {
+  readonly isDemo?: boolean;
   readonly projectId: string;
-  readonly initialMediaStep?: 'storyboard' | 'image' | 'video' | 'composition';
+  readonly projectName?: string;
+  readonly workType?: '漫剧' | '短剧';
+  readonly initialMediaStep?: 'storyboard' | 'image' | 'video' | 'composition' | null;
   readonly initialStage?: Exclude<ScriptStage, 'SHOT_CONTRACT'>;
+  readonly onBack?: () => void;
   readonly onDirtyChange: (dirty: boolean) => void;
   readonly onCommitted?: () => void;
   readonly onOpenSettings?: () => void;
+  readonly onOpenProjectSettings?: () => void;
+  readonly onOpenEvaluation?: () => void;
 }
 
 export const ScriptWorkspaceView = ({
+  isDemo = false,
   projectId,
-  initialMediaStep = 'storyboard',
+  projectName = '当前作品',
+  workType = '短剧',
+  initialMediaStep = null,
   initialStage = 'CONCEPT',
+  onBack = () => undefined,
   onDirtyChange,
   onCommitted,
   onOpenSettings = () => undefined,
+  onOpenProjectSettings = () => undefined,
+  onOpenEvaluation = () => undefined,
 }: ScriptWorkspaceViewProps) => {
   const [workspace, setWorkspace] = useState<ScriptWorkspaceDto | null>(null);
   const [selectedStage, setSelectedStage] = useState<Stage>(initialStage);
   const [editorText, setEditorText] = useState('{}');
+  const [editorMode, setEditorMode] = useState<'FORM' | 'ADVANCED'>('FORM');
+  const [formData, setFormData] = useState<StageData>({});
   const [providerReady, setProviderReady] = useState(false);
   const [job, setJob] = useState<JobSummaryDto | null>(null);
   const [error, setError] = useState<AppErrorDto | null>(null);
@@ -71,8 +100,16 @@ export const ScriptWorkspaceView = ({
   const [pending, setPending] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [pendingStage, setPendingStage] = useState<Stage | null>(null);
+  const [pendingCreatorStage, setPendingCreatorStage] = useState<CreatorStage | null>(null);
   const [batchBusy, setBatchBusy] = useState(false);
   const [videoBatchBusy, setVideoBatchBusy] = useState(false);
+  const [preparationPending, setPreparationPending] = useState(false);
+  const [preparation, setPreparation] = useState<{
+    readonly data: CreatorPreparationResultDto;
+    readonly operation: CreatorPreparationOperation;
+    readonly proceed: () => void;
+  } | null>(null);
+  const [requestedMediaStep, setRequestedMediaStep] = useState(initialMediaStep);
   // storyboard-export：成功回执通知（不含路径红线）与 Σ 偏离确认弹层状态（D5）。
   // 弹层携带原请求 format：确认重发必须落在用户最初选择的交付物形态上（deliverables D3）。
   const [exportNotice, setExportNotice] = useState<string | null>(null);
@@ -84,6 +121,18 @@ export const ScriptWorkspaceView = ({
   } | null>(null);
   const imageStates = useStoryboardImageStates(projectId);
   const videoStates = useStoryboardVideoStates(projectId);
+  const activeCreatorStage: CreatorStage =
+    requestedMediaStep ?? (selectedStage === 'CONCEPT' ? 'story' : 'script');
+
+  useEffect(() => {
+    document.querySelector<HTMLElement>('.app-content')?.scrollTo({ top: 0 });
+  }, [activeCreatorStage]);
+
+  const demoNotice = isDemo ? (
+    <p className="demo-result-notice" role="status">
+      演示结果 · 全程使用内置示例与模拟生成，不会产生真实费用
+    </p>
+  ) : null;
 
   // 整集首帧批次命令（batch-first-frame 5.2）：发起=全量镜头（服务端当前世代跳过，
   // design D3）；取消=仅未建档镜头（D6）；重试失败镜头=失败清单发起新批次（D2）。
@@ -105,7 +154,30 @@ export const ScriptWorkspaceView = ({
       });
   };
 
-  const generateFirstFrames = (): void => {
+  const openPreparation = async (
+    operation: CreatorPreparationOperation,
+    proceed: () => void,
+  ): Promise<void> => {
+    const shotIds = workspace?.storyboard.shots.map((shot) => shot.shotId) ?? [];
+    if (workspace === null || shotIds.length === 0) return;
+    setPreparationPending(true);
+    try {
+      const result = await getCreatorGuideClient().getPreparation({
+        episodeId: workspace.episode.id,
+        operation,
+        projectId,
+        shotIds,
+      });
+      if (result.ok) setPreparation({ data: result.data, operation, proceed });
+      else setError(result.error);
+    } catch {
+      setError(rendererTransportError());
+    } finally {
+      setPreparationPending(false);
+    }
+  };
+
+  const performGenerateFirstFrames = (): void => {
     const shotIds = workspace?.storyboard.shots.map((shot) => shot.shotId) ?? [];
     if (shotIds.length === 0) return;
     runBatchCommand(() =>
@@ -156,7 +228,7 @@ export const ScriptWorkspaceView = ({
       });
   };
 
-  const generateVideos = (): void => {
+  const performGenerateVideos = (): void => {
     const shotIds = workspace?.storyboard.shots.map((shot) => shot.shotId) ?? [];
     if (shotIds.length === 0) return;
     runVideoBatchCommand(() =>
@@ -194,10 +266,41 @@ export const ScriptWorkspaceView = ({
     onDirtyChange(next);
   };
 
+  const confirmPreparation = async (): Promise<void> => {
+    if (preparation === null || workspace === null || preparationPending) return;
+    setPreparationPending(true);
+    try {
+      const result = await getCreatorGuideClient().getPreparation({
+        episodeId: workspace.episode.id,
+        operation: preparation.operation,
+        projectId,
+        shotIds: [...preparation.data.shotIds],
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      if (!result.data.canProceed) {
+        setPreparation({ ...preparation, data: result.data });
+        return;
+      }
+      const proceed = preparation.proceed;
+      setPreparation(null);
+      proceed();
+    } catch {
+      setError(rendererTransportError());
+    } finally {
+      setPreparationPending(false);
+    }
+  };
+
   const selectStage = (stage: Stage, nextWorkspace = workspace): void => {
     const item = nextWorkspace?.stages.find((candidate) => candidate.stage === stage);
+    const data = item?.current?.document.data ?? {};
     setSelectedStage(stage);
-    setEditorText(JSON.stringify(item?.current?.document.data ?? {}, null, 2));
+    setFormData(data);
+    setEditorText(serializeStageData(data));
+    setEditorMode('FORM');
     updateDirty(false);
   };
 
@@ -209,14 +312,11 @@ export const ScriptWorkspaceView = ({
           if (result.ok) {
             setWorkspace(result.data);
             setJob(result.data.currentJob);
-            setEditorText(
-              JSON.stringify(
-                result.data.stages.find((item) => item.stage === selectedStage)?.current?.document
-                  .data ?? {},
-                null,
-                2,
-              ),
-            );
+            const data =
+              result.data.stages.find((item) => item.stage === selectedStage)?.current?.document
+                .data ?? {};
+            setFormData(data);
+            setEditorText(serializeStageData(data));
             setError(null);
           } else if (result.error.code !== 'SCRIPT_WORKSPACE_NOT_INITIALIZED') {
             setError(result.error);
@@ -239,14 +339,11 @@ export const ScriptWorkspaceView = ({
         if (result.ok) {
           setWorkspace(result.data);
           setJob(result.data.currentJob);
-          setEditorText(
-            JSON.stringify(
-              result.data.stages.find((item) => item.stage === 'CONCEPT')?.current?.document.data ??
-                {},
-              null,
-              2,
-            ),
-          );
+          const data =
+            result.data.stages.find((item) => item.stage === 'CONCEPT')?.current?.document.data ??
+            {};
+          setFormData(data);
+          setEditorText(serializeStageData(data));
         } else if (result.error.code !== 'SCRIPT_WORKSPACE_NOT_INITIALIZED') {
           setError(result.error);
         }
@@ -324,6 +421,7 @@ export const ScriptWorkspaceView = ({
   const performVersionCommand = async (
     operation: 'confirm' | 'restore',
     version: ScriptVersionDto,
+    continueAfterConfirm = false,
   ): Promise<void> => {
     if (current === null || pending) return;
     setPending(true);
@@ -345,6 +443,10 @@ export const ScriptWorkspaceView = ({
       updateDirty(false);
       await refresh();
       onCommitted?.();
+      if (operation === 'confirm' && continueAfterConfirm) {
+        if (nextStage !== null) selectStage(nextStage[0]);
+        else setRequestedMediaStep('storyboard');
+      }
     }
     setPending(false);
   };
@@ -379,6 +481,7 @@ export const ScriptWorkspaceView = ({
   // 逐镜头编辑/锁定/解锁（shot-edit-lock）：成功后刷新整集工作区，失败展示稳定错误码。
   const performShotEditLockCommand = async (
     run: () => Promise<AppResultDto<ShotEditLockSummaryDto>>,
+    clearDirtyOnSuccess = false,
   ): Promise<void> => {
     if (pending) return;
     setPending(true);
@@ -387,7 +490,12 @@ export const ScriptWorkspaceView = ({
       const result = await run();
       if (!result.ok) setError(result.error);
       else {
+        if (clearDirtyOnSuccess) updateDirty(false);
         await refresh();
+        if (clearDirtyOnSuccess && pendingCreatorStage !== null) {
+          applyCreatorStage(pendingCreatorStage);
+          setPendingCreatorStage(null);
+        }
         onCommitted?.();
       }
     } catch {
@@ -526,9 +634,69 @@ export const ScriptWorkspaceView = ({
 
   const selectedStageIndex = STAGES.findIndex(([stage]) => stage === selectedStage);
   const nextStage = STAGES[selectedStageIndex + 1] ?? null;
+  const applyCreatorStage = (stage: CreatorStage): void => {
+    if (stage === 'story') {
+      setRequestedMediaStep(null);
+      selectStage('CONCEPT');
+      return;
+    }
+    if (stage === 'script') {
+      setRequestedMediaStep(null);
+      const target = selectedStage === 'CONCEPT' ? 'STORY_BIBLE' : selectedStage;
+      selectStage(target);
+      return;
+    }
+    setRequestedMediaStep(stage);
+  };
+  const selectCreatorStage = (stage: CreatorStage): void => {
+    if (dirty) {
+      setPendingCreatorStage(stage);
+      return;
+    }
+    applyCreatorStage(stage);
+  };
 
   return (
-    <section className="script-workspace">
+    <section
+      className={`script-workspace creator-workspace-page media-${activeCreatorStage}${
+        selectedStage === 'SCENE_SCRIPT' ? ' scene-script-page' : ''
+      }`}
+    >
+      <CreatorStageBar
+        activeStage={activeCreatorStage}
+        onBack={onBack}
+        onOpenEvaluation={onOpenEvaluation}
+        onOpenProjectSettings={onOpenProjectSettings}
+        onOpenSettings={onOpenSettings}
+        onOpenHistory={() => {
+          if (dirty) {
+            setPendingCreatorStage('script');
+            return;
+          }
+          globalThis.setTimeout(() => {
+            const history = document.querySelector<HTMLDetailsElement>(
+              requestedMediaStep === null ? '#script-version-history' : '.storyboard-history',
+            );
+            if (history !== null) {
+              history.open = true;
+              history.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          }, 0);
+        }}
+        onSelect={selectCreatorStage}
+        projectName={projectName}
+        workType={workType}
+      />
+      {selectedStage === 'CONCEPT' && (
+        <div aria-hidden="true" className="provider-readiness-probe">
+          <ProviderSettings
+            mode="status"
+            onOpenSettings={onOpenSettings}
+            onReadyChange={setProviderReady}
+          />
+        </div>
+      )}
+      {demoNotice}
       {error !== null && (
         <section className="inline-error" role="alert">
           <strong>当前操作未完成</strong>
@@ -541,36 +709,86 @@ export const ScriptWorkspaceView = ({
           </details>
         </section>
       )}
-      <WorkspaceLayout
-        flow={
-          <>
-            <div className="flow-heading">
-              <small>当前作品</small>
-              <strong>六阶段创作流程</strong>
-            </div>
-            <div className="production-phase done">
-              <span className="stage-index">01</span>
-              <span className="stage-copy">
-                <strong>创作输入</strong>
-                <small>已完成</small>
-              </span>
-              <span aria-hidden="true" className="phase-indicator" />
-            </div>
-            <div className="production-phase active">
-              <span className="stage-index">02</span>
-              <span className="stage-copy">
-                <strong>剧本开发</strong>
-                <small>{workspaceStatusLabel(current?.status)}</small>
-              </span>
-              <span aria-hidden="true" className="phase-indicator" />
-            </div>
-            <nav aria-label="五阶段剧本" className="stage-navigation script-substage-navigation">
-              {STAGES.map(([stage, label]) => {
-                const item = workspace.stages.find((candidate) => candidate.stage === stage);
-                return (
+      {requestedMediaStep === null && (
+        <WorkspaceLayout
+          inspector={
+            selectedStage === 'CONCEPT' ? (
+              <section className="prototype-tip-panel">
+                <h2>本步提示</h2>
+                <ol>
+                  {[
+                    ['明确主题', '用一句话说明你最想表达的核心。'],
+                    ['突出冲突', '让主角面对一个必须解决的困难。'],
+                    ['简洁清晰', '故事梗概不需要太长，用清晰的语言描述主要情节和结局即可。'],
+                    ['了解受众', '明确目标观众有助于我们生成更符合调性的剧本与镜头。'],
+                  ].map(([title, copy], index) => (
+                    <li key={title}>
+                      <span>{String(index + 1)}</span>
+                      <div>
+                        <strong>{title}</strong>
+                        <small>{copy}</small>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            ) : (
+              <>
+                <section className="prototype-next-panel">
+                  <h2>下一步</h2>
+                  <p>确认当前剧本内容后，继续完成下一环节。</p>
+                  <dl className="compact-definition-list">
+                    <div>
+                      <dt>当前状态</dt>
+                      <dd>{workspaceStatusLabel(current?.status)}</dd>
+                    </div>
+                    <div>
+                      <dt>接下来</dt>
+                      <dd>{nextScriptStageLabel(selectedStage) ?? '分镜设计'}</dd>
+                    </div>
+                  </dl>
+                </section>
+                <details className="technical-details">
+                  <summary>服务与高级信息</summary>
+                  <ProviderSettings
+                    mode="status"
+                    onOpenSettings={onOpenSettings}
+                    onReadyChange={setProviderReady}
+                  />
+                  <p>当前环节：{STAGES.find(([stage]) => stage === selectedStage)?.[1]}</p>
+                </details>
+              </>
+            )
+          }
+        >
+          <section className="script-card">
+            <header className="script-heading">
+              <div>
+                <p className="eyebrow">
+                  {workType}项目 · 第 {selectedStage === 'CONCEPT' ? '1' : '2'} 步
+                </p>
+                <h2>
+                  {selectedStage === 'CONCEPT'
+                    ? '创作故事梗概'
+                    : formalScriptPageTitle(selectedStage)}
+                </h2>
+                <p className="prototype-stage-description">
+                  {selectedStage === 'CONCEPT'
+                    ? `当前选择“${workType}”，后续会按对应节奏生成剧本与镜头。`
+                    : '按人物、情节与场景逐步完善，为后续分镜与画面生成打好基础。'}
+                </p>
+                <p className="script-substage-label">
+                  当前环节：{STAGES.find(([stage]) => stage === selectedStage)?.[1]}
+                </p>
+              </div>
+              <StatusBadge status={current?.status} />
+            </header>
+            {selectedStage !== 'CONCEPT' && (
+              <nav aria-label="剧本完善环节" className="script-substage-toolbar">
+                {STAGES.slice(1).map(([stage, label]) => (
                   <button
                     aria-current={selectedStage === stage ? 'step' : undefined}
-                    className={selectedStage === stage ? 'active-tab' : 'secondary-button'}
+                    className={selectedStage === stage ? 'active' : ''}
                     key={stage}
                     onClick={() => {
                       if (dirty) setPendingStage(stage);
@@ -578,300 +796,326 @@ export const ScriptWorkspaceView = ({
                     }}
                     type="button"
                   >
-                    <span className="stage-index">
-                      {String(STAGES.findIndex(([value]) => value === stage) + 1).padStart(2, '0')}
-                    </span>
-                    <span className="stage-copy">
-                      <strong>{label}</strong>
-                      <small>{workspaceStatusLabel(item?.current?.status)}</small>
-                    </span>
+                    {label}
                   </button>
-                );
-              })}
-            </nav>
-            <div className="flow-divider" />
-            {[
-              ['03', '分镜设计', workspaceStatusLabel(workspace.storyboard.current?.status)],
-              ['04', '画面生成', '按镜头推进'],
-              ['05', '视频生成', '按镜头推进'],
-              ['06', '合成导出', '分镜确认后开放'],
-            ].map(([index, label, status]) => (
-              <div className="production-phase" key={index}>
-                <span className="stage-index">{index}</span>
-                <span className="stage-copy">
-                  <strong>{label}</strong>
-                  <small>{status}</small>
-                </span>
-                <span aria-hidden="true" className="phase-indicator" />
-              </div>
-            ))}
-          </>
-        }
-        inspector={
-          <>
-            <ProviderSettings
-              mode="status"
-              onOpenSettings={onOpenSettings}
-              onReadyChange={setProviderReady}
-            />
-            <section className="inspector-section">
-              <h3>当前阶段</h3>
-              <dl className="compact-definition-list">
-                <div>
-                  <dt>状态</dt>
-                  <dd>{workspaceStatusLabel(current?.status)}</dd>
-                </div>
-                <div>
-                  <dt>版本</dt>
-                  <dd>{current === null ? '尚未生成' : `v${String(current.versionNo)}`}</dd>
-                </div>
-                <div>
-                  <dt>下一步</dt>
-                  <dd>{nextScriptStageLabel(selectedStage) ?? '分镜设计'}</dd>
-                </div>
-              </dl>
-            </section>
-            <details className="technical-details">
-              <summary>高级信息</summary>
-              <p>阶段标识：{selectedStage}</p>
-              <p>版本标识：{current?.id ?? '无'}</p>
-              <p>输入版本：{expectedInputVersionId ?? '无'}</p>
-            </details>
-          </>
-        }
-      >
-        <section className="script-card">
-          <header className="script-heading">
-            <div>
-              <p className="eyebrow">剧本开发 · 第 {String(selectedStageIndex + 1)} 步</p>
-              <h2>{STAGES.find(([stage]) => stage === selectedStage)?.[1]}</h2>
-            </div>
-            <StatusBadge status={current?.status} />
-          </header>
-          {!stageWorkspace?.prerequisiteReady && (
-            <p className="action-hint">前置阶段尚未确认，完成上一阶段后即可生成当前内容。</p>
-          )}
-          {current?.status === 'STALE_INPUT' && (
-            <p className="field-error">上游已变化，此版本仅供查看；请重新生成后确认。</p>
-          )}
-          <div className="script-actions">
-            <button
-              disabled={
-                !providerReady ||
-                stageWorkspace?.prerequisiteReady !== true ||
-                expectedInputVersionId === null ||
-                (job !== null && !isTerminalJob(job))
-              }
-              onClick={() => {
-                if (expectedInputVersionId === null) return;
-                setError(null);
-                void getJobClient()
-                  .create({
-                    episodeId: stageEpisodeId,
-                    expectedInputVersionId,
-                    idempotencyKey: createScriptRequestId('script-job-idempotency'),
-                    operationType: 'GENERATE',
-                    projectId,
-                    requestId: createScriptRequestId('script-job-create'),
-                    stage: selectedStage,
-                  })
-                  .then((result) => {
-                    if (result.ok) setJob(result.data);
-                    else setError(result.error);
-                  });
-              }}
-              type="button"
-            >
-              {current === null
-                ? `生成${STAGES[selectedStageIndex]?.[1] ?? '当前阶段'}`
-                : '重新生成'}
-            </button>
-            {job !== null && !isTerminalJob(job) && (
-              <button
-                className="danger-button"
-                onClick={() => {
-                  void getJobClient()
-                    .cancel({
-                      expectedVersionId: job.versionId,
-                      jobId: job.id,
-                      requestId: createScriptRequestId('script-job-cancel'),
-                    })
-                    .then((result) => {
-                      if (result.ok) setJob(result.data);
-                      else setError(result.error);
-                    });
-                }}
-                type="button"
-              >
-                取消任务
-              </button>
+                ))}
+              </nav>
             )}
-            {job?.status === 'FAILED' && (
-              <button
-                onClick={() => {
-                  void getJobClient()
-                    .retry({
-                      expectedVersionId: job.versionId,
-                      jobId: job.id,
-                      requestId: createScriptRequestId('script-job-retry'),
-                    })
-                    .then((result) => {
-                      if (result.ok) setJob(result.data);
-                      else setError(result.error);
-                    });
-                }}
-                type="button"
-              >
-                重试任务
-              </button>
+            {!stageWorkspace?.prerequisiteReady && (
+              <p className="action-hint">前置阶段尚未确认，完成上一阶段后即可生成当前内容。</p>
             )}
-          </div>
-          {job !== null && (
-            <p aria-live="polite">
-              任务状态：{workspaceStatusLabel(job.status)}
-              {job.errorCode === null ? '' : ' · 可在错误详情中查看诊断信息'}
-            </p>
-          )}
-          <form
-            className="script-form"
-            id="script-stage-editor"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (current === null || pending) return;
-              let data: Record<string, unknown>;
-              try {
-                data = JSON.parse(editorText) as Record<string, unknown>;
-              } catch {
-                setError({
-                  code: 'SCRIPT_SCHEMA_INVALID',
-                  fieldErrors: { '/data': '必须是有效 JSON 对象' },
-                  message: '阶段内容格式无效',
-                  retryable: false,
-                  traceId: 'renderer_local_validation',
-                  userAction: '修正 JSON 后重新保存',
-                });
-                return;
-              }
-              setPending(true);
-              void getScriptClient()
-                .saveDraft({
-                  data,
-                  episodeId: stageEpisodeId,
-                  expectedVersionId: current.id,
-                  projectId,
-                  requestId: createScriptRequestId('script-save'),
-                  stage: selectedStage,
-                })
-                .then(async (result) => {
-                  if (!result.ok) setError(result.error);
-                  else {
-                    updateDirty(false);
-                    await refresh();
-                    if (pendingStage !== null) {
-                      selectStage(pendingStage);
-                      setPendingStage(null);
-                    }
-                    onCommitted?.();
-                  }
-                })
-                .finally(() => {
-                  setPending(false);
-                });
-            }}
-          >
-            <label>
-              结构化阶段内容
-              <textarea
-                aria-describedby="editor-help"
-                disabled={current === null}
-                onChange={(event) => {
-                  setEditorText(event.target.value);
-                  updateDirty(true);
-                }}
-                rows={18}
-                value={editorText}
-              />
-            </label>
-            <small id="editor-help">
-              字段错误使用 JSON Pointer 显示；保存会创建新的不可变 DRAFT。
-            </small>
-            {error?.fieldErrors !== null &&
-              error?.fieldErrors !== undefined &&
-              Object.entries(error.fieldErrors).map(([path, message]) => (
-                <p className="field-error" key={path}>
-                  {path}：{message}
-                </p>
-              ))}
+            {current?.status === 'STALE_INPUT' && (
+              <p className="field-error">上游已变化，此版本仅供查看；请重新生成后确认。</p>
+            )}
             <div className="script-actions">
-              <button disabled={current === null || pending} type="submit">
-                保存为新草稿
-              </button>
               <button
-                disabled={current?.status !== 'DRAFT' || pending}
+                disabled={
+                  !providerReady ||
+                  stageWorkspace?.prerequisiteReady !== true ||
+                  expectedInputVersionId === null ||
+                  (job !== null && !isTerminalJob(job))
+                }
                 onClick={() => {
-                  if (
-                    current !== null &&
-                    globalThis.confirm('确认后，下游旧内容可能需要重新确认。继续？')
-                  ) {
-                    void performVersionCommand('confirm', current);
-                  }
+                  if (expectedInputVersionId === null) return;
+                  setError(null);
+                  void getJobClient()
+                    .create({
+                      episodeId: stageEpisodeId,
+                      expectedInputVersionId,
+                      idempotencyKey: createScriptRequestId('script-job-idempotency'),
+                      operationType: 'GENERATE',
+                      projectId,
+                      requestId: createScriptRequestId('script-job-create'),
+                      stage: selectedStage,
+                    })
+                    .then((result) => {
+                      if (result.ok) setJob(result.data);
+                      else setError(result.error);
+                    });
                 }}
                 type="button"
               >
-                确认为可用
+                {current === null
+                  ? `生成${STAGES[selectedStageIndex]?.[1] ?? '当前阶段'}`
+                  : '重新生成'}
               </button>
-              {current?.status === 'READY' && (
+              {job !== null && !isTerminalJob(job) && (
                 <button
-                  className="primary-next-action"
+                  className="danger-button"
                   onClick={() => {
-                    if (nextStage !== null) selectStage(nextStage[0]);
-                    else
-                      document
-                        .querySelector('#storyboard-panel')
-                        ?.scrollIntoView({ behavior: 'smooth' });
+                    void getJobClient()
+                      .cancel({
+                        expectedVersionId: job.versionId,
+                        jobId: job.id,
+                        requestId: createScriptRequestId('script-job-cancel'),
+                      })
+                      .then((result) => {
+                        if (result.ok) setJob(result.data);
+                        else setError(result.error);
+                      });
                   }}
                   type="button"
                 >
-                  下一步：{nextScriptStageLabel(selectedStage)}
+                  取消任务
+                </button>
+              )}
+              {job?.status === 'FAILED' && (
+                <button
+                  onClick={() => {
+                    void getJobClient()
+                      .retry({
+                        expectedVersionId: job.versionId,
+                        jobId: job.id,
+                        requestId: createScriptRequestId('script-job-retry'),
+                      })
+                      .then((result) => {
+                        if (result.ok) setJob(result.data);
+                        else setError(result.error);
+                      });
+                  }}
+                  type="button"
+                >
+                  重试任务
                 </button>
               )}
             </div>
-          </form>
-          <section aria-labelledby="history-title">
-            <h3 id="history-title">版本历史</h3>
-            {stageWorkspace?.history.length === 0 ? (
-              <p>暂无历史版本。</p>
-            ) : (
-              <ul className="version-list">
-                {stageWorkspace?.history.map((item) => (
-                  <li key={item.id}>
-                    <span>
-                      v{String(item.versionNo)} · {workspaceStatusLabel(item.status)}
-                    </span>
+            {job !== null && (
+              <p aria-live="polite">
+                当前生成：{workspaceStatusLabel(job.status)}
+                {job.errorCode === null ? '' : ' · 可在高级信息中查看诊断'}
+              </p>
+            )}
+            <form
+              className="script-form"
+              id="script-stage-editor"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (current === null || pending) return;
+                const parsed =
+                  editorMode === 'FORM'
+                    ? { data: formData, ok: true as const }
+                    : parseAdvancedStageData(editorText);
+                if (!parsed.ok) {
+                  setError({
+                    code: 'SCRIPT_SCHEMA_INVALID',
+                    fieldErrors: { '/data': parsed.message },
+                    message: '阶段内容格式无效',
+                    retryable: false,
+                    traceId: 'renderer_local_validation',
+                    userAction: '修正高级内容后重新保存',
+                  });
+                  return;
+                }
+                setPending(true);
+                void getScriptClient()
+                  .saveDraft({
+                    data: parsed.data,
+                    episodeId: stageEpisodeId,
+                    expectedVersionId: current.id,
+                    projectId,
+                    requestId: createScriptRequestId('script-save'),
+                    stage: selectedStage,
+                  })
+                  .then(async (result) => {
+                    if (!result.ok) setError(result.error);
+                    else {
+                      updateDirty(false);
+                      await refresh();
+                      if (pendingStage !== null) {
+                        selectStage(pendingStage);
+                        setPendingStage(null);
+                      }
+                      if (pendingCreatorStage !== null) {
+                        applyCreatorStage(pendingCreatorStage);
+                        setPendingCreatorStage(null);
+                      }
+                      onCommitted?.();
+                    }
+                  })
+                  .finally(() => {
+                    setPending(false);
+                  });
+              }}
+            >
+              {selectedStage === 'CONCEPT' && (
+                <div className="prototype-work-type-field">
+                  <strong>作品类型</strong>
+                  <div aria-label="当前作品类型" className="segmented-control">
                     <button
-                      className="secondary-button"
-                      disabled={current === null || item.id === current.id || pending}
-                      onClick={() => {
-                        if (
-                          globalThis.confirm(`基于 v${String(item.versionNo)} 创建新的 DRAFT？`)
-                        ) {
-                          void performVersionCommand('restore', item);
-                        }
-                      }}
+                      aria-pressed={workType === '漫剧'}
+                      className={workType === '漫剧' ? 'active' : ''}
+                      disabled={workType !== '漫剧'}
+                      title={workType === '漫剧' ? undefined : '作品类型已在创建项目时确定'}
                       type="button"
                     >
-                      恢复为新草稿
+                      漫剧
                     </button>
-                  </li>
+                    <button
+                      aria-pressed={workType === '短剧'}
+                      className={workType === '短剧' ? 'active' : ''}
+                      disabled={workType !== '短剧'}
+                      title={workType === '短剧' ? undefined : '作品类型已在创建项目时确定'}
+                      type="button"
+                    >
+                      短剧
+                    </button>
+                  </div>
+                  <span>作品类型已在创建时记录，确保后续生成与审计口径一致。</span>
+                </div>
+              )}
+              <div aria-label="编辑方式" className="segmented-control">
+                <button
+                  aria-pressed={editorMode === 'FORM'}
+                  className={editorMode === 'FORM' ? 'active' : ''}
+                  onClick={() => {
+                    const parsed = parseAdvancedStageData(editorText);
+                    if (!parsed.ok) {
+                      setError({
+                        code: 'SCRIPT_SCHEMA_INVALID',
+                        fieldErrors: { '/data': parsed.message },
+                        message: '高级内容格式无效',
+                        retryable: false,
+                        traceId: 'renderer_local_validation',
+                        userAction: '修正后才能返回表单，当前草稿未被覆盖。',
+                      });
+                      return;
+                    }
+                    setFormData(parsed.data);
+                    setEditorMode('FORM');
+                    setError(null);
+                  }}
+                  type="button"
+                >
+                  表单编辑
+                </button>
+                <button
+                  aria-pressed={editorMode === 'ADVANCED'}
+                  className={editorMode === 'ADVANCED' ? 'active' : ''}
+                  onClick={() => {
+                    setEditorText(serializeStageData(formData));
+                    setEditorMode('ADVANCED');
+                  }}
+                  type="button"
+                >
+                  高级编辑
+                </button>
+              </div>
+              {editorMode === 'FORM' ? (
+                <StageStructuredForm
+                  data={formData}
+                  disabled={current === null}
+                  errors={error?.fieldErrors ?? undefined}
+                  referenceData={
+                    workspace.stages.find((item) => item.stage === 'STORY_BIBLE')?.current?.document
+                      .data
+                  }
+                  onChange={(data) => {
+                    setFormData(data);
+                    setEditorText(serializeStageData(data));
+                    updateDirty(true);
+                  }}
+                  stage={selectedStage}
+                />
+              ) : (
+                <label>
+                  高级内容
+                  <textarea
+                    aria-describedby="editor-help"
+                    disabled={current === null}
+                    onChange={(event) => {
+                      setEditorText(event.target.value);
+                      updateDirty(true);
+                    }}
+                    rows={18}
+                    value={editorText}
+                  />
+                </label>
+              )}
+              <small id="editor-help">保存会创建新的草稿；系统字段由镜序维护。</small>
+              {error?.fieldErrors !== null &&
+                error?.fieldErrors !== undefined &&
+                Object.entries(error.fieldErrors).map(([path, message]) => (
+                  <p className="field-error" key={path}>
+                    {pointerToStageFieldId(path) === null
+                      ? '请检查阶段内容'
+                      : '请检查表单中的对应字段'}
+                    ：{message}
+                  </p>
                 ))}
-              </ul>
-            )}
+              <div className="script-actions">
+                <button disabled={current === null || pending} type="submit">
+                  暂存
+                </button>
+                <button
+                  disabled={current?.status !== 'DRAFT' || pending}
+                  onClick={() => {
+                    if (
+                      current !== null &&
+                      globalThis.confirm('确认后，下游旧内容可能需要重新确认。继续？')
+                    ) {
+                      void performVersionCommand('confirm', current, true);
+                    }
+                  }}
+                  type="button"
+                >
+                  保存并继续
+                </button>
+                {current?.status === 'READY' && (
+                  <button
+                    className="primary-next-action"
+                    onClick={() => {
+                      if (nextStage !== null) selectStage(nextStage[0]);
+                      else
+                        document
+                          .querySelector('#storyboard-panel')
+                          ?.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    type="button"
+                  >
+                    下一步：{nextScriptStageLabel(selectedStage)}
+                  </button>
+                )}
+              </div>
+            </form>
+            <details className="technical-details" id="script-version-history">
+              <summary id="history-title">历史与恢复</summary>
+              {stageWorkspace?.history.length === 0 ? (
+                <p>暂无历史版本。</p>
+              ) : (
+                <ul className="version-list">
+                  {stageWorkspace?.history.map((item) => (
+                    <li key={item.id}>
+                      <span>
+                        v{String(item.versionNo)} · {workspaceStatusLabel(item.status)}
+                      </span>
+                      <button
+                        className="secondary-button"
+                        disabled={current === null || item.id === current.id || pending}
+                        onClick={() => {
+                          if (
+                            globalThis.confirm(`基于 v${String(item.versionNo)} 创建新的 DRAFT？`)
+                          ) {
+                            void performVersionCommand('restore', item);
+                          }
+                        }}
+                        type="button"
+                      >
+                        恢复为新草稿
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </details>
           </section>
-        </section>
-      </WorkspaceLayout>
-      {sceneScriptCurrent?.status === 'READY' && (
+        </WorkspaceLayout>
+      )}
+      {requestedMediaStep !== null && sceneScriptCurrent?.status === 'READY' && (
         <StoryboardPanel
-          initialMediaStep={initialMediaStep}
+          isDemo={isDemo}
+          onDirtyChange={updateDirty}
+          onMediaStepChange={setRequestedMediaStep}
+          initialMediaStep={requestedMediaStep}
           batchBusy={batchBusy}
           episodeTargetDurationSec={workspace.episode.targetDurationSec}
           exportNotice={exportNotice}
@@ -880,7 +1124,10 @@ export const ScriptWorkspaceView = ({
           job={job}
           onBatchCancel={cancelBatch}
           onBatchRetryFailed={retryFailedShots}
-          onGenerateVideos={generateVideos}
+          onGenerateVideos={performGenerateVideos}
+          onPrepareOperation={(operation, proceed) => {
+            void openPreparation(operation, proceed);
+          }}
           onVideoBatchCancel={cancelVideoBatch}
           onVideoBatchRetryFailed={retryFailedVideoShots}
           onConfirm={() => {
@@ -919,9 +1166,9 @@ export const ScriptWorkspaceView = ({
                 else setError(result.error);
               });
           }}
-          onGenerateFirstFrames={generateFirstFrames}
+          onGenerateFirstFrames={performGenerateFirstFrames}
           onEditShot={(input) => {
-            void performShotEditLockCommand(() => getStoryboardClient().editShot(input));
+            void performShotEditLockCommand(() => getStoryboardClient().editShot(input), true);
           }}
           onLockShot={(input) => {
             void performShotEditLockCommand(() => getStoryboardClient().lockShot(input));
@@ -944,18 +1191,54 @@ export const ScriptWorkspaceView = ({
       <DirtyLeaveDialog
         onCancel={() => {
           setPendingStage(null);
+          setPendingCreatorStage(null);
         }}
         onDiscard={() => {
           const target = pendingStage;
+          const creatorTarget = pendingCreatorStage;
           setPendingStage(null);
+          setPendingCreatorStage(null);
+          updateDirty(false);
           if (target !== null) selectStage(target);
+          if (creatorTarget !== null) applyCreatorStage(creatorTarget);
         }}
         onSaveAndLeave={() => {
           document.querySelector<HTMLFormElement>('#script-stage-editor')?.requestSubmit();
         }}
-        open={pendingStage !== null}
+        open={pendingStage !== null || pendingCreatorStage !== null}
         pending={pending}
       />
+      {preparation !== null && (
+        <PreparationDialog
+          onCancel={() => {
+            setPreparation(null);
+          }}
+          onConfirm={() => {
+            void confirmPreparation();
+          }}
+          onFix={(fixAction) => {
+            setPreparation(null);
+            if (fixAction === 'OPEN_GENERATION_SERVICES') {
+              onOpenSettings();
+              return;
+            }
+            if (
+              fixAction === 'ADD_CHARACTER_REFERENCE' ||
+              fixAction === 'ADD_STYLE_REFERENCE' ||
+              fixAction === 'SELECT_IMAGE_CANDIDATE'
+            ) {
+              setRequestedMediaStep('image');
+            } else if (fixAction === 'SELECT_VIDEO_CANDIDATE') {
+              setRequestedMediaStep('video');
+            } else {
+              setRequestedMediaStep('composition');
+            }
+            document.querySelector('#storyboard-panel')?.scrollIntoView({ behavior: 'smooth' });
+          }}
+          pending={preparationPending}
+          preparation={preparation.data}
+        />
+      )}
       {deviation !== null && (
         <ExportDeviationDialog
           onCancel={() => {

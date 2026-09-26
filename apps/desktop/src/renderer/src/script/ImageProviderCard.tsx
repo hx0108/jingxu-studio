@@ -8,8 +8,8 @@ import { createScriptRequestId, getProviderClient, rendererTransportError } from
 const IMAGE_PROFILE_ID = 'profile-image-agnes-primary';
 // 与 Main 侧 IMAGE_SELECTABLE_MODELS（register-job-provider-features）同源镜像。
 const IMAGE_MODELS = [
-  { id: 'agnes-image-2.5-flash', label: 'Agnes Image 2.5 Flash' },
-  { id: 'agnes-image-2.1-flash', label: 'Agnes Image 2.1 Flash' },
+  { id: 'agnes-image-2.5-flash', label: '画面模型 2.5 极速版' },
+  { id: 'agnes-image-2.1-flash', label: '画面模型 2.1 极速版' },
 ] as const;
 const DEFAULT_IMAGE_MODEL_ID = 'agnes-image-2.5-flash';
 
@@ -49,7 +49,7 @@ export const ImageProviderCardView = ({
       </span>
       <div>
         <p className="eyebrow">图片模型</p>
-        <h2 id="image-provider-title">Agnes AI</h2>
+        <h2 id="image-provider-title">阿格尼斯画面服务</h2>
       </div>
       <span
         className={`model-configuration-status${profile?.configured === true ? ' configured' : ''}`}
@@ -58,7 +58,10 @@ export const ImageProviderCardView = ({
       </span>
       <span className="model-current-summary">
         <small>当前模型</small>
-        <strong>{profile?.modelId ?? 'Agnes Image 2.5 Flash'}</strong>
+        <strong>
+          {IMAGE_MODELS.find((model) => model.id === (profile?.modelId ?? modelId))?.label ??
+            '画面模型 2.5 极速版'}
+        </strong>
       </span>
       <span className="model-credential-summary">
         <small>凭据</small>
@@ -72,8 +75,7 @@ export const ImageProviderCardView = ({
     </summary>
     <div className="model-service-body" aria-labelledby="image-provider-title">
       <p>
-        用于首帧图片生成（2026-09-21 起由火山方舟 Seedream 切换至 Agnes Image）。 保存 Agnes API Key
-        并选择模型；完整 Key 不回显、不进入页面长期状态。
+        用于首帧图片生成。请选择模型并保存服务密钥；密钥完整内容不会回显，也不会留在页面长期状态中。
       </p>
       {error !== null && (
         <p className="field-error" role="alert">
@@ -97,7 +99,7 @@ export const ImageProviderCardView = ({
         </select>
       </label>
       <label>
-        Agnes API Key
+        服务密钥
         <input
           autoComplete="new-password"
           onChange={(event) => {
@@ -209,7 +211,7 @@ export const ImageProviderCard = () => {
       modelId={modelId}
       onApiKeyChange={setApiKey}
       onDelete={() => {
-        if (profile === null || !globalThis.confirm('删除已保存的 Agnes 凭据？')) return;
+        if (profile === null || !globalThis.confirm('删除已保存的画面服务凭据？')) return;
         void apply(
           () =>
             getProviderClient().deleteCredential({

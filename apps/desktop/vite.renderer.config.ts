@@ -13,6 +13,8 @@ const injectContentSecurityPolicy = (policy: string): Plugin => ({
 export default defineConfig(({ command }) => ({
   base: './',
   build: {
+    // 本地原型素材必须作为受 CSP 允许的独立资源输出，不能内联为被 img-src 拒绝的 data URL。
+    assetsInlineLimit: 0,
     emptyOutDir: true,
     outDir: path.resolve(import.meta.dirname, '.vite/renderer/main_window'),
   },

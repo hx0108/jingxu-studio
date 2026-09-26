@@ -19,11 +19,12 @@ import { useProjectCommands, useProjectDetail, useProjectList } from './project-
 import { getTransferClient } from './transfer-api';
 import { formatTransferWarnings } from './transfer-copy';
 import { ScriptWorkspaceView } from '../script/ScriptWorkspace';
-import { ProviderSettings } from '../script/ProviderSettings';
+import { ApprovedSettingsWorkspace } from '../script/ApprovedSettingsWorkspace';
 import { EvaluationWorkspace } from '../evaluation/EvaluationWorkspace';
 import { AppShell, ComingSoonPanel, type GlobalArea } from '../ui/AppShell';
 import { WorkspaceTopbar } from '../ui/WorkspaceTopbar';
 import { CreatorHome } from './CreatorHome';
+import { readCreatorPreferences } from './creator-preferences';
 import {
   getCreatorGuideClient,
   routeForCreatorAction,
@@ -59,6 +60,40 @@ const ProjectErrorBanner = ({ error }: { readonly error: AppErrorDto }) => {
   );
 };
 
+/** 百分比表示六步创作流程位置，始终由主进程返回的真实下一动作确定。 */
+const creatorProgress = (
+  action: CreatorNextActionResultDto,
+): { readonly percent: number; readonly stageLabel: string } => {
+  const scriptPercent: Readonly<Record<string, number>> = {
+    BEAT_SHEET: 42,
+    CONCEPT: 14,
+    EPISODE_OUTLINE: 32,
+    SCENE_SCRIPT: 52,
+    STORY_BIBLE: 23,
+  };
+  const percent =
+    action.target === 'START'
+      ? 0
+      : action.target === 'SOURCE_INPUT'
+        ? 5
+        : action.target === 'SCRIPT'
+          ? (scriptPercent[action.stage ?? ''] ?? 10)
+          : action.target === 'STORYBOARD'
+            ? 62
+            : action.target === 'ASSETS'
+              ? 68
+              : action.target === 'IMAGE'
+                ? 74
+                : action.target === 'VIDEO'
+                  ? 84
+                  : action.target === 'VOICE'
+                    ? 90
+                    : action.target === 'EXPORT'
+                      ? 96
+                      : 100;
+  return { percent, stageLabel: action.title };
+};
+
 export const ProjectWorkspace = () => {
   const {
     selectedProjectId,
@@ -75,7 +110,14 @@ export const ProjectWorkspace = () => {
   const [creatorGuidePending, setCreatorGuidePending] = useState(false);
   const [demoPending, setDemoPending] = useState(false);
   const [creatorGuideError, setCreatorGuideError] = useState<string | null>(null);
+  const [projectProgressById, setProjectProgressById] = useState<
+    Readonly<Record<string, { readonly percent: number | null; readonly stageLabel: string }>>
+  >({});
   const [showStartChoice, setShowStartChoice] = useState(false);
+  const [selectedWorkType, setSelectedWorkType] = useState<'漫剧' | '短剧'>(() => {
+    const preferred = readCreatorPreferences().defaultType;
+    return preferred === '漫剧' ? '漫剧' : '短剧';
+  });
   const [creatorRoute, setCreatorRoute] = useState<CreatorWorkspaceRoute | null>(null);
   const [pendingScreen, setPendingScreen] = useState<PendingTarget | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState | null>(null);
@@ -89,11 +131,13 @@ export const ProjectWorkspace = () => {
   );
   const commands = useProjectCommands();
 
-  const refreshCreatorAction = async (): Promise<CreatorNextActionResultDto | null> => {
+  const refreshCreatorAction = async (
+    projectId: string | null = selectedProjectId,
+  ): Promise<CreatorNextActionResultDto | null> => {
     setCreatorGuidePending(true);
     setCreatorGuideError(null);
     try {
-      const result = await getCreatorGuideClient().getNextAction({ projectId: selectedProjectId });
+      const result = await getCreatorGuideClient().getNextAction({ projectId });
       if (!result.ok) {
         setCreatorGuideError(result.error.userAction ?? '请稍后重试。');
         return null;
@@ -125,6 +169,10 @@ export const ProjectWorkspace = () => {
         setCreatorGuideError('请检查应用状态后重试。');
       });
   }, [screen, selectedProjectId]);
+
+  useEffect(() => {
+    document.querySelector<HTMLElement>('.app-content')?.scrollTo({ top: 0 });
+  }, [screen]);
 
   useEffect(() => {
     const blockClose = (event: BeforeUnloadEvent): void => {
@@ -163,11 +211,36 @@ export const ProjectWorkspace = () => {
     evaluation: '质量与评测',
     exports: '导出记录',
     home: '首页',
-    projects: '我的项目',
+    projects: '我的作品',
     settings: '设置',
     tasks: '生成任务',
     workspace: '创作工作台',
   };
+
+  useEffect(() => {
+    if (screen !== 'list' || listScope !== 'ACTIVE' || projects.length === 0) return;
+    let active = true;
+    void Promise.all(
+      projects.map(async (project) => {
+        try {
+          const result = await getCreatorGuideClient().getNextAction({ projectId: project.id });
+          return [
+            project.id,
+            result.ok
+              ? creatorProgress(result.data)
+              : { percent: null, stageLabel: '阶段读取失败' },
+          ] as const;
+        } catch {
+          return [project.id, { percent: null, stageLabel: '阶段读取失败' }] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (active) setProjectProgressById(Object.fromEntries(entries));
+    });
+    return () => {
+      active = false;
+    };
+  }, [listScope, projects, screen]);
 
   const moveTo = (target: Screen): void => {
     if (isDirty) {
@@ -229,10 +302,12 @@ export const ProjectWorkspace = () => {
         setCreatorGuideError(result.error.userAction ?? '示例暂时无法创建，请稍后重试。');
         return;
       }
+      // 示例创建会写入真实项目表；立即刷新列表，避免“我的作品”继续展示创建前的空缓存。
+      await list.refetch();
       select(result.data.projectId);
-      const latest = await refreshCreatorAction();
+      const latest = await refreshCreatorAction(result.data.projectId);
       const route = latest === null ? null : routeForCreatorAction(latest);
-      if (latest === null || latest.projectId === null || route === null) {
+      if (!latest?.projectId || route === null) {
         moveTo('detail');
         return;
       }
@@ -341,30 +416,38 @@ export const ProjectWorkspace = () => {
       projectName={currentDetail?.name ?? null}
     >
       <div
-        className={
-          activeArea === 'workspace' ? 'project-shell workspace-area-shell' : 'project-shell'
-        }
+        className={`${activeArea === 'workspace' ? 'project-shell workspace-area-shell' : 'project-shell'}${screen === 'list' ? ' project-list-shell' : ''}`}
       >
-        {activeArea === 'workspace' || activeArea === 'settings' ? (
+        {screen === 'home' ||
+        screen === 'script' ||
+        screen === 'settings' ||
+        screen === 'evaluation' ? null : activeArea === 'workspace' ? (
           <WorkspaceTopbar
-            area={
-              activeArea === 'settings'
-                ? '设置'
-                : screen === 'script'
-                  ? '剧本开发'
-                  : screen === 'edit'
-                    ? '编辑创作设定'
-                    : '项目概览'
-            }
-            context={activeArea === 'workspace' ? currentDetail?.name : undefined}
+            area={screen === 'edit' ? '编辑创作设定' : '项目概览'}
+            context={currentDetail?.name}
           />
         ) : (
-          <header className="page-header">
+          <header className={`page-header${screen === 'list' ? ' project-list-hero' : ''}`}>
             <div>
-              <p className="eyebrow">本地创作空间</p>
+              <p className="eyebrow">{screen === 'list' ? '继续你的故事创作' : '本地创作空间'}</p>
               <h1>{pageTitle[activeArea]}</h1>
+              {screen === 'list' && <p>在这里，继续你的故事创作。</p>}
             </div>
-            <span className="local-first-badge">仅保存在本机</span>
+            {screen === 'list' ? (
+              <button
+                aria-label="创建项目"
+                className="project-list-create-button"
+                data-primary-action
+                onClick={() => {
+                  setScreen('create');
+                }}
+                type="button"
+              >
+                ✦ 新建作品
+              </button>
+            ) : (
+              <span className="local-first-badge">仅保存在本机</span>
+            )}
           </header>
         )}
         {commandError !== null && <ProjectErrorBanner error={commandError} />}
@@ -380,6 +463,7 @@ export const ProjectWorkspace = () => {
               setShowStartChoice(false);
               moveTo('create');
             }}
+            onSelectType={setSelectedWorkType}
             onDemo={() => {
               void startDemo();
             }}
@@ -387,6 +471,7 @@ export const ProjectWorkspace = () => {
               void refreshCreatorAction();
             }}
             pending={creatorGuidePending}
+            projectName={currentDetail?.name}
             showStartChoice={showStartChoice}
           />
         )}
@@ -409,28 +494,33 @@ export const ProjectWorkspace = () => {
           />
         )}
         {screen === 'settings' && (
-          <section className="settings-workspace model-services-page">
-            <header>
-              <p className="eyebrow">设置</p>
-              <h2>模型服务</h2>
-              <p>凭据和模型配置集中管理，创作页面只显示脱敏状态。</p>
-            </header>
-            <ProviderSettings onReadyChange={() => undefined} />
-          </section>
+          <ApprovedSettingsWorkspace
+            onBack={() => {
+              moveTo(selectedProjectId === null ? 'home' : 'detail');
+            }}
+          />
         )}
         {screen === 'evaluation' && (
           <EvaluationWorkspace
+            isDemo={currentDetail?.experienceMode === 'DEMO'}
+            onOpenStoryboard={() => {
+              setCreatorRoute({ mediaStep: 'storyboard', screen: 'script', stage: 'SCENE_SCRIPT' });
+              moveTo('script');
+            }}
             onBack={() => {
               moveTo(selectedProjectId === null ? 'list' : 'detail');
             }}
             projectId={selectedProjectId}
+            projectTitle={currentDetail?.name ?? null}
+            projectType={currentDetail?.style === '漫剧' ? '漫剧' : '短剧'}
           />
         )}
         {screen === 'list' && (
-          <section>
+          <section className="project-list-page">
             <div className="list-toolbar">
               <div aria-label="项目范围" className="segmented-control">
                 <button
+                  aria-label="我的项目"
                   aria-pressed={listScope === 'ACTIVE'}
                   className={listScope === 'ACTIVE' ? 'active' : ''}
                   onClick={() => {
@@ -438,7 +528,7 @@ export const ProjectWorkspace = () => {
                   }}
                   type="button"
                 >
-                  我的项目
+                  全部作品
                 </button>
                 <button
                   aria-pressed={listScope === 'DELETED'}
@@ -462,17 +552,6 @@ export const ProjectWorkspace = () => {
                   value={listFilter}
                 />
               </label>
-              {listScope === 'ACTIVE' && (
-                <button
-                  data-primary-action
-                  onClick={() => {
-                    setScreen('create');
-                  }}
-                  type="button"
-                >
-                  创建项目
-                </button>
-              )}
               {listScope === 'ACTIVE' && (
                 <button
                   disabled={importPending}
@@ -513,6 +592,7 @@ export const ProjectWorkspace = () => {
                 setConfirmState({ action: 'restore', project });
               }}
               projects={projects}
+              progressByProjectId={projectProgressById}
               scope={listScope}
               state={
                 list.isPending
@@ -528,7 +608,14 @@ export const ProjectWorkspace = () => {
           <section className="editor-panel">
             <h2>创建项目</h2>
             <ProjectFormView
-              defaults={createProjectFormDefaults()}
+              defaults={{
+                ...createProjectFormDefaults(),
+                style:
+                  readCreatorPreferences().defaultType === '每次询问'
+                    ? selectedWorkType
+                    : readCreatorPreferences().defaultType,
+                aspectRatio: readCreatorPreferences().defaultAspect === '横屏' ? '16:9' : '9:16',
+              }}
               formId="project-editor"
               onCancel={() => {
                 moveTo('list');
@@ -554,21 +641,6 @@ export const ProjectWorkspace = () => {
             </section>
           ) : screen === 'script' ? (
             <section className="script-shell">
-              <div className="script-heading">
-                <div>
-                  <p className="eyebrow">剧本工作区</p>
-                  <h2>{currentDetail.name}</h2>
-                </div>
-                <button
-                  className="secondary-button"
-                  onClick={() => {
-                    moveTo('detail');
-                  }}
-                  type="button"
-                >
-                  返回项目
-                </button>
-              </div>
               <ScriptWorkspaceView
                 {...(creatorRoute !== null
                   ? {
@@ -582,10 +654,22 @@ export const ProjectWorkspace = () => {
                   if (pendingScreen !== null) finishPendingNavigation();
                 }}
                 onDirtyChange={setDirty}
+                onBack={() => {
+                  moveTo('detail');
+                }}
                 onOpenSettings={() => {
                   moveTo('settings');
                 }}
+                onOpenProjectSettings={() => {
+                  moveTo('edit');
+                }}
+                onOpenEvaluation={() => {
+                  moveTo('evaluation');
+                }}
+                isDemo={currentDetail.experienceMode === 'DEMO'}
                 projectId={currentDetail.id}
+                projectName={currentDetail.name}
+                workType={currentDetail.style === '漫剧' ? '漫剧' : '短剧'}
               />
             </section>
           ) : screen === 'edit' ? (

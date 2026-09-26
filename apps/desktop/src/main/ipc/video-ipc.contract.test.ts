@@ -112,6 +112,12 @@ const okTimeline = {
     alignmentItems: [],
     audioAsset: null,
     audioVolume: 0.2,
+    bgmFadeInMs: 0,
+    bgmFadeOutMs: 2000,
+    bgmMuted: false,
+    bgmStartMs: 0,
+    bgmTrimInMs: 0,
+    bgmTrimOutMs: null,
     createdAt: NOW,
     episodeId: 'episode_12345678',
     episodeVersionId: 'episode_version_12345678',
@@ -124,6 +130,7 @@ const okTimeline = {
     totalDurationMs: 0,
     versionNo: 1,
     voiceItems: [],
+    voiceTrackMuted: false,
   },
 };
 const okAudio = {
@@ -171,6 +178,7 @@ const createHarness = (ready = true) => {
     importBackgroundMusic: vi.fn(() => Promise.resolve(okAudio)),
     startExport: vi.fn(() => Promise.resolve(okExport)),
     getExportJob: vi.fn(() => Promise.resolve(okExport)),
+    listExports: vi.fn(() => Promise.resolve({ data: [okExport.data], ok: true as const })),
     cancelExport: vi.fn(() => Promise.resolve(okExport)),
   };
   registerVideoIpc(
@@ -285,6 +293,55 @@ describe('Video Main IPC Contract', () => {
       }),
     ).resolves.toMatchObject({ error: { code: 'IPC_INVALID_REQUEST' } });
     expect(service.generateVideosForShots).not.toHaveBeenCalled();
+  });
+
+  it('时间线更新越权字段、非法起点和超限片段—IPC 拒绝且 Service 零调用', async () => {
+    const { handlers, service } = createHarness();
+    const handle = handlers.get(VIDEO_IPC_CHANNELS.updateTimeline);
+    const item = {
+      candidateId: 'candidate_12345678',
+      clipId: 'clip_12345678',
+      enabled: true,
+      fileSha256: hash64('video'),
+      generationInputHash: hash64('generation'),
+      isMock: false,
+      position: 0,
+      providerKind: 'VOLCARK_SEEDANCE',
+      shotId: 'shot_12345678',
+      targetStartMs: 0,
+      trimInMs: 0,
+      trimOutMs: 1000,
+    };
+    const input = {
+      audioAssetId: null,
+      episodeId: 'episode_12345678',
+      expectedVersionId: 'timeline_12345678',
+      items: [item],
+      projectId: 'project_12345678',
+      requestId: 'request_timeline_1',
+    };
+    for (const unsafe of [
+      { ...input, localPath: 'C:\\private.mp4' },
+      { ...input, apiKey: 'sk-secret' },
+      { ...input, providerEndpoint: 'https://evil.example' },
+      { ...input, rawResponse: 'provider body' },
+      { ...input, items: [{ ...item, targetStartMs: 150 }] },
+      {
+        ...input,
+        items: Array.from({ length: 61 }, (_, index) => ({
+          ...item,
+          clipId: `clip_${String(index).padStart(8, '0')}`,
+          position: index,
+          targetStartMs: index * 1000,
+        })),
+      },
+    ]) {
+      await expect(handle?.(trustedEvent(), unsafe)).resolves.toMatchObject({
+        error: { code: 'IPC_INVALID_REQUEST' },
+        ok: false,
+      });
+    }
+    expect(service.updateTimeline).not.toHaveBeenCalled();
   });
 
   it('不可信 frame—边界直接拒绝—Service 零调用', () => {

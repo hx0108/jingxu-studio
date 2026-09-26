@@ -278,6 +278,99 @@ export class SqlitePersistenceRuntimeAdapter implements PersistenceRuntimePort {
     return this.#mediaUnitOfWork;
   }
 
+  /**
+   * 仅供五分钟体验初始化失败补偿。以 projects 行为根，沿实际外键图收集并删除
+   * 该 DEMO 项目的所有后代；STANDARD 项目和不存在项目一律拒绝。
+   */
+  public async discardIncompleteDemoProject(projectId: string): Promise<void> {
+    const coordinator = this.#transactionCoordinator;
+    if (coordinator === null) throw new PersistenceRuntimeError('DATABASE_WRITE_BLOCKED');
+    const database = this.#manager.open();
+    const quoteIdentifier = (value: string): string => `"${value.replaceAll('"', '""')}"`;
+    await coordinator.run(() => {
+      const project = database
+        .prepare('SELECT experience_mode FROM projects WHERE id = ?')
+        .get(projectId) as { readonly experience_mode?: unknown } | undefined;
+      if (project?.experience_mode !== 'DEMO') {
+        throw new PersistenceRuntimeError('DEMO_CLEANUP_SCOPE_INVALID');
+      }
+      database.exec('PRAGMA defer_foreign_keys = ON');
+      database.exec('DROP TABLE IF EXISTS temp.demo_cleanup_targets');
+      database.exec(
+        'CREATE TEMP TABLE demo_cleanup_targets (table_name TEXT NOT NULL, row_id INTEGER NOT NULL, PRIMARY KEY (table_name, row_id)) WITHOUT ROWID',
+      );
+      database
+        .prepare(
+          "INSERT INTO demo_cleanup_targets (table_name, row_id) SELECT 'projects', rowid FROM projects WHERE id = ?",
+        )
+        .run(projectId);
+      const tableNames = database
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name",
+        )
+        .all()
+        .map((row) => row.name)
+        .filter((name): name is string => typeof name === 'string');
+      const relationships: {
+        readonly child: string;
+        readonly columns: readonly { readonly from: string; readonly to: string }[];
+        readonly parent: string;
+      }[] = [];
+      for (const child of tableNames) {
+        const rows = database.prepare(`PRAGMA foreign_key_list(${quoteIdentifier(child)})`).all();
+        const groups = new Map<number, typeof rows>();
+        for (const row of rows) {
+          if (typeof row.id !== 'number') continue;
+          const group = groups.get(row.id) ?? [];
+          group.push(row);
+          groups.set(row.id, group);
+        }
+        for (const group of groups.values()) {
+          const first = group[0];
+          if (first === undefined || typeof first.table !== 'string') continue;
+          const columns = group.flatMap((row) =>
+            typeof row.from === 'string' && typeof row.to === 'string'
+              ? [{ from: row.from, to: row.to }]
+              : [],
+          );
+          if (columns.length > 0) relationships.push({ child, columns, parent: first.table });
+        }
+      }
+      for (;;) {
+        let inserted = 0;
+        for (const relationship of relationships) {
+          const join = relationship.columns
+            .map(({ from, to }) => `child.${quoteIdentifier(from)} = parent.${quoteIdentifier(to)}`)
+            .join(' AND ');
+          const outcome = database
+            .prepare(
+              `INSERT OR IGNORE INTO demo_cleanup_targets (table_name, row_id)
+               SELECT ?, child.rowid
+               FROM ${quoteIdentifier(relationship.child)} AS child
+               JOIN ${quoteIdentifier(relationship.parent)} AS parent ON ${join}
+               JOIN demo_cleanup_targets AS target
+                 ON target.table_name = ? AND target.row_id = parent.rowid`,
+            )
+            .run(relationship.child, relationship.parent) as { readonly changes?: unknown };
+          if (typeof outcome.changes === 'number') inserted += outcome.changes;
+          else if (typeof outcome.changes === 'bigint') inserted += Number(outcome.changes);
+        }
+        if (inserted === 0) break;
+      }
+      for (const tableName of [...tableNames].reverse()) {
+        database
+          .prepare(
+            `DELETE FROM ${quoteIdentifier(tableName)} WHERE rowid IN (SELECT row_id FROM demo_cleanup_targets WHERE table_name = ?)`,
+          )
+          .run(tableName);
+      }
+      const violations = database.prepare('PRAGMA foreign_key_check').all();
+      if (violations.length > 0) throw new PersistenceRuntimeError('DATABASE_INVARIANT_FAILED');
+      database.exec('DROP TABLE temp.demo_cleanup_targets');
+      return Promise.resolve();
+    });
+  }
+
   public prepare(): Promise<PersistenceCheckResult> {
     return this.#runExclusive(async () => this.#prepareUnsafe());
   }

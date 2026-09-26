@@ -2,7 +2,9 @@ import type {
   AppResultDto,
   CreatorDemoResultDto,
   CreatorNextActionResultDto,
+  CreatorPreparationResultDto,
   GetCreatorNextActionInputDto,
+  GetCreatorPreparationInputDto,
   StartCreatorDemoInputDto,
 } from '@jingxu/contracts';
 
@@ -10,9 +12,10 @@ export interface CreatorGuideClient {
   getNextAction(
     input: GetCreatorNextActionInputDto,
   ): Promise<AppResultDto<CreatorNextActionResultDto>>;
-  startDemo(
-    input: StartCreatorDemoInputDto,
-  ): Promise<AppResultDto<CreatorDemoResultDto>>;
+  getPreparation(
+    input: GetCreatorPreparationInputDto,
+  ): Promise<AppResultDto<CreatorPreparationResultDto>>;
+  startDemo(input: StartCreatorDemoInputDto): Promise<AppResultDto<CreatorDemoResultDto>>;
 }
 
 export const getCreatorGuideClient = (): CreatorGuideClient => window.jingxu.creatorGuide;
@@ -32,7 +35,7 @@ export const routeForCreatorAction = (
     return { mediaStep: null, screen: 'script', stage: 'CONCEPT' };
   }
   if (action.target === 'ASSETS') {
-    return { mediaStep: null, screen: 'assets', stage: 'SCENE_SCRIPT' };
+    return { mediaStep: 'image', screen: 'script', stage: 'SCENE_SCRIPT' };
   }
   if (action.target === 'SCRIPT') {
     return {

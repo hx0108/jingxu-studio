@@ -7,9 +7,7 @@ import { createScriptRequestId, getProviderClient, rendererTransportError } from
 // 与 Main 侧 VOICE_PROFILE_ID（register-job-provider-features）同值镜像：配音密文按此固定 id 读写。
 const VOICE_PROFILE_ID = 'profile-voice-primary';
 // 与 packages/model-adapters 的 QWEN_TTS_MODELS 注册表镜像（渲染层不依赖 main 进程包）。
-const VOICE_MODELS = [
-  { id: 'qwen3-tts-instruct-flash', label: '千问3-TTS-Instruct-Flash' },
-] as const;
+const VOICE_MODELS = [{ id: 'qwen3-tts-instruct-flash', label: '千问语音指令极速版' }] as const;
 
 interface VoiceProviderCardViewProps {
   readonly apiKey: string;
@@ -47,7 +45,7 @@ export const VoiceProviderCardView = ({
       </span>
       <div>
         <p className="eyebrow">配音模型</p>
-        <h2 id="voice-provider-title">阿里云 DashScope</h2>
+        <h2 id="voice-provider-title">阿里云语音服务</h2>
       </div>
       <span
         className={`model-configuration-status${profile?.configured === true ? ' configured' : ''}`}
@@ -70,8 +68,7 @@ export const VoiceProviderCardView = ({
     </summary>
     <div className="model-service-body" aria-labelledby="voice-provider-title">
       <p>
-        用于逐镜头台词配音（Qwen3-TTS）。与文本档共用同一把 DashScope API
-        Key——密文按配音档独立保存， 需在此再粘贴一次；完整 Key 不回显、不进入页面长期状态。
+        用于逐镜头台词配音。配音与文字创作可使用同一份服务密钥，但需在此再粘贴一次并独立安全保存；密钥完整内容不会回显，也不会留在页面长期状态中。
       </p>
       {error !== null && (
         <p className="field-error" role="alert">
@@ -95,7 +92,7 @@ export const VoiceProviderCardView = ({
         </select>
       </label>
       <label>
-        DashScope API Key
+        服务密钥
         <input
           autoComplete="new-password"
           onChange={(event) => {
@@ -134,7 +131,7 @@ export const VoiceProviderCardView = ({
       </p>
       <p className="action-hint">
         测试仅验证密文可解密读取，不发起计费请求，也不代表模型已开通。若配音提示凭据无效，请检查该
-        DashScope API Key 是否有百炼模型调用权限。
+        服务密钥是否具有语音模型调用权限。
       </p>
     </div>
   </details>
@@ -203,7 +200,7 @@ export const VoiceProviderCard = () => {
       modelId={modelId}
       onApiKeyChange={setApiKey}
       onDelete={() => {
-        if (profile === null || !globalThis.confirm('删除已保存的配音 DashScope 凭据？')) return;
+        if (profile === null || !globalThis.confirm('删除已保存的配音服务凭据？')) return;
         void apply(
           () =>
             getProviderClient().deleteCredential({

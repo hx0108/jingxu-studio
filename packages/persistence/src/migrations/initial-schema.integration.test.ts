@@ -186,6 +186,7 @@ describe('0001_initial.sql', () => {
         { version: 24 },
         { version: 25 },
         { version: 26 },
+        { version: 27 },
       ]);
     });
   });

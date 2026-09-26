@@ -184,6 +184,7 @@ const seedGraph = (database: SqliteTestDatabase): void => {
 
 const timelineItem = (trimOutMs = 5_000) => ({
   candidateId: 'video_1',
+  clipId: 'clip_00000001',
   enabled: true,
   fileSha256: HASH,
   generationInputHash: HASH,
@@ -191,17 +192,20 @@ const timelineItem = (trimOutMs = 5_000) => ({
   isMock: null,
   providerKind: null,
   shotId: 'shot_1',
+  targetStartMs: 0,
   trimInMs: 0,
   trimOutMs,
 });
 
 const voiceTrackItem = (offsetMs = 0) => ({
   candidateId: 'vcan_1',
+  clipId: 'voice_00000001',
   enabled: true,
   fileSha256: HASH,
   generationInputHash: HASH,
   offsetMs,
   shotId: 'shot_1',
+  targetStartMs: offsetMs,
   trimInMs: 0,
   trimOutMs: 1_500,
   volume: 1,
@@ -240,8 +244,15 @@ const subtitleTrackItem = {
 const emptyTracks = {
   alignmentItems: [],
   audioVolume: 0.2,
+  bgmFadeInMs: 0,
+  bgmFadeOutMs: 2000,
+  bgmMuted: false,
+  bgmStartMs: 0,
+  bgmTrimInMs: 0,
+  bgmTrimOutMs: null,
   subtitleItems: [],
   voiceItems: [],
+  voiceTrackMuted: false,
 };
 
 const requireValue = <T>(value: T | null | undefined): T => {
@@ -260,6 +271,7 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
         const uow = new SqliteMediaUnitOfWork(database, () => NOW);
         const first = await uow.run(({ composition }) =>
           requireValue(composition).composition.createTimeline({
+            ...emptyTracks,
             audioVolume: 0.2,
             episodeId: 'episode_1',
             episodeVersionId: 'episode_v1',
@@ -276,16 +288,50 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
         );
         const second = await uow.run(({ composition }) =>
           requireValue(composition).composition.updateTimeline({
+            ...emptyTracks,
             audioAssetId: null,
             audioVolume: 0.35,
+            bgmFadeInMs: 300,
+            bgmFadeOutMs: 500,
+            bgmMuted: true,
+            bgmStartMs: 1500,
+            bgmTrimInMs: 100,
+            bgmTrimOutMs: 3100,
             expectedVersionId: first.id,
             id: 'timeline_v2',
             inputHash: HASH_B,
-            items: [timelineItem(4_000)],
+            items: [
+              {
+                ...timelineItem(4_000),
+                clipId: 'clip_00000002',
+                position: 1,
+                targetStartMs: 2_500,
+                trimInMs: 2_500,
+              },
+              {
+                ...timelineItem(2_500),
+                clipId: 'clip_00000001',
+                position: 0,
+              },
+            ],
             projectId: 'project_1',
+            payloadSha256: HASH_B,
+            requestId: 'request_timeline_update_1',
             subtitleItems: [],
             totalDurationMs: 4_000,
-            voiceItems: [voiceTrackItem(120)],
+            traceId: 'trace_timeline_update_1',
+            voiceItems: [
+              {
+                ...voiceTrackItem(120),
+                clipId: 'voice_00000002',
+                targetStartMs: 2_620,
+              },
+              {
+                ...voiceTrackItem(),
+                clipId: 'voice_00000001',
+              },
+            ],
+            voiceTrackMuted: true,
             alignmentItems: [alignmentFallbackRow],
           }),
         );
@@ -332,9 +378,41 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
             }),
           ],
           audioVolume: 0.35,
+          bgmFadeInMs: 300,
+          bgmFadeOutMs: 500,
+          bgmMuted: true,
+          bgmStartMs: 1500,
+          bgmTrimInMs: 100,
+          bgmTrimOutMs: 3100,
           id: 'timeline_v2',
+          items: [
+            expect.objectContaining({
+              candidateId: 'video_1',
+              clipId: 'clip_00000001',
+              position: 0,
+              targetStartMs: 0,
+            }),
+            expect.objectContaining({
+              candidateId: 'video_1',
+              clipId: 'clip_00000002',
+              position: 1,
+              targetStartMs: 2_500,
+            }),
+          ],
           subtitleItems: [],
-          voiceItems: [voiceTrackItem(120)],
+          voiceItems: [
+            expect.objectContaining({
+              candidateId: 'vcan_1',
+              clipId: 'voice_00000001',
+              targetStartMs: 0,
+            }),
+            expect.objectContaining({
+              candidateId: 'vcan_1',
+              clipId: 'voice_00000002',
+              targetStartMs: 2_620,
+            }),
+          ],
+          voiceTrackMuted: true,
         });
         expect(
           database
@@ -342,9 +420,102 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
               "SELECT count(*) AS count FROM video_timeline_voice_items WHERE timeline_version_id='timeline_v2'",
             )
             .get()?.count,
-        ).toBe(1);
+        ).toBe(2);
+        expect(
+          database
+            .prepare(
+              "SELECT action, before_sha256, after_sha256 FROM audit_events WHERE object_version_id='timeline_v2'",
+            )
+            .get(),
+        ).toEqual({
+          action: 'VIDEO_TIMELINE_UPDATED',
+          after_sha256: HASH_B,
+          before_sha256: HASH,
+        });
+        expect(
+          database
+            .prepare(
+              "SELECT command_name, payload_sha256 FROM command_receipts WHERE request_id='request_timeline_update_1'",
+            )
+            .get(),
+        ).toEqual({ command_name: 'UPDATE_VIDEO_TIMELINE', payload_sha256: HASH_B });
       } finally {
         database.close();
+      }
+    });
+  });
+
+  it('关闭并重新打开数据库—只从 current pointer 恢复已保存三轨版本', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const databasePath = path.join(root, 'composition-restart.sqlite');
+      const database = new SqliteTestDatabase(databasePath);
+      try {
+        applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
+        seedGraph(database);
+        const uow = new SqliteMediaUnitOfWork(database, () => NOW);
+        const first = await uow.run(({ composition }) =>
+          requireValue(composition).composition.createTimeline({
+            ...emptyTracks,
+            episodeId: 'episode_1',
+            episodeVersionId: 'episode_v1',
+            formatProfileId: 'format_1',
+            id: 'timeline_restart_v1',
+            inputHash: HASH,
+            items: [timelineItem()],
+            projectId: 'project_1',
+            totalDurationMs: 5_000,
+            voiceItems: [voiceTrackItem()],
+          }),
+        );
+        await uow.run(({ composition }) =>
+          requireValue(composition).composition.updateTimeline({
+            ...emptyTracks,
+            audioAssetId: null,
+            audioVolume: 0.4,
+            bgmMuted: true,
+            expectedVersionId: first.id,
+            id: 'timeline_restart_v2',
+            inputHash: HASH_B,
+            items: [timelineItem(4_000)],
+            payloadSha256: HASH_B,
+            projectId: 'project_1',
+            requestId: 'request_timeline_restart_v2',
+            totalDurationMs: 4_000,
+            traceId: 'trace_timeline_restart_v2',
+            voiceItems: [voiceTrackItem(200)],
+            voiceTrackMuted: true,
+          }),
+        );
+      } finally {
+        database.close();
+      }
+
+      const reopened = new SqliteTestDatabase(databasePath);
+      try {
+        const uow = new SqliteMediaUnitOfWork(reopened, () => NOW);
+        const current = await uow.run(({ composition }) =>
+          requireValue(composition).composition.findTimelineVersion('project_1', 'episode_1', null),
+        );
+        expect(current).toMatchObject({
+          audioVolume: 0.4,
+          bgmMuted: true,
+          id: 'timeline_restart_v2',
+          items: [expect.objectContaining({ trimOutMs: 4_000 })],
+          parentVersionId: 'timeline_restart_v1',
+          versionNo: 2,
+          voiceItems: [expect.objectContaining({ targetStartMs: 200 })],
+          voiceTrackMuted: true,
+        });
+        const history = await uow.run(({ composition }) =>
+          requireValue(composition).composition.findTimelineVersion(
+            'project_1',
+            'episode_1',
+            'timeline_restart_v1',
+          ),
+        );
+        expect(history).toMatchObject({ id: 'timeline_restart_v1', totalDurationMs: 5_000 });
+      } finally {
+        reopened.close();
       }
     });
   });
@@ -353,7 +524,8 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
     await withSqliteTestContext(async ({ root }) => {
       const database = new SqliteTestDatabase(path.join(root, 'legacy-timeline.sqlite'));
       try {
-        applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
+        const migrations = await loadMigrationSet(MIGRATIONS);
+        applyMigrations(database, migrations.slice(0, 26), () => NOW);
         seedGraph(database);
         // 直插 0020 之前形状的行：不写 audio_volume（列默认生效）、无两轨行。
         database
@@ -377,6 +549,7 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
            VALUES ('timeline_lv1', 'shot_1', 'video_1', ?, ?, 0, 1, 0, 5000)`,
           )
           .run(HASH, HASH);
+        applyMigrations(database, migrations, () => NOW);
         const legacy = await new SqliteMediaUnitOfWork(database, () => NOW).run(({ composition }) =>
           requireValue(composition).composition.findTimelineVersion(
             'project_1',
@@ -387,15 +560,205 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
         expect(legacy).toMatchObject({
           alignmentItems: [],
           audioVolume: 0.2,
-          items: [timelineItem()],
+          items: [
+            expect.objectContaining({
+              candidateId: 'video_1',
+              shotId: 'shot_1',
+              targetStartMs: 0,
+              trimOutMs: 5_000,
+            }),
+          ],
           subtitleItems: [],
           voiceItems: [],
         });
+        expect(legacy?.items[0]?.clipId).toMatch(/^clip_[A-Za-z0-9_]+$/u);
+        expect(database.pragma('foreign_key_check')).toEqual([]);
       } finally {
         database.close();
       }
     });
   });
+
+  it('时间线更新中任一子轨写入失败—新版本、子轨行与 current pointer 全部回滚', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = new SqliteTestDatabase(path.join(root, 'composition-rollback.sqlite'));
+      try {
+        applyMigrations(database, await loadMigrationSet(MIGRATIONS), () => NOW);
+        seedGraph(database);
+        const uow = new SqliteMediaUnitOfWork(database, () => NOW);
+        await uow.run(({ composition }) =>
+          requireValue(composition).composition.createTimeline({
+            ...emptyTracks,
+            episodeId: 'episode_1',
+            episodeVersionId: 'episode_v1',
+            formatProfileId: 'format_1',
+            id: 'timeline_atomic_v1',
+            inputHash: HASH,
+            items: [timelineItem()],
+            projectId: 'project_1',
+            totalDurationMs: 5_000,
+          }),
+        );
+
+        await expect(
+          uow.run(({ composition }) =>
+            requireValue(composition).composition.updateTimeline({
+              ...emptyTracks,
+              audioAssetId: null,
+              expectedVersionId: 'timeline_atomic_v1',
+              id: 'timeline_atomic_v2',
+              inputHash: HASH_B,
+              items: [timelineItem(4_000)],
+              payloadSha256: HASH_B,
+              projectId: 'project_1',
+              requestId: 'request_timeline_atomic_failure',
+              subtitleItems: [subtitleTrackItem, subtitleTrackItem],
+              totalDurationMs: 4_000,
+              traceId: 'trace_timeline_atomic_failure',
+              voiceItems: [voiceTrackItem()],
+            }),
+          ),
+        ).rejects.toThrow();
+
+        expect(
+          database
+            .prepare(
+              "SELECT current_version_id FROM video_timelines WHERE id='timeline_timeline_atomic_v1'",
+            )
+            .get(),
+        ).toEqual({ current_version_id: 'timeline_atomic_v1' });
+        expect(
+          database
+            .prepare(
+              "SELECT COUNT(*) AS count FROM video_timeline_versions WHERE id='timeline_atomic_v2'",
+            )
+            .get(),
+        ).toEqual({ count: 0 });
+        expect(
+          database
+            .prepare(
+              "SELECT COUNT(*) AS count FROM audit_events WHERE object_version_id='timeline_atomic_v2'",
+            )
+            .get(),
+        ).toEqual({ count: 0 });
+        expect(
+          database
+            .prepare(
+              "SELECT COUNT(*) AS count FROM command_receipts WHERE request_id='request_timeline_atomic_failure'",
+            )
+            .get(),
+        ).toEqual({ count: 0 });
+        expect(
+          database
+            .prepare(
+              "SELECT COUNT(*) AS count FROM video_timeline_items WHERE timeline_version_id='timeline_atomic_v2'",
+            )
+            .get(),
+        ).toEqual({ count: 0 });
+        expect(
+          database
+            .prepare(
+              "SELECT COUNT(*) AS count FROM video_timeline_voice_items WHERE timeline_version_id='timeline_atomic_v2'",
+            )
+            .get(),
+        ).toEqual({ count: 0 });
+        expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
+      } finally {
+        database.close();
+      }
+    });
+  });
+
+  it('v26 含 101 个历史版本—0027 确定性回填片段身份、绝对起点和三轨默认值', async () => {
+    await withSqliteTestContext(async ({ root }) => {
+      const database = new SqliteTestDatabase(path.join(root, 'timeline-0027-history.sqlite'));
+      try {
+        const migrations = await loadMigrationSet(MIGRATIONS);
+        applyMigrations(database, migrations.slice(0, 26), () => NOW);
+        seedGraph(database);
+        database
+          .prepare(
+            `INSERT INTO video_timelines
+             (id, project_id, episode_id, current_version_id, created_at, updated_at)
+             VALUES ('timeline_history', 'project_1', 'episode_1', NULL, ?, ?)`,
+          )
+          .run(NOW, NOW);
+        const insertVersion = database.prepare(
+          `INSERT INTO video_timeline_versions
+           (id, timeline_id, episode_version_id, format_profile_id, version_no, parent_version_id,
+            input_hash, audio_asset_id, total_duration_ms, created_at)
+           VALUES (?, 'timeline_history', 'episode_v1', 'format_1', ?, ?, ?, NULL, 5000, ?)`,
+        );
+        const insertItem = database.prepare(
+          `INSERT INTO video_timeline_items
+           (timeline_version_id, shot_id, candidate_id, file_sha256, generation_input_hash,
+            position, enabled, trim_in_ms, trim_out_ms)
+           VALUES (?, 'shot_1', 'video_1', ?, ?, 0, 1, 0, 5000)`,
+        );
+        const insertVoice = database.prepare(
+          `INSERT INTO video_timeline_voice_items
+           (timeline_version_id, shot_id, candidate_id, file_sha256, generation_input_hash,
+            offset_ms, volume, trim_in_ms, trim_out_ms, enabled)
+           VALUES (?, 'shot_1', 'vcan_1', ?, ?, 300, 0.8, 0, 1500, 1)`,
+        );
+        for (let versionNo = 1; versionNo <= 101; versionNo += 1) {
+          const versionId = `timeline_history_${String(versionNo).padStart(3, '0')}`;
+          const parentId =
+            versionNo === 1 ? null : `timeline_history_${String(versionNo - 1).padStart(3, '0')}`;
+          insertVersion.run(versionId, versionNo, parentId, HASH, NOW);
+          insertItem.run(versionId, HASH, HASH);
+          insertVoice.run(versionId, HASH, HASH);
+        }
+        database
+          .prepare(
+            "UPDATE video_timelines SET current_version_id = 'timeline_history_101' WHERE id = 'timeline_history'",
+          )
+          .run();
+
+        applyMigrations(database, migrations, () => NOW);
+        const rows = database
+          .prepare(
+            `SELECT i.timeline_version_id, i.clip_id, i.target_start_ms,
+                    v.voice_track_muted, v.bgm_start_ms, v.bgm_trim_in_ms,
+                    v.bgm_trim_out_ms, v.bgm_muted, v.bgm_fade_in_ms, v.bgm_fade_out_ms
+             FROM video_timeline_items i
+             JOIN video_timeline_versions v ON v.id = i.timeline_version_id
+             WHERE v.timeline_id = 'timeline_history'
+             ORDER BY v.version_no`,
+          )
+          .all() as unknown as readonly Record<string, unknown>[];
+        expect(rows).toHaveLength(101);
+        expect(new Set(rows.map((row) => row.clip_id)).size).toBe(101);
+        expect(rows[0]).toMatchObject({
+          bgm_fade_in_ms: 0,
+          bgm_fade_out_ms: 2000,
+          bgm_muted: 0,
+          bgm_start_ms: 0,
+          bgm_trim_in_ms: 0,
+          bgm_trim_out_ms: null,
+          target_start_ms: 0,
+          voice_track_muted: 0,
+        });
+        const voiceRows = database
+          .prepare(
+            `SELECT target_start_ms, clip_id
+             FROM video_timeline_voice_items
+             WHERE timeline_version_id LIKE 'timeline_history_%'
+             ORDER BY timeline_version_id`,
+          )
+          .all() as unknown as readonly {
+          readonly clip_id: string;
+          readonly target_start_ms: number;
+        }[];
+        expect(voiceRows).toHaveLength(101);
+        expect(voiceRows.every((row) => row.target_start_ms === 300)).toBe(true);
+        expect(new Set(voiceRows.map((row) => row.clip_id)).size).toBe(101);
+        expect(database.pragma('foreign_key_check')).toEqual([]);
+      } finally {
+        database.close();
+      }
+    });
+  }, 15_000);
 
   it('同 requestId 由唯一约束保持单一 Job，UoW 异常整单回滚', async () => {
     await withSqliteTestContext(async ({ root }) => {
@@ -447,6 +810,22 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
           errorCode: 'VIDEO_EXPORT_CANCELLED',
           status: 'CANCELLED',
         });
+        await uow.run(({ composition }) =>
+          requireValue(composition).composition.createExportJob({
+            episodeId: 'episode_1',
+            id: 'export_3',
+            inputHash: HASH,
+            projectId: 'project_1',
+            requestId: 'request_3',
+            timelineVersionId: 'timeline_v1',
+            totalDurationMs: 5_000,
+          }),
+        );
+        const recent = await uow.run(({ composition }) =>
+          requireValue(composition).composition.listExports('project_1', 'episode_1', 1),
+        );
+        expect(recent).toHaveLength(1);
+        expect(recent[0]?.id).toBe('export_1');
         await expect(
           uow.run(({ composition }) =>
             requireValue(composition).composition.createExportJob({
@@ -476,7 +855,7 @@ describe('SqliteVideoCompositionRepository/UoW', () => {
         ).rejects.toThrow('ROLLBACK_TEST');
         expect(
           database.prepare('SELECT count(*) AS count FROM video_export_jobs').get()?.count,
-        ).toBe(1);
+        ).toBe(2);
         expect(
           database
             .prepare("SELECT count(*) AS count FROM video_audio_assets WHERE id='audio_rollback'")

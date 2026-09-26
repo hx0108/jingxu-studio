@@ -1,4 +1,5 @@
 import type {
+  MediaUnitOfWorkPort,
   ProjectRepositories,
   ProjectUnitOfWorkPort,
   ScriptWorkspaceQueryPort,
@@ -67,7 +68,7 @@ const createHarness = () => {
     ),
     getVersionDocument: vi.fn(),
   } satisfies ScriptWorkspaceQueryPort;
-  return { query: createCreatorGuideQuery({ projects, scripts }), scripts, writes };
+  return { query: createCreatorGuideQuery({ projects, scripts }), projects, scripts, writes };
 };
 
 describe('desktop creator guide query', () => {
@@ -115,5 +116,147 @@ describe('desktop creator guide query', () => {
       videosReady: false,
       voiceReady: false,
     });
+  });
+
+  it('分镜已确认且媒体事实逐步完成—投影当前选中候选、配音与成功导出—不把旧候选计为完成', async () => {
+    const { projects, scripts } = createHarness();
+    scripts.getWorkspace.mockResolvedValue({
+      projectId: project.id,
+      sourceInput: { id: 'source_1' },
+      episode: { id: 'episode_1' },
+      stages: [
+        ...(
+          ['CONCEPT', 'STORY_BIBLE', 'EPISODE_OUTLINE', 'BEAT_SHEET', 'SCENE_SCRIPT'] as const
+        ).map((stage) => ({ current: { status: 'READY' }, stage })),
+      ],
+      storyboard: {
+        current: { status: 'READY' },
+        currentShots: [
+          {
+            shotId: 'shot_1',
+            version: {
+              document: JSON.stringify({ content: { spoken_text: '你好' } }),
+              id: 'shot_version_1',
+            },
+          },
+          {
+            shotId: 'shot_2',
+            version: {
+              document: JSON.stringify({ content: { spoken_text: '' } }),
+              id: 'shot_version_2',
+            },
+          },
+        ],
+        history: [],
+        historyTruncated: false,
+      },
+    } as never);
+    const selected = (shotVersionId: string) => ({
+      selectedAt: '2026-09-21T01:00:00.000Z',
+      shotVersionId,
+      status: 'SUCCEEDED',
+    });
+    const media: MediaUnitOfWorkPort = {
+      run: (work) =>
+        work({
+          composition: {
+            composition: {
+              findLatestSucceededExport: vi.fn(() => Promise.resolve({ id: 'export_1' })),
+            },
+          },
+          media: {
+            listCandidates: vi.fn((shotId: string) =>
+              Promise.resolve([
+                selected(shotId === 'shot_1' ? 'shot_version_1' : 'shot_version_2'),
+              ]),
+            ),
+          },
+          video: {
+            listCandidates: vi.fn((shotId: string) =>
+              Promise.resolve([
+                selected(shotId === 'shot_1' ? 'shot_version_1' : 'shot_version_2'),
+              ]),
+            ),
+          },
+          voice: {
+            generation: {
+              listCandidatesByShot: vi.fn(() => Promise.resolve([selected('shot_version_1')])),
+            },
+          },
+        } as never),
+    };
+    const consistency = {
+      getPreflight: vi.fn(() =>
+        Promise.resolve({
+          ok: true as const,
+          data: {
+            missingItems: [],
+            ready: true,
+            shots: [],
+            storyBibleValid: true,
+            styleAssetVersionId: 'asset_version_style',
+            warnings: [],
+          },
+        }),
+      ),
+    };
+
+    await expect(
+      createCreatorGuideQuery({ consistency, media, projects, scripts }).getProjectSnapshot(
+        project.id,
+      ),
+    ).resolves.toMatchObject({
+      consistencyBlocks: [],
+      exportReady: true,
+      imagesReady: true,
+      videosReady: true,
+      voiceReady: true,
+    });
+  });
+
+  it('一致性预检缺少画风与角色—聚合为两个阻断且媒体不误报就绪', async () => {
+    const { projects, scripts } = createHarness();
+    scripts.getWorkspace.mockResolvedValue({
+      projectId: project.id,
+      sourceInput: { id: 'source_1' },
+      episode: { id: 'episode_1' },
+      stages: [],
+      storyboard: {
+        current: { status: 'READY' },
+        currentShots: [{ shotId: 'shot_1', version: { document: '{}', id: 'version_1' } }],
+        history: [],
+        historyTruncated: false,
+      },
+    } as never);
+    const consistency = {
+      getPreflight: vi.fn(() =>
+        Promise.resolve({
+          ok: true as const,
+          data: {
+            missingItems: [
+              { bibleRefId: 'project-style', displayName: '项目画风', kind: 'STYLE' as const },
+              { bibleRefId: 'char_1', displayName: '角色一', kind: 'CHARACTER' as const },
+            ],
+            ready: false,
+            shots: [],
+            storyBibleValid: true,
+            styleAssetVersionId: null,
+            warnings: [],
+          },
+        }),
+      ),
+    };
+    const mediaRun = vi.fn();
+    const media = { run: mediaRun } as unknown as MediaUnitOfWorkPort;
+
+    await expect(
+      createCreatorGuideQuery({ consistency, media, projects, scripts }).getProjectSnapshot(
+        project.id,
+      ),
+    ).resolves.toMatchObject({
+      consistencyBlocks: ['STYLE_REFERENCE', 'CHARACTER_REFERENCE'],
+      imagesReady: false,
+    });
+    expect(mediaRun).not.toHaveBeenCalled();
   });
 });

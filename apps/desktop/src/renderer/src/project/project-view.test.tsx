@@ -109,6 +109,29 @@ describe('ProjectListView — §8.2 完整页面状态', () => {
     );
     expect(html.match(/data-primary-action/g) ?? []).toHaveLength(1);
   });
+
+  it('作品行用真实下一动作展示类型、当前阶段和流程进度', () => {
+    const html = renderToStaticMarkup(
+      <ProjectListView
+        hasFilter={false}
+        hasMore={false}
+        onCreate={vi.fn()}
+        onLoadMore={vi.fn()}
+        onOpen={vi.fn()}
+        onRestore={vi.fn()}
+        progressByProjectId={{
+          [PROJECT.id]: { percent: 62, stageLabel: '确认本集分镜' },
+        }}
+        projects={[{ ...PROJECT, style: '漫剧' }]}
+        state="ready"
+      />,
+    );
+
+    for (const expected of ['类型', '当前阶段', '完成进度', '漫剧', '确认本集分镜', '62%']) {
+      expect(html).toContain(expected);
+    }
+    expect(html).toContain('value="62"');
+  });
 });
 
 describe('ProjectFormView — §8.3 创作设定', () => {
@@ -151,8 +174,8 @@ describe('ProjectDetailView — §8.5 详情与后续入口', () => {
     const html = renderToStaticMarkup(
       <ProjectDetailView detail={DETAIL} onDelete={vi.fn()} onEdit={vi.fn()} onRestore={vi.fn()} />,
     );
-    expect(html).toContain('当前版本 v2');
-    expect(html).toContain('历史版本 v1');
+    expect(html).toContain('当前设置 v2');
+    expect(html).toContain('历史设置 v1');
     expect(html).toContain('进入剧本工作区');
     expect(html).toContain('分镜工作台');
     expect((html.match(/disabled=""/g) ?? []).length).toBe(1);

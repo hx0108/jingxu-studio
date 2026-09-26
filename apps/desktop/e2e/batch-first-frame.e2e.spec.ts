@@ -10,7 +10,7 @@ import {
   type Page,
 } from '@playwright/test';
 
-import { openProjectsList } from './support/app-navigation';
+import { confirmGenerationPreparation, openProjectsList } from './support/app-navigation';
 
 import { seedStoryboardReady } from './support/storyboard-seeding';
 
@@ -41,10 +41,12 @@ const repeat = (token: string, count: number): string[] =>
 
 /** 重载后从项目列表走真实入口进分镜工作台（复用 first-frame E2E 驱动路径）。 */
 const openStoryboard = async (page: Page, projectName: string): Promise<void> => {
-  await expect(page.getByRole('heading', { name: '我的项目', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的作品', exact: true })).toBeVisible();
   await page.locator('.project-card-main', { hasText: projectName }).click();
   await page.getByRole('button', { name: '进入剧本工作区' }).click();
-  await expect(page.getByRole('heading', { name: '分镜工作台' })).toBeVisible();
+  await page.locator('.creator-stage-progress').getByText('分镜设计', { exact: true }).click();
+  await expect(page.locator('.media-page-title')).toHaveText('分镜设计');
+  await page.locator('.media-advanced-actions > summary').click();
 };
 
 const shotBadge = (page: Page, sequence: number) =>
@@ -59,13 +61,16 @@ test('§6.2-T1 整集批量首帧—排队/生成中徽标流转至 COMPLETED，
   const application = await launch(path.join(root, 'managed'), repeat('S:600', 24).join(','));
   try {
     const page = await application.firstWindow();
-    const seeded = await seedStoryboardReady(page, '批次全量');
+    const seeded = await seedStoryboardReady(page, '批次全量', undefined, {
+      imageProvider: true,
+    });
     expect(seeded.shotCount).toBe(6);
     await page.reload();
     await openProjectsList(page);
     await openStoryboard(page, '批次全量');
 
     await page.getByRole('button', { name: '为整集生成首帧' }).click();
+    await confirmGenerationPreparation(page);
     // 中态：进度行进入「进行中」，取消入口可见，未轮到的镜头呈排队徽标。
     await expect(page.locator('#batch-progress')).toContainText('首帧批次进行中', {
       timeout: 15_000,
@@ -107,13 +112,16 @@ test('§6.2-T2 失败注入—候选级全败派生 PARTIAL，重试失败镜头
   const application = await launch(path.join(root, 'managed'), steps);
   try {
     const page = await application.firstWindow();
-    const seeded = await seedStoryboardReady(page, '批次失败重试');
+    const seeded = await seedStoryboardReady(page, '批次失败重试', undefined, {
+      imageProvider: true,
+    });
     expect(seeded.shotCount).toBe(6);
     await page.reload();
     await openProjectsList(page);
     await openStoryboard(page, '批次失败重试');
 
     await page.getByRole('button', { name: '为整集生成首帧' }).click();
+    await confirmGenerationPreparation(page);
     // 终态：失败隔离后收尾 PARTIAL，失败清单恰为镜头2（候选级失败按 FAILED 呈报）。
     await expect(page.locator('#batch-progress')).toContainText(
       '首帧批次部分完成 · 进度 6/6 · 失败 1',
@@ -148,13 +156,16 @@ test('§6.2-T3 取消剩余—批次 CANCELLED，在飞成员跑完，未建档�
   const application = await launch(path.join(root, 'managed'), steps);
   try {
     const page = await application.firstWindow();
-    const seeded = await seedStoryboardReady(page, '批次取消');
+    const seeded = await seedStoryboardReady(page, '批次取消', undefined, {
+      imageProvider: true,
+    });
     expect(seeded.shotCount).toBe(6);
     await page.reload();
     await openProjectsList(page);
     await openStoryboard(page, '批次取消');
 
     await page.getByRole('button', { name: '为整集生成首帧' }).click();
+    await confirmGenerationPreparation(page);
     await expect(shotBadge(page, 1)).toContainText('首帧生成中', { timeout: 15_000 });
 
     // 取消剩余：批次 CANCELLED，队列不再消费；在飞任务不被中断。
@@ -185,12 +196,15 @@ test('§6.2-T4 重启恢复—在飞任务标 INTERRUPTED 待人工，剩余队�
   const first = await launch(managedRoot, firstRunSteps);
   try {
     const page = await first.firstWindow();
-    const seeded = await seedStoryboardReady(page, '批次重启');
+    const seeded = await seedStoryboardReady(page, '批次重启', undefined, {
+      imageProvider: true,
+    });
     expect(seeded.shotCount).toBe(6);
     await page.reload();
     await openProjectsList(page);
     await openStoryboard(page, '批次重启');
     await page.getByRole('button', { name: '为整集生成首帧' }).click();
+    await confirmGenerationPreparation(page);
     // 等到镜头2 在飞（无 provider 证据的 SUBMITTED）后硬退出。
     await expect(shotBadge(page, 2)).toContainText('首帧生成中', { timeout: 20_000 });
   } finally {
@@ -215,11 +229,14 @@ test('§6.2-T4 重启恢复—在飞任务标 INTERRUPTED 待人工，剩余队�
     await expect(page.getByRole('button', { name: '重试失败镜头（新批次）' })).toBeVisible();
     // 不重发红线：被打断的镜头2 四候选停留 PENDING（尚未出图、零终态推进），
     // 恢复未重发也未补提交——任务级 FAILED（INTERRUPTED）+ 候选原地不动。
-    await page.getByRole('button', { name: '画面生成', exact: true }).click();
-    await page.locator('.shot-card', { hasText: '#2' }).click();
-    await expect(page.getByRole('heading', { name: '首帧候选 · 镜头 #2' })).toBeVisible();
+    await page.locator('.creator-stage-progress').getByText('画面生成', { exact: true }).click();
+    await expect(page.locator('.media-page-title')).toHaveText('画面生成');
+    await page.locator('#storyboard-panel .shot-card', { hasText: '#2' }).click();
+    await expect(page.locator('#first-frame-panel')).toBeVisible();
     await expect(page.locator('#first-frame-panel .candidate-card')).toHaveCount(4);
-    await expect(page.locator('#first-frame-panel .candidate-placeholder')).toHaveCount(4);
+    await expect(
+      page.locator('#first-frame-panel .candidate-card .candidate-placeholder'),
+    ).toHaveCount(4);
   } finally {
     await second.close();
     await rm(root, { force: true, recursive: true });

@@ -13,7 +13,7 @@ import type {
 import { ExportDeviationDialog } from './ExportDeviationDialog';
 import { ImageProviderCardView } from './ImageProviderCard';
 import { OriginalInput } from './OriginalInput';
-import { ProviderSettings } from './ProviderSettings';
+import { GENERATION_SERVICE_GROUPS, ProviderSettings } from './ProviderSettings';
 import { StoryboardPanel } from './StoryboardPanel';
 
 describe('Staged Script Renderer 可观察基线', () => {
@@ -66,9 +66,13 @@ describe('Staged Script Renderer 可观察基线', () => {
 
   it('Provider 设置—首次加载不回显 Key 或伪装已验证', () => {
     const html = renderToStaticMarkup(<ProviderSettings onReadyChange={vi.fn()} />);
-    expect(html).toContain('正在读取文本模型状态');
+    expect(html).toContain('正在读取文本生成服务状态');
     expect(html).not.toContain('sk-');
     expect(html).not.toContain('已验证');
+  });
+
+  it('生成服务设置按四类创作任务组织', () => {
+    expect(GENERATION_SERVICE_GROUPS).toEqual(['文本生成', '画面生成', '视频生成', '配音']);
   });
 
   it('模型服务卡使用宽松布局并提供独立配置状态槽', () => {
@@ -199,23 +203,22 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     expect(html).toContain('横摇');
     expect(html).toContain('旁白优先');
     expect(html).toContain('仅字幕');
-    // 默认详情：首个镜头的摘要字段全量展示（含枚举原码便于排障）。
+    // 默认详情只显示创作摘要；工程字段进入关闭状态的高级入口。
     expect(html).toContain('镜头 #1 详情');
     expect(html).toContain('雨夜车厢大远景开场');
-    expect(html).toContain('shot_00000001');
     expect(html).toContain('12s');
-    expect(html).toContain('EXTREME_LONG');
+    expect(html).not.toContain('shot_00000001');
+    expect(html).not.toContain('EXTREME_LONG');
     // 逐镜头首帧面板挂载在详情内：DRAFT 整集下生成首帧按钮禁用并给出提示。
     expect(html).toContain('首帧候选 · 镜头 #1');
     expect(html).toContain('分镜整集尚未确认；确认可用后才能为镜头生成首帧。');
     expect(html).toContain('正在加载首帧候选…');
     // 分镜自身操作可执行（首帧按钮的 disabled 属预期，不在此断言）。
     expect(html).toContain('<button type="button">生成整集分镜</button>');
-    // 编辑/锁定入口（shot-edit-lock D1/D3）与历史恢复入口。
-    expect(html).toContain('编辑镜头');
+    // 锁和历史仍可追溯，但都收在显式展开的高级信息入口中。
+    expect(html).toContain('高级信息与镜头保护');
     expect(html).toContain('字段锁定');
     expect(html).toContain('锁定 台词');
-    expect(html).toContain('七类根字段加锁');
     expect(html).toContain('v1 · 已确认 · 2 个镜头');
     expect(html).toContain('恢复为新草稿');
     // storyboard-export：非 READY 整集不渲染任何导出入口（spec 工作台入口场景）。
