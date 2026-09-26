@@ -102,3 +102,8 @@
 - 过程中发现并修复降级脚本两处问题：对白 `offset_ms` 还原必须在画面子表重建前执行；`video_timeline_versions` 重建 DDL 必须保留 0020 增加的 `audio_volume` 列，否则 repository 读取静默失败、界面误显示"未创建"。
 - 未运行任何真实付费探针；`pnpm format:check`、`pnpm lint`、`tsc -b` 全部通过。
 - 10.4 diff 清洁检查：全部改动可追溯到本 Change（十页组件/三轨/AGNES 固定路由/E2E/文档/designs 原型入库/tools 对照工具）；敏感内容扫描无 Key、无绝对路径泄漏；`test-results/` 与临时产物均在 gitignore 内；migration 0027 与打包内副本一致（深度验证）。10.5 `openspec validate implement-approved-creator-workbench --strict` 通过；由于十页逐像素一致证据仍缺（final result: blocked 仅指此项），Change 保持 Active 不 Archive。
+
+## 2026-09-26 夜间逐页目检与 dev demo 路径修复
+
+- 十页截图与并排对照图（`tools/design-qa/create-comparison-sheets.py`）按最新构建重新生成并逐页目检：01/05/09/10 结构、品牌头、流程栏、橙色列与组件关系与原图一致，差异集中在字号密度、全局导航保留与真实演示数据文案（演示标题/时长/状态不冒充原图《午后列车》数值）；04 为记录在案的结构化编辑器与富文本输入形态差异；08 三轨剪辑器真实可用但空对白/配乐轨与原图已填内容不同。
+- 目检过程在带 `ELECTRON_FORCE_IS_PACKAGED` 的终端发现 dev 五分钟体验报"示例内容损坏"：`main.ts` 的 `demoResourceRoot` 是唯一裸读 `app.isPackaged` 的位置，绕过 `resolveIsPackaged()`，误指 `node_modules/electron/dist/resources/demo`。已修复（d7e82a0）并在污染与干净环境各复跑十页导航 E2E 1/1 通过；打包态行为不变，无需重打包。
