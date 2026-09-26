@@ -437,6 +437,29 @@ describe('JobRunner', () => {
     },
   );
 
+  it('Provider 摘要随归一化错误上行—error_json 含账号/审核类标识供高级诊断', async () => {
+    const harness = createHarness([
+      {
+        ...modelError('MODEL_MODEL_UNAVAILABLE'),
+        providerCode: 'Model.AccessDenied',
+        providerMessage: 'Model.AccessDenied: the model is not activated for this account',
+        providerStatus: 400,
+        userAction: '确认百炼账号已开通该模型且未欠费，或在设置中更换服务密钥',
+      },
+    ]);
+    await expect(harness.runner.run('job_1')).resolves.toEqual({
+      errorCode: 'MODEL_MODEL_UNAVAILABLE',
+      status: 'FAILED',
+    });
+    expect(JSON.parse(harness.store.job.errorJson ?? '{}')).toMatchObject({
+      code: 'MODEL_MODEL_UNAVAILABLE',
+      providerCode: 'Model.AccessDenied',
+      providerMessage: 'Model.AccessDenied: the model is not activated for this account',
+      providerStatus: 400,
+      userAction: '确认百炼账号已开通该模型且未欠费，或在设置中更换服务密钥',
+    });
+  });
+
   it('候选结构失败—只修一次并重新注入系统字段—第二次仍失败不写版本', async () => {
     const harness = createHarness([result('{'), result('{}')]);
     await expect(harness.runner.run('job_1')).resolves.toEqual({

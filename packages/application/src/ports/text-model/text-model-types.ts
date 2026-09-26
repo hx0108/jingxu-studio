@@ -27,6 +27,8 @@ export type ModelErrorCode =
  * 归一化模型错误：稳定 code + 脱敏 detail + 可选 Provider 请求 ID。
  *
  * 严禁携带 API Key、Authorization header、百炼原始错误体或完整响应。
+ * provider* 三字段只允许携带 Provider 错误 JSON 的 `code` 与截断后的 `message`
+ * （各 ≤200 字符）以及 HTTP 状态码，供审计与高级诊断定位账号/参数类失败。
  */
 export interface NormalizedModelError {
   readonly code: ModelErrorCode;
@@ -34,6 +36,12 @@ export interface NormalizedModelError {
   readonly providerRequestId: string | null;
   readonly retryable: boolean;
   readonly userAction: string | null;
+  /** Provider HTTP 状态码（非 2xx 时）。 */
+  readonly providerStatus?: number | null;
+  /** Provider 错误 JSON 的 `error.code`（如 Model.AccessDenied、DataInspectionFailed）。 */
+  readonly providerCode?: string | null;
+  /** Provider 错误 JSON 的 `error.message`，截断至 200 字符。 */
+  readonly providerMessage?: string | null;
 }
 
 /** 凭据连通性检查结果；失败时返回稳定 code，不暴露明文 Key。 */

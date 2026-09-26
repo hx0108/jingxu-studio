@@ -38,8 +38,8 @@ const ERROR_COPY: Record<ProjectErrorCode, readonly [string, string]> = {
   MODEL_RATE_LIMITED: ['模型服务请求过多', '等待片刻后重试。'],
   MODEL_PROVIDER_ERROR: ['模型服务端错误', '稍后重试；若持续失败请查看服务状态页。'],
   MODEL_MODEL_UNAVAILABLE: [
-    '当前视频模型不可用',
-    '在火山方舟为该服务密钥开通所选模型或配置对应接入点后重试。',
+    '当前账号无权访问该模型',
+    '确认服务商账号已开通该模型且未欠费，或在设置中更换服务密钥后重试。',
   ],
   MODEL_NETWORK_ERROR: ['网络不可用或无法连接模型服务', '检查网络连接（含代理设置）后重试。'],
   MODEL_TIMEOUT: ['请求超时', '请重试；网络不佳时可稍后再试。'],
@@ -180,4 +180,14 @@ export const describeProjectError = (error: AppErrorDto): ProjectErrorView => {
     fieldErrors: error.fieldErrors,
     traceId: error.traceId,
   };
+};
+
+/**
+ * 作业 DTO 只携带稳定 errorCode（无 userAction/traceId）——按已知 code 取
+ * 用户可行动文案；未知 code 返回 null，由调用方回退到通用提示。
+ */
+export const describeErrorCode = (code: string): ProjectErrorView | null => {
+  if (!Object.hasOwn(ERROR_COPY, code)) return null;
+  const [summary, fallbackAction] = ERROR_COPY[code as ProjectErrorCode];
+  return { summary, nextAction: fallbackAction, fieldErrors: null, traceId: '' };
 };

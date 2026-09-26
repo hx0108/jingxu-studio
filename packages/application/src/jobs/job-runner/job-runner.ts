@@ -23,6 +23,22 @@ export type JobRunnerOutcome =
   | Readonly<{ status: 'NOT_CLAIMED' | 'SUCCEEDED' | 'CANCELLED' }>
   | Readonly<{ errorCode: string; status: 'FAILED' }>;
 
+/**
+ * 模型失败落库的 error_json：稳定 code + 脱敏 Provider 摘要（如
+ * 百炼 Model.AccessDenied / DataInspectionFailed），使"高级诊断"可区分
+ * 账号无权限与内容违规；严禁携带密钥、鉴权材料或完整响应体。
+ */
+const modelErrorJson = (normalized: NormalizedModelError): string =>
+  JSON.stringify({
+    code: normalized.code,
+    ...(normalized.providerCode ? { providerCode: normalized.providerCode } : {}),
+    ...(normalized.providerMessage ? { providerMessage: normalized.providerMessage } : {}),
+    ...(typeof normalized.providerStatus === 'number'
+      ? { providerStatus: normalized.providerStatus }
+      : {}),
+    ...(normalized.userAction ? { userAction: normalized.userAction } : {}),
+  });
+
 export interface JobRunnerUnitOfWorkPort<Repositories extends JobRepositories = JobRepositories> {
   run<T>(work: (repositories: Repositories) => Promise<T>): Promise<T>;
 }
@@ -279,7 +295,7 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
             requireWrite(
               await jobs.transition({
                 errorCode: normalized.code,
-                errorJson: JSON.stringify({ code: normalized.code }),
+                errorJson: modelErrorJson(normalized),
                 expectedStatus: 'RUNNING',
                 finishedAt: null,
                 jobId: job.id,
@@ -297,7 +313,7 @@ export const createJobRunner = <Repositories extends JobRepositories = JobReposi
           requireWrite(
             await jobs.transition({
               errorCode: normalized.code,
-              errorJson: JSON.stringify({ code: normalized.code }),
+              errorJson: modelErrorJson(normalized),
               expectedStatus: 'RUNNING',
               finishedAt: failedAt,
               jobId: job.id,

@@ -37,6 +37,13 @@ class QwenAdapterError extends Error {
   }
 }
 
+/** 非常规化处理的 Provider 错误摘要（脱敏后随归一化错误上行）。 */
+interface ProviderError {
+  readonly code: string | null;
+  readonly message: string | null;
+  readonly status: number;
+}
+
 export interface QwenTextModelAdapterOptions {
   readonly countInputTokens?: (serializedInput: string) => number;
   readonly credentialId: string;
@@ -138,7 +145,11 @@ export class QwenTextModelAdapter implements TextModelPort {
         redirect: 'error',
         signal: invocationSignal,
       });
-      if (!response.ok) throw new QwenAdapterError(this.#normalizeStatus(response.status));
+      if (!response.ok) {
+        throw new QwenAdapterError(
+          this.#normalizeStatus(response.status, await this.#readProviderError(response)),
+        );
+      }
       const payload = (await response.json()) as QwenResponse;
       const choice = payload.choices?.[0];
       if (typeof choice?.message?.content !== 'string') {
@@ -184,18 +195,74 @@ export class QwenTextModelAdapter implements TextModelPort {
       : normalized('MODEL_UNKNOWN', false, '检查 Provider 配置后重试');
   }
 
-  #normalizeStatus(status: number): NormalizedModelError {
-    if (status === 401 || status === 403) {
-      return normalized('MODEL_CREDENTIAL_INVALID', false, '重新配置 API Key');
+  /**
+   * 读取非 2xx 响应体中的稳定错误标识。只提取 `error.code` 与截断后的
+   * `error.message`（各 ≤200 字符）——绝不保留完整响应体或任何鉴权材料。
+   * 解析失败一律返回空标识，不影响既有归一化路径。
+   */
+  async #readProviderError(response: Response): Promise<ProviderError> {
+    try {
+      const text = (await response.text()).slice(0, 4_096);
+      const parsed = JSON.parse(text) as {
+        readonly error?: { readonly code?: unknown; readonly message?: unknown };
+      };
+      const code = typeof parsed.error?.code === 'string' ? parsed.error.code.slice(0, 200) : null;
+      const message =
+        typeof parsed.error?.message === 'string' ? parsed.error.message.slice(0, 200) : null;
+      return { code, message, status: response.status };
+    } catch {
+      return { code: null, message: null, status: response.status };
     }
-    if (status === 429) return normalized('MODEL_RATE_LIMITED', true, '等待后重试');
-    if (status >= 500) return normalized('MODEL_PROVIDER_ERROR', true, '等待后重试');
+  }
+
+  #normalizeStatus(status: number, providerError: ProviderError): NormalizedModelError {
+    const withProvider = (
+      code: NormalizedModelError['code'],
+      retryable: boolean,
+      userAction: string | null,
+    ): NormalizedModelError => ({
+      ...normalized(code, retryable, userAction),
+      providerCode: providerError.code,
+      providerMessage: providerError.message,
+      providerStatus: providerError.status,
+    });
+    if (status === 401 || status === 403) {
+      return withProvider('MODEL_CREDENTIAL_INVALID', false, '重新配置 API Key');
+    }
+    if (status === 429) return withProvider('MODEL_RATE_LIMITED', true, '等待后重试');
+    if (status >= 500) return withProvider('MODEL_PROVIDER_ERROR', true, '等待后重试');
     if (status === 413) {
-      return normalized('MODEL_CONTEXT_LIMIT', false, '缩短或拆分输入后重试');
+      return withProvider('MODEL_CONTEXT_LIMIT', false, '缩短或拆分输入后重试');
     }
     if (status === 400 || status === 422) {
-      return normalized('MODEL_CONTENT_REJECTED', false, '检查内容与 Provider 规则');
+      const providerCode = providerError.code?.toLowerCase() ?? '';
+      // 内容安全审核拒绝：才是真正的"内容被拒"。
+      if (providerCode.includes('datainspection')) {
+        return withProvider('MODEL_CONTENT_REJECTED', false, '调整输入内容后重试');
+      }
+      // 账号/模型开通类失败：与内容无关，指引到账号与密钥排查。
+      if (
+        providerCode.includes('accessdenied') ||
+        providerCode.includes('notactivated') ||
+        providerCode.includes('notfound') ||
+        providerCode.includes('arrearage') ||
+        providerCode.includes('accountnotfound') ||
+        providerCode.includes('invalidapikey') ||
+        providerCode.includes('invalid.model')
+      ) {
+        return withProvider(
+          'MODEL_MODEL_UNAVAILABLE',
+          false,
+          '确认百炼账号已开通该模型且未欠费，或在设置中更换服务密钥',
+        );
+      }
+      // 未知 400/422：不再武断归为内容问题，按 Provider 侧错误呈现。
+      return withProvider(
+        'MODEL_PROVIDER_ERROR',
+        false,
+        '稍后重试；若持续失败请携带诊断中的服务错误码检查 Provider 配置',
+      );
     }
-    return normalized('MODEL_PROVIDER_ERROR', false, '检查 Provider 配置后重试');
+    return withProvider('MODEL_PROVIDER_ERROR', false, '检查 Provider 配置后重试');
   }
 }

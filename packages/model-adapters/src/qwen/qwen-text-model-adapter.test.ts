@@ -117,6 +117,83 @@ describe('QwenTextModelAdapter', () => {
     }
   });
 
+  it.each([
+    ['DataInspectionFailed', 'MODEL_CONTENT_REJECTED', '调整输入内容后重试'] as const,
+    [
+      'Model.AccessDenied',
+      'MODEL_MODEL_UNAVAILABLE',
+      '确认百炼账号已开通该模型且未欠费，或在设置中更换服务密钥',
+    ] as const,
+    [
+      'Arrearage',
+      'MODEL_MODEL_UNAVAILABLE',
+      '确认百炼账号已开通该模型且未欠费，或在设置中更换服务密钥',
+    ] as const,
+    [
+      'SomeUnexpectedParameter',
+      'MODEL_PROVIDER_ERROR',
+      '稍后重试；若持续失败请携带诊断中的服务错误码检查 Provider 配置',
+    ] as const,
+  ])(
+    'HTTP 400 且 provider code %s—归一化—精确错误码与脱敏摘要',
+    async (providerCode, expectedCode, expectedAction) => {
+      const adapter = new QwenTextModelAdapter({
+        credentialId: 'credential-1',
+        credentialPort,
+        fetch: vi.fn(() =>
+          Promise.resolve(
+            response(400, {
+              error: {
+                code: providerCode,
+                message: `${providerCode}: request rejected (account/model detail)`,
+              },
+            }),
+          ),
+        ),
+        workspaceId: 'workspace-123',
+      });
+      try {
+        await adapter.generate(request, new AbortController().signal);
+        throw new Error('EXPECTED_FAILURE');
+      } catch (error) {
+        const failure = adapter.normalizeError(error);
+        expect(failure).toMatchObject({
+          code: expectedCode,
+          providerCode,
+          providerMessage: `${providerCode}: request rejected (account/model detail)`,
+          providerStatus: 400,
+          retryable: false,
+          userAction: expectedAction,
+        });
+        // 归一化错误只允许携带摘要，绝不携带完整响应体。
+        expect(JSON.stringify(failure).length).toBeLessThan(600);
+      }
+    },
+  );
+
+  it('HTTP 400 且响应体非 JSON—归一化—退回 MODEL_PROVIDER_ERROR 且无 provider 摘要', async () => {
+    const adapter = new QwenTextModelAdapter({
+      credentialId: 'credential-1',
+      credentialPort,
+      fetch: vi.fn(() =>
+        Promise.resolve(new Response('<html>bad gateway</html>', { status: 400 })),
+      ),
+      workspaceId: 'workspace-123',
+    });
+    try {
+      await adapter.generate(request, new AbortController().signal);
+      throw new Error('EXPECTED_FAILURE');
+    } catch (error) {
+      const failure = adapter.normalizeError(error);
+      expect(failure).toMatchObject({
+        code: 'MODEL_PROVIDER_ERROR',
+        providerCode: null,
+        providerMessage: null,
+        providerStatus: 400,
+      });
+    }
+  });
+
   it('成功响应结构非法—生成—归一化为 MODEL_INVALID_RESPONSE', async () => {
     const adapter = new QwenTextModelAdapter({
       credentialId: 'credential-1',

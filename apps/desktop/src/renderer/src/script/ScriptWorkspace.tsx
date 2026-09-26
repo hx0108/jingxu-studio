@@ -22,6 +22,7 @@ import { ProviderSettings } from './ProviderSettings';
 import { DirtyLeaveDialog } from '../project/DirtyLeaveDialog';
 import { getTransferClient } from '../project/transfer-api';
 import { formatTransferWarnings } from '../project/transfer-copy';
+import { describeErrorCode } from '../project/project-error';
 import { getCreatorGuideClient } from '../project/creator-guide-api';
 import {
   createScriptRequestId,
@@ -885,6 +886,16 @@ export const ScriptWorkspaceView = ({
                 {job.errorCode === null ? '' : ' · 可在高级信息中查看诊断'}
               </p>
             )}
+            {job?.errorCode != null &&
+              (() => {
+                const failureView = describeErrorCode(job.errorCode);
+                return failureView === null ? null : (
+                  <p aria-live="polite">
+                    <strong>{failureView.summary}</strong>
+                    {`；${failureView.nextAction}`}
+                  </p>
+                );
+              })()}
             <form
               className="script-form"
               id="script-stage-editor"
