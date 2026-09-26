@@ -303,7 +303,7 @@ if (!singleInstanceLockAcquired) {
           trustedUrl: getTrustedUrl(),
         });
         creatorGuideFeatureRegistration = createCreatorGuideFeatureRegistration({
-          demoResourceRoot: app.isPackaged
+          demoResourceRoot: resolveIsPackaged()
             ? path.join(process.resourcesPath, 'demo')
             : path.join(app.getAppPath(), 'resources', 'demo'),
           ipcRegistrar,
