@@ -107,3 +107,15 @@
 
 - 十页截图与并排对照图（`tools/design-qa/create-comparison-sheets.py`）按最新构建重新生成并逐页目检：01/05/09/10 结构、品牌头、流程栏、橙色列与组件关系与原图一致，差异集中在字号密度、全局导航保留与真实演示数据文案（演示标题/时长/状态不冒充原图《午后列车》数值）；04 为记录在案的结构化编辑器与富文本输入形态差异；08 三轨剪辑器真实可用但空对白/配乐轨与原图已填内容不同。
 - 目检过程在带 `ELECTRON_FORCE_IS_PACKAGED` 的终端发现 dev 五分钟体验报"示例内容损坏"：`main.ts` 的 `demoResourceRoot` 是唯一裸读 `app.isPackaged` 的位置，绕过 `resolveIsPackaged()`，误指 `node_modules/electron/dist/resources/demo`。已修复（d7e82a0）并在污染与干净环境各复跑十页导航 E2E 1/1 通过；打包态行为不变，无需重打包。
+
+## 2026-09-26 夜间逐页目检与 dev demo 路径修复
+
+- 十页截图与并排对照图（`tools/design-qa/create-comparison-sheets.py`）按最新构建重新生成并逐页目检：01/05/09/10 结构、品牌头、流程栏、橙色列与组件关系与原图一致，差异集中在字号密度、全局导航保留与真实演示数据文案（演示标题/时长/状态不冒充原图《午后列车》数值）；04 为记录在案的结构化编辑器与富文本输入形态差异；08 三轨剪辑器真实可用但空对白/配乐轨与原图已填内容不同。
+- 目检过程在带 `ELECTRON_FORCE_IS_PACKAGED` 的终端发现 dev 五分钟体验报"示例内容损坏"：`main.ts` 的 `demoResourceRoot` 是唯一裸读 `app.isPackaged` 的位置，绕过 `resolveIsPackaged()`，误指 `node_modules/electron/dist/resources/demo`。已修复（d7e82a0）并在污染与干净环境各复跑十页导航 E2E 1/1 通过；打包态行为不变，无需重打包。
+
+## 2026-09-27 新 Windows 包（含用户反馈两修复）
+
+- 用户真实项目《你的明信片》两问题定位并修复：① CONCEPT 恒报"内容被拒"实为旧 key 账号无权访问模型的 400 被误映射（e1e39fd：精确错误映射 + provider 摘要入 error_json + 渲染层可行动文案）；② 整集分镜 6 版全部停留 DRAFT 无法进入画面生成——「确认为可用」被折叠在"更多操作与真实状态"里（7abf3b7：DRAFT 态主按钮改为确认可用 + 分镜页透出作业失败原因）。受控复现验证 DRAFT→确认→已确认全链。
+- Windows x64 重新打包（forge EPERM rename 按既定方案手动 mv tmp 暂存目录恢复）：EXE `apps/desktop/out/镜序 Studio-win32-x64/jingxu-studio.exe`，2026-09-27T01:48:27Z（本地 01:48），225441792 字节，SHA-256 `05A255AB7A6A82BD33D0471A0451A4DDDCEC3B2F29A95F5A32E588F7D87998E7`。
+- 包内标记核验：MODEL_MODEL_UNAVAILABLE/datainspection/accessdenied/defaultApp、确认为可用/重新生成整集分镜/分镜草稿已生成/上次生成失败等新旧逻辑标记均在 asar 内命中。
+- 打包版界面冒烟 1/1 通过（16.6s）；深度打包验证通过 migration 1–27、四份 Schema 与引用链、六把 prompt 锁、冻结 Preload 面、项目生命周期、零 native addon、敏感文本与用户目录隔离。未运行任何真实付费探针。
