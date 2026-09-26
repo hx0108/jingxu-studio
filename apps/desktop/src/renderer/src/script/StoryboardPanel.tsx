@@ -18,6 +18,7 @@ import type {
 import { FirstFramePanel } from './FirstFramePanel';
 import { ShotStructuredFields } from './ShotStructuredFields';
 import { VoicePanel } from './VoicePanel';
+import { describeErrorCode } from '../project/project-error';
 import { VideoPanel } from './VideoPanel';
 import { VideoCompositionPanel } from './VideoCompositionPanel';
 import { createScriptRequestId, getImageClient } from './script-api';
@@ -312,14 +313,36 @@ export const StoryboardPanel = ({
         <h2>下一步</h2>
         <p>
           {activeMediaStep === 'storyboard'
-            ? '根据当前剧本生成并确认整集分镜。'
+            ? current?.status === 'DRAFT'
+              ? '分镜草稿已生成。确认可用后即可进入画面生成。'
+              : '根据当前剧本生成并确认整集分镜。'
             : activeMediaStep === 'image'
               ? '生成并挑选最合适的画面候选。'
               : activeMediaStep === 'video'
                 ? '根据动态要求生成本镜头视频。'
                 : '保存剪辑后生成完整成片。'}
         </p>
-        {activeMediaStep === 'storyboard' && (
+        {activeMediaStep === 'storyboard' && current?.status === 'DRAFT' && (
+          <>
+            <button
+              className="media-primary-action"
+              disabled={jobActive || pending}
+              onClick={onConfirm}
+              type="button"
+            >
+              确认为可用
+            </button>
+            <button
+              className="secondary-button"
+              disabled={generateHint !== null || jobActive || pending}
+              onClick={onGenerate}
+              type="button"
+            >
+              重新生成整集分镜
+            </button>
+          </>
+        )}
+        {activeMediaStep === 'storyboard' && current?.status !== 'DRAFT' && (
           <button
             className="media-primary-action"
             disabled={generateHint !== null || jobActive || pending}
@@ -387,6 +410,17 @@ export const StoryboardPanel = ({
         >
           稍后处理
         </button>
+        {job?.status === 'FAILED' &&
+          (() => {
+            const failureView = job.errorCode === null ? null : describeErrorCode(job.errorCode);
+            return (
+              <p className="field-error" role="alert">
+                {failureView === null
+                  ? '上次生成失败，请重试。'
+                  : `上次生成失败：${failureView.summary}；${failureView.nextAction}`}
+              </p>
+            );
+          })()}
         <details className="media-advanced-actions">
           <summary>更多操作与真实状态</summary>
           <div>

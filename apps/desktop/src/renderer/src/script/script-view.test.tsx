@@ -213,8 +213,10 @@ describe('Storyboard Panel 可观察基线（shot-contract-generation §5.4）',
     expect(html).toContain('首帧候选 · 镜头 #1');
     expect(html).toContain('分镜整集尚未确认；确认可用后才能为镜头生成首帧。');
     expect(html).toContain('正在加载首帧候选…');
-    // 分镜自身操作可执行（首帧按钮的 disabled 属预期，不在此断言）。
-    expect(html).toContain('<button type="button">生成整集分镜</button>');
+    // DRAFT 整集：主操作是「确认为可用」，生成入口降为「重新生成整集分镜」次操作。
+    expect(html).toContain('确认为可用</button>');
+    expect(html).toContain('重新生成整集分镜</button>');
+    expect(html).toContain('分镜草稿已生成。确认可用后即可进入画面生成。');
     // 锁和历史仍可追溯，但都收在显式展开的高级信息入口中。
     expect(html).toContain('高级信息与镜头保护');
     expect(html).toContain('字段锁定');
