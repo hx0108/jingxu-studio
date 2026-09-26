@@ -108,11 +108,6 @@
 - 十页截图与并排对照图（`tools/design-qa/create-comparison-sheets.py`）按最新构建重新生成并逐页目检：01/05/09/10 结构、品牌头、流程栏、橙色列与组件关系与原图一致，差异集中在字号密度、全局导航保留与真实演示数据文案（演示标题/时长/状态不冒充原图《午后列车》数值）；04 为记录在案的结构化编辑器与富文本输入形态差异；08 三轨剪辑器真实可用但空对白/配乐轨与原图已填内容不同。
 - 目检过程在带 `ELECTRON_FORCE_IS_PACKAGED` 的终端发现 dev 五分钟体验报"示例内容损坏"：`main.ts` 的 `demoResourceRoot` 是唯一裸读 `app.isPackaged` 的位置，绕过 `resolveIsPackaged()`，误指 `node_modules/electron/dist/resources/demo`。已修复（d7e82a0）并在污染与干净环境各复跑十页导航 E2E 1/1 通过；打包态行为不变，无需重打包。
 
-## 2026-09-26 夜间逐页目检与 dev demo 路径修复
-
-- 十页截图与并排对照图（`tools/design-qa/create-comparison-sheets.py`）按最新构建重新生成并逐页目检：01/05/09/10 结构、品牌头、流程栏、橙色列与组件关系与原图一致，差异集中在字号密度、全局导航保留与真实演示数据文案（演示标题/时长/状态不冒充原图《午后列车》数值）；04 为记录在案的结构化编辑器与富文本输入形态差异；08 三轨剪辑器真实可用但空对白/配乐轨与原图已填内容不同。
-- 目检过程在带 `ELECTRON_FORCE_IS_PACKAGED` 的终端发现 dev 五分钟体验报"示例内容损坏"：`main.ts` 的 `demoResourceRoot` 是唯一裸读 `app.isPackaged` 的位置，绕过 `resolveIsPackaged()`，误指 `node_modules/electron/dist/resources/demo`。已修复（d7e82a0）并在污染与干净环境各复跑十页导航 E2E 1/1 通过；打包态行为不变，无需重打包。
-
 ## 2026-09-27 新 Windows 包（含用户反馈两修复）
 
 - 用户真实项目《你的明信片》两问题定位并修复：① CONCEPT 恒报"内容被拒"实为旧 key 账号无权访问模型的 400 被误映射（e1e39fd：精确错误映射 + provider 摘要入 error_json + 渲染层可行动文案）；② 整集分镜 6 版全部停留 DRAFT 无法进入画面生成——「确认为可用」被折叠在"更多操作与真实状态"里（7abf3b7：DRAFT 态主按钮改为确认可用 + 分镜页透出作业失败原因）。受控复现验证 DRAFT→确认→已确认全链。
