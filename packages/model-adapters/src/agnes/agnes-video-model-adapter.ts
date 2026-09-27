@@ -159,7 +159,8 @@ export class AgnesVideoModelAdapter implements VideoModelPort {
         signal: invocationSignal,
       });
       const evidence = await this.#evidence(response);
-      if (!response.ok) throw new AgnesAdapterError(this.#status(response.status), evidence);
+      if (!response.ok)
+        throw new AgnesAdapterError(this.#normalizeNonOk(response.status, evidence), evidence);
       const payload = this.#parse(evidence);
       const videoId = payload.video_id;
       if (typeof videoId !== 'string' || videoId === '')
@@ -184,7 +185,8 @@ export class AgnesVideoModelAdapter implements VideoModelPort {
         signal: invocationSignal,
       });
       const evidence = await this.#evidence(response);
-      if (!response.ok) throw new AgnesAdapterError(this.#status(response.status), evidence);
+      if (!response.ok)
+        throw new AgnesAdapterError(this.#normalizeNonOk(response.status, evidence), evidence);
       const payload = this.#parse(evidence);
       const status = payload.status;
       if (status === 'completed') {
@@ -317,6 +319,17 @@ export class AgnesVideoModelAdapter implements VideoModelPort {
     return text.includes('content') || text.includes('sensitive')
       ? 'MODEL_CONTENT_REJECTED'
       : 'MODEL_PROVIDER_ERROR';
+  }
+  /**
+   * 2026-09-27 实测：网关迁移期对任意合法请求回 400 `fail_to_fetch_task`
+   *（litellm BadRequestError 包装的服务端转发故障）——与用户内容无关，按可重试
+   * Provider 错误归一，不误标「内容被拒」。
+   */
+  #normalizeNonOk(status: number, evidence: ModelCallEvidence): NormalizedModelError {
+    if (status === 400 && (evidence.bodyText ?? '').includes('fail_to_fetch_task')) {
+      return normalized('MODEL_PROVIDER_ERROR', true, '等待后重试，或在设置中切换视频模型');
+    }
+    return this.#status(status);
   }
   #status(status: number): NormalizedModelError {
     if (status === 401 || status === 403)

@@ -333,6 +333,28 @@ describe('AgnesVideoModelAdapter 错误矩阵补齐（low-cost 5.7 / design D5b/
     }
   });
 
+  it('400 fail_to_fetch_task（2026-09-27 网关迁移实测）归一可重试 MODEL_PROVIDER_ERROR 而非「内容被拒」', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            code: 'fail_to_fetch_task',
+            data: null,
+            message:
+              '{"error":{"message":"litellm.BadRequestError: OpenAIException - {\\"error\\":{\\"message\\":\\"Input should be a valid dictionary or object to extract fields from\\",\\"code\\":\\"400\\"}}","type":"invalid_request_error","param":null,"code":"400"}} (request id: x)',
+          }),
+          { status: 400 },
+        ),
+      ),
+    );
+    const adapter = adapterOf(fetch);
+    const normalized = await normalizedOf(
+      adapter,
+      adapter.submit(request(), new AbortController().signal),
+    );
+    expect(normalized).toMatchObject({ code: 'MODEL_PROVIDER_ERROR', retryable: true });
+  });
+
   it('超时/取消—TIMEOUT 与 CANCELLED 不可重试（网络/SSL 可重试已由上文覆盖）', async () => {
     const timeoutReason = new DOMException('信号超时', 'TimeoutError');
     const timedOut = new AgnesVideoModelAdapter({
