@@ -362,8 +362,11 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
       return false;
     }
     let stored: Awaited<ReturnType<MediaFileStorePort['writeMedia']>>;
+    // Provider 响应不回尺寸时（Agnes 图片）由下载段字节流探测，落库供视频建档档位解析。
+    let downloadDimensions: Readonly<{ height?: number | null; width?: number | null }> = {};
     try {
       const download = await runSegment(signal, (segment) => model.download(result, segment));
+      downloadDimensions = download;
       stored = await dependencies.fileStore.writeMedia({
         bytes: download.bytes,
         mimeType: download.mimeType,
@@ -395,11 +398,12 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
       await generationOf(repos).completeCandidateSucceeded(candidate.id, {
         byteSize: stored.byteSize,
         fileSha256: stored.sha256,
-        height: result.height,
+        // Provider 响应无尺寸时回退下载段字节流探测（如 Agnes 图片只回 URL）。
+        height: result.height ?? downloadDimensions.height ?? null,
         invocationEvidenceRef: submitRowId ?? submitRef,
         mimeType: stored.mimeType,
         storageRelPath: stored.storageRelPath,
-        width: result.width,
+        width: result.width ?? downloadDimensions.width ?? null,
         // 域扩展通道（任务 3.3）：视频实例由此携带 actualDurationSec，图片摊空对象。
         ...resultMetaOf(result),
       });

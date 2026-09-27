@@ -81,6 +81,42 @@ const base64Of = (bytes: Uint8Array): string => {
   return out;
 };
 
+/**
+ * 从 PNG（IHDR 定长）或 JPEG（SOF 段扫描）字节流解析像素尺寸。
+ * Agnes 同步接口不返回尺寸，而视频建档档位依赖真实宽高——解析失败返回 null，
+ * 交由调用方如实落库，不做猜测。
+ */
+const sniffImageDimensions = (
+  bytes: Uint8Array,
+): { readonly height: number; readonly width: number } | null => {
+  if (bytes.length >= 24 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e) {
+    const at = (index: number): number => bytes[index] ?? 0;
+    const width = (at(16) << 24) | (at(17) << 16) | (at(18) << 8) | at(19);
+    const height = (at(20) << 24) | (at(21) << 16) | (at(22) << 8) | at(23);
+    return width > 0 && height > 0 ? { height, width } : null;
+  }
+  if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xd8) {
+    const at = (index: number): number => bytes[index] ?? 0;
+    let cursor = 2;
+    while (cursor + 9 < bytes.length) {
+      if (at(cursor) !== 0xff) {
+        cursor += 1;
+        continue;
+      }
+      const marker = at(cursor + 1);
+      // SOF0–SOF15 中 C4(DHT)/C8(JPG)/CC(DAC) 之外携带帧头（含尺寸）。
+      if (marker >= 0xc0 && marker <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(marker)) {
+        const height = (at(cursor + 5) << 8) | at(cursor + 6);
+        const width = (at(cursor + 7) << 8) | at(cursor + 8);
+        return width > 0 && height > 0 ? { height, width } : null;
+      }
+      const segmentLength = (at(cursor + 2) << 8) | at(cursor + 3);
+      cursor += 2 + segmentLength;
+    }
+  }
+  return null;
+};
+
 /** 结果字节嗅探（下载段不信任 Content-Type 时的兜底）。 */
 const sniffImageMime = (bytes: Uint8Array): string | null => {
   if (bytes.length >= 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e) {
@@ -294,7 +330,14 @@ export class AgnesImageModelAdapter implements ImageModelPort {
           normalized('MODEL_INVALID_RESPONSE', false, '重新生成候选'),
         );
       }
-      return { bytes, mimeType: sniffed };
+      // Agnes 同步接口不回像素尺寸；从字节流头部如实解析（视频建档档位依赖该值）。
+      const dimensions = sniffImageDimensions(bytes);
+      return {
+        bytes,
+        height: dimensions?.height ?? null,
+        mimeType: sniffed,
+        width: dimensions?.width ?? null,
+      };
     } catch (error) {
       throw this.#wrapTransportError(error, signal, 'MODEL_RESULT_UNAVAILABLE', '重新生成候选');
     }

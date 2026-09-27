@@ -89,4 +89,10 @@ export type ImageTaskStatus =
 export interface ImageDownload {
   readonly bytes: Uint8Array;
   readonly mimeType: string;
+  /**
+   * 下载段从字节流解析出的像素尺寸（PNG/JPEG 头）。Provider 响应不携带尺寸时
+   * （如 Agnes 图片同步接口只回 URL），适配器在此如实上报；解析失败为 null。
+   */
+  readonly height?: number | null;
+  readonly width?: number | null;
 }

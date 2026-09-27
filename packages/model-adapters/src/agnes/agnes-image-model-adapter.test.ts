@@ -214,7 +214,12 @@ describe('AgnesImageModelAdapter', () => {
       { height: null, providerRequestId: null, url: RESULT_URL, width: null },
       new AbortController().signal,
     );
-    expect(downloaded).toEqual({ bytes: pngBytes, mimeType: 'image/png' });
+    expect(downloaded).toEqual({
+      bytes: pngBytes,
+      height: null,
+      mimeType: 'image/png',
+      width: null,
+    });
 
     for (const url of [
       'http://platform-outputs.agnes-ai.space/img.png',
@@ -229,6 +234,36 @@ describe('AgnesImageModelAdapter', () => {
         ),
       ).rejects.toMatchObject({ name: 'AgnesImageAdapterError' });
     }
+  });
+
+  it('download—PNG IHDR 头部解析真实像素尺寸（视频建档档位依赖）', async () => {
+    const bytes = Uint8Array.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0,
+      0x04, 0x38, 0, 0, 0x07, 0x80, 8, 6, 0, 0, 0,
+    ]);
+    const okDownload = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(new Response(bytes, { status: 200 })),
+    );
+    const downloaded = await adapterOf(okDownload).download(
+      { height: null, providerRequestId: null, url: RESULT_URL, width: null },
+      new AbortController().signal,
+    );
+    expect(downloaded).toMatchObject({ height: 1920, mimeType: 'image/png', width: 1080 });
+  });
+
+  it('download—JPEG SOF0 头部解析真实像素尺寸（视频建档档位依赖）', async () => {
+    const bytes = Uint8Array.from([
+      0xff, 0xd8, 0xff, 0xc0, 0x00, 0x0b, 0x08, 0x07, 0x80, 0x04, 0x38, 3, 1, 0x22, 0, 2, 0x11, 1,
+      3, 0x11, 1, 0xff, 0xda, 0, 2,
+    ]);
+    const okDownload = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve(new Response(bytes, { status: 200 })),
+    );
+    const downloaded = await adapterOf(okDownload).download(
+      { height: null, providerRequestId: null, url: RESULT_URL, width: null },
+      new AbortController().signal,
+    );
+    expect(downloaded).toMatchObject({ height: 1920, mimeType: 'image/jpeg', width: 1080 });
   });
 
   it('validateCredential—解密失败归一 CREDENTIAL_INVALID；成功不碰网', async () => {
