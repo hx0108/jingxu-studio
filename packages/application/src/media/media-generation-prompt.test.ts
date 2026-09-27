@@ -80,11 +80,32 @@ describe('buildFirstFramePrompt', () => {
         '画风锚点：项目画风——二维国漫厚涂，冷青色电影光。全片保持相同的材质、线条、色彩、光影与渲染方式。',
         '雨巷中的少女，中景，电影感',
         '场景：雨巷——江南雨巷，青石板路与两侧老墙',
-        '人物身份：小雨（16 岁少女，白裙，长发）。严格保持角色身份、脸部特征、发型、服装与配饰一致，不新增或替换角色。',
+        '人物身份：小雨（16 岁少女，白裙，长发）。',
+        '身份锁定：以上角色的脸型、五官、发型发色、瞳色、体型、服装与配饰必须与对应角色参考图完全一致；同一角色在任何镜头中不得改变年龄、体格与装扮；角色形象与场景或画风描述冲突时，以角色参考图为准；不新增或替换角色。',
         '机位：MEDIUM / LOW；构图：人物居右，雨幕占左三分之二；焦点：人物面部与手中的伞',
         '首帧要求：雨幕中的巷口，少女半身入画',
         '避免：文字水印、多余人物',
       ].join('\n'),
+    );
+  });
+
+  it('一致性 v2—referenceRoles 按请求图序生成逐张映射句—置于画风锚点之后主描述之前', () => {
+    const creative = extractShotCreativeFields(shotDocument());
+    if (creative === null) throw new Error('镜头创意字段应可解析');
+    const prompt = buildFirstFramePrompt({
+      boundCharacters: [{ appearance: '16 岁少女，白裙，长发', name: '小雨' }],
+      creative,
+      referenceRoles: [
+        { kind: 'STYLE', label: '项目画风' },
+        { kind: 'CHARACTER', label: '小雨' },
+        { kind: 'SCENE', label: '雨巷' },
+      ],
+      scene: null,
+      style: { description: '二维国漫厚涂', name: '项目画风' },
+    });
+    const lines = prompt.split('\n');
+    expect(lines[1]).toBe(
+      '参考图说明：第1张为全片画风基准图；第2张为角色「小雨」的标准形象参考；第3张为场景参考图。',
     );
   });
 

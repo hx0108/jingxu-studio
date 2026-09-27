@@ -163,7 +163,24 @@ export const createMediaRequestBlueprintBuilder = (
     }
     if (style === null) throw new Error('MEDIA_CONSISTENCY_STYLE_REQUIRED');
 
-    const prompt = buildFirstFramePrompt({ boundCharacters, creative, scene, style });
+    // 一致性 v2：参考图逐张映射与实际发出的 referenceImages 顺序严格一致，
+    // 让模型显式绑定「第几张图是谁」（角色名取自 STORY_BIBLE，缺名回退 bibleRefId）。
+    const referenceRoles = referenceDescriptors.map((descriptor) => ({
+      kind: descriptor.kind,
+      label:
+        descriptor.kind === 'CHARACTER'
+          ? (bible.characters[descriptor.bibleRefId]?.name ?? descriptor.bibleRefId)
+          : descriptor.kind === 'SCENE'
+            ? (scene?.name ?? descriptor.bibleRefId)
+            : style.name,
+    }));
+    const prompt = buildFirstFramePrompt({
+      boundCharacters,
+      creative,
+      referenceRoles,
+      scene,
+      style,
+    });
     return {
       buildRequest: (invocationId) => ({
         invocationId,

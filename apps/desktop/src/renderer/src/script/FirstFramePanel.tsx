@@ -493,7 +493,7 @@ export const FirstFramePanel = ({
           : shotBusy
             ? '媒体任务运行中，完成后可再次生成新一轮。'
             : consistency !== null && !consistency.ready
-              ? '请先补齐项目画风与全部出场角色参考图。'
+              ? '请先补齐项目画风与全部出场角色参考图。角色参考图建议使用正面清晰、纯色背景的定妆半身像，全片复用同一张以锁定人物形象。'
               : null;
   const errorView = error === null ? null : describeProjectError(error);
   const selectedCandidate = candidates?.find(

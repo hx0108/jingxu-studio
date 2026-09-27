@@ -254,6 +254,10 @@ describe('createMediaRequestBlueprintBuilder', () => {
     expect(request.size).toEqual({ height: 2560, width: 1440 });
     expect(request.prompt).toContain('白裙少女');
     expect(request.prompt).toContain('青石板雨巷');
+    // 一致性 v2：映射句顺序必须与 referenceImages 逐张一致（第2张=角色、第3张=场景）。
+    expect(request.prompt).toContain(
+      '参考图说明：第1张为全片画风基准图；第2张为角色「少女」的标准形象参考；第3张为场景参考图。',
+    );
     expect(request.referenceImages).toEqual([
       { bytes: Uint8Array.from([1, 2, 3]), mimeType: 'image/png' },
       { bytes: Uint8Array.from([1, 2, 3]), mimeType: 'image/png' },

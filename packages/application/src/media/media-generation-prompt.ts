@@ -92,21 +92,41 @@ export interface FirstFramePromptInput {
     readonly name: string;
   }[];
   readonly creative: ShotCreativeFields;
+  /**
+   * 参考图逐张角色映射（一致性 v2，2026-09-28）：与请求 referenceImages 顺序
+   * 一致，让多参考图模型显式绑定「第几张图是谁」——行业通行做法（即梦智能
+   * 参考/可灵多图参考/Story2Screen 均为 reference+映射+镜头词三件套）。
+   */
+  readonly referenceRoles?: readonly {
+    readonly kind: 'CHARACTER' | 'SCENE' | 'STYLE';
+    readonly label: string;
+  }[];
   readonly scene: { readonly description: string; readonly name: string } | null;
   readonly style: { readonly description: string; readonly name: string };
 }
 
-export const FIRST_FRAME_PROMPT_TEMPLATE_VERSION = 'first-frame-consistency-v1';
+export const FIRST_FRAME_PROMPT_TEMPLATE_VERSION = 'first-frame-consistency-v2';
+
+const referenceRolePhrase = (
+  role: { readonly kind: 'CHARACTER' | 'SCENE' | 'STYLE'; readonly label: string },
+  position: number,
+): string => {
+  const ordinal = `第${String(position)}张`;
+  if (role.kind === 'STYLE') return `${ordinal}为全片画风基准图`;
+  if (role.kind === 'SCENE') return `${ordinal}为场景参考图`;
+  return `${ordinal}为角色「${role.label}」的标准形象参考`;
+};
 
 /**
  * 组装首帧 Prompt（确定性、纯函数）。
  *
  * 主描述优先取镜头自带 image_prompt；缺失时回退 action/emotion 复合。
- * SAME_SCENE_CUT 机位规则（design D1）：同场景切镜时附加「保持外观一致、仅切换
- * 机位」约束，配合场景资产参考图实现同资产新机位。避免项来自 negative_constraints。
+ * 一致性 v2（2026-09-28）：新增参考图逐张映射句与身份锁定块——多参考图场景下
+ * 模型需要显式知道「第几张图是谁」，且身份约束须与参考图绑定（行业通行做法：
+ * 定妆图 + 逐张映射 + 身份/场景分离的结构化提示词）。避免项来自 negative_constraints。
  */
 export const buildFirstFramePrompt = (input: FirstFramePromptInput): string => {
-  const { boundCharacters, creative, scene, style } = input;
+  const { boundCharacters, creative, referenceRoles, scene, style } = input;
   const fallback = [creative.action, creative.emotion]
     .filter((part): part is string => part !== null)
     .join('，');
@@ -114,11 +134,21 @@ export const buildFirstFramePrompt = (input: FirstFramePromptInput): string => {
   const lines: string[] = [
     `画风锚点：${style.name}——${style.description}。全片保持相同的材质、线条、色彩、光影与渲染方式。`,
   ];
+  if (referenceRoles !== undefined && referenceRoles.length > 0) {
+    lines.push(
+      `参考图说明：${referenceRoles
+        .map((role, index) => referenceRolePhrase(role, index + 1))
+        .join('；')}。`,
+    );
+  }
   if (primary !== null) lines.push(primary);
   if (scene !== null) lines.push(`场景：${scene.name}——${scene.description}`);
   if (boundCharacters.length > 0) {
     lines.push(
-      `人物身份：${boundCharacters.map((c) => `${c.name}（${c.appearance}）`).join('；')}。严格保持角色身份、脸部特征、发型、服装与配饰一致，不新增或替换角色。`,
+      `人物身份：${boundCharacters.map((c) => `${c.name}（${c.appearance}）`).join('；')}。`,
+    );
+    lines.push(
+      '身份锁定：以上角色的脸型、五官、发型发色、瞳色、体型、服装与配饰必须与对应角色参考图完全一致；同一角色在任何镜头中不得改变年龄、体格与装扮；角色形象与场景或画风描述冲突时，以角色参考图为准；不新增或替换角色。',
     );
   }
   const framing = [creative.shotSize, creative.cameraAngle].filter((part) => part !== null);
