@@ -124,3 +124,9 @@
 - 切换视频档至 `agnes-video-2.5-flash`（provider_profiles 行 `profile-video-agnes-primary`，设置页支持的合法口径；2.5 Flash i2v keyframe 形状经探针复测仍被接受）。促销价 $0/秒可能已结束（列表价 $0.025/秒）。
 - **错误映射修正（ec96a31）**：400 fail_to_fetch_task 带体判别归一 MODEL_PROVIDER_ERROR（可重试），不再误报"内容被拒"。
 - 视频阶段受制于免费档队列重堵：候选可排队 30-40+ 分钟不出片（09-19 实测 ~2.5 分钟），组合根 15 分钟轮询截止内大批候选死于 MODEL_TIMEOUT；429 免费档限流与 503 video_queue_full 交替。E2E 驱动改为"在飞>0 不叠加提交"的精简策略。**全链路时间线/导出段待视频出片后收口。**
+
+## 2026-09-27 下午：第四笔修复与新包（B573E8D4）
+
+- E2E 恢复期暴露孤儿候选缺陷：任务先于候选收敛落终态（提交段 SUBMIT STARTED 行停滞 + FAILED 任务 + 永久 PENDING 候选），界面残留永久「生成中」。修复 e24926d：recover 改用新增 listTasksByProject 全量扫描，终态任务的 PENDING 候选补收敛（有 SUBMIT 证据行→FAILED+引用；无→STALE_INPUT）；21 项调度器测试 + 18 项 sqlite 集成测试全绿。
+- Windows x64 重打包：SHA-256 `B573E8D47C1690AD4915A0B84B7759BBFC23F24E24AAC53D4F61FC6788A5817C`（225441792 字节，2026-09-27 13:04 UTC），含当日四笔修复（8f1817e / ec96a31 / 9c23f0e / e24926d），asar 标记核验通过。
+- 打包冒烟一度两连败，根因是 **C: 盘 0 字节**（ENOSPC：应用静默退出、播种期 MEDIA_TASK_INTERRUPTED 全为磁盘症状），非代码回归；清理第一档（更新缓存/Temp/浏览器缓存/回收站，C: 0→2.5 GB）后冒烟 1/1（22.9s）。当日清理记录已入记忆 jingxu-disk-fragility。
