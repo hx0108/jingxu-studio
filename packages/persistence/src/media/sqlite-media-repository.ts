@@ -751,6 +751,22 @@ export class SqliteMediaRepository implements MediaRepository {
     );
   }
 
+  public listTasksByProject(projectId: string): Promise<readonly MediaTaskRecord[]> {
+    return syncToPromise(() =>
+      this.database
+        .prepare(
+          `SELECT id, project_id, shot_id, shot_version_id, idempotency_key, provider_task_id,
+                  phase, generation_input_hash, candidate_count, round_no, error_code,
+                  created_at, updated_at
+           FROM media_generation_tasks
+           WHERE project_id = ?
+           ORDER BY created_at, id`,
+        )
+        .all(projectId)
+        .map(mapTaskRow),
+    );
+  }
+
   private selectBatchWhere(whereClause: string, ...params: readonly string[]): Row | undefined {
     return this.database
       .prepare(

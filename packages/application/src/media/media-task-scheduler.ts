@@ -814,7 +814,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
     },
 
     recover: async (projectId) => {
-      const tasks = await runGeneration((generation) => generation.listUnfinishedTasks(projectId));
+      const tasks = await runGeneration((generation) => generation.listTasksByProject(projectId));
       const outcomes: MediaRecoveryOutcome[] = [];
       for (const task of tasks) {
         const candidates = await runGeneration((generation) =>
@@ -823,6 +823,12 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
         const pending = candidates.filter(
           (entry) => entry.roundNo === task.roundNo && entry.status === 'PENDING',
         );
+        if (isTerminal(task.phase)) {
+          // 终态任务的残留 PENDING 候选（任务先于候选收敛落终态的孤儿）：补收敛，
+          // 不进 outcomes（任务已终态，无需人工介入信号）。
+          if (pending.length > 0) await convergeInterruptedCandidates(task.id, pending);
+          continue;
+        }
         const resumable =
           (task.phase === 'POLLING' || task.phase === 'DOWNLOADING') &&
           pending.every((entry) => entry.providerTaskId !== null);

@@ -332,6 +332,10 @@ export class InMemoryVideoMediaRepository implements VideoMediaRepository {
     );
   }
 
+  public listTasksByProject(projectId: string): Promise<readonly MediaTaskRecord[]> {
+    return Promise.resolve(this.tasks.filter((task) => task.projectId === projectId));
+  }
+
   public findBatchByIdempotencyKey(
     projectId: string,
     idempotencyKey: string,

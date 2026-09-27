@@ -321,6 +321,9 @@ export interface MediaGenerationRepository<
   /** 调度与恢复扫描（4.2）：非终态任务按创建序返回。 */
   listUnfinishedTasks(projectId: string): Promise<readonly MediaTaskRecord[]>;
 
+  /** 恢复全量扫描（2026-09-27）：项目全部任务按创建序返回（含终态，供孤儿候选收敛）。 */
+  listTasksByProject(projectId: string): Promise<readonly MediaTaskRecord[]>;
+
   /**
    * 批次幂等重放查询：UNIQUE(project_id, idempotency_key) 的读侧入口
    * （idempotency_key = IPC 批级 requestId）。

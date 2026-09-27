@@ -427,6 +427,10 @@ export class InMemoryMediaRepository implements MediaRepository {
     );
   }
 
+  public listTasksByProject(projectId: string): Promise<readonly MediaTaskRecord[]> {
+    return Promise.resolve(this.tasks.filter((task) => task.projectId === projectId));
+  }
+
   public findBatchByIdempotencyKey(
     projectId: string,
     idempotencyKey: string,

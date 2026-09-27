@@ -606,6 +606,20 @@ export class SqliteVideoMediaRepository implements VideoMediaRepository {
     );
   }
 
+  public listTasksByProject(projectId: string): Promise<readonly MediaTaskRecord[]> {
+    return syncToPromise(() =>
+      this.database
+        .prepare(
+          `SELECT ${TASK_COLUMNS}
+           FROM video_generation_tasks
+           WHERE project_id = ?
+           ORDER BY created_at, id`,
+        )
+        .all(projectId)
+        .map(mapTaskRow),
+    );
+  }
+
   private selectBatchWhere(whereClause: string, ...params: readonly string[]): Row | undefined {
     return this.database
       .prepare(`SELECT ${BATCH_COLUMNS} FROM video_batches ${whereClause}`)
