@@ -308,6 +308,20 @@ export class SqliteVideoMediaRepository implements VideoMediaRepository {
     });
   }
 
+  public markCandidateStale(candidateId: string): Promise<VideoCandidateRecord> {
+    return syncToPromise(() => {
+      const now = this.clock();
+      this.database
+        .prepare(
+          `UPDATE video_candidates
+           SET status = 'STALE_INPUT', updated_at = ?
+           WHERE id = ? AND status = 'PENDING'`,
+        )
+        .run(now, candidateId);
+      return this.requireCandidate(candidateId, 'MEDIA_CANDIDATE_NOT_FOUND');
+    });
+  }
+
   public listCandidates(shotId: string): Promise<readonly VideoCandidateRecord[]> {
     return syncToPromise(() =>
       this.database

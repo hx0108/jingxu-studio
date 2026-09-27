@@ -466,6 +466,20 @@ export class SqliteMediaRepository implements MediaRepository {
     });
   }
 
+  public markCandidateStale(candidateId: string): Promise<MediaCandidateRecord> {
+    return syncToPromise(() => {
+      const now = this.clock();
+      this.database
+        .prepare(
+          `UPDATE image_candidates
+           SET status = 'STALE_INPUT', updated_at = ?
+           WHERE id = ? AND status = 'PENDING'`,
+        )
+        .run(now, candidateId);
+      return this.requireCandidate(candidateId, 'MEDIA_CANDIDATE_NOT_FOUND');
+    });
+  }
+
   public listCandidates(shotId: string): Promise<readonly MediaCandidateRecord[]> {
     return syncToPromise(() =>
       this.database

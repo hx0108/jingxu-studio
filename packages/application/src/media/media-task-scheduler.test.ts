@@ -713,6 +713,33 @@ describe('MediaTaskScheduler 启动恢复（recover）', () => {
     expect(fixture.port.submitCount()).toBe(0);
   });
 
+  it('中断收敛—任务失败待人工时 PENDING 候选同步落终态（留证 FAILED/无证 STALE_INPUT）—不留幽灵', async () => {
+    const fixture = buildFixture();
+    const taskId = await seedTask(fixture.repository);
+    // c_1 已到达提交段（SUBMIT 证据行 STARTED 残留）；c_2..c_4 从未被轮到。
+    const submitRowId = 'inv_submit_c_1';
+    await fixture.invocations.insert({
+      candidateId: 'task_1_c_1',
+      id: submitRowId,
+      mediaTaskId: taskId,
+      modelId: MODEL_ID,
+      requestSha256: hash64('snap'),
+      requestSnapshotJson: '{"snap":true}',
+      segmentKind: 'SUBMIT',
+    });
+    const outcomes = await fixture.scheduler.recover('project_1');
+    expect(outcomes).toEqual([{ action: 'MARKED_FAILED_PENDING_MANUAL', taskId }]);
+    const byId = new Map(fixture.repository.candidates.map((c) => [c.id, c]));
+    expect(byId.get('task_1_c_1')).toMatchObject({
+      errorCode: 'MEDIA_TASK_INTERRUPTED',
+      invocationEvidenceRef: submitRowId,
+      status: 'FAILED',
+    });
+    expect(byId.get('task_1_c_2')).toMatchObject({ errorCode: null, status: 'STALE_INPUT' });
+    expect(byId.get('task_1_c_3')).toMatchObject({ errorCode: null, status: 'STALE_INPUT' });
+    expect(byId.get('task_1_c_4')).toMatchObject({ errorCode: null, status: 'STALE_INPUT' });
+  });
+
   it('POLLING 全留证—恢复轮询零重发—完成全轮', async () => {
     const fixture = buildFixture({ submits: [{ kind: 'ASYNC' }] });
     const taskId = await seedTask(fixture.repository, { phase: 'POLLING', withEvidence: true });

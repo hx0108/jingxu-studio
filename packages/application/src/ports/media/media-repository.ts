@@ -225,6 +225,14 @@ export interface MediaGenerationRepository<
     },
   ): Promise<CandidateRecord>;
 
+  /**
+   * 候选收敛（恢复专用，2026-09-27）：把 PENDING 候选置 STALE_INPUT 终态。
+   * 仅用于任务落中断终态时、从未到达提交段（无 SUBMIT 证据行可引用，FAILED 的
+   * 证据引用约束无法满足）的候选——不收敛会在界面残留永远「生成中」的幽灵候选。
+   * 非 PENDING 候选不动（幂等）；已留证候选走 completeCandidateFailed。
+   */
+  markCandidateStale(candidateId: string): Promise<CandidateRecord>;
+
   /** 列出镜头全部候选（轮次与轮内索引升序），世代分组由上层按 hash 归并。 */
   listCandidates(shotId: string): Promise<readonly CandidateRecord[]>;
 

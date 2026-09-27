@@ -327,6 +327,40 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
     return findSubmitRowId(rows, candidateId) ?? fallback;
   };
 
+  /**
+   * 任务落中断终态时同步收敛本轮 PENDING 候选（2026-09-27 重启恢复缺口）：
+   * 已留 SUBMIT 证据行的候选按 MEDIA_TASK_INTERRUPTED 失败（FAILED 的证据引用
+   * 约束正好指向该行）；从未到达提交段的候选无证据行可如实引用，按 STALE_INPUT
+   * 收敛为终态（用户动作同为重新生成）。不收敛会让界面残留永远「生成中」的
+   * 幽灵候选。单候选收敛失败不阻断其余收敛；下次启动 recover 重试。
+   */
+  const convergeInterruptedCandidates = async (
+    taskId: string,
+    pending: readonly MediaCandidateRecord[],
+  ): Promise<void> => {
+    for (const candidate of pending) {
+      try {
+        await mediaUnitOfWork.run(async (repos) => {
+          const submitRow = findSubmitRowId(
+            await repos.invocations.listByTaskId(taskId),
+            candidate.id,
+          );
+          const generation = generationOf(repos);
+          if (submitRow !== null) {
+            await generation.completeCandidateFailed(candidate.id, {
+              errorCode: 'MEDIA_TASK_INTERRUPTED',
+              invocationEvidenceRef: submitRow,
+            });
+            return;
+          }
+          await generation.markCandidateStale(candidate.id);
+        });
+      } catch {
+        // 收敛失败保持 PENDING：下个恢复周期重试，不放大为任务级失败。
+      }
+    }
+  };
+
   /** 下载→落盘→（事务内相位复核）候选成功落库。返回是否继续驱动。 */
   const settleDownload = async (
     task: MediaTaskRecord,
@@ -797,6 +831,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
         } else {
           // SUBMITTED 无证据（含同步 Provider 崩溃窗口）：不自动重发，待人工。
           await attemptFailTask(task.id, 'MEDIA_TASK_INTERRUPTED');
+          await convergeInterruptedCandidates(task.id, pending);
           outcomes.push({ action: 'MARKED_FAILED_PENDING_MANUAL', taskId: task.id });
         }
       }

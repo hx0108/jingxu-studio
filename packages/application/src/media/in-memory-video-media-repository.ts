@@ -143,6 +143,21 @@ export class InMemoryVideoMediaRepository implements VideoMediaRepository {
     });
   }
 
+  public markCandidateStale(candidateId: string): Promise<VideoCandidateRecord> {
+    return this.completeCandidate(candidateId, {
+      actualDurationSec: null,
+      byteSize: null,
+      errorCode: null,
+      fileSha256: null,
+      height: null,
+      invocationEvidenceRef: null,
+      mimeType: null,
+      status: 'STALE_INPUT',
+      storageRelPath: null,
+      width: null,
+    });
+  }
+
   public listCandidates(shotId: string): Promise<readonly VideoCandidateRecord[]> {
     return Promise.resolve(
       this.candidates

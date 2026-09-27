@@ -241,6 +241,20 @@ export class InMemoryMediaRepository implements MediaRepository {
     });
   }
 
+  public markCandidateStale(candidateId: string): Promise<MediaCandidateRecord> {
+    return this.completeCandidate(candidateId, {
+      byteSize: null,
+      errorCode: null,
+      fileSha256: null,
+      height: null,
+      invocationEvidenceRef: null,
+      mimeType: null,
+      status: 'STALE_INPUT',
+      storageRelPath: null,
+      width: null,
+    });
+  }
+
   public listCandidates(shotId: string): Promise<readonly MediaCandidateRecord[]> {
     return Promise.resolve(
       this.candidates
