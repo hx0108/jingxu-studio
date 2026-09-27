@@ -21,6 +21,7 @@ const shotState = (overrides: Partial<ShotImageStateDto>): ShotImageStateDto => 
   currentGenSucceededCount: 0,
   latestTaskErrorCode: null,
   queuedInBatchId: null,
+  selectedPreviewMediaUrl: null,
   shotId: 'shot_00000001',
   ...overrides,
 });

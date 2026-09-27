@@ -685,6 +685,11 @@ export const StoryboardPanel = ({
             const videoState = shotVideoStates.get(shot.shotId) ?? null;
             const badge = imageState === null ? null : shotFirstFrameBadge(imageState);
             const videoBadge = videoState === null ? null : shotVideoBadge(videoState);
+            // 缩略图真相优先（2026-09-27）：真实项目用已选首帧，未选择时不冒充原型图；
+            // 演示项目保持原型资产。
+            const realPreview = isDemo ? null : (imageState?.selectedPreviewMediaUrl ?? null);
+            const fallbackVisual = prototypeAssetAt(PROTOTYPE_ASSETS.shots, index);
+            const visualSrc = isDemo ? fallbackVisual : realPreview;
             return (
               <li key={shot.shotId}>
                 <button
@@ -705,12 +710,11 @@ export const StoryboardPanel = ({
                   }}
                   type="button"
                 >
-                  <img
-                    alt=""
-                    aria-hidden="true"
-                    className="shot-card-visual"
-                    src={prototypeAssetAt(PROTOTYPE_ASSETS.shots, index)}
-                  />
+                  {visualSrc === null ? (
+                    <span aria-hidden="true" className="shot-card-visual shot-card-visual-empty" />
+                  ) : (
+                    <img alt="" aria-hidden="true" className="shot-card-visual" src={visualSrc} />
+                  )}
                   <span>#{String(shot.sequence)}</span>
                   <span>
                     {SHOT_SIZE_LABELS[shot.shotSize]} · {CAMERA_MOTION_LABELS[shot.cameraMotion]}
@@ -755,15 +759,29 @@ export const StoryboardPanel = ({
                 <span>时长 {String(selectedShot.targetDurationSec)} 秒</span>
               </div>
             </div>
-            <img
-              alt={`镜头 ${String(selectedShot.sequence)} 场景预览`}
-              className="shot-detail-preview"
-              src={
-                isDemo && selectedShot.sequence === 2
+            {(() => {
+              // 详情预览与顶部镜头条同源（2026-09-27）：真实项目用已选首帧，不冒充原型图。
+              const realPreview = isDemo
+                ? null
+                : (shotStates.get(selectedShot.shotId)?.selectedPreviewMediaUrl ?? null);
+              const demoSrc =
+                selectedShot.sequence === 2
                   ? PROTOTYPE_ASSETS.heroineMain
-                  : prototypeAssetAt(PROTOTYPE_ASSETS.shots, selectedShot.sequence - 1)
-              }
-            />
+                  : prototypeAssetAt(PROTOTYPE_ASSETS.shots, selectedShot.sequence - 1);
+              const detailSrc = isDemo ? demoSrc : realPreview;
+              return detailSrc === null ? (
+                <span
+                  aria-hidden="true"
+                  className="shot-detail-preview shot-detail-preview-empty"
+                />
+              ) : (
+                <img
+                  alt={`镜头 ${String(selectedShot.sequence)} 已选首帧预览`}
+                  className="shot-detail-preview"
+                  src={detailSrc}
+                />
+              );
+            })()}
             <div aria-label="镜头时长预览" className="shot-preview-ruler">
               <span aria-hidden="true">▶</span>
               <span>00:00 / 00:{String(selectedShot.targetDurationSec).padStart(2, '0')}</span>

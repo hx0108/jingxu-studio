@@ -572,6 +572,20 @@ export class InMemoryMediaRepository implements MediaRepository {
     return Promise.resolve([...counts.values()]);
   }
 
+  public listSelectedCandidatesByProject(
+    projectId: string,
+  ): Promise<readonly { readonly candidateId: string; readonly shotId: string }[]> {
+    const selected = this.candidates
+      .filter(
+        (candidate) =>
+          candidate.status === 'SUCCEEDED' &&
+          candidate.selectedAt !== null &&
+          this.candidateProjectIds.get(candidate.id) === projectId,
+      )
+      .sort((a, b) => (a.selectedAt ?? '').localeCompare(b.selectedAt ?? ''));
+    return Promise.resolve(selected.map((c) => ({ candidateId: c.id, shotId: c.shotId })));
+  }
+
   public listLatestTaskPerShot(projectId: string): Promise<readonly MediaTaskRecord[]> {
     const latest = new Map<string, MediaTaskRecord>();
     for (const task of this.tasks) {

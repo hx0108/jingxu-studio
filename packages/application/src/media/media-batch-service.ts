@@ -21,6 +21,7 @@ import type {
   MediaBatchViewDto,
   StoryboardImageStatesDto,
 } from '@jingxu/contracts';
+import { candidateMediaUrl } from '@jingxu/contracts';
 
 import type {
   MediaBatchRecord,
@@ -305,6 +306,13 @@ export const createMediaBatchService = (
           const activeByShot = new Map(unfinished.map((task) => [task.shotId, task.phase]));
           const latestByShot = new Map(latest.map((task) => [task.shotId, task]));
           const runningPending = new Set(running?.pendingShotIds ?? []);
+          // 列表缩略图（2026-09-27）：项目级已选首帧一次查齐，shotId → 受限取图地址。
+          const selectedByShot = new Map(
+            (await media.listSelectedCandidatesByProject(input.projectId)).map((entry) => [
+              entry.shotId,
+              candidateMediaUrl(entry.candidateId),
+            ]),
+          );
           const shots = [];
           for (const shot of storyboard.currentShots) {
             const resolved = await resolveGenerationInput(
@@ -331,6 +339,7 @@ export const createMediaBatchService = (
               latestTaskErrorCode:
                 latestTask === undefined ? null : await failureErrorCodeOf(media, latestTask),
               queuedInBatchId: runningPending.has(shot.shotId) ? (running?.id ?? null) : null,
+              selectedPreviewMediaUrl: selectedByShot.get(shot.shotId) ?? null,
               shotId: shot.shotId,
             });
           }

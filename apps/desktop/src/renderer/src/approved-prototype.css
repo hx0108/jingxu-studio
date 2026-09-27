@@ -2143,3 +2143,65 @@
     padding-block: 6px;
   }
 }
+
+/* 未选择首帧时的中性占位（2026-09-27）：真实项目镜头条/详情不冒充原型演示图。 */
+.creator-workspace-page .shot-card-visual-empty,
+.creator-workspace-page .shot-detail-preview-empty {
+  border: 1px dashed #3a4652;
+  background:
+    linear-gradient(135deg, rgb(255 133 45 / 6%), rgb(20 28 36 / 55%)),
+    rgb(12 18 24 / 80%);
+}
+.creator-workspace-page .media-step-storyboard .shot-detail-heading > .shot-detail-preview-empty {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  grid-column: 1;
+  grid-row: 1 / span 3;
+  align-self: stretch;
+}
+
+/* 视频步骤与画面/分镜步骤同口径：内容收进视口，不出页面级纵向滚动条（2026-09-27）。 */
+.creator-workspace-page .media-step-video .video-panel-hero {
+  min-height: 0;
+}
+.creator-workspace-page .media-step-video .video-panel-preview > :is(img, video, .candidate-placeholder) {
+  height: clamp(230px, 32vh, 350px);
+}
+.creator-workspace-page .media-step-video .selected-first-frame-preview {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.creator-workspace-page .media-step-video .selected-first-frame-preview h4 {
+  flex-shrink: 0;
+  margin: 0;
+}
+.creator-workspace-page .media-step-video .selected-first-frame-preview img {
+  width: 150px;
+}
+.creator-workspace-page .media-step-video .media-candidate-strip {
+  max-height: clamp(96px, 14vh, 150px);
+  overflow: auto;
+  scrollbar-width: none;
+}
+.creator-workspace-page .media-step-video .media-candidate-strip::-webkit-scrollbar {
+  display: none;
+}
+.creator-workspace-page .media-step-video .video-panel-requirements {
+  max-height: clamp(240px, 30vh, 340px);
+  overflow: auto;
+  scrollbar-width: none;
+}
+.creator-workspace-page .media-step-video .video-panel-requirements::-webkit-scrollbar {
+  display: none;
+}
+
+/* 全站文档级不出现可见滚动条（2026-09-27）：视频步骤此前因内容超高在文档层
+   出现系统滚动条，与其它页面观感不一致；滚动能力保留（滚轮可达，滚动条隐藏）。 */
+html {
+  scrollbar-width: none;
+}
+html::-webkit-scrollbar {
+  display: none;
+}

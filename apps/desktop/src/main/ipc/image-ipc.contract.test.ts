@@ -117,6 +117,7 @@ const okStates: AppResultDto<StoryboardImageStatesDto> = {
         currentGenSucceededCount: 0,
         latestTaskErrorCode: null,
         queuedInBatchId: 'batch_12345678',
+        selectedPreviewMediaUrl: null,
         shotId: 'shot_12345678',
       },
     ],

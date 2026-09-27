@@ -995,6 +995,24 @@ export class SqliteMediaRepository implements MediaRepository {
     );
   }
 
+  public listSelectedCandidatesByProject(
+    projectId: string,
+  ): Promise<readonly { readonly candidateId: string; readonly shotId: string }[]> {
+    return syncToPromise(() =>
+      this.database
+        .prepare(
+          `SELECT id AS candidate_id, shot_id FROM image_candidates
+           WHERE project_id = ? AND status = 'SUCCEEDED' AND selected_at IS NOT NULL
+           ORDER BY shot_id, selected_at`,
+        )
+        .all(projectId)
+        .map((row) => ({
+          candidateId: requiredString(row as Row, 'candidate_id'),
+          shotId: requiredString(row as Row, 'shot_id'),
+        })),
+    );
+  }
+
   public listLatestTaskPerShot(projectId: string): Promise<readonly MediaTaskRecord[]> {
     return syncToPromise(() =>
       this.database

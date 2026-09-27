@@ -315,6 +315,9 @@ export const VideoPanel = ({
     (candidate) => candidate.selectedAt !== null && candidateVideoSrc(candidate) !== null,
   );
   const selectedVideoSrc = selectedVideo === undefined ? null : candidateVideoSrc(selectedVideo);
+  // 视频未就绪时回退展示已选首帧（与顶部镜头条同源），不再留空白占位。
+  const selectedFirstFrameSrc =
+    selectedFirstFrame === null ? null : candidateImageSrc(selectedFirstFrame);
   const asObject = (value: unknown): Record<string, unknown> =>
     typeof value === 'object' && value !== null && !Array.isArray(value)
       ? (value as Record<string, unknown>)
@@ -357,6 +360,8 @@ export const VideoPanel = ({
                 preload="metadata"
                 src={selectedVideoSrc}
               />
+            ) : selectedFirstFrameSrc !== null ? (
+              <img alt="已选首帧 · 视频生成后可在此播放" src={selectedFirstFrameSrc} />
             ) : (
               <p className="candidate-placeholder">尚无可预览的视频候选</p>
             )}
@@ -365,7 +370,9 @@ export const VideoPanel = ({
                 ? '演示视频封面 · 实际模拟候选可播放和追溯'
                 : selectedVideoSrc !== null
                   ? '当前已选视频候选'
-                  : '生成视频后可在这里预览'}
+                  : selectedFirstFrameSrc !== null
+                    ? '视频尚未生成 · 当前显示已选首帧'
+                    : '生成视频后可在这里预览'}
             </p>
           </div>
           <div className="media-candidate-strip">{candidateBoard}</div>

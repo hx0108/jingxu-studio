@@ -414,6 +414,7 @@ const shotImageState = (overrides: Partial<ShotImageStateDto>): ShotImageStateDt
   currentGenSucceededCount: 0,
   latestTaskErrorCode: null,
   queuedInBatchId: null,
+  selectedPreviewMediaUrl: null,
   shotId: 'shot_00000001',
   ...overrides,
 });
@@ -423,6 +424,7 @@ const shotVideoState = (overrides: Partial<StoryboardVideoStatesDto['shots'][num
   currentGenSucceededCount: 0,
   latestTaskErrorCode: null,
   queuedInBatchId: null,
+  selectedPreviewMediaUrl: null,
   shotId: 'shot_00000001',
   ...overrides,
 });

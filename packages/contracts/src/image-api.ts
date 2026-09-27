@@ -364,6 +364,8 @@ export const shotImageStateSchema = z
     currentGenSucceededCount: z.number().int().nonnegative().max(16),
     latestTaskErrorCode: z.string().min(1).max(64).nullable(),
     queuedInBatchId: batchIdSchema.nullable(),
+    /** 已选首帧候选的受限取图地址（未选择/无成功候选为 null；列表缩略图用）。 */
+    selectedPreviewMediaUrl: z.string().startsWith('jingxu://media/').nullable(),
     shotId: shotIdSchema,
   })
   .strict();

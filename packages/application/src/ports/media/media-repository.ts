@@ -378,6 +378,14 @@ export interface MediaGenerationRepository<
   /** 首帧状态底座：项目内 SUCCEEDED 候选按 (shotId, 世代哈希) 聚合计数。 */
   listSucceededCandidateShotHashes(projectId: string): Promise<readonly MediaSucceededShotHash[]>;
 
+  /**
+   * 项目内已选择的首帧候选（status=SUCCEEDED 且 selected_at 非空），每镜头至多一条。
+   * 列表缩略图（2026-09-27）数据底座：返回 (shotId, candidateId) 最小投影。
+   */
+  listSelectedCandidatesByProject(
+    projectId: string,
+  ): Promise<readonly { readonly candidateId: string; readonly shotId: string }[]>;
+
   /** 首帧状态底座：项目内每镜头最新一轮任务（round_no 最大者）。 */
   listLatestTaskPerShot(projectId: string): Promise<readonly MediaTaskRecord[]>;
 }
