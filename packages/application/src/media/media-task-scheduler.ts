@@ -127,6 +127,9 @@ const TERMINAL_PHASES: ReadonlySet<MediaTaskPhase> = new Set(['COMPLETED', 'FAIL
 /** 单候选轮询期可重试错误的连续容忍上限（low-cost D5b：网络抖动/限流不判死）。 */
 const POLL_RETRYABLE_TOLERANCE = 5;
 
+/** 单候选下载期可重试错误的连续容忍上限（与轮询段同因）：provider 任务已真实完成，单次网络抖动/慢速 CDN 断流不该作废整个候选。 */
+const DOWNLOAD_RETRYABLE_TOLERANCE = 3;
+
 const isTerminal = (phase: MediaTaskPhase): boolean => TERMINAL_PHASES.has(phase);
 
 /** 持久化/完整性标记（PersistenceRuntimeError 与内存实现共用 message 前缀约定）。 */
@@ -395,18 +398,33 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
       await stopForAbort(task.projectId, task.id);
       return false;
     }
-    let stored: Awaited<ReturnType<MediaFileStorePort['writeMedia']>>;
+    let stored: Awaited<ReturnType<MediaFileStorePort['writeMedia']>> | null = null;
     // Provider 响应不回尺寸时（Agnes 图片）由下载段字节流探测，落库供视频建档档位解析。
     let downloadDimensions: Readonly<{ height?: number | null; width?: number | null }> = {};
-    try {
-      const download = await runSegment(signal, (segment) => model.download(result, segment));
-      downloadDimensions = download;
-      stored = await dependencies.fileStore.writeMedia({
-        bytes: download.bytes,
-        mimeType: download.mimeType,
-        projectId: task.projectId,
-      });
-    } catch (caught) {
+    let downloadFailure: unknown = null;
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        const download = await runSegment(signal, (segment) => model.download(result, segment));
+        downloadDimensions = download;
+        stored = await dependencies.fileStore.writeMedia({
+          bytes: download.bytes,
+          mimeType: download.mimeType,
+          projectId: task.projectId,
+        });
+        break;
+      } catch (caught) {
+        // 下载段可重试错误有限容忍（与轮询段 D5b 同因）：走到下载段时 provider 任务
+        // 已真实完成，单次网络抖动/慢速 CDN 断流作废整个候选代价过高（Agnes 下载域
+        // 经不稳定代理实测常态断流）。非重试或超容忍才走失败三写。
+        const normalized = model.normalizeError(caught);
+        if (!normalized.retryable || attempt >= DOWNLOAD_RETRYABLE_TOLERANCE) {
+          downloadFailure = caught;
+          break;
+        }
+        await dependencies.sleep(dependencies.pollIntervalMs);
+      }
+    }
+    if (stored === null) {
       // onSegmentFailure 语义为「true=停机」；本函数返回「true=继续」，需取反。
       // 下载段失败同事务三写（design D4 2026-08-20 修订）：候选 FAILED + DOWNLOAD
       // 行 FAILED + SUBMIT 行按成功收尾（submit 实际已成功，raw/usage 不丢失）。
@@ -416,7 +434,7 @@ export const createMediaTaskScheduler = <R = ImageGenerationRequest>(
         candidate.id,
         await submitRowIdOf(task.id, candidate.id, submitRef),
         downloadInvocationId,
-        caught,
+        downloadFailure,
         model,
         submitOutcome,
       );

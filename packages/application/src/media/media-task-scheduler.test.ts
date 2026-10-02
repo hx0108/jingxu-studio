@@ -57,11 +57,14 @@ interface FakePortOptions {
   readonly downloadGate?: Promise<void>;
   /** 非空时 download 段抛该码归一错误（真实实录：结果 URL 拉取失败 → MODEL_RESULT_UNAVAILABLE，无响应体）。 */
   readonly downloadFailureCode?: NormalizedModelError['code'];
+  /** download 段先抛 N 次可重试网络错误再成功（真实实录：慢速 CDN 经代理常态断流）。 */
+  readonly downloadRetryableFailures?: number;
 }
 
 /** 顺序记录 submit/poll/download，供「先留证再轮询」等次序断言。 */
 class FakeImageModel implements ImageModelPort {
   public readonly order: string[] = [];
+  public downloadAttempts = 0;
   private submitAttempts = 0;
   private readonly pollCounts = new Map<string, number>();
 
@@ -181,7 +184,17 @@ class FakeImageModel implements ImageModelPort {
         userAction: null,
       });
     }
+    this.downloadAttempts += 1;
     this.order.push(`download:${resultRef.url}`);
+    if (this.downloadAttempts <= (this.options.downloadRetryableFailures ?? 0)) {
+      throw new FakeModelError({
+        code: 'MODEL_NETWORK_ERROR',
+        detail: null,
+        providerRequestId: null,
+        retryable: true,
+        userAction: '等待后重试',
+      });
+    }
     return { bytes: Uint8Array.from([1, 2, 3, 4]), mimeType: 'image/png' };
   }
 
@@ -592,6 +605,53 @@ describe('MediaTaskScheduler 调用证据（media-invocation-evidence）', () =>
       expect(submitRows.some((row) => row.id === candidate.invocationEvidenceRef)).toBe(true);
     }
     // 统一失败口径：候选级全败时任务相位仍 COMPLETED（batch-first-frame 拍板）。
+    expect(fixture.repository.tasks[0]).toMatchObject({ phase: 'COMPLETED' });
+  });
+
+  it('下载段可重试错误在容忍内重试成功—候选 SUCCEEDED—单条 DOWNLOAD 行成功收尾', async () => {
+    // 2026-10-02 真实录：Agnes 视频任务完成后结果 URL 经不稳定代理下载常态断流
+    // （1.4MB 约 15s，单次抖动即 MODEL_RESULT_UNAVAILABLE）——一次断流不该作废
+    // 已完成的 5 分钟生成。首候选吃满 2 次重试后成功，后续候选一次成功。
+    const fixture = buildFixture({ downloadRetryableFailures: 2 });
+    await seedTask(fixture.repository);
+    await fixture.scheduler.run('project_1');
+    // 首候选 3 次（2 失败 + 1 成功）+ 其余 3 候选各 1 次。
+    expect(fixture.port.downloadAttempts).toBe(6);
+    for (const candidate of fixture.repository.candidates) {
+      expect(candidate).toMatchObject({ status: 'SUCCEEDED' });
+    }
+    const rows = fixture.invocations.invocations;
+    const downloadRows = rows.filter((row) => row.segmentKind === 'DOWNLOAD');
+    expect(downloadRows).toHaveLength(4); // 每候选仍恰好一条 DOWNLOAD 证据行
+    for (const row of downloadRows) {
+      expect(row).toMatchObject({ status: 'SUCCEEDED' });
+    }
+    expect(fixture.repository.tasks[0]).toMatchObject({ phase: 'COMPLETED' });
+  });
+
+  it('下载段可重试错误超容忍—失败三写候选 FAILED 且 errorCode 为网络错误', async () => {
+    // 抖动持续超容忍（3 次）才判死——错误码如实取最后一次的可重试码而非吞成
+    // RESULT_UNAVAILABLE，界面可行动文案与 Provider 真因对齐。
+    const fixture = buildFixture({ downloadRetryableFailures: 99 });
+    await seedTask(fixture.repository);
+    await fixture.scheduler.run('project_1');
+    // 每候选 1 + 3 次重试 = 4 次尝试。
+    expect(fixture.port.downloadAttempts).toBe(16);
+    for (const candidate of fixture.repository.candidates) {
+      expect(candidate).toMatchObject({ errorCode: 'MODEL_NETWORK_ERROR', status: 'FAILED' });
+    }
+    const downloadRows = fixture.invocations.invocations.filter(
+      (row) => row.segmentKind === 'DOWNLOAD',
+    );
+    expect(downloadRows).toHaveLength(4);
+    for (const row of downloadRows) {
+      expect(row).toMatchObject({ errorCode: 'MODEL_NETWORK_ERROR', status: 'FAILED' });
+    }
+    // SUBMIT 实际成功的三写口径不因下载重试改变。
+    const submitRows = fixture.invocations.invocations.filter(
+      (row) => row.segmentKind === 'SUBMIT',
+    );
+    for (const row of submitRows) expect(row.status).toBe('SUCCEEDED');
     expect(fixture.repository.tasks[0]).toMatchObject({ phase: 'COMPLETED' });
   });
 
