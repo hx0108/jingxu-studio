@@ -3,9 +3,10 @@
 ## 固定试用构建
 
 - 应用：`apps/desktop/out/镜序 Studio-win32-x64/jingxu-studio.exe`
-- 字节数：`225441792`
-- SHA-256：`6270C3D9CD773B5EF2234345BDC382FAF8BFB6B5BF3FF3DB49F5D856DDAD8F65`
-- 构建状态：2026-09-21 于 `0573401`（在 17aa85a 视频双档树之上叠加：实地全链四修复——Agnes 行回读/引用 id 对齐 V1/调度器轮询可重试错误有限容忍/收官探针，实地端到端 50s 1080×1920 MP4 已验证；**图片档切换 Agnes Image**（2.5 Flash 默认/2.1 Flash 可选，界面下拉），Seedream 停用）打包，packaged-smoke 通过（fresh DB 自动迁移到 head 25）；当日回归 application 640 / persistence 集成 257 / desktop 264 / model-adapters+contracts 127 全绿，图片凭据 UI E2E 与双模型真实 Canary 通过。哈希迭代链 `E60F9075…`（8-27）→ `20E6B020…` → `88D0B13F…` → `8C1D7EAA…`（9-10）→ `BD64B6F3…`（9-18 @9946106）→ `E44D9C6B…`（9-20 @17aa85a）→ 本哈希，均未开始试用，以本哈希为准；回滚按对应提交重建。`2247C514` 为 9-19/20 联调脏树构建，未入链、不得试用。
+- 字节数：`225442304`
+- SHA-256：`2EEDF985026935315B66412F3D34578E878EB303AEF1CA52D256A745F19379F5`
+- 构建状态：2026-10-03 于 `3f4bdcb`（218d71f 工作台收官树之上叠加：媒体下载段可重试错误有限容忍 3 次——修复 Agnes 慢速 CDN/不稳定代理下一次断流即作废已完成生成的缺陷）打包，packaged-smoke 通过；**该包为视频侧真实 E2E 实战包**：10/10 镜 Agnes 真实视频重生成（首帧全部绑定一致性 v2 参考图）→ 时间线 → 导出 50.0s 1920×1080 H.264+AAC 31,655,164B MP4（sha256 `fac1bda1…` 三处一致，证据 `jingxu-tools/e2e-final-export-20261003.mp4`）；media 域单测 161/161 全绿。哈希迭代链 `E60F9075…`（8-27）→ `20E6B020…` → `88D0B13F…` → `8C1D7EAA…`（9-10）→ `BD64B6F3…`（9-18 @9946106）→ `E44D9C6B…`（9-20 @17aa85a）→ `6270C3D9…`（9-21 @0573401）→ `05A255AB…` / `B573E8D4…`（9-27 工作台联调两包）→ `3715BBB0…`（9-28 01:48 工作台截图包）→ 本哈希（第八次），均未开始试用，以本哈希为准；回滚按对应提交重建（离线重建配方见 CLAUDE 记忆 jingxu-electron-sandbox-env 与 forge 本地 zip 覆盖）。
+- 上一代构建（2026-09-21 于 `0573401`）：实地全链四修复 + 图片档切换 Agnes Image（2.5 Flash 默认），packaged-smoke 通过（fresh DB head 25）；同日回归 application 640 / persistence 集成 257 / desktop 264 / model-adapters+contracts 127 全绿。`2247C514` 为 9-19/20 联调脏树构建，未入链、不得试用。
 - 上一代构建（2026-09-20 于 `17aa85a`）为 low-cost-video-provider-integration 归档树：Seedance+Agnes 双档视频（Agnes V2.0/2.5 Flash 界面可选）、万相档移除、视频任务溯源冻结、Provider 设置两档卡 + Mock 醒目标记；packaged-smoke 通过（head 24）；同树回归 unit 1118+2 skipped / contract 191 / integration 277 全绿。
 - 上一代构建状态（2026-09-18 于 `9946106`）（`enforce-character-style-consistency` 角色一致性门禁全链 + 恢复轮询；父链 `c8627fc` 主体 → … → `f4fd3f2` CINE 逐页收尾 → `4330dfa` 2026-08-27 全量门禁树）打包，在既有能力上新增：项目画风锚点（STYLE 资产）、出场角色参考图强制预检、StoryBible 信封正确注入生成 Prompt——即角色/画风一致性控制前置。打包后 packaged-smoke 通过；同树全量回归 unit 1091 / contract 180 / integration 265 / renderer 114 全绿，一致性门禁 E2E 与批量/首帧/视频链 E2E 全过。哈希迭代链 `E60F9075…`（8-27）→ `20E6B020…` → `88D0B13F…` → `8C1D7EAA…`（9-10 四代）→ 本哈希，均未开始试用，以本哈希为准；回滚按对应提交重建。
 - 自动化基线：AC-V1-01～06 于 `f4fd3f2` 树全过；一致性门禁为 `enforce-character-style-consistency` 新增能力（详见其 change 目录），其首个生成前必须有画风锚点与出场角色参考图，试用组织者应知悉此前置步骤。自动化不代替本轮真实试用。
